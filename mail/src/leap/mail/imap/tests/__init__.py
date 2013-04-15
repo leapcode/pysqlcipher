@@ -48,18 +48,19 @@ class BaseSoledadIMAPTest(BaseLeapTest):
                               document_factory=LeapDocument)
         self._db2 = u1db.open(self.db2_file, create=True,
                               document_factory=LeapDocument)
+
         # initialize soledad by hand so we can control keys
         self._soledad = Soledad(self.email, gnupg_home=self.gnupg_home,
-                                initialize=False,
+                                bootstrap=False,
                                 prefix=self.tempdir)
         self._soledad._init_dirs()
         self._soledad._gpg = GPGWrapper(gnupghome=self.gnupg_home)
-        self._soledad._gpg.import_keys(PUBLIC_KEY)
-        self._soledad._gpg.import_keys(PRIVATE_KEY)
-        self._soledad._load_openpgp_keypair()
-        if not self._soledad._has_secret():
-            self._soledad._gen_secret()
-        self._soledad._load_secret()
+
+        if not self._soledad._has_privkey():
+            self._soledad._set_privkey(PRIVATE_KEY)
+        if not self._soledad._has_symkey():
+            self._soledad._gen_symkey()
+        self._soledad._load_symkey()
         self._soledad._init_db()
 
     def tearDown(self):
