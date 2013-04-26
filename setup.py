@@ -1,7 +1,7 @@
 #-*- coding: ISO-8859-1 -*-
 # setup.py: the distutils script
 #
-# Copyright (C) Kali Kaneko <kali@futeisha.org> (sqlcipher support)
+# Copyright (C) 2013 Kali Kaneko <kali@futeisha.org> (sqlcipher support)
 # Copyright (C) 2005-2010 Gerhard Häring <gh@ghaering.de>
 #
 # This file is part of pysqlcipher.
@@ -61,11 +61,12 @@ extra_objects = []
 define_macros = []
 
 long_description = \
-"""Python interface to SQCipher
+"""Python interface to SQLCipher
 
-pysqlcipher is an interface to the SQLite 3.x embedded relational database engine.
-It is almost fully compliant with the Python database API version 2.0 also
-exposes the unique features of SQLCipher."""
+pysqlcipher is an interface to the SQLite 3.x embedded relational
+database engine. It is almost fully compliant with the Python database API
+version 2.0. At the same time, it also exposes the unique features of
+SQLCipher."""
 
 if sys.platform != "win32":
     define_macros.append(('MODULE_NAME', '"pysqlcipher.dbapi2"'))
@@ -172,9 +173,9 @@ class MyBuildExt(build_ext):
         sources = ext.sources
         if sources is None or type(sources) not in (ListType, TupleType):
             raise DistutilsSetupError, \
-                  ("in 'ext_modules' option (extension '%s'), " +
-                   "'sources' must be present and must be " +
-                   "a list of source filenames") % ext.name
+                ("in 'ext_modules' option (extension '%s'), " +
+                 "'sources' must be present and must be " +
+                 "a list of source filenames") % ext.name
         sources = list(sources)
 
         ext_path = self.get_ext_fullpath(ext.name)
@@ -290,11 +291,11 @@ def get_setup_args():
         sys.exit(1)
 
     data_files = [("pysqlcipher-doc",
-                        glob.glob("doc/*.html") \
-                      + glob.glob("doc/*.txt") \
-                      + glob.glob("doc/*.css")),
-                   ("pysqlcipher-doc/code",
-                        glob.glob("doc/code/*.py"))]
+                  glob.glob("doc/*.html")
+                  + glob.glob("doc/*.txt")
+                  + glob.glob("doc/*.css")),
+                  ("pysqlcipher-doc/code",
+                  glob.glob("doc/code/*.py"))]
 
     py_modules = ["sqlcipher"],
 
@@ -305,12 +306,11 @@ def get_setup_args():
         long_description=long_description,
         author="Kali Kaneko",
         author_email="kali@futeisha.org",
-        license="zlib/libpng", # is THIS a license?
+        license="zlib/libpng",  # is THIS a license?
         # It says MIT in the google project
         platforms="ALL",
         #XXX missing url
-        url="http://xxx.example.com/",
-
+        url="http://github.com/leapcode/pysqlcipher/",
         # Description of the modules and packages in the distribution
         package_dir={"pysqlcipher": "lib"},
         packages=["pysqlcipher", "pysqlcipher.test"] +
