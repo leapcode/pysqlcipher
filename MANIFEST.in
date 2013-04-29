@@ -6,3 +6,6 @@ include doc/includes/sqlite3/*.py
 include doc/sphinx/*
 include doc/sphinx/.static/.keepme
 include src/*.h
+include setup.py
+
+global-exclude *~ *.pyc
