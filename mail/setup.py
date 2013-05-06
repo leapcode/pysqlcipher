@@ -21,8 +21,13 @@ from setuptools import setup, find_packages
 
 requirements = [
     "leap.soledad",
-    "leap.common",
+    "leap.common>=0.2.3-dev",
     "twisted",
+]
+
+tests_requirements = [
+    'setuptools-trial',
+    'mock',
 ]
 
 # XXX add classifiers, docs
@@ -40,7 +45,8 @@ setup(
     ),
     namespace_packages=["leap"],
     package_dir={'': 'src'},
-    packages=find_packages('src'),
-    #test_suite='leap.mail.tests',
-    #install_requires=requirements,
+    packages=find_packages('src', exclude=['leap.mail.tests']),
+    test_suite='leap.mail.tests',
+    install_requires=requirements,
+    tests_require=tests_requirements,
 )

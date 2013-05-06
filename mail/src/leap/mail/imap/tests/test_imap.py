@@ -49,8 +49,8 @@ import u1db
 
 from leap.common.testing.basetest import BaseLeapTest
 from leap.mail.imap.server import SoledadMailbox
-from leap.mail.imap.tests import PUBLIC_KEY
-from leap.mail.imap.tests import PRIVATE_KEY
+from leap.mail.tests.imap import PUBLIC_KEY
+from leap.mail.tests.imap import PRIVATE_KEY
 
 from leap.soledad import Soledad
 from leap.soledad.util import GPGWrapper

@@ -1,17 +1,49 @@
+# -*- coding: utf-8 -*-
+# __init__.py
+# Copyright (C) 2013 LEAP
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+
+"""
+Base classes and keys for SMTP relay tests.
+"""
+
 import os
 import shutil
 import tempfile
+from mock import Mock
+
 
 from twisted.trial import unittest
 
+
+from leap.soledad import Soledad
+from leap.soledad.crypto import SoledadCrypto
+from leap.common.keymanager import (
+    KeyManager,
+    openpgp,
+)
+
+
 from leap.common.testing.basetest import BaseLeapTest
-from leap.mail.smtp.smtprelay import GPGWrapper
 
 
-class OpenPGPTestCase(unittest.TestCase, BaseLeapTest):
+class TestCaseWithKeyManager(BaseLeapTest):
 
     def setUp(self):
-        # mimic LeapBaseTest.setUpClass behaviour, because this is deprecated
+        # mimic BaseLeapTest.setUpClass behaviour, because this is deprecated
         # in Twisted: http://twistedmatrix.com/trac/ticket/1870
         self.old_path = os.environ['PATH']
         self.old_home = os.environ['HOME']
@@ -22,18 +54,46 @@ class OpenPGPTestCase(unittest.TestCase, BaseLeapTest):
             'bin')
         os.environ["PATH"] = bin_tdir
         os.environ["HOME"] = self.tempdir
-        # setup our own stuff
-        self.gnupg_home = self.tempdir + '/gnupg'
-        os.mkdir(self.gnupg_home)
-        self.email = 'leap@leap.se'
-        self._gpg = GPGWrapper(gpghome=self.gnupg_home)
 
-        self.assertEqual(self._gpg.import_keys(PUBLIC_KEY).summary(),
-                         '1 imported', "error importing public key")
-        self.assertEqual(self._gpg.import_keys(PRIVATE_KEY).summary(),
-                         # note that gnupg does not return a successful import
-                         # for private keys. Bug?
-                         '0 imported', "error importing private key")
+        # setup our own stuff
+        address = 'leap@leap.se'  # user's address in the form user@provider
+        uuid = 'leap@leap.se'
+        passphrase = '123'
+        secret_path = os.path.join(self.tempdir, 'secret.gpg')
+        local_db_path = os.path.join(self.tempdir, 'soledad.u1db')
+        server_url = 'http://provider/'
+        cert_file = ''
+
+        # mock key fetching and storing so Soledad doesn't fail when trying to
+        # reach the server.
+        Soledad._fetch_keys_from_shared_db = Mock(return_value=None)
+        Soledad._assert_keys_in_shared_db = Mock(return_value=None)
+
+        # instantiate soledad
+        self._soledad = Soledad(
+            uuid,
+            passphrase,
+            secret_path,
+            local_db_path,
+            server_url,
+            cert_file,
+        )
+
+        self._config = {
+            'host': 'http://provider/',
+            'port': 25,
+            'username': address,
+            'password': '<password>',
+            'encrypted_only': True
+        }
+
+        nickserver_url = ''  # the url of the nickserver
+        self._km = KeyManager(address, nickserver_url, self._soledad)
+
+        # insert test keys in key manager.
+        pgp = openpgp.OpenPGPScheme(self._soledad)
+        pgp.put_ascii_key(PRIVATE_KEY)
+        pgp.put_ascii_key(PRIVATE_KEY_2)
 
     def tearDown(self):
         # mimic LeapBaseTest.tearDownClass behaviour
@@ -42,16 +102,6 @@ class OpenPGPTestCase(unittest.TestCase, BaseLeapTest):
         # safety check
         assert self.tempdir.startswith('/tmp/leap_tests-')
         shutil.rmtree(self.tempdir)
-
-    def test_openpgp_encrypt_decrypt(self):
-        "Test if openpgp can encrypt and decrypt."
-        text = "simple raw text"
-        encrypted = str(self._gpg.encrypt(text, KEY_FINGERPRINT,
-                                          # TODO: handle always trust issue
-                                          always_trust=True))
-        self.assertNotEqual(text, encrypted, "failed encrypting text")
-        decrypted = str(self._gpg.decrypt(encrypted))
-        self.assertEqual(text, decrypted, "failed decrypting text")
 
 
 # Key material for testing
