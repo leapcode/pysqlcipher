@@ -31,7 +31,7 @@ from leap.mail.smtp.smtprelay import SMTPFactory
 
 
 def setup_smtp_relay(port, keymanager, smtp_host, smtp_port, smtp_username,
-                    smtp_password, encrypted_only):
+                     smtp_password, encrypted_only):
     """
     Setup SMTP relay to run with Twisted.
 

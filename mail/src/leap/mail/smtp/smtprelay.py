@@ -40,11 +40,11 @@ from email.parser import Parser
 from leap.common.check import leap_assert, leap_assert_type
 from leap.common.keymanager import KeyManager
 from leap.common.keymanager.openpgp import (
-    encrypt_asym,
     OpenPGPKey,
+    encrypt_asym,
+    sign,
 )
 from leap.common.keymanager.errors import KeyNotFound
-from leap.common.keymanager.keys import is_address
 
 
 #
@@ -103,31 +103,25 @@ def assert_config_structure(config):
     leap_assert(config[PASSWORD_KEY] != '')
 
 
-def strip_and_validate_address(address):
+def validate_address(address):
     """
-    Helper function to (eventually) strip and validate an email address.
-
-    This function first checks whether the incomming C{address} is of the form
-    '<something>' and, if it is, then '<' and '>' are removed from the
-    address. After that, a simple validation for user@provider form is
-    carried.
+    Validate C{address} as defined in RFC 2822.
 
     @param address: The address to be validated.
     @type address: str
 
-    @return: The (eventually) stripped address.
+    @return: A valid address.
     @rtype: str
 
-    @raise smtp.SMTPBadRcpt: Raised if C{address} does not have the expected
-        format.
+    @raise smtp.SMTPBadRcpt: Raised if C{address} is invalid.
     """
-    leap_assert(address is not None)
     leap_assert_type(address, str)
+    # the following parses the address as described in RFC 2822 and
+    # returns ('', '') if the parse fails.
     _, address = parseaddr(address)
-    leap_assert(address != '')
-    if is_address(address):
-        return address
-    raise smtp.SMTPBadRcpt(address)
+    if address == '':
+        raise smtp.SMTPBadRcpt(address)
+    return address
 
 
 #
@@ -141,6 +135,8 @@ class SMTPFactory(ServerFactory):
 
     def __init__(self, keymanager, config):
         """
+        Initialize the SMTP factory.
+
         @param keymanager: A KeyManager for retrieving recipient's keys.
         @type keymanager: leap.common.keymanager.KeyManager
         @param config: A dictionary with smtp configuration. Should have
@@ -190,6 +186,8 @@ class SMTPDelivery(object):
 
     def __init__(self, keymanager, config):
         """
+        Initialize the SMTP delivery object.
+
         @param keymanager: A KeyManager for retrieving recipient's keys.
         @type keymanager: leap.common.keymanager.KeyManager
         @param config: A dictionary with smtp configuration. Should have
@@ -209,10 +207,11 @@ class SMTPDelivery(object):
         # and store them
         self._km = keymanager
         self._config = config
+        self._origin = None
 
     def receivedHeader(self, helo, origin, recipients):
         """
-        Generate the Received header for a message.
+        Generate the 'Received:' header for a message.
 
         @param helo: The argument to the HELO command and the client's IP
             address.
@@ -234,12 +233,17 @@ class SMTPDelivery(object):
 
     def validateTo(self, user):
         """
-        Validate the address for which the message is destined.
+        Validate the address of C{user}, a recipient of the message.
 
-        For now, it just asserts the existence of the user's key if the
-        configuration option ENCRYPTED_ONLY_KEY is True.
+        This method is called once for each recipient and validates the
+        C{user}'s address against the RFC 2822 definition. If the
+        configuration option ENCRYPTED_ONLY_KEY is True, it also asserts the
+        existence of the user's key.
 
-        @param user: The address to validate.
+        In the end, it returns an encrypted message object that is able to
+        send itself to the C{user}'s address.
+
+        @param user: The user whose address we wish to validate.
         @type: twisted.mail.smtp.User
 
         @return: A Deferred which becomes, or a callable which takes no
@@ -253,7 +257,7 @@ class SMTPDelivery(object):
         """
         # try to find recipient's public key
         try:
-            address = strip_and_validate_address(user.dest.addrstr)
+            address = validate_address(user.dest.addrstr)
             pubkey = self._km.get_key(address, OpenPGPKey)
             log.msg("Accepting mail for %s..." % user.dest)
         except KeyNotFound:
@@ -262,7 +266,8 @@ class SMTPDelivery(object):
                 raise smtp.SMTPBadRcpt(user.dest.addrstr)
             log.msg("Warning: will send an unencrypted message (because "
                     "encrypted_only' is set to False).")
-        return lambda: EncryptedMessage(user, self._km, self._config)
+        return lambda: EncryptedMessage(
+            self._origin, user, self._km, self._config)
 
     def validateFrom(self, helo, origin):
         """
@@ -282,6 +287,7 @@ class SMTPDelivery(object):
         """
         # accept mail from anywhere. To reject an address, raise
         # smtp.SMTPBadSender here.
+        self._origin = origin
         return origin
 
 
@@ -296,12 +302,14 @@ class EncryptedMessage(object):
     """
     implements(smtp.IMessage)
 
-    def __init__(self, user, keymanager, config):
+    def __init__(self, fromAddress, user, keymanager, config):
         """
         Initialize the encrypted message.
 
-        @param user: The address to validate.
-        @type: twisted.mail.smtp.User
+        @param fromAddress: The address of the sender.
+        @type fromAddress: twisted.mail.smtp.Address
+        @param user: The recipient of this message.
+        @type user: twisted.mail.smtp.User
         @param keymanager: A KeyManager for retrieving recipient's keys.
         @type keymanager: leap.common.keymanager.KeyManager
         @param config: A dictionary with smtp configuration. Should have
@@ -320,6 +328,7 @@ class EncryptedMessage(object):
         leap_assert_type(keymanager, KeyManager)
         assert_config_structure(config)
         # and store them
+        self._fromAddress = fromAddress
         self._user = user
         self._km = keymanager
         self._config = config
@@ -345,7 +354,7 @@ class EncryptedMessage(object):
         self.lines.append('')  # add a trailing newline
         self.parseMessage()
         try:
-            self._encrypt()
+            self._encrypt_and_sign()
             return self.sendMessage()
         except KeyNotFound:
             return None
@@ -385,12 +394,6 @@ class EncryptedMessage(object):
         log.msg(e)
         log.err()
 
-    def prepareHeader(self):
-        """
-        Prepare the headers of the message.
-        """
-        self._message.replace_header('From', '<%s>' % self._user.orig.addrstr)
-
     def sendMessage(self):
         """
         Send the message.
@@ -402,7 +405,6 @@ class EncryptedMessage(object):
             message send.
         @rtype: twisted.internet.defer.Deferred
         """
-        self.prepareHeader()
         msg = self._message.as_string(False)
         d = defer.Deferred()
         factory = smtp.ESMTPSenderFactory(
@@ -424,26 +426,50 @@ class EncryptedMessage(object):
         d.addErrback(self.sendError)
         return d
 
-    def _encrypt_payload_rec(self, message, pubkey):
+    def _encrypt_and_sign_payload_rec(self, message, pubkey, signkey):
         """
-        Recursivelly descend in C{message}'s payload and encrypt to C{pubkey}.
+        Recursivelly descend in C{message}'s payload encrypting to C{pubkey}
+        and signing with C{signkey}.
 
         @param message: The message whose payload we want to encrypt.
         @type message: email.message.Message
         @param pubkey: The public key used to encrypt the message.
         @type pubkey: leap.common.keymanager.openpgp.OpenPGPKey
+        @param signkey: The private key used to sign the message.
+        @type signkey: leap.common.keymanager.openpgp.OpenPGPKey
         """
         if message.is_multipart() is False:
-            message.set_payload(encrypt_asym(message.get_payload(), pubkey))
+            message.set_payload(
+                encrypt_asym(
+                    message.get_payload(), pubkey, sign=signkey))
         else:
             for msg in message.get_payload():
-                self._encrypt_payload_rec(msg, pubkey)
+                self._encrypt_and_sign_payload_rec(msg, pubkey, signkey)
 
-    def _encrypt(self):
+    def _sign_payload_rec(self, message, signkey):
+        """
+        Recursivelly descend in C{message}'s payload signing with C{signkey}.
+
+        @param message: The message whose payload we want to encrypt.
+        @type message: email.message.Message
+        @param pubkey: The public key used to encrypt the message.
+        @type pubkey: leap.common.keymanager.openpgp.OpenPGPKey
+        @param signkey: The private key used to sign the message.
+        @type signkey: leap.common.keymanager.openpgp.OpenPGPKey
+        """
+        if message.is_multipart() is False:
+            message.set_payload(
+                sign(
+                    message.get_payload(), signkey))
+        else:
+            for msg in message.get_payload():
+                self._sign_payload_rec(msg, signkey)
+
+    def _encrypt_and_sign(self):
         """
         Encrypt the message body.
 
-        This method fetches the recipient key and encrypts the content to the
+        Fetch the recipient key and encrypt the content to the
         recipient. If a key is not found, then the behaviour depends on the
         configuration parameter ENCRYPTED_ONLY_KEY. If it is False, the message
         is sent unencrypted and a warning is logged. If it is True, the
@@ -452,13 +478,18 @@ class EncryptedMessage(object):
         @raise KeyNotFound: Raised when the recipient key was not found and
             the ENCRYPTED_ONLY_KEY configuration parameter is set to True.
         """
+        from_address = validate_address(self._fromAddress.addrstr)
+        signkey = self._km.get_key(from_address, OpenPGPKey, private=True)
+        log.msg("Will sign the message with %s." % signkey.fingerprint)
+        to_address = validate_address(self._user.dest.addrstr)
         try:
-            address = strip_and_validate_address(self._user.dest.addrstr)
-            pubkey = self._km.get_key(address, OpenPGPKey)
-            log.msg("Encrypting to %s" % pubkey.fingerprint)
-            self._encrypt_payload_rec(self._message, pubkey)
+            # try to get the recipient pubkey
+            pubkey = self._km.get_key(to_address, OpenPGPKey)
+            log.msg("Will encrypt the message to %s." % pubkey.fingerprint)
+            self._encrypt_and_sign_payload_rec(self._message, pubkey, signkey)
         except KeyNotFound:
-            if self._config[ENCRYPTED_ONLY_KEY]:
-                raise
-            log.msg("Warning: sending unencrypted mail (because "
-                    "'encrypted_only' is set to False).")
+            # at this point we _can_ send unencrypted mail, because if the
+            # configuration said the opposite the address would have been
+            # rejected in SMTPDelivery.validateTo().
+            self._sign_payload_rec(self._message, signkey)
+            log.msg('Will send unencrypted message to %s.' % to_address)

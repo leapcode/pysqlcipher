@@ -28,6 +28,7 @@ from datetime import datetime
 from twisted.test import proto_helpers
 from twisted.mail.smtp import (
     User,
+    Address,
     SMTPBadRcpt,
 )
 from mock import Mock
@@ -37,7 +38,11 @@ from leap.mail.smtp.smtprelay import (
     SMTPFactory,
     EncryptedMessage,
 )
-from leap.mail.tests.smtp import TestCaseWithKeyManager
+from leap.mail.tests.smtp import (
+    TestCaseWithKeyManager,
+    ADDRESS,
+    ADDRESS_2,
+)
 from leap.common.keymanager import openpgp
 
 
@@ -52,11 +57,11 @@ IP_OR_HOST_REGEX = '(' + IP_REGEX + '|' + HOSTNAME_REGEX + ')'
 class TestSmtpRelay(TestCaseWithKeyManager):
 
     EMAIL_DATA = ['HELO relay.leap.se',
-                  'MAIL FROM: <user@leap.se>',
-                  'RCPT TO: <leap@leap.se>',
+                  'MAIL FROM: <%s>' % ADDRESS_2,
+                  'RCPT TO: <%s>' % ADDRESS,
                   'DATA',
-                  'From: User <user@leap.se>',
-                  'To: Leap <leap@leap.se>',
+                  'From: User <%s>' % ADDRESS_2,
+                  'To: Leap <%s>' % ADDRESS,
                   'Date: ' + datetime.now().strftime('%c'),
                   'Subject: test message',
                   '',
@@ -77,13 +82,15 @@ class TestSmtpRelay(TestCaseWithKeyManager):
         "Test if openpgp can encrypt and decrypt."
         text = "simple raw text"
         pubkey = self._km.get_key(
-            'leap@leap.se', openpgp.OpenPGPKey, private=False)
+            ADDRESS, openpgp.OpenPGPKey, private=False)
         encrypted = openpgp.encrypt_asym(text, pubkey)
-        self.assertNotEqual(text, encrypted, "failed encrypting text")
+        self.assertNotEqual(
+            text, encrypted, "Ciphertext is equal to plaintext.")
         privkey = self._km.get_key(
-            'leap@leap.se', openpgp.OpenPGPKey, private=True)
+            ADDRESS, openpgp.OpenPGPKey, private=True)
         decrypted = openpgp.decrypt_asym(encrypted, privkey)
-        self.assertEqual(text, decrypted, "failed decrypting text")
+        self.assertEqual(text, decrypted,
+            "Decrypted text differs from plaintext.")
 
     def test_relay_accepts_valid_email(self):
         """
@@ -104,7 +111,8 @@ class TestSmtpRelay(TestCaseWithKeyManager):
         for i, line in enumerate(self.EMAIL_DATA):
             proto.lineReceived(line + '\r\n')
             self.assertMatch(transport.value(),
-                             '\r\n'.join(SMTP_ANSWERS[0:i + 1]))
+                             '\r\n'.join(SMTP_ANSWERS[0:i + 1]),
+                             'Did not get expected answer from relay.')
         proto.setTimeout(None)
 
     def test_message_encrypt(self):
@@ -113,17 +121,77 @@ class TestSmtpRelay(TestCaseWithKeyManager):
         """
         proto = SMTPFactory(
             self._km, self._config).buildProtocol(('127.0.0.1', 0))
-        user = User('leap@leap.se', 'relay.leap.se', proto, 'leap@leap.se')
-        m = EncryptedMessage(user, self._km, self._config)
+        fromAddr = Address(ADDRESS_2)
+        dest = User(ADDRESS, 'relay.leap.se', proto, ADDRESS)
+        m = EncryptedMessage(fromAddr, dest, self._km, self._config)
         for line in self.EMAIL_DATA[4:12]:
             m.lineReceived(line)
         m.eomReceived()
         privkey = self._km.get_key(
-            'leap@leap.se', openpgp.OpenPGPKey, private=True)
+            ADDRESS, openpgp.OpenPGPKey, private=True)
         decrypted = openpgp.decrypt_asym(m._message.get_payload(), privkey)
         self.assertEqual(
             '\r\n'.join(self.EMAIL_DATA[9:12]) + '\r\n',
-            decrypted)
+            decrypted,
+            'Decrypted text differs from plaintext.')
+
+    def test_message_encrypt_sign(self):
+        """
+        Test if message gets encrypted to destination email and signed with
+        sender key.
+        """
+        proto = SMTPFactory(
+            self._km, self._config).buildProtocol(('127.0.0.1', 0))
+        user = User(ADDRESS, 'relay.leap.se', proto, ADDRESS)
+        fromAddr = Address(ADDRESS_2)
+        m = EncryptedMessage(fromAddr, user, self._km, self._config)
+        for line in self.EMAIL_DATA[4:12]:
+            m.lineReceived(line)
+        # trigger encryption and signing
+        m.eomReceived()
+        # decrypt and verify
+        privkey = self._km.get_key(
+            ADDRESS, openpgp.OpenPGPKey, private=True)
+        pubkey = self._km.get_key(ADDRESS_2, openpgp.OpenPGPKey)
+        decrypted = openpgp.decrypt_asym(
+            m._message.get_payload(), privkey, verify=pubkey)
+        self.assertEqual(
+            '\r\n'.join(self.EMAIL_DATA[9:12]) + '\r\n',
+            decrypted,
+            'Decrypted text differs from plaintext.')
+
+    def test_message_sign(self):
+        """
+        Test if message is signed with sender key.
+        """
+        # mock the key fetching
+        self._km.fetch_keys_from_server = Mock(return_value=[])
+        proto = SMTPFactory(
+            self._km, self._config).buildProtocol(('127.0.0.1', 0))
+        user = User('ihavenopubkey@nonleap.se', 'relay.leap.se', proto, ADDRESS)
+        fromAddr = Address(ADDRESS_2)
+        m = EncryptedMessage(fromAddr, user, self._km, self._config)
+        for line in self.EMAIL_DATA[4:12]:
+            m.lineReceived(line)
+        # trigger signing
+        m.eomReceived()
+        # assert content of message
+        self.assertTrue(
+            m._message.get_payload().startswith(
+                '-----BEGIN PGP SIGNED MESSAGE-----\n' +
+                'Hash: SHA1\n\n' + 
+                ('\r\n'.join(self.EMAIL_DATA[9:12]) + '\r\n' +
+                '-----BEGIN PGP SIGNATURE-----\n')),
+            'Message does not start with signature header.')
+        self.assertTrue(
+            m._message.get_payload().endswith(
+                '-----END PGP SIGNATURE-----\n'),
+            'Message does not end with signature footer.')
+        # assert signature is valid
+        pubkey = self._km.get_key(ADDRESS_2, openpgp.OpenPGPKey)
+        self.assertTrue(
+            openpgp.verify(m._message.get_payload(), pubkey),
+            'Signature could not be verified.')
 
     def test_missing_key_rejects_address(self):
         """
@@ -131,7 +199,7 @@ class TestSmtpRelay(TestCaseWithKeyManager):
         True.
         """
         # remove key from key manager
-        pubkey = self._km.get_key('leap@leap.se', openpgp.OpenPGPKey)
+        pubkey = self._km.get_key(ADDRESS, openpgp.OpenPGPKey)
         pgp = openpgp.OpenPGPScheme(self._soledad)
         pgp.delete_key(pubkey)
         # mock the key fetching
@@ -148,7 +216,8 @@ class TestSmtpRelay(TestCaseWithKeyManager):
         lines = transport.value().rstrip().split('\n')
         self.assertEqual(
             '550 Cannot receive for specified address',
-            lines[-1])
+            lines[-1],
+            'Address should have been rejecetd with appropriate message.')
 
     def test_missing_key_accepts_address(self):
         """
@@ -156,7 +225,7 @@ class TestSmtpRelay(TestCaseWithKeyManager):
         False.
         """
         # remove key from key manager
-        pubkey = self._km.get_key('leap@leap.se', openpgp.OpenPGPKey)
+        pubkey = self._km.get_key(ADDRESS, openpgp.OpenPGPKey)
         pgp = openpgp.OpenPGPScheme(self._soledad)
         pgp.delete_key(pubkey)
         # mock the key fetching
@@ -171,42 +240,9 @@ class TestSmtpRelay(TestCaseWithKeyManager):
         proto.lineReceived(self.EMAIL_DATA[0] + '\r\n')
         proto.lineReceived(self.EMAIL_DATA[1] + '\r\n')
         proto.lineReceived(self.EMAIL_DATA[2] + '\r\n')
-        # ensure the address was rejected
+        # ensure the address was accepted
         lines = transport.value().rstrip().split('\n')
         self.assertEqual(
             '250 Recipient address accepted',
-            lines[-1])
-
-    def test_malformed_address_rejects(self):
-        """
-        Test if server rejects to send to malformed addresses.
-        """
-        # mock the key fetching
-        self._km.fetch_keys_from_server = Mock(return_value=[])
-        # prepare the SMTP factory
-        for malformed in ['leap@']:
-            proto = SMTPFactory(
-                self._km, self._config).buildProtocol(('127.0.0.1', 0))
-            transport = proto_helpers.StringTransport()
-            proto.makeConnection(transport)
-            proto.lineReceived(self.EMAIL_DATA[0] + '\r\n')
-            proto.lineReceived(self.EMAIL_DATA[1] + '\r\n')
-            proto.lineReceived('RCPT TO: <%s>%s' % (malformed, '\r\n'))
-            # ensure the address was rejected
-            lines = transport.value().rstrip().split('\n')
-            self.assertEqual(
-                '550 Cannot receive for specified address',
-                lines[-1])
-
-    def test_prepare_header_adds_from(self):
-        """
-        Test if message headers are OK.
-        """
-        proto = SMTPFactory(
-            self._km, self._config).buildProtocol(('127.0.0.1', 0))
-        user = User('leap@leap.se', 'relay.leap.se', proto, 'leap@leap.se')
-        m = EncryptedMessage(user, self._km, self._config)
-        for line in self.EMAIL_DATA[4:12]:
-            m.lineReceived(line)
-        m.eomReceived()
-        self.assertEqual('<leap@leap.se>', m._message['From'])
+            lines[-1],
+            'Address should have been accepted with appropriate message.')
