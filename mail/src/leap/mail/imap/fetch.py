@@ -66,8 +66,7 @@ class LeapIncomingMail(object):
             soledad_path,
             server_url,
             server_pemfile,
-            token,
-            bootstrap=True)
+            token)
 
         self._pkey = self._keymanager.get_all_keys_in_local_db(
             private=True).pop()
@@ -109,7 +108,7 @@ class LeapIncomingMail(object):
         """
         Process a successfully decrypted message
         """
-        log.msg("processing message!")
+        log.msg("processing incoming message!")
         msg = json.loads(data)
         if not isinstance(msg, dict):
             return False
@@ -119,10 +118,10 @@ class LeapIncomingMail(object):
         rawmsg = msg.get('content', None)
         if not rawmsg:
             return False
-        log.msg("we got raw message")
+        #log.msg("we got raw message")
 
         # add to inbox and delete from soledad
         inbox.addMessage(rawmsg, ("\\Recent",))
-        log.msg("added msg")
+        doc_id = doc.doc_id
         self._soledad.delete_doc(doc)
-        log.msg("deleted doc")
+        log.msg("deleted doc %s from incoming" % doc_id)

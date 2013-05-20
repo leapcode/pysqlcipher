@@ -36,34 +36,96 @@ from twisted.python import log
 #import u1db
 
 from leap.common.check import leap_assert, leap_assert_type
+from leap.soledad import Soledad
 from leap.soledad.backends.sqlcipher import SQLCipherDatabase
 
 logger = logging.getLogger(__name__)
 
 
 class MissingIndexError(Exception):
-    """raises when tried to access a non existent index document"""
+    """
+    Raises when tried to access a non existent index document.
+    """
 
 
 class BadIndexError(Exception):
-    """raises when index is malformed or has the wrong cardinality"""
+    """
+    Raises when index is malformed or has the wrong cardinality.
+    """
+
+
+class WithMsgFields(object):
+    """
+    Container class for class-attributes to be shared by
+    several message-related classes.
+    """
+    # Internal representation of Message
+    DATE_KEY = "date"
+    HEADERS_KEY = "headers"
+    FLAGS_KEY = "flags"
+    MBOX_KEY = "mbox"
+    RAW_KEY = "raw"
+    SUBJECT_KEY = "subject"
+    UID_KEY = "uid"
+
+    # Mailbox specific keys
+    CLOSED_KEY = "closed"
+    CREATED_KEY = "created"
+    SUBSCRIBED_KEY = "subscribed"
+    RW_KEY = "rw"
+
+    # Document Type, for indexing
+    TYPE_KEY = "type"
+    TYPE_MESSAGE_VAL = "msg"
+    TYPE_MBOX_VAL = "mbox"
+
+    INBOX_VAL = "inbox"
+
+    # Flags for LeapDocument for indexing.
+    SEEN_KEY = "seen"
+    RECENT_KEY = "recent"
+
+    # Flags in Mailbox and Message
+    SEEN_FLAG = "\\Seen"
+    RECENT_FLAG = "\\Recent"
+    ANSWERED_FLAG = "\\Answered"
+    FLAGGED_FLAG = "\\Flagged"  # yo dawg
+    DELETED_FLAG = "\\Deleted"
+    DRAFT_FLAG = "\\Draft"
+    NOSELECT_FLAG = "\\Noselect"
+    LIST_FLAG = "List"  # is this OK? (no \. ie, no system flag)
+
+    # Fields in mail object
+    SUBJECT_FIELD = "Subject"
+    DATE_FIELD = "Date"
 
 
 class IndexedDB(object):
     """
-    Methods dealing with the index
+    Methods dealing with the index.
+
+    This is a MixIn that needs access to the soledad instance,
+    and also assumes that a INDEXES attribute is accessible to the instance.
+
+    INDEXES must be a dictionary of type:
+    {'index-name': ['field1', 'field2']}
     """
+    # TODO we might want to move this to soledad itself, check
 
     def initialize_db(self):
         """
         Initialize the database.
         """
+        leap_assert(self._soledad,
+                    "Need a soledad attribute accesible in the instance")
+        leap_assert_type(self.INDEXES, dict)
+
         # Ask the database for currently existing indexes.
-        db_indexes = dict(self._db.list_indexes())
-        for name, expression in self.INDEXES.items():
+        db_indexes = dict(self._soledad.list_indexes())
+        for name, expression in SoledadBackedAccount.INDEXES.items():
             if name not in db_indexes:
                 # The index does not yet exist.
-                self._db.create_index(name, *expression)
+                self._soledad.create_index(name, *expression)
                 continue
 
             if expression == db_indexes[name]:
@@ -71,8 +133,8 @@ class IndexedDB(object):
                 continue
             # The index exists but the definition is not what expected, so we
             # delete it and add the proper index expression.
-            self._db.delete_index(name)
-            self._db.create_index(name, *expression)
+            self._soledad.delete_index(name)
+            self._soledad.create_index(name, *expression)
 
 
 #######################################
@@ -80,7 +142,7 @@ class IndexedDB(object):
 #######################################
 
 
-class SoledadBackedAccount(IndexedDB):
+class SoledadBackedAccount(WithMsgFields, IndexedDB):
     """
     An implementation of IAccount and INamespacePresenteer
     that is backed by Soledad Encrypted Documents.
@@ -89,7 +151,6 @@ class SoledadBackedAccount(IndexedDB):
     implements(imap4.IAccount, imap4.INamespacePresenter)
 
     _soledad = None
-    _db = None
     selected = None
 
     TYPE_IDX = 'by-type'
@@ -99,75 +160,84 @@ class SoledadBackedAccount(IndexedDB):
     TYPE_MBOX_SEEN_IDX = 'by-type-and-mbox-and-seen'
     TYPE_MBOX_RECT_IDX = 'by-type-and-mbox-and-recent'
 
+    KTYPE = WithMsgFields.TYPE_KEY
+    MBOX_VAL = WithMsgFields.TYPE_MBOX_VAL
+
     INDEXES = {
         # generic
-        TYPE_IDX: ['type'],
-        TYPE_MBOX_IDX: ['type', 'mbox'],
-        TYPE_MBOX_UID_IDX: ['type', 'mbox', 'uid'],
+        TYPE_IDX: [KTYPE],
+        TYPE_MBOX_IDX: [KTYPE, MBOX_VAL],
+        TYPE_MBOX_UID_IDX: [KTYPE, MBOX_VAL, WithMsgFields.UID_KEY],
 
         # mailboxes
-        TYPE_SUBS_IDX: ['type', 'bool(subscribed)'],
+        TYPE_SUBS_IDX: [KTYPE, 'bool(subscribed)'],
 
         # messages
-        TYPE_MBOX_SEEN_IDX: ['type', 'mbox', 'bool(seen)'],
-        TYPE_MBOX_RECT_IDX: ['type', 'mbox', 'bool(recent)'],
+        TYPE_MBOX_SEEN_IDX: [KTYPE, MBOX_VAL, 'bool(seen)'],
+        TYPE_MBOX_RECT_IDX: [KTYPE, MBOX_VAL, 'bool(recent)'],
     }
+
+    INBOX_NAME = "INBOX"
+    MBOX_KEY = MBOX_VAL
 
     EMPTY_MBOX = {
-        "type": "mbox",
-        "mbox": "INBOX",
-        "subject": "",
-        "flags": [],
-        "closed": False,
-        "subscribed": False,
-        "rw": 1,
+        WithMsgFields.TYPE_KEY: MBOX_KEY,
+        WithMsgFields.TYPE_MBOX_VAL: INBOX_NAME,
+        WithMsgFields.SUBJECT_KEY: "",
+        WithMsgFields.FLAGS_KEY: [],
+        WithMsgFields.CLOSED_KEY: False,
+        WithMsgFields.SUBSCRIBED_KEY: False,
+        WithMsgFields.RW_KEY: 1,
     }
 
-    def __init__(self, name, soledad=None):
+    def __init__(self, account_name, soledad=None):
         """
-        SoledadBackedAccount constructor
-        creates a SoledadAccountIndex that keeps track of the
-        mailboxes and subscriptions handled by this account.
+        Creates a SoledadAccountIndex that keeps track of the mailboxes
+        and subscriptions handled by this account.
 
-        @param name: the name of the account (user id)
-        @type name: C{str}
+        :param acct_name: The name of the account (user id).
+        :type acct_name: str
 
-        @param soledad: a Soledad instance
-        @param soledad: C{Soledad}
+        :param soledad: a Soledad instance.
+        :param soledad: Soledad
         """
         leap_assert(soledad, "Need a soledad instance to initialize")
-        # XXX check isinstance ...
-        # XXX SHOULD assert too that the name matches the user with which
-        # soledad has been intialized.
+        leap_assert_type(soledad, Soledad)
 
-        self.name = name.upper()
+        # XXX SHOULD assert too that the name matches the user/uuid with which
+        # soledad has been initialized.
+
+        self._account_name = account_name.upper()
         self._soledad = soledad
 
-        self._db = soledad._db
         self.initialize_db()
 
-        # every user should see an inbox folder
-        # at least
+        # every user should have the right to an inbox folder
+        # at least, so let's make one!
 
         if not self.mailboxes:
-            self.addMailbox('inbox')
+            self.addMailbox(self.INBOX_NAME)
 
     def _get_empty_mailbox(self):
         """
         Returns an empty mailbox.
 
-        @rtype: dict
+        :rtype: dict
         """
         return copy.deepcopy(self.EMPTY_MBOX)
 
     def _get_mailbox_by_name(self, name):
         """
-        Returns an mbox by name.
+        Returns an mbox document by name.
 
-        @rtype: C{LeapDocument}
+        :param name: the name of the mailbox
+        :type name: str
+
+        :rtype: LeapDocument
         """
         name = name.upper()
-        doc = self._db.get_from_index(self.TYPE_MBOX_IDX, 'mbox', name)
+        doc = self._soledad.get_from_index(
+            self.TYPE_MBOX_IDX, self.MBOX_KEY, name)
         return doc[0] if doc else None
 
     @property
@@ -175,26 +245,28 @@ class SoledadBackedAccount(IndexedDB):
         """
         A list of the current mailboxes for this account.
         """
-        return [str(doc.content['mbox'])
-                for doc in self._db.get_from_index(self.TYPE_IDX, 'mbox')]
+        return [str(doc.content[self.MBOX_KEY])
+                for doc in self._soledad.get_from_index(
+                    self.TYPE_IDX, self.MBOX_KEY)]
 
     @property
     def subscriptions(self):
         """
         A list of the current subscriptions for this account.
         """
-        return [str(doc.content['mbox'])
-                for doc in self._db.get_from_index(
-                    self.TYPE_SUBS_IDX, 'mbox', '1')]
+        return [str(doc.content[self.MBOX_KEY])
+                for doc in self._soledad.get_from_index(
+                    self.TYPE_SUBS_IDX, self.MBOX_KEY, '1')]
 
     def getMailbox(self, name):
         """
-        Returns Mailbox with that name, without selecting it.
+        Returns a Mailbox with that name, without selecting it.
 
-        @param name: name of the mailbox
-        @type name: C{str}
+        :param name: name of the mailbox
+        :type name: str
 
-        @returns: a a SoledadMailbox instance
+        :returns: a a SoledadMailbox instance
+        :rtype: SoledadMailbox
         """
         name = name.upper()
         if name not in self.mailboxes:
@@ -210,15 +282,16 @@ class SoledadBackedAccount(IndexedDB):
         """
         Adds a mailbox to the account.
 
-        @param name: the name of the mailbox
-        @type name: str
+        :param name: the name of the mailbox
+        :type name: str
 
-        @param creation_ts: a optional creation timestamp to be used as
-            mailbox id. A timestamp will be used if no one is provided.
-        @type creation_ts: C{int}
+        :param creation_ts: a optional creation timestamp to be used as
+                            mailbox id. A timestamp will be used if no
+                            one is provided.
+        :type creation_ts: int
 
-        @returns: True if successful
-        @rtype: bool
+        :returns: True if successful
+        :rtype: bool
         """
         name = name.upper()
         # XXX should check mailbox name for RFC-compliant form
@@ -229,27 +302,33 @@ class SoledadBackedAccount(IndexedDB):
         if not creation_ts:
             # by default, we pass an int value
             # taken from the current time
+            # we make sure to take enough decimals to get a unique
+            # maibox-uidvalidity.
             creation_ts = int(time.time() * 10E2)
 
         mbox = self._get_empty_mailbox()
-        mbox['mbox'] = name
-        mbox['created'] = creation_ts
+        mbox[self.MBOX_KEY] = name
+        mbox[self.CREATED_KEY] = creation_ts
 
-        doc = self._db.create_doc(mbox)
+        doc = self._soledad.create_doc(mbox)
         return bool(doc)
 
     def create(self, pathspec):
-        # XXX What _exactly_ is the difference with addMailbox?
-        # We accept here a path specification, which can contain
-        # many levels, but look for the appropriate documentation
-        # pointer.
         """
-        Create a mailbox
-        Return True if successfully created
+        Create a new mailbox from the given hierarchical name.
 
-        @param pathspec: XXX ??? -----------------
-        @rtype: bool
+        :param pathspec: The full hierarchical name of a new mailbox to create.
+                         If any of the inferior hierarchical names to this one
+                         do not exist, they are created as well.
+        :type pathspec: str
+
+        :return: A true value if the creation succeeds.
+        :rtype: bool
+
+        :raise MailboxException: Raised if this mailbox cannot be added.
         """
+        # TODO raise MailboxException
+
         paths = filter(None, pathspec.split('/'))
         for accum in range(1, len(paths)):
             try:
@@ -265,10 +344,15 @@ class SoledadBackedAccount(IndexedDB):
 
     def select(self, name, readwrite=1):
         """
-        Select a mailbox.
-        @param name: the mailbox to select
-        @param readwrite: 1 for readwrite permissions.
-        @rtype: bool
+        Selects a mailbox.
+
+        :param name: the mailbox to select
+        :type name: str
+
+        :param readwrite: 1 for readwrite permissions.
+        :type readwrite: int
+
+        :rtype: bool
         """
         name = name.upper()
 
@@ -284,10 +368,16 @@ class SoledadBackedAccount(IndexedDB):
     def delete(self, name, force=False):
         """
         Deletes a mailbox.
+
         Right now it does not purge the messages, but just removes the mailbox
         name from the mailboxes list!!!
 
-        @param name: the mailbox to be deleted
+        :param name: the mailbox to be deleted
+        :type name: str
+
+        :param force: if True, it will not check for noselect flag or inferior
+                      names. use with care.
+        :type force: bool
         """
         name = name.upper()
         if not name in self.mailboxes:
@@ -298,7 +388,7 @@ class SoledadBackedAccount(IndexedDB):
         if force is False:
             # See if this box is flagged \Noselect
             # XXX use mbox.flags instead?
-            if r'\Noselect' in mbox.getFlags():
+            if self.NOSELECT_FLAG in mbox.getFlags():
                 # Check for hierarchically inferior mailboxes with this one
                 # as part of their root.
                 for others in self.mailboxes:
@@ -318,9 +408,13 @@ class SoledadBackedAccount(IndexedDB):
 
     def rename(self, oldname, newname):
         """
-        Renames a mailbox
-        @param oldname: old name of the mailbox
-        @param newname: new name of the mailbox
+        Renames a mailbox.
+
+        :param oldname: old name of the mailbox
+        :type oldname: str
+
+        :param newname: new name of the mailbox
+        :type newname: str
         """
         oldname = oldname.upper()
         newname = newname.upper()
@@ -337,8 +431,8 @@ class SoledadBackedAccount(IndexedDB):
 
         for (old, new) in inferiors:
             mbox = self._get_mailbox_by_name(old)
-            mbox.content['mbox'] = new
-            self._db.put_doc(mbox)
+            mbox.content[self.MBOX_KEY] = new
+            self._soledad.put_doc(mbox)
 
         # XXX ---- FIXME!!!! ------------------------------------
         # until here we just renamed the index...
@@ -350,9 +444,10 @@ class SoledadBackedAccount(IndexedDB):
 
     def _inferiorNames(self, name):
         """
-        Return hierarchically inferior mailboxes
-        @param name: the mailbox
-        @rtype: list
+        Return hierarchically inferior mailboxes.
+
+        :param name: name of the mailbox
+        :rtype: list
         """
         # XXX use wildcard query instead
         inferiors = []
@@ -365,8 +460,10 @@ class SoledadBackedAccount(IndexedDB):
         """
         Returns True if user is subscribed to this mailbox.
 
-        @param name: the mailbox to be checked.
-        @rtype: bool
+        :param name: the mailbox to be checked.
+        :type name: str
+
+        :rtype: bool
         """
         mbox = self._get_mailbox_by_name(name)
         return mbox.content.get('subscribed', False)
@@ -375,11 +472,11 @@ class SoledadBackedAccount(IndexedDB):
         """
         Sets the subscription value for a given mailbox
 
-        @param name: the mailbox
-        @type name: C{str}
+        :param name: the mailbox
+        :type name: str
 
-        @param value: the boolean value
-        @type value: C{bool}
+        :param value: the boolean value
+        :type value: bool
         """
         # maybe we should store subscriptions in another
         # document...
@@ -389,15 +486,15 @@ class SoledadBackedAccount(IndexedDB):
         mbox = self._get_mailbox_by_name(name)
 
         if mbox:
-            mbox.content['subscribed'] = value
-            self._db.put_doc(mbox)
+            mbox.content[self.SUBSCRIBED_KEY] = value
+            self._soledad.put_doc(mbox)
 
     def subscribe(self, name):
         """
         Subscribe to this mailbox
 
-        @param name: the mailbox
-        @type name: C{str}
+        :param name: name of the mailbox
+        :type name: str
         """
         name = name.upper()
         if name not in self.subscriptions:
@@ -407,8 +504,8 @@ class SoledadBackedAccount(IndexedDB):
         """
         Unsubscribe from this mailbox
 
-        @param name: the mailbox
-        @type name: C{str}
+        :param name: name of the mailbox
+        :type name: str
         """
         name = name.upper()
         if name not in self.subscriptions:
@@ -425,8 +522,11 @@ class SoledadBackedAccount(IndexedDB):
         replies are returned, containing the name attributes, hierarchy
         delimiter, and name.
 
-        @param ref: reference name
-        @param wildcard: mailbox name with possible wildcards
+        :param ref: reference name
+        :type ref: str
+
+        :param wildcard: mailbox name with possible wildcards
+        :type wildcard: str
         """
         # XXX use wildcard in index query
         ref = self._inferiorNames(ref.upper())
@@ -453,13 +553,18 @@ class SoledadBackedAccount(IndexedDB):
         Deletes all messages from all mailboxes.
         Danger! high voltage!
 
-        @param iknowhatiamdoing: confirmation parameter, needs to be True
-            to proceed.
+        :param iknowhatiamdoing: confirmation parameter, needs to be True
+                                 to proceed.
         """
         if iknowhatiamdoing is True:
             for mbox in self.mailboxes:
                 self.delete(mbox, force=True)
 
+    def __repr__(self):
+        """
+        Representation string for this object.
+        """
+        return "<SoledadBackedAccount (%s)>" % self._account_name
 
 #######################################
 # Soledad Message, MessageCollection
@@ -467,7 +572,7 @@ class SoledadBackedAccount(IndexedDB):
 #######################################
 
 
-class LeapMessage(object):
+class LeapMessage(WithMsgFields):
 
     implements(imap4.IMessage, imap4.IMessageFile)
 
@@ -475,9 +580,9 @@ class LeapMessage(object):
         """
         Initializes a LeapMessage.
 
-        @type doc: C{LeapDocument}
-        @param doc: A LeapDocument containing the internal
-        representation of the message
+        :param doc: A LeapDocument containing the internal
+                    representation of the message
+        :type doc: LeapDocument
         """
         self._doc = doc
 
@@ -485,23 +590,25 @@ class LeapMessage(object):
         """
         Retrieve the unique identifier associated with this message
 
-        @rtype: C{int}
+        :return: uid for this message
+        :rtype: int
         """
+        # XXX debug, to remove after a while...
         if not self._doc:
             log.msg('BUG!!! ---- message has no doc!')
             return
-        return self._doc.content['uid']
+        return self._doc.content[self.UID_KEY]
 
     def getFlags(self):
         """
         Retrieve the flags associated with this message
 
-        @rtype: C{iterable}
-        @return: The flags, represented as strings
+        :return: The flags, represented as strings
+        :rtype: iterable
         """
         if self._doc is None:
             return []
-        flags = self._doc.content.get('flags', None)
+        flags = self._doc.content.get(self.FLAGS_KEY, None)
         if flags:
             flags = map(str, flags)
         return flags
@@ -515,24 +622,30 @@ class LeapMessage(object):
 
         Returns a LeapDocument that needs to be updated by the caller.
 
-        @type flags: sequence of C{str}
-        @rtype: LeapDocument
+        :param flags: the flags to update in the message.
+        :type flags: sequence of str
+
+        :return: a LeapDocument instance
+        :rtype: LeapDocument
         """
         log.msg('setting flags')
         doc = self._doc
-        doc.content['flags'] = flags
-        doc.content['seen'] = "\\Seen" in flags
-        doc.content['recent'] = "\\Recent" in flags
-        return self._doc
+        doc.content[self.FLAGS_KEY] = flags
+        doc.content[self.SEEN_KEY] = self.SEEN_FLAG in flags
+        doc.content[self.RECENT_KEY] = self.RECENT_FLAG in flags
+        return doc
 
     def addFlags(self, flags):
         """
-        Adds flags to this message
+        Adds flags to this message.
 
-        Returns a document that needs to be updated by the caller.
+        Returns a LeapDocument that needs to be updated by the caller.
 
-        @type flags: sequence of C{str}
-        @rtype: LeapDocument
+        :param flags: the flags to add to the message.
+        :type flags: sequence of str
+
+        :return: a LeapDocument instance
+        :rtype: LeapDocument
         """
         oldflags = self.getFlags()
         return self.setFlags(list(set(flags + oldflags)))
@@ -541,10 +654,13 @@ class LeapMessage(object):
         """
         Remove flags from this message.
 
-        Returns a document that needs to be updated by the caller.
+        Returns a LeapDocument that needs to be updated by the caller.
 
-        @type flags: sequence of C{str}
-        @rtype: LeapDocument
+        :param flags: the flags to be removed from the message.
+        :type flags: sequence of str
+
+        :return: a LeapDocument instance
+        :rtype: LeapDocument
         """
         oldflags = self.getFlags()
         return self.setFlags(list(set(oldflags) - set(flags)))
@@ -556,7 +672,7 @@ class LeapMessage(object):
         @rtype: C{str}
         @retur: An RFC822-formatted date string.
         """
-        return str(self._doc.content.get('date', ''))
+        return str(self._doc.content.get(self.DATE_KEY, ''))
 
     #
     # IMessageFile
@@ -575,9 +691,12 @@ class LeapMessage(object):
 
         Reading from the returned file will return all the bytes
         of which this message consists.
+
+        :return: file-like object opened fore reading.
+        :rtype: StringIO
         """
         fd = cStringIO.StringIO()
-        fd.write(str(self._doc.content.get('raw', '')))
+        fd.write(str(self._doc.content.get(self.RAW_KEY, '')))
         fd.seek(0)
         return fd
 
@@ -592,50 +711,57 @@ class LeapMessage(object):
         """
         Retrieve a file object containing only the body of this message.
 
-        @rtype: C{StringIO}
+        :return: file-like object opened for reading
+        :rtype: StringIO
         """
         fd = StringIO.StringIO()
-        fd.write(str(self._doc.content.get('raw', '')))
+        fd.write(str(self._doc.content.get(self.RAW_KEY, '')))
         # SHOULD use a separate BODY FIELD ...
         fd.seek(0)
         return fd
 
     def getSize(self):
         """
-        Return the total size, in octets, of this message
+        Return the total size, in octets, of this message.
 
-        @rtype: C{int}
+        :return: size of the message, in octets
+        :rtype: int
         """
         return self.getBodyFile().len
 
     def _get_headers(self):
         """
-        Return the headers dict stored in this message document
+        Return the headers dict stored in this message document.
         """
-        return self._doc.content['headers']
+        return self._doc.content.get(self.HEADERS_KEY, {})
 
     def getHeaders(self, negate, *names):
         """
         Retrieve a group of message headers.
 
-        @type names: C{tuple} of C{str}
-        @param names: The names of the headers to retrieve or omit.
+        :param names: The names of the headers to retrieve or omit.
+        :type names: tuple of str
 
-        @type negate: C{bool}
-        @param negate: If True, indicates that the headers listed in C{names}
-        should be omitted from the return value, rather than included.
+        :param negate: If True, indicates that the headers listed in names
+                       should be omitted from the return value, rather
+                       than included.
+        :type negate: bool
 
-        @rtype: C{dict}
-        @return: A mapping of header field names to header field values
+        :return: A mapping of header field names to header field values
+        :rtype: dict
         """
         headers = self._get_headers()
         if negate:
             cond = lambda key: key.upper() not in names
         else:
             cond = lambda key: key.upper() in names
-        return dict(
-            [map(str, (key, val)) for key, val in headers.items()
-             if cond(key)])
+
+        # unpack and filter original dict by negate-condition
+        filter_by_cond = [
+            map(str, (key, val)) for
+            key, val in headers.items()
+            if cond(key)]
+        return dict(filter_by_cond)
 
     # --- no multipart for now
 
@@ -646,7 +772,7 @@ class LeapMessage(object):
         return None
 
 
-class MessageCollection(object):
+class MessageCollection(WithMsgFields):
     """
     A collection of messages, surprisingly.
 
@@ -657,49 +783,53 @@ class MessageCollection(object):
     # XXX this should be able to produce a MessageSet methinks
 
     EMPTY_MSG = {
-        "type": "msg",
-        "uid": 1,
-        "mbox": "inbox",
-        "subject": "",
-        "date": "",
-        "seen": False,
-        "recent": True,
-        "flags": [],
-        "headers": {},
-        "raw": "",
+        WithMsgFields.TYPE_KEY: WithMsgFields.TYPE_MESSAGE_VAL,
+        WithMsgFields.UID_KEY: 1,
+        WithMsgFields.MBOX_KEY: WithMsgFields.INBOX_VAL,
+        WithMsgFields.SUBJECT_KEY: "",
+        WithMsgFields.DATE_KEY: "",
+        WithMsgFields.SEEN_KEY: False,
+        WithMsgFields.RECENT_KEY: True,
+        WithMsgFields.FLAGS_KEY: [],
+        WithMsgFields.HEADERS_KEY: {},
+        WithMsgFields.RAW_KEY: "",
     }
 
-    def __init__(self, mbox=None, db=None):
+    def __init__(self, mbox=None, soledad=None):
         """
         Constructor for MessageCollection.
 
-        @param mbox: the name of the mailbox. It is the name
+        :param mbox: the name of the mailbox. It is the name
                      with which we filter the query over the
                      messages database
-        @type mbox: C{str}
+        :type mbox: str
 
-        @param db: SQLCipher database (contained in soledad)
-        @type db: SQLCipher instance
+        :param soledad: Soledad database
+        :type soledad: Soledad instance
         """
+        # XXX pass soledad directly
+
         leap_assert(mbox, "Need a mailbox name to initialize")
         leap_assert(mbox.strip() != "", "mbox cannot be blank space")
         leap_assert(isinstance(mbox, (str, unicode)),
                     "mbox needs to be a string")
-        leap_assert(db, "Need a db instance to initialize")
-        leap_assert(isinstance(db, SQLCipherDatabase),
-                    "db must be an instance of SQLCipherDatabase")
+        leap_assert(soledad, "Need a soledad instance to initialize")
+        leap_assert(isinstance(soledad._db, SQLCipherDatabase),
+                    "soledad._db must be an instance of SQLCipherDatabase")
 
         # okay, all in order, keep going...
 
         self.mbox = mbox.upper()
-        self.db = db
+        self._soledad = soledad
+        #self.db = db
         self._parser = Parser()
 
     def _get_empty_msg(self):
         """
         Returns an empty message.
 
-        @rtype: dict
+        :return: a dict containing a default empty message
+        :rtype: dict
         """
         return copy.deepcopy(self.EMPTY_MSG)
 
@@ -707,20 +837,20 @@ class MessageCollection(object):
         """
         Creates a new message document.
 
-        @param raw: the raw message
-        @type raw: C{str}
+        :param raw: the raw message
+        :type raw: str
 
-        @param subject: subject of the message.
-        @type subject: C{str}
+        :param subject: subject of the message.
+        :type subject: str
 
-        @param flags: flags
-        @type flags: C{list}
+        :param flags: flags
+        :type flags: list
 
-        @param date: the received date for the message
-        @type date: C{str}
+        :param date: the received date for the message
+        :type date: str
 
-        @param uid: the message uid for this mailbox
-        @type uid: C{int}
+        :param uid: the message uid for this mailbox
+        :type uid: int
         """
         if flags is None:
             flags = tuple()
@@ -733,11 +863,11 @@ class MessageCollection(object):
                 return o
 
         content = self._get_empty_msg()
-        content['mbox'] = self.mbox
+        content[self.MBOX_KEY] = self.mbox
 
         if flags:
-            content['flags'] = map(stringify, flags)
-            content['seen'] = "\\Seen" in flags
+            content[self.FLAGS_KEY] = map(stringify, flags)
+            content[self.SEEN_KEY] = self.SEEN_FLAG in flags
 
         def _get_parser_fun(o):
             if isinstance(o, (cStringIO.OutputType, StringIO.StringIO)):
@@ -749,39 +879,55 @@ class MessageCollection(object):
         headers = dict(msg)
 
         # XXX get lower case for keys?
-        content['headers'] = headers
-        content['subject'] = headers['Subject']
-        content['raw'] = stringify(raw)
+        content[self.HEADERS_KEY] = headers
+        content[self.SUBJECT_KEY] = headers[self.SUBJECT_FIELD]
+        content[self.RAW_KEY] = stringify(raw)
 
         if not date:
-            content['date'] = headers['Date']
+            content[self.DATE_KEY] = headers[self.DATE_FIELD]
 
         # ...should get a sanity check here.
-        content['uid'] = uid
+        content[self.UID_KEY] = uid
 
-        return self.db.create_doc(content)
+        return self._soledad.create_doc(content)
 
     def remove(self, msg):
         """
         Removes a message.
 
-        @param msg: a u1db doc containing the message
+        :param msg: a u1db doc containing the message
+        :type msg: LeapDocument
         """
-        self.db.delete_doc(msg)
+        self._soledad.delete_doc(msg)
 
     # getters
 
     def get_by_uid(self, uid):
         """
-        Retrieves a message document by UID
+        Retrieves a message document by UID.
+
+        :param uid: the message uid to query by
+        :type uid: int
+
+        :return: A LeapDocument instance matching the query,
+                 or None if not found.
+        :rtype: LeapDocument
         """
-        docs = self.db.get_from_index(
-            SoledadBackedAccount.TYPE_MBOX_UID_IDX, 'msg', self.mbox, str(uid))
+        docs = self._soledad.get_from_index(
+            SoledadBackedAccount.TYPE_MBOX_UID_IDX,
+            self.TYPE_MESSAGE_VAL, self.mbox, str(uid))
         return docs[0] if docs else None
 
     def get_msg_by_uid(self, uid):
         """
-        Retrieves a LeapMessage by UID
+        Retrieves a LeapMessage by UID.
+
+        :param uid: the message uid to query by
+        :type uid: int
+
+        :return: A LeapMessage instance matching the query,
+                 or None if not found.
+        :rtype: LeapMessage
         """
         doc = self.get_by_uid(uid)
         if doc:
@@ -789,53 +935,56 @@ class MessageCollection(object):
 
     def get_all(self):
         """
-        Get all messages for the selected mailbox
-        Returns a list of u1db documents.
+        Get all message documents for the selected mailbox.
         If you want acess to the content, use __iter__ instead
 
-        @rtype: list
+        :return: a list of u1db documents
+        :rtype: list of LeapDocument
         """
         # XXX this should return LeapMessage instances
-        return self.db.get_from_index(
-            SoledadBackedAccount.TYPE_MBOX_IDX, 'msg', self.mbox)
+        return self._soledad.get_from_index(
+            SoledadBackedAccount.TYPE_MBOX_IDX,
+            self.TYPE_MESSAGE_VAL, self.mbox)
 
     def unseen_iter(self):
         """
         Get an iterator for the message docs with no `seen` flag
 
-        @rtype: C{iterable}
+        :return: iterator through unseen message docs
+        :rtype: iterable
         """
         return (doc for doc in
-                self.db.get_from_index(
+                self._soledad.get_from_index(
                     SoledadBackedAccount.TYPE_MBOX_RECT_IDX,
-                    'msg', self.mbox, '1'))
+                    self.TYPE_MESSAGE_VAL, self.mbox, '1'))
 
     def get_unseen(self):
         """
         Get all messages with the `Unseen` flag
 
-        @rtype: C{list}
-        @returns: a list of LeapMessages
+        :returns: a list of LeapMessages
+        :rtype: list
         """
         return [LeapMessage(doc) for doc in self.unseen_iter()]
 
     def recent_iter(self):
         """
-        Get an iterator for the message docs with recent flag.
+        Get an iterator for the message docs with `recent` flag.
 
-        @rtype: C{iterable}
+        :return: iterator through recent message docs
+        :rtype: iterable
         """
         return (doc for doc in
-                self.db.get_from_index(
+                self._soledad.get_from_index(
                     SoledadBackedAccount.TYPE_MBOX_RECT_IDX,
-                    'msg', self.mbox, '1'))
+                    self.TYPE_MESSAGE_VAL, self.mbox, '1'))
 
     def get_recent(self):
         """
         Get all messages with the `Recent` flag.
 
-        @type: C{list}
-        @returns: a list of LeapMessages
+        :returns: a list of LeapMessages
+        :rtype: list
         """
         return [LeapMessage(doc) for doc in self.recent_iter()]
 
@@ -843,15 +992,15 @@ class MessageCollection(object):
         """
         Return the count of messages for this mailbox.
 
-        @rtype: C{int}
+        :rtype: int
         """
         return len(self.get_all())
 
     def __len__(self):
         """
-        Returns the number of messages on this mailbox
+        Returns the number of messages on this mailbox.
 
-        @rtype: C{int}
+        :rtype: int
         """
         return self.count()
 
@@ -859,17 +1008,21 @@ class MessageCollection(object):
         """
         Returns an iterator over all messages.
 
-        @rtype: C{iterable}
-        @returns: iterator of dicts with content for all messages.
+        :returns: iterator of dicts with content for all messages.
+        :rtype: iterable
         """
+        # XXX return LeapMessage instead?! (change accordingly)
         return (m.content for m in self.get_all())
 
     def __getitem__(self, uid):
         """
         Allows indexing as a list, with msg uid as the index.
 
-        @type key: C{int}
-        @param key: an integer index
+        :param uid: an integer index
+        :type uid: int
+
+        :return: LeapMessage or None if not found.
+        :rtype: LeapMessage
         """
         try:
             return self.get_msg_by_uid(uid)
@@ -877,13 +1030,16 @@ class MessageCollection(object):
             return None
 
     def __repr__(self):
+        """
+        Representation string for this object.
+        """
         return u"<MessageCollection: mbox '%s' (%s)>" % (
             self.mbox, self.count())
 
     # XXX should implement __eq__ also
 
 
-class SoledadMailbox(object):
+class SoledadMailbox(WithMsgFields):
     """
     A Soledad-backed IMAP mailbox.
 
@@ -896,26 +1052,31 @@ class SoledadMailbox(object):
     messages = None
     _closed = False
 
-    INIT_FLAGS = ('\\Seen', '\\Answered', '\\Flagged',
-                  '\\Deleted', '\\Draft', '\\Recent', 'List')
-    DELETED_FLAG = '\\Deleted'
+    INIT_FLAGS = (WithMsgFields.SEEN_FLAG, WithMsgFields.ANSWERED_FLAG,
+                  WithMsgFields.FLAGGED_FLAG, WithMsgFields.DELETED_FLAG,
+                  WithMsgFields.DRAFT_FLAG, WithMsgFields.RECENT_FLAG,
+                  WithMsgFields.LIST_FLAG)
     flags = None
+
+    CMD_MSG = "MESSAGES"
+    CMD_RECENT = "RECENT"
+    CMD_UIDNEXT = "UIDNEXT"
+    CMD_UIDVALIDITY = "UIDVALIDITY"
+    CMD_UNSEEN = "UNSEEN"
 
     def __init__(self, mbox, soledad=None, rw=1):
         """
-        SoledadMailbox constructor
-        Needs to get passed a name, plus a soledad instance and
-        the soledad account index, where it stores the flags for this
-        mailbox.
+        SoledadMailbox constructor. Needs to get passed a name, plus a
+        Soledad instance.
 
-        @param mbox: the mailbox name
-        @type mbox: C{str}
+        :param mbox: the mailbox name
+        :type mbox: str
 
-        @param soledad: a Soledad instance.
-        @type soledad: C{Soledad}
+        :param soledad: a Soledad instance.
+        :type soledad: Soledad
 
-        @param rw: read-and-write flags
-        @type rw: C{int}
+        :param rw: read-and-write flags
+        :type rw: int
         """
         leap_assert(mbox, "Need a mailbox name to initialize")
         leap_assert(soledad, "Need a soledad instance to initialize")
@@ -926,10 +1087,9 @@ class SoledadMailbox(object):
         self.rw = rw
 
         self._soledad = soledad
-        self._db = soledad._db
 
         self.messages = MessageCollection(
-            mbox=mbox, db=soledad._db)
+            mbox=mbox, soledad=soledad)
 
         if not self.getFlags():
             self.setFlags(self.INIT_FLAGS)
@@ -945,41 +1105,75 @@ class SoledadMailbox(object):
         #------------------------------------------
 
     def _get_mbox(self):
-        """Returns mailbox document"""
-        return self._db.get_from_index(
-            SoledadBackedAccount.TYPE_MBOX_IDX, 'mbox', self.mbox)[0]
+        """
+        Returns mailbox document.
+
+        :return: A LeapDocument containing this mailbox.
+        :rtype: LeapDocument
+        """
+        query = self._soledad.get_from_index(
+            SoledadBackedAccount.TYPE_MBOX_IDX,
+            self.TYPE_MBOX_VAL, self.mbox)
+        if query:
+            return query.pop()
 
     def getFlags(self):
         """
-        Returns the possible flags of this mailbox
-        @rtype: tuple
+        Returns the flags defined for this mailbox.
+
+        :returns: tuple of flags for this mailbox
+        :rtype: tuple of str
         """
-        mbox = self._get_mbox()
-        flags = mbox.content.get('flags', [])
-        return map(str, flags)
+        return map(str, self.INIT_FLAGS)
+
+        # TODO -- returning hardcoded flags for now,
+        # no need of setting flags.
+
+        #mbox = self._get_mbox()
+        #if not mbox:
+            #return None
+        #flags = mbox.content.get(self.FLAGS_KEY, [])
+        #return map(str, flags)
 
     def setFlags(self, flags):
         """
-        Sets flags for this mailbox
-        @param flags: a tuple with the flags
+        Sets flags for this mailbox.
+
+        :param flags: a tuple with the flags
+        :type flags: tuple of str
         """
+        # TODO -- fix also getFlags
         leap_assert(isinstance(flags, tuple),
                     "flags expected to be a tuple")
         mbox = self._get_mbox()
-        mbox.content['flags'] = map(str, flags)
-        self._db.put_doc(mbox)
+        if not mbox:
+            return None
+        mbox.content[self.FLAGS_KEY] = map(str, flags)
+        self._soledad.put_doc(mbox)
 
     # XXX SHOULD BETTER IMPLEMENT ADD_FLAG, REMOVE_FLAG.
 
     def _get_closed(self):
+        """
+        Return the closed attribute for this mailbox.
+
+        :return: True if the mailbox is closed
+        :rtype: bool
+        """
         mbox = self._get_mbox()
-        return mbox.content.get('closed', False)
+        return mbox.content.get(self.CLOSED_KEY, False)
 
     def _set_closed(self, closed):
+        """
+        Set the closed attribute for this mailbox.
+
+        :param closed: the state to be set
+        :type closed: bool
+        """
         leap_assert(isinstance(closed, bool), "closed needs to be boolean")
         mbox = self._get_mbox()
-        mbox.content['closed'] = closed
-        self._db.put_doc(mbox)
+        mbox.content[self.CLOSED_KEY] = closed
+        self._soledad.put_doc(mbox)
 
     closed = property(
         _get_closed, _set_closed, doc="Closed attribute.")
@@ -988,92 +1182,117 @@ class SoledadMailbox(object):
         """
         Return the unique validity identifier for this mailbox.
 
-        @rtype: C{int}
+        :return: unique validity identifier
+        :rtype: int
         """
         mbox = self._get_mbox()
-        return mbox.content.get('created', 1)
+        return mbox.content.get(self.CREATED_KEY, 1)
 
     def getUID(self, message):
         """
         Return the UID of a message in the mailbox
 
-        @rtype: C{int}
+        .. note:: this implementation does not make much sense RIGHT NOW,
+        but in the future will be useful to get absolute UIDs from
+        message sequence numbers.
+
+        :param message: the message uid
+        :type message: int
+
+        :rtype: int
         """
         msg = self.messages.get_msg_by_uid(message)
         return msg.getUID()
 
-    def getRecentCount(self):
-        """
-        Returns the number of messages with the 'Recent' flag
-
-        @rtype: C{int}
-        """
-        return len(self.messages.get_recent())
-
     def getUIDNext(self):
         """
         Return the likely UID for the next message added to this
-        mailbox
+        mailbox. Currently it returns the current length incremented
+        by one.
 
-        @rtype: C{int}
+        :rtype: int
         """
         # XXX reimplement with proper index
         return self.messages.count() + 1
 
     def getMessageCount(self):
         """
-        Returns the total count of messages in this mailbox
+        Returns the total count of messages in this mailbox.
+
+        :rtype: int
         """
         return self.messages.count()
 
     def getUnseenCount(self):
         """
-        Returns the total count of unseen messages in this mailbox
+        Returns the number of messages with the 'Unseen' flag.
+
+        :return: count of messages flagged `unseen`
+        :rtype: int
         """
         return len(self.messages.get_unseen())
 
+    def getRecentCount(self):
+        """
+        Returns the number of messages with the 'Recent' flag.
+
+        :return: count of messages flagged `recent`
+        :rtype: int
+        """
+        return len(self.messages.get_recent())
+
     def isWriteable(self):
         """
-        Get the read/write status of the mailbox
-        @rtype: C{int}
+        Get the read/write status of the mailbox.
+
+        :return: 1 if mailbox is read-writeable, 0 otherwise.
+        :rtype: int
         """
         return self.rw
 
     def getHierarchicalDelimiter(self):
         """
-        Returns the character used to delimite hierarchies in mailboxes
+        Returns the character used to delimite hierarchies in mailboxes.
 
-        @rtype: C{str}
+        :rtype: str
         """
         return '/'
 
     def requestStatus(self, names):
         """
         Handles a status request by gathering the output of the different
-        status commands
+        status commands.
 
-        @param names: a list of strings containing the status commands
-        @type names: iter
+        :param names: a list of strings containing the status commands
+        :type names: iter
         """
         r = {}
-        if 'MESSAGES' in names:
-            r['MESSAGES'] = self.getMessageCount()
-        if 'RECENT' in names:
-            r['RECENT'] = self.getRecentCount()
-        if 'UIDNEXT' in names:
-            r['UIDNEXT'] = self.getMessageCount() + 1
-        if 'UIDVALIDITY' in names:
-            r['UIDVALIDITY'] = self.getUID()
-        if 'UNSEEN' in names:
-            r['UNSEEN'] = self.getUnseenCount()
+        if self.CMD_MSG in names:
+            r[self.CMD_MSG] = self.getMessageCount()
+        if self.CMD_RECENT in names:
+            r[self.CMD_RECENT] = self.getRecentCount()
+        if self.CMD_UIDNEXT in names:
+            r[self.CMD_UIDNEXT] = self.getMessageCount() + 1
+        if self.CMD_UIDVALIDITY in names:
+            r[self.CMD_UIDVALIDITY] = self.getUID()
+        if self.CMD_UNSEEN in names:
+            r[self.CMD_UNSEEN] = self.getUnseenCount()
         return defer.succeed(r)
 
     def addMessage(self, message, flags, date=None):
         """
-        Adds a message to this mailbox
-        @param message: the raw message
-        @flags: flag list
-        @date: timestamp
+        Adds a message to this mailbox.
+
+        :param message: the raw message
+        :type message: str
+
+        :param flags: flag list
+        :type flags: list of str
+
+        :param date: timestamp
+        :type date: str
+
+        :return: a deferred that evals to None
         """
         # XXX we should treat the message as an IMessage from here
         uid_next = self.getUIDNext()
@@ -1092,12 +1311,12 @@ class SoledadMailbox(object):
         Should cleanup resources, and set the \\Noselect flag
         on the mailbox.
         """
-        self.setFlags(('\\Noselect',))
+        self.setFlags((self.NOSELECT_FLAG,))
         self.deleteAllDocs()
 
         # XXX removing the mailbox in situ for now,
         # we should postpone the removal
-        self._db.delete_doc(self._get_mbox())
+        self._soledad.delete_doc(self._get_mbox())
 
     def expunge(self):
         """
@@ -1109,7 +1328,7 @@ class SoledadMailbox(object):
         delete = []
         deleted = []
         for m in self.messages.get_all():
-            if self.DELETED_FLAG in m.content['flags']:
+            if self.DELETED_FLAG in m.content[self.FLAGS_KEY]:
                 delete.append(m)
         for m in delete:
             deleted.append(m.content)
@@ -1126,15 +1345,15 @@ class SoledadMailbox(object):
         from rfc 3501: The data items to be fetched can be either a single atom
         or a parenthesized list.
 
-        @type messages: C{MessageSet}
-        @param messages: IDs of the messages to retrieve information about
+        :param messages: IDs of the messages to retrieve information about
+        :type messages: MessageSet
 
-        @type uid: C{bool}
-        @param uid: If true, the IDs are UIDs. They are message sequence IDs
-        otherwise.
+        :param uid: If true, the IDs are UIDs. They are message sequence IDs
+                    otherwise.
+        :type uid: bool
 
-        @rtype: A tuple of two-tuples of message sequence numbers and
-        C{LeapMessage}
+        :rtype: A tuple of two-tuples of message sequence numbers and
+                LeapMessage
         """
         # XXX implement sequence numbers (uid = 0)
         result = []
@@ -1152,34 +1371,35 @@ class SoledadMailbox(object):
         """
         Sets the flags of one or more messages.
 
-        @type messages: A MessageSet object with the list of messages requested
-        @param messages: The identifiers of the messages to set the flags
+        :param messages: The identifiers of the messages to set the flags
+        :type messages: A MessageSet object with the list of messages requested
 
-        @type flags: sequence of {str}
-        @param flags: The flags to set, unset, or  add.
+        :param flags: The flags to set, unset, or add.
+        :type flags: sequence of str
 
-        @type mode: -1, 0, or 1
-        @param mode: If mode is -1, these flags should be removed from the
-        specified messages.  If mode is 1, these flags should be added to
-        the specified messages.  If mode is 0, all existing flags should be
-        cleared and these flags should be added.
+        :param mode: If mode is -1, these flags should be removed from the
+                     specified messages.  If mode is 1, these flags should be
+                     added to the specified messages.  If mode is 0, all
+                     existing flags should be cleared and these flags should be
+                     added.
+        :type mode: -1, 0, or 1
 
-        @type uid: C{bool}
-        @param uid: If true, the IDs specified in the query are UIDs;
-        otherwise they are message sequence IDs.
+        :param uid: If true, the IDs specified in the query are UIDs;
+                    otherwise they are message sequence IDs.
+        :type uid: bool
 
-        @rtype: C{dict}
-        @return: A C{dict} mapping message sequence numbers to sequences of
-        C{str}
-        representing the flags set on the message after this operation has
-        been performed, or a C{Deferred} whose callback will be invoked with
-        such a dict
+        :return: A dict mapping message sequence numbers to sequences of
+                 str representing the flags set on the message after this
+                 operation has been performed.
+        :rtype: dict
 
-        @raise ReadOnlyMailbox: Raised if this mailbox is not open for
-        read-write.
+        :raise ReadOnlyMailbox: Raised if this mailbox is not open for
+                                read-write.
         """
         # XXX implement also sequence (uid = 0)
+
         if not self.isWriteable():
+            log.msg('read only mailbox!')
             raise imap4.ReadOnlyMailbox
 
         if not messages.last:
@@ -1187,6 +1407,7 @@ class SoledadMailbox(object):
 
         result = {}
         for msg_id in messages:
+            print "MSG ID = %s" % msg_id
             msg = self.messages.get_msg_by_uid(msg_id)
             if mode == 1:
                 self._update(msg.addFlags(flags))
@@ -1220,8 +1441,11 @@ class SoledadMailbox(object):
         Updates document in u1db database
         """
         #log.msg('updating doc... %s ' % doc)
-        self._db.put_doc(doc)
+        self._soledad.put_doc(doc)
 
     def __repr__(self):
+        """
+        Representation string for this mailbox.
+        """
         return u"<SoledadMailbox: mbox '%s' (%s)>" % (
             self.mbox, self.messages.count())

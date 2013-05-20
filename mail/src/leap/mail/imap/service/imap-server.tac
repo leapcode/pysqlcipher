@@ -117,7 +117,7 @@ class LeapIMAPFactory(ServerFactory):
 
 
 def initialize_mailbox_soledad(user_uuid, soledad_pass, server_url,
-                       	       server_pemfile, token):
+                               server_pemfile, token):
     """
     Initializes soledad by hand
 
@@ -137,16 +137,14 @@ def initialize_mailbox_soledad(user_uuid, soledad_pass, server_url,
     soledad_path = os.path.join(
         base_config, "leap", "soledad", "%s-mailbox.db" % user_uuid)
 
-
     _soledad = Soledad(
         user_uuid,
-	soledad_pass,
+        soledad_pass,
         secret_path,
         soledad_path,
-	server_url,
+        server_url,
         server_pemfile,
-        token,
-        bootstrap=True)
+        token)
     #_soledad._init_dirs()
     #_soledad._crypto = SoledadCrypto(_soledad)
     #_soledad._shared_db = None
@@ -165,6 +163,7 @@ def populate_test_account(acct):
     inbox = acct.getMailbox('inbox')
     inbox.addMessage(mail_sample, ("\\Foo", "\\Recent",), date="Right now2")
 '''
+
 
 def incoming_check(fetcher):
     """
