@@ -1,3 +1,2 @@
-leap.common>=0.2.3-dev
-leap.soledad
+leap.soledad>=0.0.2-dev
 twisted

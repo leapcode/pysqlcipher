@@ -1,0 +1,81 @@
+T 127.0.0.1:9930 -> 127.0.0.1:42866 [AP]
+* OK [CAPABILITY IMAP4rev1 IDLE NAMESPACE] Twisted IMAP4rev1 Ready.
+
+##
+T 127.0.0.1:42866 -> 127.0.0.1:9930 [AP]
+NCLJ1 CAPABILITY.
+
+##
+T 127.0.0.1:9930 -> 127.0.0.1:42866 [AP]
+* CAPABILITY IMAP4rev1 IDLE NAMESPACE.
+NCLJ1 OK CAPABILITY completed.
+
+##
+T 127.0.0.1:42866 -> 127.0.0.1:9930 [AP]
+NCLJ2 LOGIN user "pass".
+
+#
+T 127.0.0.1:9930 -> 127.0.0.1:42866 [AP]
+NCLJ2 OK LOGIN succeeded.
+
+##
+T 127.0.0.1:42866 -> 127.0.0.1:9930 [AP]
+NCLJ3 CAPABILITY.
+
+#
+T 127.0.0.1:9930 -> 127.0.0.1:42866 [AP]
+* CAPABILITY IMAP4rev1 IDLE NAMESPACE.
+NCLJ3 OK CAPABILITY completed.
+
+#
+T 127.0.0.1:42866 -> 127.0.0.1:9930 [AP]
+NCLJ4 LIST "" "".
+
+##
+T 127.0.0.1:9930 -> 127.0.0.1:42866 [AP]
+* LIST (\Seen \Answered \Flagged \Deleted \Draft \Recent List) "/" "INBOX".
+NCLJ4 OK LIST completed.
+
+#
+T 127.0.0.1:42866 -> 127.0.0.1:9930 [AP]
+NCLJ5 LIST "" "*".
+
+##
+T 127.0.0.1:9930 -> 127.0.0.1:42866 [AP]
+* LIST (\Seen \Answered \Flagged \Deleted \Draft \Recent List) "/" "INBOX".
+NCLJ5 OK LIST completed.
+
+#
+T 127.0.0.1:42866 -> 127.0.0.1:9930 [AP]
+NCLJ6 SELECT INBOX.
+
+#
+T 127.0.0.1:9930 -> 127.0.0.1:42866 [AP]
+* 0 EXISTS.
+* 3 RECENT.
+* FLAGS (\Seen \Answered \Flagged \Deleted \Draft \Recent List).
+* OK [UIDVALIDITY 42].
+NCLJ6 OK [READ-WRITE] SELECT successful.
+
+#
+T 127.0.0.1:42866 -> 127.0.0.1:9930 [AP]
+NCLJ7 EXAMINE INBOX.
+
+##
+T 127.0.0.1:9930 -> 127.0.0.1:42866 [AP]
+* 0 EXISTS.
+* 3 RECENT.
+* FLAGS (\Seen \Answered \Flagged \Deleted \Draft \Recent List).
+* OK [UIDVALIDITY 42].
+NCLJ7 OK [READ-ONLY] EXAMINE successful.
+
+#
+T 127.0.0.1:42866 -> 127.0.0.1:9930 [AP]
+NCLJ8 LOGOUT.
+
+##
+T 127.0.0.1:9930 -> 127.0.0.1:42866 [AP]
+* BYE Nice talking to you.
+NCLJ8 OK LOGOUT successful.
+
+
