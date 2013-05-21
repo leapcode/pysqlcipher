@@ -814,8 +814,11 @@ class MessageCollection(WithMsgFields):
         leap_assert(isinstance(mbox, (str, unicode)),
                     "mbox needs to be a string")
         leap_assert(soledad, "Need a soledad instance to initialize")
-        leap_assert(isinstance(soledad._db, SQLCipherDatabase),
-                    "soledad._db must be an instance of SQLCipherDatabase")
+
+        # This is a wrapper now!...
+        # should move assertion there...
+        #leap_assert(isinstance(soledad._db, SQLCipherDatabase),
+                    #"soledad._db must be an instance of SQLCipherDatabase")
 
         # okay, all in order, keep going...
 
@@ -1080,8 +1083,10 @@ class SoledadMailbox(WithMsgFields):
         """
         leap_assert(mbox, "Need a mailbox name to initialize")
         leap_assert(soledad, "Need a soledad instance to initialize")
-        leap_assert(isinstance(soledad._db, SQLCipherDatabase),
-                    "soledad._db must be an instance of SQLCipherDatabase")
+
+        # XXX should move to wrapper
+        #leap_assert(isinstance(soledad._db, SQLCipherDatabase),
+                    #"soledad._db must be an instance of SQLCipherDatabase")
 
         self.mbox = mbox
         self.rw = rw

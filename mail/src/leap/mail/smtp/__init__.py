@@ -15,18 +15,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-
 """
 SMTP relay helper function.
 """
 
-
-from twisted.application import internet, service
 from twisted.internet import reactor
 
 
-from leap import soledad
-from leap.common.keymanager import KeyManager
+#from leap import soledad
+#from leap.common.keymanager import KeyManager
 from leap.mail.smtp.smtprelay import SMTPFactory
 
 
