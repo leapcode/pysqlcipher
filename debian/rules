@@ -1,0 +1,19 @@
+#!/usr/bin/make -f
+# Uncomment this to turn on verbose mode.
+#DH_VERBOSE=1
+
+%:
+	dh $@ --with python2 --buildsystem=python_distutils
+
+build-python%:
+	python$* setup.py build_sqlcipher
+
+install-python%:
+	python$* setup.py install --root=$(CURDIR)/debian/tmp --install-layout=deb
+
+
+override_dh_auto_clean:
+        dh_auto_clean
+        rm -rf build
+        rm -rf docs/_build 
+        rm -rf *.egg-info

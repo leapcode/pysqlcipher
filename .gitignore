@@ -3,3 +3,5 @@ build
 *.pyc
 dist/
 MANIFEST
+debian/python-sqlcipher
+debian/*.log

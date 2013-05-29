@@ -1,0 +1,17 @@
+Source: pysqlcipher
+Maintainer: Ben Carrillo <ben@futeisha.org>
+Section: python
+Priority: optional
+Build-Depends: python-all-dev (>= 2.6.6-3), debhelper (>= 7)
+Standards-Version: 3.9.1
+
+Package: python-sqlcipher
+Architecture: any
+Depends: libsqlcipher0 (>=2.1.1-1), ${misc:Depends}, ${python:Depends}, ${shlibs:Depends}
+Description: DB-API 2.0 interface for SQLCIPHER 3.x
+ Python interface to SQLCipher
+ .
+ pysqlcipher is an interface to the SQLite 3.x embedded relational
+ database engine. It is almost fully compliant with the Python database API
+ version 2.0. At the same time, it also exposes the unique features of
+ SQLCipher.
