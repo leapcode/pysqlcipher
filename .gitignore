@@ -7,3 +7,4 @@ debian/python-sqlcipher
 debian/*.log
 debian/files
 debian/*.substvars
+debian/*.debhelper
