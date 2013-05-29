@@ -33,8 +33,8 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General substitutions.
-project = 'pysqlite'
-copyright = u'2008-2009, Gerhard Häring'
+project = 'pysqlcipher'
+copyright = u'2008-2009, Gerhard Häring; 2013, Kali Kaneko'
 
 # The default replacements for |version| and |release|, also used in various
 # other places throughout the built documents.
@@ -42,7 +42,7 @@ copyright = u'2008-2009, Gerhard Häring'
 # The short X.Y version.
 version = '2.6'
 # The full version, including alpha/beta/rc tags.
-release = '2.6.0'
+release = '2.6.0.dev1'
 
 # There are two options for replacing |today|: either, you set today to some
 # non-false value, then it is used:
@@ -106,7 +106,7 @@ html_last_updated_fmt = '%b %d, %Y'
 #html_copy_source = True
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'pysqlitedoc'
+htmlhelp_basename = 'pysqlcipherdoc'
 
 
 # Options for LaTeX output

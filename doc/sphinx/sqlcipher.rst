@@ -1,10 +1,12 @@
-:mod:`sqlite3` --- DB-API 2.0 interface for SQLite databases
-============================================================
+:mod:`sqlcipher` --- DB-API 2.0 interface for SQCipher databases
+==============================================================
 
-.. module:: sqlite3
-   :synopsis: A DB-API 2.0 implementation using SQLite 3.x.
+.. module:: sqlcipher
+   :synopsis: A DB-API 2.0 implementation using SQCipher 3.x.
 .. sectionauthor:: Gerhard HÃ¤ring <gh@ghaering.de>
+.. sectionauthor:: Kali Kaneko <kali@leap.se>
 
+.. note:: This documentation has to be adapted to the use of SQLCipher
 
 SQLite is a C library that provides a lightweight disk-based database that
 doesn't require a separate server process and allows accessing the database
@@ -20,7 +22,6 @@ To use the module, you must first create a :class:`Connection` object that
 represents the database.  Here the data will be stored in the
 :file:`/tmp/example` file::
 
-   conn = sqlite3.connect('/tmp/example')
 
 You can also supply the special name ``:memory:`` to create a database in RAM.
 
