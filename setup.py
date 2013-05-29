@@ -110,8 +110,7 @@ def get_amalgamation():
     os.mkdir(AMALGAMATION_ROOT)
     print "Downloading amalgation."
 
-    # XXX upload the amalgamation file to a somewhat more
-    # official place
+    # XXX upload the amalgamation file to downloads.leap.se
     amalgamation_url = ("http://futeisha.org/sqlcipher/"
                         "amalgamation-sqlcipher-2.1.0.zip")
 
@@ -140,6 +139,15 @@ class AmalgamationBuilder(build):
         MyBuildExt.amalgamation = True
         MyBuildExt.static = True
         build.__init__(self, *args, **kwargs)
+
+
+class LibSQLCipherBuilder(build_ext):
+
+    description = ("Build C extension linking against libsqlcipher library.")
+
+    def build_extension(self, ext):
+        ext.extra_link_args.append("-lsqlcipher")
+        build_ext.build_extension(self, ext)
 
 
 class MyBuildExt(build_ext):
@@ -304,7 +312,8 @@ def get_setup_args():
                   ("pysqlcipher-doc/code",
                   glob.glob("doc/code/*.py"))]
 
-    py_modules = ["sqlcipher"],
+    #XXX ?
+    #py_modules = ["sqlcipher"],
 
     setup_args = dict(
         name="pysqlcipher",
@@ -317,7 +326,6 @@ def get_setup_args():
         license="zlib/libpng",  # is THIS a license?
         # It says MIT in the google project
         platforms="ALL",
-        #XXX missing url
         url="http://github.com/leapcode/pysqlcipher/",
         # Description of the modules and packages in the distribution
         package_dir={"pysqlcipher": "lib"},
@@ -338,7 +346,7 @@ def get_setup_args():
                 define_macros=define_macros)
         ],
         classifiers=[
-            "Development Status :: 5 - Production/Stable",
+            "Development Status :: 4 - Beta",
             "Intended Audience :: Developers",
             "License :: OSI Approved :: zlib/libpng License",
             "Operating System :: MacOS :: MacOS X",
@@ -355,6 +363,7 @@ def get_setup_args():
         {"build_docs": DocBuilder,
          "build_ext": MyBuildExt,
          "build_static": AmalgamationBuilder,
+         "build_sqlcipher": LibSQLCipherBuilder,
          "cross_bdist_wininst": cross_bdist_wininst.bdist_wininst})
     return setup_args
 
