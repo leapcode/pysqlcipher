@@ -6,3 +6,4 @@ MANIFEST
 debian/python-sqlcipher
 debian/*.log
 debian/files
+debian/*.substvars

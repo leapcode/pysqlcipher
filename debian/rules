@@ -5,12 +5,12 @@
 %:
 	dh $@ --with python2 --buildsystem=python_distutils
 
-build-python%:
+override_dh_auto_build:
 	python$* setup.py build_sqlcipher
 
-install-python%:
-	python$* setup.py install --root=$(CURDIR)/debian/tmp --install-layout=deb
-
+override_dh_auto_install:
+	python$* setup.py install --skip-build --root=debian/python-sqlcipher \
+		--install-layout=deb
 
 override_dh_auto_clean:
 	dh_auto_clean
