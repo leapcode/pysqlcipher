@@ -13,7 +13,7 @@ install-python%:
 
 
 override_dh_auto_clean:
-        dh_auto_clean
-        rm -rf build
-        rm -rf docs/_build 
-        rm -rf *.egg-info
+	dh_auto_clean
+	rm -rf build
+	rm -rf docs/_build 
+	rm -rf *.egg-info
