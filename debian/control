@@ -2,8 +2,9 @@ Source: pysqlcipher
 Maintainer: Ben Carrillo <ben@futeisha.org>
 Section: python
 Priority: optional
-Build-Depends: python-all-dev (>= 2.6.6-3), libsqlcipher-dev, debhelper (>= 7)
-Standards-Version: 3.9.1
+Build-Depends: python-all-dev (>= 2.6.6-3), libsqlcipher-dev, debhelper (>= 9)
+Standards-Version: 3.9.4
+Uploaders: Micah Anderson <micah@debian.org>
 
 Package: python-sqlcipher
 Architecture: any

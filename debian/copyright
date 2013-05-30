@@ -49,3 +49,11 @@ Files: *
 
         3. This notice may not be removed or altered from any source
            distribution.
+
+Files: debian/*
+Copyright: Copyright 2013 Kali Kaneko <kali@futeisha.org>
+License: GPL-3+
+ 
+License: GPL-3+
+ On Debian systems, the complete text of the GNU General
+ Public License can be found in `/usr/share/common-licenses/GPL'.

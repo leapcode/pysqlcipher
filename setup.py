@@ -306,13 +306,6 @@ def get_setup_args():
         print "Fatal error: PYSQLITE_VERSION could not be detected!"
         sys.exit(1)
 
-    data_files = [("pysqlcipher-doc",
-                  glob.glob("doc/*.html")
-                  + glob.glob("doc/*.txt")
-                  + glob.glob("doc/*.css")),
-                  ("pysqlcipher-doc/code",
-                  glob.glob("doc/code/*.py"))]
-
     #XXX ?
     #py_modules = ["sqlcipher"],
 
@@ -333,7 +326,6 @@ def get_setup_args():
         packages=["pysqlcipher", "pysqlcipher.test"] +
             (["pysqlcipher.test.py25"], [])[sys.version_info < (2, 5)],
         scripts=[],
-        data_files=data_files,
 
         ext_modules=[
             Extension(

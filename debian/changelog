@@ -1,5 +1,5 @@
-pysqlcipher (2.6.3~dev02-1) unstable; urgency=low
+pysqlcipher (2.6.3~dev02) unstable; urgency=low
 
-  * source package automatically created by stdeb 0.6.0+git
+  * Initial debian package
 
  -- Ben Carrillo <ben@futeisha.org>  Thu, 30 May 2013 03:33:25 +0900
