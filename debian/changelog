@@ -1,4 +1,4 @@
-pysqlcipher (2.6.3~dev02-1) unstable; urgency=low
+pysqlcipher (2.6.3~dev02) unstable; urgency=low
 
   * Initial debian package
 
