@@ -146,6 +146,7 @@ class LibSQLCipherBuilder(build_ext):
     description = ("Build C extension linking against libsqlcipher library.")
 
     def build_extension(self, ext):
+        ext.extra_compile_args.append("-I/usr/include/sqlcipher/")
         ext.extra_link_args.append("-lsqlcipher")
         build_ext.build_extension(self, ext)
 
