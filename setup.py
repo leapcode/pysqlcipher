@@ -306,9 +306,6 @@ def get_setup_args():
         print "Fatal error: PYSQLITE_VERSION could not be detected!"
         sys.exit(1)
 
-    #XXX ?
-    #py_modules = ["sqlcipher"],
-
     setup_args = dict(
         name="pysqlcipher",
         version=PYSQLITE_VERSION,
@@ -326,7 +323,6 @@ def get_setup_args():
         packages=["pysqlcipher", "pysqlcipher.test"] +
             (["pysqlcipher.test.py25"], [])[sys.version_info < (2, 5)],
         scripts=[],
-
         ext_modules=[
             Extension(
                 name="pysqlcipher._sqlite",
