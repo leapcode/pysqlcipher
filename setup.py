@@ -22,7 +22,7 @@
 #    misrepresented as being the original software.
 # 3. This notice may not be removed or altered from any source distribution.
 
-import glob
+#import glob
 import os
 import re
 import sys
@@ -323,6 +323,7 @@ def get_setup_args():
         packages=["pysqlcipher", "pysqlcipher.test"] +
             (["pysqlcipher.test.py25"], [])[sys.version_info < (2, 5)],
         scripts=[],
+
         ext_modules=[
             Extension(
                 name="pysqlcipher._sqlite",

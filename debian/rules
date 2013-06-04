@@ -13,6 +13,9 @@ override_dh_auto_install:
 	python$* setup.py install --skip-build --root=debian/python-sqlcipher \
 		--install-layout=deb
 
+override_dh_python2:
+	dh_python2 --no-guessing-versions
+
 override_dh_auto_clean:
 	dh_auto_clean
 	rm -rf build

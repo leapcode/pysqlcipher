@@ -5,6 +5,7 @@ Priority: optional
 Build-Depends: python-all-dev (>= 2.6.6-3), libsqlcipher-dev, debhelper (>= 9)
 Standards-Version: 3.9.4
 Uploaders: Micah Anderson <micah@debian.org>
+X-Python-Version: >= 2.5
 
 Package: python-sqlcipher
 Architecture: any
