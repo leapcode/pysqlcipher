@@ -22,8 +22,6 @@ SMTP relay helper function.
 from twisted.internet import reactor
 
 
-#from leap import soledad
-#from leap.common.keymanager import KeyManager
 from leap.mail.smtp.smtprelay import SMTPFactory
 
 

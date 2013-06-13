@@ -772,7 +772,7 @@ class LeapMessage(WithMsgFields):
         return None
 
 
-class MessageCollection(WithMsgFields):
+class MessageCollection(WithMsgFields, IndexedDB):
     """
     A collection of messages, surprisingly.
 
@@ -794,6 +794,10 @@ class MessageCollection(WithMsgFields):
         WithMsgFields.HEADERS_KEY: {},
         WithMsgFields.RAW_KEY: "",
     }
+
+    # get from SoledadBackedAccount the needed index-related constants
+    INDEXES = SoledadBackedAccount.INDEXES
+    TYPE_IDX = SoledadBackedAccount.TYPE_IDX
 
     def __init__(self, mbox=None, soledad=None):
         """
@@ -1131,8 +1135,7 @@ class SoledadMailbox(WithMsgFields):
         """
         return map(str, self.INIT_FLAGS)
 
-        # TODO -- returning hardcoded flags for now,
-        # no need of setting flags.
+        # XXX CHECK against thunderbird XXX
 
         #mbox = self._get_mbox()
         #if not mbox:
