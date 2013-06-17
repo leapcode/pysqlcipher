@@ -37,7 +37,7 @@ from twisted.python import log
 
 from leap.common.check import leap_assert, leap_assert_type
 from leap.soledad import Soledad
-from leap.soledad.backends.sqlcipher import SQLCipherDatabase
+from leap.soledad.sqlcipher import SQLCipherDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ class WithMsgFields(object):
 
     INBOX_VAL = "inbox"
 
-    # Flags for LeapDocument for indexing.
+    # Flags for SoledadDocument for indexing.
     SEEN_KEY = "seen"
     RECENT_KEY = "recent"
 
@@ -233,7 +233,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         :param name: the name of the mailbox
         :type name: str
 
-        :rtype: LeapDocument
+        :rtype: SoledadDocument
         """
         name = name.upper()
         doc = self._soledad.get_from_index(
@@ -580,9 +580,9 @@ class LeapMessage(WithMsgFields):
         """
         Initializes a LeapMessage.
 
-        :param doc: A LeapDocument containing the internal
+        :param doc: A SoledadDocument containing the internal
                     representation of the message
-        :type doc: LeapDocument
+        :type doc: SoledadDocument
         """
         self._doc = doc
 
@@ -620,13 +620,13 @@ class LeapMessage(WithMsgFields):
         """
         Sets the flags for this message
 
-        Returns a LeapDocument that needs to be updated by the caller.
+        Returns a SoledadDocument that needs to be updated by the caller.
 
         :param flags: the flags to update in the message.
         :type flags: sequence of str
 
-        :return: a LeapDocument instance
-        :rtype: LeapDocument
+        :return: a SoledadDocument instance
+        :rtype: SoledadDocument
         """
         log.msg('setting flags')
         doc = self._doc
@@ -639,13 +639,13 @@ class LeapMessage(WithMsgFields):
         """
         Adds flags to this message.
 
-        Returns a LeapDocument that needs to be updated by the caller.
+        Returns a SoledadDocument that needs to be updated by the caller.
 
         :param flags: the flags to add to the message.
         :type flags: sequence of str
 
-        :return: a LeapDocument instance
-        :rtype: LeapDocument
+        :return: a SoledadDocument instance
+        :rtype: SoledadDocument
         """
         oldflags = self.getFlags()
         return self.setFlags(list(set(flags + oldflags)))
@@ -654,13 +654,13 @@ class LeapMessage(WithMsgFields):
         """
         Remove flags from this message.
 
-        Returns a LeapDocument that needs to be updated by the caller.
+        Returns a SoledadDocument that needs to be updated by the caller.
 
         :param flags: the flags to be removed from the message.
         :type flags: sequence of str
 
-        :return: a LeapDocument instance
-        :rtype: LeapDocument
+        :return: a SoledadDocument instance
+        :rtype: SoledadDocument
         """
         oldflags = self.getFlags()
         return self.setFlags(list(set(oldflags) - set(flags)))
@@ -751,6 +751,7 @@ class LeapMessage(WithMsgFields):
         :rtype: dict
         """
         headers = self._get_headers()
+        names = map(lambda s: s.upper(), names)
         if negate:
             cond = lambda key: key.upper() not in names
         else:
@@ -771,6 +772,21 @@ class LeapMessage(WithMsgFields):
     def getSubPart(part):
         return None
 
+    #
+    # accessors
+    #
+
+    def __getitem__(self, key):
+        """
+        Return the content of the message document.
+
+        @param key: The key
+        @type key: str
+
+        @return: The content value indexed by C{key} or None
+        @rtype: str
+        """
+        return self._doc.content.get(key, None)
 
 class MessageCollection(WithMsgFields, IndexedDB):
     """
@@ -828,7 +844,7 @@ class MessageCollection(WithMsgFields, IndexedDB):
 
         self.mbox = mbox.upper()
         self._soledad = soledad
-        #self.db = db
+        self.initialize_db()
         self._parser = Parser()
 
     def _get_empty_msg(self):
@@ -887,11 +903,18 @@ class MessageCollection(WithMsgFields, IndexedDB):
 
         # XXX get lower case for keys?
         content[self.HEADERS_KEY] = headers
-        content[self.SUBJECT_KEY] = headers[self.SUBJECT_FIELD]
+        # set subject based on message headers and eventually replace by
+        # subject given as param
+        if self.SUBJECT_FIELD in headers:
+            content[self.SUBJECT_KEY] = headers[self.SUBJECT_FIELD]
+        if subject is not None:
+            content[self.SUBJECT_KEY] = subject
         content[self.RAW_KEY] = stringify(raw)
 
-        if not date:
+        if not date and self.DATE_FIELD in headers:
             content[self.DATE_KEY] = headers[self.DATE_FIELD]
+        else:
+            content[self.DATE_KEY] = date
 
         # ...should get a sanity check here.
         content[self.UID_KEY] = uid
@@ -903,7 +926,7 @@ class MessageCollection(WithMsgFields, IndexedDB):
         Removes a message.
 
         :param msg: a u1db doc containing the message
-        :type msg: LeapDocument
+        :type msg: SoledadDocument
         """
         self._soledad.delete_doc(msg)
 
@@ -916,9 +939,9 @@ class MessageCollection(WithMsgFields, IndexedDB):
         :param uid: the message uid to query by
         :type uid: int
 
-        :return: A LeapDocument instance matching the query,
+        :return: A SoledadDocument instance matching the query,
                  or None if not found.
-        :rtype: LeapDocument
+        :rtype: SoledadDocument
         """
         docs = self._soledad.get_from_index(
             SoledadBackedAccount.TYPE_MBOX_UID_IDX,
@@ -946,7 +969,7 @@ class MessageCollection(WithMsgFields, IndexedDB):
         If you want acess to the content, use __iter__ instead
 
         :return: a list of u1db documents
-        :rtype: list of LeapDocument
+        :rtype: list of SoledadDocument
         """
         # XXX this should return LeapMessage instances
         return self._soledad.get_from_index(
@@ -1117,8 +1140,8 @@ class SoledadMailbox(WithMsgFields):
         """
         Returns mailbox document.
 
-        :return: A LeapDocument containing this mailbox.
-        :rtype: LeapDocument
+        :return: A SoledadDocument containing this mailbox.
+        :rtype: SoledadDocument
         """
         query = self._soledad.get_from_index(
             SoledadBackedAccount.TYPE_MBOX_IDX,
@@ -1133,15 +1156,15 @@ class SoledadMailbox(WithMsgFields):
         :returns: tuple of flags for this mailbox
         :rtype: tuple of str
         """
-        return map(str, self.INIT_FLAGS)
+        #return map(str, self.INIT_FLAGS)
 
         # XXX CHECK against thunderbird XXX
 
-        #mbox = self._get_mbox()
-        #if not mbox:
-            #return None
-        #flags = mbox.content.get(self.FLAGS_KEY, [])
-        #return map(str, flags)
+        mbox = self._get_mbox()
+        if not mbox:
+            return None
+        flags = mbox.content.get(self.FLAGS_KEY, [])
+        return map(str, flags)
 
     def setFlags(self, flags):
         """
@@ -1442,7 +1465,7 @@ class SoledadMailbox(WithMsgFields):
         """
         docs = self.messages.get_all()
         for doc in docs:
-            self.messages.db.delete_doc(doc)
+            self.messages._soledad.delete_doc(doc)
 
     def _update(self, doc):
         """
