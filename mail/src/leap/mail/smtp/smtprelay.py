@@ -21,7 +21,6 @@ LEAP SMTP encrypted relay.
 
 import re
 import os
-import gnupg
 import tempfile
 
 
@@ -38,13 +37,13 @@ from email.parser import Parser
 
 
 from leap.common.check import leap_assert, leap_assert_type
-from leap.common.keymanager import KeyManager
-from leap.common.keymanager.openpgp import (
+from leap.keymanager import KeyManager
+from leap.keymanager.openpgp import (
     OpenPGPKey,
     encrypt_asym,
     sign,
 )
-from leap.common.keymanager.errors import KeyNotFound
+from leap.keymanager.errors import KeyNotFound
 
 
 #

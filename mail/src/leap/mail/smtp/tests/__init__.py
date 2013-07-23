@@ -30,8 +30,7 @@ from twisted.trial import unittest
 
 
 from leap.soledad import Soledad
-from leap.soledad.crypto import SoledadCrypto
-from leap.common.keymanager import (
+from leap.keymanager import (
     KeyManager,
     openpgp,
 )
@@ -59,26 +58,53 @@ class TestCaseWithKeyManager(BaseLeapTest):
         address = 'leap@leap.se'  # user's address in the form user@provider
         uuid = 'leap@leap.se'
         passphrase = '123'
-        secret_path = os.path.join(self.tempdir, 'secret.gpg')
+        secrets_path = os.path.join(self.tempdir, 'secret.gpg')
         local_db_path = os.path.join(self.tempdir, 'soledad.u1db')
         server_url = 'http://provider/'
         cert_file = ''
 
+        self._soledad = self._soledad_instance(
+            uuid, passphrase, secrets_path, local_db_path, server_url,
+            cert_file)
+        self._km = self._keymanager_instance(address)
+
+    def _soledad_instance(self, uuid, passphrase, secrets_path, local_db_path,
+                          server_url, cert_file):
+        """
+        Return a Soledad instance for tests.
+        """
         # mock key fetching and storing so Soledad doesn't fail when trying to
         # reach the server.
         Soledad._fetch_keys_from_shared_db = Mock(return_value=None)
         Soledad._assert_keys_in_shared_db = Mock(return_value=None)
 
         # instantiate soledad
-        self._soledad = Soledad(
+        def _put_doc_side_effect(doc):
+            self._doc_put = doc
+
+        class MockSharedDB(object):
+
+            get_doc = Mock(return_value=None)
+            put_doc = Mock(side_effect=_put_doc_side_effect)
+
+            def __call__(self):
+                return self
+
+        Soledad._shared_db = MockSharedDB()
+
+        return Soledad(
             uuid,
             passphrase,
-            secret_path,
-            local_db_path,
-            server_url,
-            cert_file,
+            secrets_path=secrets_path,
+            local_db_path=local_db_path,
+            server_url=server_url,
+            cert_file=cert_file,
         )
 
+    def _keymanager_instance(self, address):
+        """
+        Return a Key Manager instance for tests.
+        """
         self._config = {
             'host': 'http://provider/',
             'port': 25,
@@ -87,13 +113,28 @@ class TestCaseWithKeyManager(BaseLeapTest):
             'encrypted_only': True
         }
 
+        class Response(object):
+            status_code = 200
+            headers = {'content-type': 'application/json'}
+
+            def json(self):
+                return {'address': ADDRESS_2, 'openpgp': PUBLIC_KEY_2}
+
+            def raise_for_status(self):
+                pass
+
         nickserver_url = ''  # the url of the nickserver
-        self._km = KeyManager(address, nickserver_url, self._soledad)
+        km = KeyManager(address, nickserver_url, self._soledad,
+                              ca_cert_path='')
+        km._fetcher.put = Mock()
+        km._fetcher.get = Mock(return_value=Response())
 
         # insert test keys in key manager.
         pgp = openpgp.OpenPGPScheme(self._soledad)
         pgp.put_ascii_key(PRIVATE_KEY)
         pgp.put_ascii_key(PRIVATE_KEY_2)
+
+        return km
 
     def tearDown(self):
         # mimic LeapBaseTest.tearDownClass behaviour

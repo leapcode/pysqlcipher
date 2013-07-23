@@ -31,24 +31,18 @@ try:
 except ImportError:
     from StringIO import StringIO
 
-#import codecs
-#import locale
 import os
 import types
 import tempfile
 import shutil
 
 
-#from zope.interface import implements
+from mock import Mock
 
-#from twisted.mail.imap4 import MessageSet
+
 from twisted.mail import imap4
 from twisted.protocols import loopback
 from twisted.internet import defer
-#from twisted.internet import error
-#from twisted.internet import reactor
-#from twisted.internet import interfaces
-#from twisted.internet.task import Clock
 from twisted.trial import unittest
 from twisted.python import util, log
 from twisted.python import failure
@@ -59,8 +53,6 @@ import twisted.cred.checkers
 import twisted.cred.credentials
 import twisted.cred.portal
 
-#from twisted.test.proto_helpers import StringTransport, StringTransportWithDisconnection
-
 
 #import u1db
 
@@ -68,8 +60,6 @@ from leap.common.testing.basetest import BaseLeapTest
 from leap.mail.imap.server import SoledadMailbox
 from leap.mail.imap.server import SoledadBackedAccount
 from leap.mail.imap.server import MessageCollection
-#from leap.mail.imap.tests import PUBLIC_KEY
-#from leap.mail.imap.tests import PRIVATE_KEY
 
 from leap.soledad import Soledad
 from leap.soledad import SoledadCrypto
@@ -107,19 +97,23 @@ def initialize_soledad(email, gnupg_home, tempdir):
     server_url = "http://provider"
     cert_file = ""
 
+    class MockSharedDB(object):
+
+        get_doc = Mock(return_value=None)
+        put_doc = Mock()
+
+        def __call__(self):
+            return self
+
+    Soledad._shared_db = MockSharedDB()
+
     _soledad = Soledad(
-        uuid,  # user's uuid, obtained through signal events
-        passphrase,  # how to get this?
-        secret_path,  # how to get this?
-        local_db_path,  # how to get this?
-        server_url,  # can be None for now
-        cert_file,
-        bootstrap=False)
-    _soledad._init_dirs()
-    _soledad._crypto = SoledadCrypto(_soledad)
-    _soledad._shared_db = None
-    _soledad._init_keys()
-    _soledad._init_db()
+        uuid,
+        passphrase,
+        secret_path,
+        local_db_path,
+        server_url,
+        cert_file)
 
     return _soledad
 
@@ -253,9 +247,9 @@ class IMAP4HelperMixin(BaseLeapTest):
         #cls.db2_file = "%s/db2.u1db" % cls.tempdir
         # open test dbs
         #cls._db1 = u1db.open(cls.db1_file, create=True,
-                              #document_factory=LeapDocument)
+                              #document_factory=SoledadDocument)
         #cls._db2 = u1db.open(cls.db2_file, create=True,
-                              #document_factory=LeapDocument)
+                              #document_factory=SoledadDocument)
 
         # initialize soledad by hand so we can control keys
         cls._soledad = initialize_soledad(
@@ -401,12 +395,21 @@ class MessageCollectionTestCase(IMAP4HelperMixin, unittest.TestCase):
         """
         Test empty message and collection
         """
-        em = self.messages.get_empty_msg()
-        self.assertEqual(em,
-                         {"subject": "", "seen": False,
-                          "flags": [], "mailbox": "inbox",
-                          "mbox-uid": 1,
-                          "raw": ""})
+        em = self.messages._get_empty_msg()
+        self.assertEqual(
+            em,
+            {
+                "date": '',
+                "flags": [],
+                "headers": {},
+                "mbox": "inbox",
+                "raw": "",
+                "recent": True,
+                "seen": False,
+                "subject": "",
+                "type": "msg",
+                "uid": 1,
+            })
         self.assertEqual(self.messages.count(), 0)
 
     def testFilterByMailbox(self):
@@ -419,13 +422,13 @@ class MessageCollectionTestCase(IMAP4HelperMixin, unittest.TestCase):
         mc.add_msg('', subject="test3")
         self.assertEqual(self.messages.count(), 3)
 
-        newmsg = mc.get_empty_msg()
+        newmsg = mc._get_empty_msg()
         newmsg['mailbox'] = "mailbox/foo"
         newmsg['subject'] = "test another mailbox"
-        mc.db.create_doc(newmsg)
+        mc._soledad.create_doc(newmsg)
         self.assertEqual(mc.count(), 3)
-        self.assertEqual(len(mc.db.get_from_index(mc.MAILBOX_INDEX, "*")),
-                         4)
+        self.assertEqual(
+            len(mc._soledad.get_from_index(mc.TYPE_IDX, "*")), 4)
 
 
 class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
@@ -561,10 +564,13 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         """
         Try deleting a mailbox with sub-folders, and \NoSelect flag set.
         An exception is expected
+
+        Obs: this test will fail if SoledadMailbox returns hardcoded flags.
         """
         SimpleLEAPServer.theAccount.addMailbox('delete')
         to_delete = SimpleLEAPServer.theAccount.getMailbox('delete')
         to_delete.setFlags((r'\Noselect',))
+        to_delete.getFlags()
         SimpleLEAPServer.theAccount.addMailbox('delete/me')
 
         def login():
@@ -1180,7 +1186,6 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         """
         name = 'mailbox-close'
         self.server.theAccount.addMailbox(name)
-        #import ipdb; ipdb.set_trace()
 
         m = SimpleLEAPServer.theAccount.getMailbox(name)
         m.messages.add_msg('', subject="Message 1",

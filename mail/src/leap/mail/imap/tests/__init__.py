@@ -17,13 +17,13 @@ def run():
     """xxx fill me in"""
     pass
 
+import os
 import u1db
 
 from leap.common.testing.basetest import BaseLeapTest
 
 from leap.soledad import Soledad
-from leap.soledad.util import GPGWrapper
-from leap.soledad.backends.leap_backend import LeapDocument
+from leap.soledad.document import SoledadDocument
 
 
 #-----------------------------------------------------------------------------
@@ -38,30 +38,65 @@ class BaseSoledadIMAPTest(BaseLeapTest):
     """
 
     def setUp(self):
-        # config info
-        self.gnupg_home = "%s/gnupg" % self.tempdir
-        self.db1_file = "%s/db1.u1db" % self.tempdir
-        self.db2_file = "%s/db2.u1db" % self.tempdir
-        self.email = 'leap@leap.se'
         # open test dbs
+        self.db1_file = os.path.join(
+            self.tempdir, "db1.u1db")
+        self.db2_file = os.path.join(
+            self.tempdir, "db2.u1db")
+
         self._db1 = u1db.open(self.db1_file, create=True,
-                              document_factory=LeapDocument)
+                              document_factory=SoledadDocument)
         self._db2 = u1db.open(self.db2_file, create=True,
-                              document_factory=LeapDocument)
+                              document_factory=SoledadDocument)
 
-        # initialize soledad by hand so we can control keys
-        self._soledad = Soledad(self.email, gnupg_home=self.gnupg_home,
-                                bootstrap=False,
-                                prefix=self.tempdir)
-        self._soledad._init_dirs()
-        self._soledad._gpg = GPGWrapper(gnupghome=self.gnupg_home)
+        # soledad config info
+        self.email = 'leap@leap.se'
+        secrets_path = os.path.join(
+            self.tempdir, Soledad.STORAGE_SECRETS_FILE_NAME)
+        local_db_path = os.path.join(
+            self.tempdir, Soledad.LOCAL_DATABASE_FILE_NAME)
+        server_url = ''
+        cert_file = None
 
-        if not self._soledad._has_privkey():
-            self._soledad._set_privkey(PRIVATE_KEY)
-        if not self._soledad._has_symkey():
-            self._soledad._gen_symkey()
-        self._soledad._load_symkey()
-        self._soledad._init_db()
+        self._soledad = self._soledad_instance(
+            self.email, '123',
+            secrets_path=secrets_path,
+            local_db_path=local_db_path,
+            server_url=server_url,
+            cert_file=cert_file)
+
+    def _soledad_instance(self, uuid, passphrase, secrets_path, local_db_path,
+                          server_url, cert_file):
+        """
+        Return a Soledad instance for tests.
+        """
+        # mock key fetching and storing so Soledad doesn't fail when trying to
+        # reach the server.
+        Soledad._fetch_keys_from_shared_db = Mock(return_value=None)
+        Soledad._assert_keys_in_shared_db = Mock(return_value=None)
+
+        # instantiate soledad
+        def _put_doc_side_effect(doc):
+            self._doc_put = doc
+
+        class MockSharedDB(object):
+
+            get_doc = Mock(return_value=None)
+            put_doc = Mock(side_effect=_put_doc_side_effect)
+
+            def __call__(self):
+                return self
+
+        Soledad._shared_db = MockSharedDB()
+
+        return Soledad(
+            uuid,
+            passphrase,
+            secrets_path=secrets_path,
+            local_db_path=local_db_path,
+            server_url=server_url,
+            cert_file=cert_file,
+        )
 
     def tearDown(self):
         self._db1.close()

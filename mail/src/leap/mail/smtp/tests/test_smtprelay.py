@@ -38,12 +38,12 @@ from leap.mail.smtp.smtprelay import (
     SMTPFactory,
     EncryptedMessage,
 )
-from leap.mail.tests.smtp import (
+from leap.mail.smtp.tests import (
     TestCaseWithKeyManager,
     ADDRESS,
     ADDRESS_2,
 )
-from leap.common.keymanager import openpgp
+from leap.keymanager import openpgp
 
 
 # some regexps

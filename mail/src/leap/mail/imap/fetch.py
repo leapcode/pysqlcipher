@@ -104,8 +104,8 @@ class LeapIncomingMail(object):
         """
         Process a successfully decrypted message.
 
-        :param doc: a LeapDocument instance containing the incoming message
-        :type doc: LeapDocument
+        :param doc: a SoledadDocument instance containing the incoming message
+        :type doc: SoledadDocument
 
         :param data: the json-encoded, decrypted content of the incoming
                      message

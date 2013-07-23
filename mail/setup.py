@@ -17,11 +17,15 @@
 """
 setup file for leap.mail
 """
+
+
 from setuptools import setup, find_packages
+
 
 requirements = [
     "leap.soledad",
     "leap.common>=0.2.3-dev",
+    "leap.keymanager>=0.2.1",
     "twisted",
 ]
 
@@ -31,7 +35,6 @@ tests_requirements = [
 ]
 
 # XXX add classifiers, docs
-
 setup(
     name='leap.mail',
     version='0.2.0-dev',
@@ -45,8 +48,8 @@ setup(
     ),
     namespace_packages=["leap"],
     package_dir={'': 'src'},
-    packages=find_packages('src', exclude=['leap.mail.tests']),
-    test_suite='leap.mail.tests',
+    packages=find_packages('src'),
+    test_suite='leap.mail.load_tests',
     install_requires=requirements,
     tests_require=tests_requirements,
 )
