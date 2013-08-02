@@ -19,16 +19,12 @@
 LEAP SMTP encrypted relay.
 """
 
-import re
-import os
-import tempfile
-
-
 from zope.interface import implements
 from StringIO import StringIO
+from OpenSSL import SSL
 from twisted.mail import smtp
 from twisted.internet.protocol import ServerFactory
-from twisted.internet import reactor
+from twisted.internet import reactor, ssl
 from twisted.internet import defer
 from twisted.python import log
 from email.Header import Header
@@ -63,8 +59,8 @@ class MalformedConfig(Exception):
 
 HOST_KEY = 'host'
 PORT_KEY = 'port'
-USERNAME_KEY = 'username'
-PASSWORD_KEY = 'password'
+CERT_KEY = 'cert'
+KEY_KEY = 'key'
 ENCRYPTED_ONLY_KEY = 'encrypted_only'
 
 
@@ -89,17 +85,17 @@ def assert_config_structure(config):
     leap_assert_type(config[HOST_KEY], str)
     leap_assert(PORT_KEY in config)
     leap_assert_type(config[PORT_KEY], int)
-    leap_assert(USERNAME_KEY in config)
-    leap_assert_type(config[USERNAME_KEY], str)
-    leap_assert(PASSWORD_KEY in config)
-    leap_assert_type(config[PASSWORD_KEY], str)
+    leap_assert(CERT_KEY in config)
+    leap_assert_type(config[CERT_KEY], str)
+    leap_assert(KEY_KEY in config)
+    leap_assert_type(config[KEY_KEY], str)
     leap_assert(ENCRYPTED_ONLY_KEY in config)
     leap_assert_type(config[ENCRYPTED_ONLY_KEY], bool)
     # assert received params are not empty
     leap_assert(config[HOST_KEY] != '')
     leap_assert(config[PORT_KEY] is not 0)
-    leap_assert(config[USERNAME_KEY] != '')
-    leap_assert(config[PASSWORD_KEY] != '')
+    leap_assert(config[CERT_KEY] != '')
+    leap_assert(config[KEY_KEY] != '')
 
 
 def validate_address(address):
@@ -143,8 +139,8 @@ class SMTPFactory(ServerFactory):
                 {
                     HOST_KEY: '<str>',
                     PORT_KEY: <int>,
-                    USERNAME_KEY: '<str>',
-                    PASSWORD_KEY: '<str>',
+                    CERT_KEY: '<str>',
+                    KEY_KEY: '<str>',
                     ENCRYPTED_ONLY_KEY: <bool>,
                 }
         @type config: dict
@@ -294,6 +290,18 @@ class SMTPDelivery(object):
 # EncryptedMessage
 #
 
+class CtxFactory(ssl.ClientContextFactory):
+    def __init__(self, cert, key):
+        self.cert = cert
+        self.key = key
+
+    def getContext(self):
+        self.method = SSL.TLSv1_METHOD  #SSLv23_METHOD
+        ctx = ssl.ClientContextFactory.getContext(self)
+        ctx.use_certificate_file(self.cert)
+        ctx.use_privatekey_file(self.key)
+        return ctx
+
 class EncryptedMessage(object):
     """
     Receive plaintext from client, encrypt it and send message to a
@@ -405,17 +413,23 @@ class EncryptedMessage(object):
         @rtype: twisted.internet.defer.Deferred
         """
         msg = self._message.as_string(False)
+
+        log.msg("Connecting to SMTP server %s:%s" % (self._config[HOST_KEY],
+                                                     self._config[PORT_KEY]))
+
         d = defer.Deferred()
         factory = smtp.ESMTPSenderFactory(
-            self._config[USERNAME_KEY],
-            self._config[PASSWORD_KEY],
+            "",
+            "",
             self._fromAddress.addrstr,
             self._user.dest.addrstr,
             StringIO(msg),
             d,
-            requireAuthentication=False,  # for now do unauth, see issue #2474
+            contextFactory=CtxFactory(self._config[CERT_KEY],
+                                      self._config[KEY_KEY]),
+            requireAuthentication=False,
         )
-        # TODO: Change this to connectSSL when cert auth is in place in the platform
+
         reactor.connectTCP(
             self._config[HOST_KEY],
             self._config[PORT_KEY],
