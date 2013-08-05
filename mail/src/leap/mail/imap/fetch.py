@@ -1,14 +1,14 @@
 import logging
 import json
+import ssl
 
 from twisted.python import log
 from twisted.internet import defer
 from twisted.internet.threads import deferToThread
 
 from leap.common.check import leap_assert, leap_assert_type
+from leap.keymanager import openpgp
 from leap.soledad import Soledad
-
-from leap.common.keymanager import openpgp
 
 logger = logging.getLogger(__name__)
 
@@ -67,13 +67,17 @@ class LeapIncomingMail(object):
     def _sync_soledad(self):
         log.msg('syncing soledad...')
         logger.debug('in soledad sync')
-        #import ipdb; ipdb.set_trace()
 
-        self._soledad.sync()
-        gen, doclist = self._soledad.get_all_docs()
-        #logger.debug("there are %s docs" % (len(doclist),))
-        log.msg("there are %s docs" % (len(doclist),))
-        return doclist
+        try:
+            self._soledad.sync()
+            gen, doclist = self._soledad.get_all_docs()
+            #logger.debug("there are %s docs" % (len(doclist),))
+            log.msg("there are %s docs" % (len(doclist),))
+            return doclist
+        except ssl.SSLError as exc:
+            logger.warning('SSL Error while syncing soledad: %r' % (exc,))
+        except Exception as exc:
+            logger.warning('Error while syncing soledad: %r' % (exc,))
 
     def _sync_soledad_err(self, f):
         log.err("error syncing soledad: %s" % (f.value,))
@@ -81,6 +85,8 @@ class LeapIncomingMail(object):
 
     def _process_doclist(self, doclist):
         log.msg('processing doclist')
+        if not doclist:
+            return
         for doc in doclist:
             keys = doc.content.keys()
             if self.ENC_SCHEME_KEY in keys and self.ENC_JSON_KEY in keys:

@@ -28,7 +28,7 @@ from twisted.mail import imap4
 from twisted.python import log
 
 from leap.common.check import leap_assert, leap_assert_type
-from leap.common.keymanager import KeyManager
+from leap.keymanager import KeyManager
 from leap.mail.imap.server import SoledadBackedAccount
 from leap.mail.imap.fetch import LeapIncomingMail
 from leap.soledad import Soledad
@@ -127,6 +127,9 @@ class LeapIMAPFactory(ServerFactory):
 def run_service(*args, **kwargs):
     """
     Main entry point to run the service from the client.
+
+    :returns: the LoopingCall instance that will have to be stoppped
+              before shutting down the client.
     """
     leap_assert(len(args) == 2)
     soledad, keymanager = args
@@ -139,11 +142,6 @@ def run_service(*args, **kwargs):
     uuid = soledad._get_uuid()
     factory = LeapIMAPFactory(uuid, soledad)
 
-    # ---- for application framework
-    #application = service.Application("LEAP IMAP4 Local Service")
-    #imapService = internet.TCPServer(port, factory)
-    #imapService.setServiceParent(application)
-
     from twisted.internet import reactor
     reactor.listenTCP(port, factory)
 
@@ -155,13 +153,7 @@ def run_service(*args, **kwargs):
     lc = LoopingCall(fetcher.fetch)
     lc.start(check_period)
 
-    # ---- for application framework
-    #internet.TimerService(
-        #check_period,
-        #fetcher.fetch).setServiceParent(application)
-
-    logger.debug('----------------------------------------')
     logger.debug("IMAP4 Server is RUNNING in port  %s" % (port,))
 
-    #log.msg("IMAP4 Server is RUNNING in port  %s" % (port,))
-    #return application
+    # XXX maybe return both fetcher and lc??
+    return lc
