@@ -4,6 +4,7 @@ import ssl
 
 from twisted.python import log
 from twisted.internet import defer
+from twisted.internet.task import LoopingCall
 from twisted.internet.threads import deferToThread
 
 from leap.common.check import leap_assert, leap_assert_type
@@ -26,7 +27,8 @@ class LeapIncomingMail(object):
     INCOMING_KEY = "incoming"
     CONTENT_KEY = "content"
 
-    def __init__(self, keymanager, soledad, imap_account):
+    def __init__(self, keymanager, soledad, imap_account,
+                 check_period):
 
         """
         Initialize LeapIMAP.
@@ -39,10 +41,15 @@ class LeapIncomingMail(object):
 
         :param imap_account: the account to fetch periodically
         :type imap_account: SoledadBackedAccount
+
+        :param check_period: the period to fetch new mail, in seconds.
+        :type check_period: int
         """
 
         leap_assert(keymanager, "need a keymanager to initialize")
         leap_assert_type(soledad, Soledad)
+        leap_assert(check_period, "need a period to check incoming mail")
+        leap_assert_type(check_period, int)
 
         self._keymanager = keymanager
         self._soledad = soledad
@@ -51,6 +58,16 @@ class LeapIncomingMail(object):
 
         self._pkey = self._keymanager.get_all_keys_in_local_db(
             private=True).pop()
+        self._loop = None
+        self._check_period = check_period
+
+        self._create_soledad_indexes()
+
+    def _create_soledad_indexes(self):
+        """
+        Create needed indexes on soledad.
+        """
+        self._soledad.create_index("just-mail", "incoming")
 
     def fetch(self):
         """
@@ -64,15 +81,28 @@ class LeapIncomingMail(object):
         d.addCallbacks(self._process_doclist, self._sync_soledad_err)
         return d
 
+    def start_loop(self):
+        """
+        Starts a loop to fetch mail.
+        """
+        self._loop = LoopingCall(self.fetch)
+        self._loop.start(self._check_period)
+
+    def stop(self):
+        """
+        Stops the loop that fetches mail.
+        """
+        if self._loop:
+            self._loop.stop()
+
     def _sync_soledad(self):
         log.msg('syncing soledad...')
         logger.debug('in soledad sync')
 
         try:
             self._soledad.sync()
-            gen, doclist = self._soledad.get_all_docs()
-            #logger.debug("there are %s docs" % (len(doclist),))
-            log.msg("there are %s docs" % (len(doclist),))
+            doclist = self._soledad.get_from_index("just-mail", "*")
+            #log.msg("there are %s mails" % (len(doclist),))
             return doclist
         except ssl.SSLError as exc:
             logger.warning('SSL Error while syncing soledad: %r' % (exc,))

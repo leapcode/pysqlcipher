@@ -20,9 +20,7 @@ Imap service initialization
 import logging
 logger = logging.getLogger(__name__)
 
-#from twisted.application import internet, service
 from twisted.internet.protocol import ServerFactory
-from twisted.internet.task import LoopingCall
 
 from twisted.mail import imap4
 from twisted.python import log
@@ -36,8 +34,8 @@ from leap.soledad import Soledad
 IMAP_PORT = 9930
 # The default port in which imap service will run
 
-#INCOMING_CHECK_PERIOD = 10
-INCOMING_CHECK_PERIOD = 5
+# INCOMING_CHECK_PERIOD = 5
+INCOMING_CHECK_PERIOD = 60
 # The period between succesive checks of the incoming mail
 # queue (in seconds)
 
@@ -148,12 +146,10 @@ def run_service(*args, **kwargs):
     fetcher = LeapIncomingMail(
         keymanager,
         soledad,
-        factory.theAccount)
+        factory.theAccount,
+        check_period)
 
-    lc = LoopingCall(fetcher.fetch)
-    lc.start(check_period)
+    fetcher.start_loop()
 
     logger.debug("IMAP4 Server is RUNNING in port  %s" % (port,))
-
-    # XXX maybe return both fetcher and lc??
-    return lc
+    return fetcher
