@@ -25,8 +25,8 @@ from twisted.internet import reactor
 from leap.mail.smtp.smtprelay import SMTPFactory
 
 
-def setup_smtp_relay(port, keymanager, smtp_host, smtp_port, smtp_username,
-                     smtp_password, encrypted_only):
+def setup_smtp_relay(port, keymanager, smtp_host, smtp_port,
+                     smtp_cert, smtp_key, encrypted_only):
     """
     Setup SMTP relay to run with Twisted.
 
@@ -42,10 +42,10 @@ def setup_smtp_relay(port, keymanager, smtp_host, smtp_port, smtp_username,
     @type smtp_host: str
     @param smtp_port:  The port of the remote SMTP server.
     @type smtp_port: int
-    @param smtp_username: The username used to connect to remote SMTP server.
-    @type smtp_username: str
-    @param smtp_password: The password used to connect to remote SMTP server.
-    @type smtp_password: str
+    @param smtp_cert: The client certificate for authentication.
+    @type smtp_cert: str
+    @param smtp_key: The client key for authentication.
+    @type smtp_key: str
     @param encrypted_only: Whether the SMTP relay should send unencrypted mail
         or not.
     @type encrypted_only: bool
@@ -56,15 +56,15 @@ def setup_smtp_relay(port, keymanager, smtp_host, smtp_port, smtp_username,
     # {
     #     'host': '<host>',
     #     'port': <int>,
-    #     'username': '<username>',
-    #     'password': '<password>',
+    #     'cert': '<cert path>',
+    #     'key': '<key path>',
     #     'encrypted_only': <True/False>
     # }
     config = {
         'host': smtp_host,
         'port': smtp_port,
-        'username': smtp_username,
-        'password': smtp_password,
+        'cert': smtp_cert,
+        'key': smtp_key,
         'encrypted_only': encrypted_only
     }
 

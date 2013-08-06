@@ -20,15 +20,13 @@ Imap service initialization
 import logging
 logger = logging.getLogger(__name__)
 
-#from twisted.application import internet, service
 from twisted.internet.protocol import ServerFactory
-from twisted.internet.task import LoopingCall
 
 from twisted.mail import imap4
 from twisted.python import log
 
 from leap.common.check import leap_assert, leap_assert_type
-from leap.common.keymanager import KeyManager
+from leap.keymanager import KeyManager
 from leap.mail.imap.server import SoledadBackedAccount
 from leap.mail.imap.fetch import LeapIncomingMail
 from leap.soledad import Soledad
@@ -36,8 +34,8 @@ from leap.soledad import Soledad
 IMAP_PORT = 9930
 # The default port in which imap service will run
 
-#INCOMING_CHECK_PERIOD = 10
-INCOMING_CHECK_PERIOD = 5
+# INCOMING_CHECK_PERIOD = 5
+INCOMING_CHECK_PERIOD = 60
 # The period between succesive checks of the incoming mail
 # queue (in seconds)
 
@@ -127,6 +125,9 @@ class LeapIMAPFactory(ServerFactory):
 def run_service(*args, **kwargs):
     """
     Main entry point to run the service from the client.
+
+    :returns: the LoopingCall instance that will have to be stoppped
+              before shutting down the client.
     """
     leap_assert(len(args) == 2)
     soledad, keymanager = args
@@ -139,29 +140,16 @@ def run_service(*args, **kwargs):
     uuid = soledad._get_uuid()
     factory = LeapIMAPFactory(uuid, soledad)
 
-    # ---- for application framework
-    #application = service.Application("LEAP IMAP4 Local Service")
-    #imapService = internet.TCPServer(port, factory)
-    #imapService.setServiceParent(application)
-
     from twisted.internet import reactor
     reactor.listenTCP(port, factory)
 
     fetcher = LeapIncomingMail(
         keymanager,
         soledad,
-        factory.theAccount)
+        factory.theAccount,
+        check_period)
 
-    lc = LoopingCall(fetcher.fetch)
-    lc.start(check_period)
+    fetcher.start_loop()
 
-    # ---- for application framework
-    #internet.TimerService(
-        #check_period,
-        #fetcher.fetch).setServiceParent(application)
-
-    logger.debug('----------------------------------------')
     logger.debug("IMAP4 Server is RUNNING in port  %s" % (port,))
-
-    #log.msg("IMAP4 Server is RUNNING in port  %s" % (port,))
-    #return application
+    return fetcher
