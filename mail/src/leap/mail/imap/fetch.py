@@ -93,7 +93,11 @@ class LeapIncomingMail(object):
         Stops the loop that fetches mail.
         """
         if self._loop:
-            self._loop.stop()
+            try:
+                self._loop.stop()
+            except AssertionError:
+                logger.debug("It looks like we tried to stop a "
+                             "loop that was not running.")
 
     def _sync_soledad(self):
         log.msg('syncing soledad...')
