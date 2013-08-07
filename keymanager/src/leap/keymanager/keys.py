@@ -283,3 +283,72 @@ class EncryptionScheme(object):
         :type key: EncryptionKey
         """
         pass
+
+    @abstractmethod
+    def encrypt(self, data, pubkey, passphrase=None, sign=None):
+        """
+        Encrypt C{data} using public @{pubkey} and sign with C{sign} key.
+
+        :param data: The data to be encrypted.
+        :type data: str
+        :param pubkey: The key used to encrypt.
+        :type pubkey: EncryptionKey
+        :param sign: The key used for signing.
+        :type sign: EncryptionKey
+
+        :return: The encrypted data.
+        :rtype: str
+        """
+        pass
+
+    @abstractmethod
+    def decrypt(self, data, privkey, passphrase=None, verify=None):
+        """
+        Decrypt C{data} using private @{privkey} and verify with C{verify} key.
+
+        :param data: The data to be decrypted.
+        :type data: str
+        :param privkey: The key used to decrypt.
+        :type privkey: OpenPGPKey
+        :param verify: The key used to verify a signature.
+        :type verify: OpenPGPKey
+
+        :return: The decrypted data.
+        :rtype: str
+
+        @raise InvalidSignature: Raised if unable to verify the signature with
+            C{verify} key.
+        """
+        pass
+
+    @abstractmethod
+    def sign(self, data, privkey):
+        """
+        Sign C{data} with C{privkey}.
+
+        :param data: The data to be signed.
+        :type data: str
+
+        :param privkey: The private key to be used to sign.
+        :type privkey: EncryptionKey
+
+        :return: The signed data.
+        :rtype: str
+        """
+        pass
+
+    @abstractmethod
+    def verify(self, data, pubkey):
+        """
+        Verify signed C{data} with C{pubkey}.
+
+        :param data: The data to be verified.
+        :type data: str
+
+        :param pubkey: The public key to be used on verification.
+        :type pubkey: EncryptionKey
+
+        :return: The signed data.
+        :rtype: str
+        """
+        pass

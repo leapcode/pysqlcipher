@@ -22,12 +22,13 @@ Key Manager is a Nicknym agent for LEAP client.
 
 import requests
 
-from leap.common.check import leap_assert
+from leap.common.check import leap_assert, leap_assert_type
 from leap.keymanager.errors import (
     KeyNotFound,
     NoPasswordGiven,
 )
 from leap.keymanager.keys import (
+    EncryptionKey,
     build_key_from_dict,
     KEYMANAGER_KEY_TAG,
     TAGS_PRIVATE_INDEX,
@@ -52,7 +53,8 @@ class KeyManager(object):
     PUBKEY_KEY = "user[public_key]"
 
     def __init__(self, address, nickserver_uri, soledad, session_id=None,
-                 ca_cert_path=None, api_uri=None, api_version=None, uid=None):
+                 ca_cert_path=None, api_uri=None, api_version=None, uid=None,
+                 gpgbinary=None):
         """
         Initialize a Key Manager for user's C{address} with provider's
         nickserver reachable in C{url}.
@@ -73,6 +75,8 @@ class KeyManager(object):
         :type api_version: str
         :param uid: The users' UID.
         :type uid: str
+        :param gpgbinary: Name for GnuPG binary executable.
+        :type gpgbinary: C{str}
         """
         self._address = address
         self._nickserver_uri = nickserver_uri
@@ -84,7 +88,7 @@ class KeyManager(object):
         self.uid = uid
         # a dict to map key types to their handlers
         self._wrapper_map = {
-            OpenPGPKey: OpenPGPScheme(soledad),
+            OpenPGPKey: OpenPGPScheme(soledad, gpgbinary=gpgbinary),
             # other types of key will be added to this mapper.
         }
         # the following are used to perform https requests
@@ -334,3 +338,90 @@ class KeyManager(object):
 
     uid = property(
         _get_uid, _set_uid, doc='The uid of the user.')
+
+    #
+    # encrypt/decrypt and sign/verify API
+    #
+
+    def encrypt(self, data, pubkey, passphrase=None, sign=None):
+        """
+        Encrypt C{data} using public @{key} and sign with C{sign} key.
+
+        :param data: The data to be encrypted.
+        :type data: str
+        :param pubkey: The key used to encrypt.
+        :type pubkey: EncryptionKey
+        :param sign: The key used for signing.
+        :type sign: EncryptionKey
+
+        :return: The encrypted data.
+        :rtype: str
+        """
+        leap_assert_type(pubkey, EncryptionKey)
+        leap_assert(pubkey.__class__ in self._wrapper_map, 'Unknown key type.')
+        leap_assert(pubkey.private is False, 'Key is not public.')
+        return self._wrapper_map[pubkey.__class__].encrypt(
+            data, pubkey, passphrase, sign)
+
+    def decrypt(self, data, privkey, passphrase=None, verify=None):
+        """
+        Decrypt C{data} using private @{privkey} and verify with C{verify} key.
+
+        :param data: The data to be decrypted.
+        :type data: str
+        :param privkey: The key used to decrypt.
+        :type privkey: OpenPGPKey
+        :param verify: The key used to verify a signature.
+        :type verify: OpenPGPKey
+
+        :return: The decrypted data.
+        :rtype: str
+
+        @raise InvalidSignature: Raised if unable to verify the signature with
+            C{verify} key.
+        """
+        leap_assert_type(privkey, EncryptionKey)
+        leap_assert(
+            privkey.__class__ in self._wrapper_map,
+            'Unknown key type.')
+        leap_assert(privkey.private is True, 'Key is not private.')
+        return self._wrapper_map[privkey.__class__].decrypt(
+            data, privkey, passphrase, verify)
+
+    def sign(self, data, privkey):
+        """
+        Sign C{data} with C{privkey}.
+
+        :param data: The data to be signed.
+        :type data: str
+
+        :param privkey: The private key to be used to sign.
+        :type privkey: EncryptionKey
+
+        :return: The signed data.
+        :rtype: str
+        """
+        leap_assert_type(privkey, EncryptionKey)
+        leap_assert(
+            privkey.__class__ in self._wrapper_map,
+            'Unknown key type.')
+        leap_assert(privkey.private is True, 'Key is not private.')
+        return self._wrapper_map[privkey.__class__].sign(data, privkey)
+
+    def verify(self, data, pubkey):
+        """
+        Verify signed C{data} with C{pubkey}.
+
+        :param data: The data to be verified.
+        :type data: str
+
+        :param pubkey: The public key to be used on verification.
+        :type pubkey: EncryptionKey
+
+        :return: The signed data.
+        :rtype: str
+        """
+        leap_assert_type(pubkey, EncryptionKey)
+        leap_assert(pubkey.__class__ in self._wrapper_map, 'Unknown key type.')
+        leap_assert(pubkey.private is False, 'Key is not public.')
+        return self._wrapper_map[pubkey.__class__].verify(data, pubkey)
