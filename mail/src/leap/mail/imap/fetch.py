@@ -92,12 +92,8 @@ class LeapIncomingMail(object):
         """
         Stops the loop that fetches mail.
         """
-        if self._loop:
-            try:
-                self._loop.stop()
-            except AssertionError:
-                logger.debug("It looks like we tried to stop a "
-                             "loop that was not running.")
+        if self._loop and self._loop.running is True:
+            self._loop.stop()
 
     def _sync_soledad(self):
         log.msg('syncing soledad...')
@@ -106,7 +102,7 @@ class LeapIncomingMail(object):
         try:
             self._soledad.sync()
             doclist = self._soledad.get_from_index("just-mail", "*")
-            #log.msg("there are %s mails" % (len(doclist),))
+            log.msg("there are %s mails" % (len(doclist),))
             return doclist
         except ssl.SSLError as exc:
             logger.warning('SSL Error while syncing soledad: %r' % (exc,))
@@ -120,16 +116,20 @@ class LeapIncomingMail(object):
     def _process_doclist(self, doclist):
         log.msg('processing doclist')
         if not doclist:
+            logger.debug("no docs found")
             return
         for doc in doclist:
+            logger.debug("processing doc: %s" % doc)
             keys = doc.content.keys()
             if self.ENC_SCHEME_KEY in keys and self.ENC_JSON_KEY in keys:
 
                 # XXX should check for _enc_scheme == "pubkey" || "none"
                 # that is what incoming mail uses.
                 encdata = doc.content[self.ENC_JSON_KEY]
-                d = defer.Deferred(self._decrypt_msg, doc, encdata)
-                d.addCallback(self._process_decrypted)
+                d = defer.Deferred(self._decrypt_msg(doc, encdata))
+                d.addCallbacks(self._process_decrypted, log.msg)
+            else:
+                logger.debug('This does not look like a proper msg.')
 
     def _decrypt_msg(self, doc, encdata):
         log.msg('decrypting msg')
@@ -138,7 +138,9 @@ class LeapIncomingMail(object):
             encdata, key,
             # XXX get from public method instead
             passphrase=self._soledad._passphrase))
-        return doc, decrdata
+
+        # XXX TODO: defer this properly
+        return self._process_decrypted(doc, decrdata)
 
     def _process_decrypted(self, doc, data):
         """
@@ -166,10 +168,9 @@ class LeapIncomingMail(object):
         if not rawmsg:
             return False
         logger.debug('got incoming message: %s' % (rawmsg,))
-        #log.msg("we got raw message")
 
         # add to inbox and delete from soledad
-        self.inbox.addMessage(rawmsg, (self.RECENT_FLAG,))
+        self._inbox.addMessage(rawmsg, (self.RECENT_FLAG,))
         doc_id = doc.doc_id
         self._soledad.delete_doc(doc)
         log.msg("deleted doc %s from incoming" % doc_id)

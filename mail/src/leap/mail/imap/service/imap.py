@@ -34,8 +34,9 @@ from leap.soledad import Soledad
 IMAP_PORT = 9930
 # The default port in which imap service will run
 
-# INCOMING_CHECK_PERIOD = 5
-INCOMING_CHECK_PERIOD = 60
+# TODO: Make this configurable
+INCOMING_CHECK_PERIOD = 5
+#INCOMING_CHECK_PERIOD = 60
 # The period between succesive checks of the incoming mail
 # queue (in seconds)
 
