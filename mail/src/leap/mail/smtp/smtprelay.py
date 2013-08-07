@@ -86,9 +86,9 @@ def assert_config_structure(config):
     leap_assert(PORT_KEY in config)
     leap_assert_type(config[PORT_KEY], int)
     leap_assert(CERT_KEY in config)
-    leap_assert_type(config[CERT_KEY], str)
+    leap_assert_type(config[CERT_KEY], (str, unicode))
     leap_assert(KEY_KEY in config)
-    leap_assert_type(config[KEY_KEY], str)
+    leap_assert_type(config[KEY_KEY], (str, unicode))
     leap_assert(ENCRYPTED_ONLY_KEY in config)
     leap_assert_type(config[ENCRYPTED_ONLY_KEY], bool)
     # assert received params are not empty
