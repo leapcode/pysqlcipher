@@ -110,9 +110,10 @@ class GPGWrapper(gnupg.GPG):
         @raise: RuntimeError with explanation message if there is a problem
             invoking gpg.
         """
+        # XXX: options isn't always supported, so removing for the time being
         gnupg.GPG.__init__(self, gnupghome=gnupghome, gpgbinary=gpgbinary,
                            verbose=verbose, use_agent=use_agent,
-                           keyring=keyring, options=options)
+                           keyring=keyring)#, options=options)
         self.result_map['list-packets'] = ListPackets
 
     def find_key_by_email(self, email, secret=False):
