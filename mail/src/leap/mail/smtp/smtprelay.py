@@ -34,11 +34,7 @@ from email.parser import Parser
 
 from leap.common.check import leap_assert, leap_assert_type
 from leap.keymanager import KeyManager
-from leap.keymanager.openpgp import (
-    OpenPGPKey,
-    encrypt_asym,
-    sign,
-)
+from leap.keymanager.openpgp import OpenPGPKey
 from leap.keymanager.errors import KeyNotFound
 
 
@@ -296,11 +292,12 @@ class CtxFactory(ssl.ClientContextFactory):
         self.key = key
 
     def getContext(self):
-        self.method = SSL.TLSv1_METHOD  #SSLv23_METHOD
+        self.method = SSL.TLSv1_METHOD  # SSLv23_METHOD
         ctx = ssl.ClientContextFactory.getContext(self)
         ctx.use_certificate_file(self.cert)
         ctx.use_privatekey_file(self.key)
         return ctx
+
 
 class EncryptedMessage(object):
     """
@@ -453,7 +450,7 @@ class EncryptedMessage(object):
         """
         if message.is_multipart() is False:
             message.set_payload(
-                encrypt_asym(
+                self._km.encrypt(
                     message.get_payload(), pubkey, sign=signkey))
         else:
             for msg in message.get_payload():
@@ -472,7 +469,7 @@ class EncryptedMessage(object):
         """
         if message.is_multipart() is False:
             message.set_payload(
-                sign(
+                self._km.sign(
                     message.get_payload(), signkey))
         else:
             for msg in message.get_payload():
