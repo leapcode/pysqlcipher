@@ -21,8 +21,9 @@ Provide function for loading tests.
 """
 
 
-import unittest
+# Do not force the unittest dependency
+# import unittest
 
 
-def load_tests():
-    return unittest.defaultTestLoader.discover('./src/leap/mail')
+# def load_tests():
+#     return unittest.defaultTestLoader.discover('./src/leap/mail')
