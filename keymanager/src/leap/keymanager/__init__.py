@@ -20,6 +20,7 @@
 Key Manager is a Nicknym agent for LEAP client.
 """
 
+import logging
 import requests
 
 from leap.common.check import leap_assert, leap_assert_type
@@ -37,6 +38,8 @@ from leap.keymanager.openpgp import (
     OpenPGPKey,
     OpenPGPScheme,
 )
+
+logger = logging.getLogger(__name__)
 
 
 #
@@ -170,12 +173,18 @@ class KeyManager(object):
         @raise KeyNotFound: If the key was not found on nickserver.
         """
         # request keys from the nickserver
-        server_keys = self._get(
-            self._nickserver_uri, {'address': address}).json()
-        # insert keys in local database
-        if self.OPENPGP_KEY in server_keys:
-            self._wrapper_map[OpenPGPKey].put_ascii_key(
-                server_keys['openpgp'])
+        res = None
+        try:
+            res = self._get(self._nickserver_uri, {'address': address})
+            server_keys = res.json()
+            # insert keys in local database
+            if self.OPENPGP_KEY in server_keys:
+                self._wrapper_map[OpenPGPKey].put_ascii_key(
+                    server_keys['openpgp'])
+        except Exception as e:
+            logger.warning("Error retrieving the keys: %r" % (e,))
+            if res:
+                logger.warning("%s" % (res.content,))
 
     #
     # key management
