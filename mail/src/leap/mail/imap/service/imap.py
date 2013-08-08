@@ -31,7 +31,7 @@ from leap.mail.imap.server import SoledadBackedAccount
 from leap.mail.imap.fetch import LeapIncomingMail
 from leap.soledad import Soledad
 
-IMAP_PORT = 9930
+IMAP_PORT = 1984
 # The default port in which imap service will run
 
 # TODO: Make this configurable
