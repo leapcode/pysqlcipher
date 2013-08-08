@@ -8,7 +8,6 @@ from twisted.internet.task import LoopingCall
 from twisted.internet.threads import deferToThread
 
 from leap.common.check import leap_assert, leap_assert_type
-from leap.keymanager import openpgp
 from leap.soledad import Soledad
 
 logger = logging.getLogger(__name__)
@@ -130,7 +129,7 @@ class LeapIncomingMail(object):
     def _decrypt_msg(self, doc, encdata):
         log.msg('decrypting msg')
         key = self._pkey
-        decrdata = (openpgp.decrypt_asym(
+        decrdata = (self._keymanager.decrypt(
             encdata, key,
             # XXX get from public method instead
             passphrase=self._soledad._passphrase))

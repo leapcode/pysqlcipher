@@ -23,7 +23,7 @@ from setuptools import setup, find_packages
 
 
 requirements = [
-    "leap.soledad",
+    "leap.soledad>=0.2.3",
     "leap.common>=0.2.3-dev",
     "leap.keymanager>=0.2.0",
     "twisted",

@@ -41,6 +41,8 @@ from leap.common.testing.basetest import BaseLeapTest
 
 class TestCaseWithKeyManager(BaseLeapTest):
 
+    GPG_BINARY_PATH = '/usr/bin/gpg'
+
     def setUp(self):
         # mimic BaseLeapTest.setUpClass behaviour, because this is deprecated
         # in Twisted: http://twistedmatrix.com/trac/ticket/1870
@@ -110,7 +112,9 @@ class TestCaseWithKeyManager(BaseLeapTest):
             'port': 25,
             'username': address,
             'password': '<password>',
-            'encrypted_only': True
+            'encrypted_only': True,
+            'cert': 'blah',
+            'key': 'bleh',
         }
 
         class Response(object):
@@ -125,12 +129,13 @@ class TestCaseWithKeyManager(BaseLeapTest):
 
         nickserver_url = ''  # the url of the nickserver
         km = KeyManager(address, nickserver_url, self._soledad,
-                              ca_cert_path='')
+                        ca_cert_path='', gpgbinary=self.GPG_BINARY_PATH)
         km._fetcher.put = Mock()
         km._fetcher.get = Mock(return_value=Response())
 
         # insert test keys in key manager.
-        pgp = openpgp.OpenPGPScheme(self._soledad)
+        pgp = openpgp.OpenPGPScheme(
+            self._soledad, gpgbinary=self.GPG_BINARY_PATH)
         pgp.put_ascii_key(PRIVATE_KEY)
         pgp.put_ascii_key(PRIVATE_KEY_2)
 
@@ -371,4 +376,3 @@ THx7N776fcYHGumbqUMYrxrcZSbNveE6SaK8fphRam1dewM0
 =a5gs
 -----END PGP PRIVATE KEY BLOCK-----
 """
-

@@ -83,14 +83,14 @@ class TestSmtpRelay(TestCaseWithKeyManager):
         text = "simple raw text"
         pubkey = self._km.get_key(
             ADDRESS, openpgp.OpenPGPKey, private=False)
-        encrypted = openpgp.encrypt_asym(text, pubkey)
+        encrypted = self._km.encrypt(text, pubkey)
         self.assertNotEqual(
             text, encrypted, "Ciphertext is equal to plaintext.")
         privkey = self._km.get_key(
             ADDRESS, openpgp.OpenPGPKey, private=True)
-        decrypted = openpgp.decrypt_asym(encrypted, privkey)
+        decrypted = self._km.decrypt(encrypted, privkey)
         self.assertEqual(text, decrypted,
-            "Decrypted text differs from plaintext.")
+                         "Decrypted text differs from plaintext.")
 
     def test_relay_accepts_valid_email(self):
         """
@@ -129,7 +129,7 @@ class TestSmtpRelay(TestCaseWithKeyManager):
         m.eomReceived()
         privkey = self._km.get_key(
             ADDRESS, openpgp.OpenPGPKey, private=True)
-        decrypted = openpgp.decrypt_asym(m._message.get_payload(), privkey)
+        decrypted = self._km.decrypt(m._message.get_payload(), privkey)
         self.assertEqual(
             '\r\n'.join(self.EMAIL_DATA[9:12]) + '\r\n',
             decrypted,
@@ -153,7 +153,7 @@ class TestSmtpRelay(TestCaseWithKeyManager):
         privkey = self._km.get_key(
             ADDRESS, openpgp.OpenPGPKey, private=True)
         pubkey = self._km.get_key(ADDRESS_2, openpgp.OpenPGPKey)
-        decrypted = openpgp.decrypt_asym(
+        decrypted = self._km.decrypt(
             m._message.get_payload(), privkey, verify=pubkey)
         self.assertEqual(
             '\r\n'.join(self.EMAIL_DATA[9:12]) + '\r\n',
@@ -190,7 +190,7 @@ class TestSmtpRelay(TestCaseWithKeyManager):
         # assert signature is valid
         pubkey = self._km.get_key(ADDRESS_2, openpgp.OpenPGPKey)
         self.assertTrue(
-            openpgp.verify(m._message.get_payload(), pubkey),
+            self._km.verify(m._message.get_payload(), pubkey),
             'Signature could not be verified.')
 
     def test_missing_key_rejects_address(self):
@@ -200,7 +200,8 @@ class TestSmtpRelay(TestCaseWithKeyManager):
         """
         # remove key from key manager
         pubkey = self._km.get_key(ADDRESS, openpgp.OpenPGPKey)
-        pgp = openpgp.OpenPGPScheme(self._soledad)
+        pgp = openpgp.OpenPGPScheme(
+            self._soledad, gpgbinary=self.GPG_BINARY_PATH)
         pgp.delete_key(pubkey)
         # mock the key fetching
         self._km.fetch_keys_from_server = Mock(return_value=[])
@@ -226,7 +227,8 @@ class TestSmtpRelay(TestCaseWithKeyManager):
         """
         # remove key from key manager
         pubkey = self._km.get_key(ADDRESS, openpgp.OpenPGPKey)
-        pgp = openpgp.OpenPGPScheme(self._soledad)
+        pgp = openpgp.OpenPGPScheme(
+            self._soledad, gpgbinary=self.GPG_BINARY_PATH)
         pgp.delete_key(pubkey)
         # mock the key fetching
         self._km.fetch_keys_from_server = Mock(return_value=[])
