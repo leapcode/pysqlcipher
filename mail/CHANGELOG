@@ -1,0 +1,5 @@
+0.3.0 Aug 9:
+  o Add dependency for leap.keymanager.
+  o User 1984 default port for imap.
+  o Add client certificate authentication. Closes #3376.
+  o SMTP relay signs outgoing messages.
