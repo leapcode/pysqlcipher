@@ -1,2 +1,0 @@
-  o Options parameter in gnupg.GPG isn't supported by all versions, so
-    removing it for the time being.

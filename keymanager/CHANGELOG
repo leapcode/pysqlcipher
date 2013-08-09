@@ -1,2 +1,9 @@
+0.3.0 Aug 9:
+  o If a nickserver request fails in any way, notify and continue.
+  o Options parameter in gnupg.GPG isn't supported by all versions, so
+    removing it for the time being.
+  o Add support for bundled gpg. Closes #3397.
+  o Refactor API to include encrypt/decrypt/sign/verify in KeyManager.
+
 0.2.0 Jul 12:
   o Move keymanager to its own package

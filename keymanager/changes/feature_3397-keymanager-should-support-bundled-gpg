@@ -1,2 +1,0 @@
-  o Add support for bundled gpg. Closes #3397.
-  o Refactor API to include encrypt/decrypt/sign/verify in KeyManager.
