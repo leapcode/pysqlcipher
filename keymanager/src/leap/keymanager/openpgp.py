@@ -433,9 +433,7 @@ class OpenPGPScheme(EncryptionScheme):
             logger.debug("%s" % (stderr,))
         if getattr(result, 'ok', None) is not True:
             raise errors.EncryptionDecryptionFailed(
-                'Failed to encrypt/decrypt in %s: %s' % (
-                    this.encrypt,
-                    stderr))
+                'Failed to encrypt/decrypt: %s' % stderr)
 
     def encrypt(self, data, pubkey, passphrase=None, sign=None):
         """
