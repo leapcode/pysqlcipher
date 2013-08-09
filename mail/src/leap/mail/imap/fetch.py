@@ -168,8 +168,23 @@ class LeapIncomingMail(object):
             return False
         logger.debug('got incoming message: %s' % (rawmsg,))
 
-        # add to inbox and delete from soledad
-        self._inbox.addMessage(rawmsg, (self.RECENT_FLAG,))
-        doc_id = doc.doc_id
-        self._soledad.delete_doc(doc)
-        log.msg("deleted doc %s from incoming" % doc_id)
+        try:
+            pgp_beg = "-----BEGIN PGP MESSAGE-----"
+            pgp_end = "-----END PGP MESSAGE-----"
+            if pgp_beg in rawmsg:
+                first = rawmsg.find(pgp_beg)
+                last = rawmsg.rfind(pgp_end)
+                pgp_message = rawmsg[first:first+last]
+
+                decrdata = (self._keymanager.decrypt(
+                    pgp_message, self._pkey,
+                    # XXX get from public method instead
+                    passphrase=self._soledad._passphrase))
+                rawmsg = rawmsg.replace(pgp_message, decrdata)
+            # add to inbox and delete from soledad
+            self._inbox.addMessage(rawmsg, (self.RECENT_FLAG,))
+            doc_id = doc.doc_id
+            self._soledad.delete_doc(doc)
+            log.msg("deleted doc %s from incoming" % doc_id)
+        except Exception as e:
+            logger.error("Problem processing incoming mail: %r" % (e,))
