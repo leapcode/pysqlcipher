@@ -38,7 +38,7 @@ tests_requirements = [
 
 setup(
     name='leap.keymanager',
-    version='0.2.0',
+    version='0.3.0',
     url='https://leap.se/',
     license='GPLv3+',
     description='LEAP\'s Key Manager',
