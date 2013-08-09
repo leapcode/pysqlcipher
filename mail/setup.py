@@ -37,7 +37,7 @@ tests_requirements = [
 # XXX add classifiers, docs
 setup(
     name='leap.mail',
-    version='0.2.0-dev',
+    version='0.3.0',
     url='https://leap.se/',
     license='GPLv3+',
     author='The LEAP Encryption Access Project',
