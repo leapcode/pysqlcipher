@@ -121,6 +121,9 @@ class IndexedDB(object):
         leap_assert_type(self.INDEXES, dict)
 
         # Ask the database for currently existing indexes.
+        if not self._soledad:
+            logger.debug("NO SOLEDAD ON IMAP INITIALIZATION")
+            return
         db_indexes = dict(self._soledad.list_indexes())
         for name, expression in SoledadBackedAccount.INDEXES.items():
             if name not in db_indexes:
@@ -787,6 +790,7 @@ class LeapMessage(WithMsgFields):
         @rtype: str
         """
         return self._doc.content.get(key, None)
+
 
 class MessageCollection(WithMsgFields, IndexedDB):
     """
