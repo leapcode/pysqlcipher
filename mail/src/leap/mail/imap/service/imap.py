@@ -17,6 +17,8 @@
 """
 Imap service initialization
 """
+from copy import copy
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -71,7 +73,13 @@ class LeapIMAPServer(imap4.IMAP4Server):
         #self.theAccount = theAccount
 
     def lineReceived(self, line):
-        log.msg('rcv: %s' % line)
+        if "login" in line:
+            # avoid to log the pass, even though we are using a dummy auth
+            # by now.
+            msg = line[:7] + " [...]"
+        else:
+            msg = copy(line)
+        log.msg('rcv: %s' % msg)
         imap4.IMAP4Server.lineReceived(self, line)
 
     def authenticateLogin(self, username, password):

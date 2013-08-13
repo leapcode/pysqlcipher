@@ -1,0 +1,1 @@
+  o Avoid logging dummy password on imap server. Closes: #3416
