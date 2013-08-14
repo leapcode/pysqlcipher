@@ -67,8 +67,8 @@ def assert_config_structure(config):
         {
             HOST_KEY: '<str>',
             PORT_KEY: <int>,
-            USERNAME_KEY: '<str>',
-            PASSWORD_KEY: '<str>',
+            CERT_KEY: '<str>',
+            KEY_KEY: '<str>',
             ENCRYPTED_ONLY_KEY: <bool>,
         }
 
@@ -107,8 +107,8 @@ def validate_address(address):
     @raise smtp.SMTPBadRcpt: Raised if C{address} is invalid.
     """
     leap_assert_type(address, str)
-    # the following parses the address as described in RFC 2822 and
-    # returns ('', '') if the parse fails.
+    # in the following, the address is parsed as described in RFC 2822 and
+    # ('', '') is returned if the parse fails.
     _, address = parseaddr(address)
     if address == '':
         raise smtp.SMTPBadRcpt(address)
@@ -186,8 +186,8 @@ class SMTPDelivery(object):
                 {
                     HOST_KEY: '<str>',
                     PORT_KEY: <int>,
-                    USERNAME_KEY: '<str>',
-                    PASSWORD_KEY: '<str>',
+                    CERT_KEY: '<str>',
+                    KEY_KEY: '<str>',
                     ENCRYPTED_ONLY_KEY: <bool>,
                 }
         @type config: dict
@@ -321,8 +321,8 @@ class EncryptedMessage(object):
                 {
                     HOST_KEY: '<str>',
                     PORT_KEY: <int>,
-                    USERNAME_KEY: '<str>',
-                    PASSWORD_KEY: '<str>',
+                    CERT_KEY: '<str>',
+                    KEY_KEY: '<str>',
                     ENCRYPTED_ONLY_KEY: <bool>,
                 }
         @type config: dict
@@ -416,8 +416,8 @@ class EncryptedMessage(object):
 
         d = defer.Deferred()
         factory = smtp.ESMTPSenderFactory(
-            "",
-            "",
+            "",  # username is blank because server does not use auth.
+            "",  # password is blank because server does not use auth.
             self._fromAddress.addrstr,
             self._user.dest.addrstr,
             StringIO(msg),
