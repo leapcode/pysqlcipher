@@ -33,6 +33,7 @@ from email.parser import Parser
 
 
 from leap.common.check import leap_assert, leap_assert_type
+from leap.common.events import proto, signal
 from leap.keymanager import KeyManager
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.keymanager.errors import KeyNotFound
@@ -250,13 +251,16 @@ class SMTPDelivery(object):
         try:
             address = validate_address(user.dest.addrstr)
             pubkey = self._km.get_key(address, OpenPGPKey)
-            log.msg("Accepting mail for %s..." % user.dest)
+            log.msg("Accepting mail for %s..." % user.dest.addrstr)
+            signal(proto.SMTP_RECIPIENT_ACCEPTED_ENCRYPTED, user.dest.addrstr)
         except KeyNotFound:
             # if key was not found, check config to see if will send anyway.
             if self._config[ENCRYPTED_ONLY_KEY]:
+                signal(proto.SMTP_RECIPIENT_REJECTED, user.dest.addrstr)
                 raise smtp.SMTPBadRcpt(user.dest.addrstr)
             log.msg("Warning: will send an unencrypted message (because "
                     "encrypted_only' is set to False).")
+            signal(proto.SMTP_RECIPIENT_ACCEPTED_UNENCRYPTED, user.dest.addrstr)
         return lambda: EncryptedMessage(
             self._origin, user, self._km, self._config)
 
@@ -376,6 +380,7 @@ class EncryptedMessage(object):
         """
         log.msg("Connection lost unexpectedly!")
         log.err()
+        signal(proto.SMTP_CONNECTION_LOST, self._user.dest.addrstr)
         # unexpected loss of connection; don't save
         self.lines = []
 
@@ -387,6 +392,7 @@ class EncryptedMessage(object):
         @type r: anything
         """
         log.msg(r)
+        signal(proto.SMTP_SEND_MESSAGE_SUCCESS, self._user.dest.addrstr)
 
     def sendError(self, e):
         """
@@ -397,6 +403,7 @@ class EncryptedMessage(object):
         """
         log.msg(e)
         log.err()
+        signal(proto.SMTP_SEND_MESSAGE_ERROR, self._user.dest.addrstr)
 
     def sendMessage(self):
         """
@@ -424,9 +431,8 @@ class EncryptedMessage(object):
             d,
             contextFactory=CtxFactory(self._config[CERT_KEY],
                                       self._config[KEY_KEY]),
-            requireAuthentication=False,
-        )
-
+            requireAuthentication=False)
+        signal(proto.SMTP_SEND_MESSAGE_START, self._user.dest.addrstr)
         reactor.connectTCP(
             self._config[HOST_KEY],
             self._config[PORT_KEY],
@@ -496,10 +502,16 @@ class EncryptedMessage(object):
             # try to get the recipient pubkey
             pubkey = self._km.get_key(to_address, OpenPGPKey)
             log.msg("Will encrypt the message to %s." % pubkey.fingerprint)
+            signal(proto.SMTP_START_ENCRYPT_AND_SIGN,
+                   "%s,%s" % (self._fromAddress.addrstr, to_address))
             self._encrypt_and_sign_payload_rec(self._message, pubkey, signkey)
+            signal(proto.SMTP_END_ENCRYPT_AND_SIGN,
+                   "%s,%s" % (self._fromAddress.addrstr, to_address))
         except KeyNotFound:
             # at this point we _can_ send unencrypted mail, because if the
             # configuration said the opposite the address would have been
             # rejected in SMTPDelivery.validateTo().
-            self._sign_payload_rec(self._message, signkey)
             log.msg('Will send unencrypted message to %s.' % to_address)
+            signal(proto.SMTP_START_SIGN, self._fromAddress.addrstr)
+            self._sign_payload_rec(self._message, signkey)
+            signal(proto.SMTP_END_SIGN, self._fromAddress.addrstr)
