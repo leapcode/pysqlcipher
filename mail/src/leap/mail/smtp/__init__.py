@@ -22,6 +22,7 @@ SMTP relay helper function.
 from twisted.internet import reactor
 
 
+from leap.common.events import proto, signal
 from leap.mail.smtp.smtprelay import SMTPFactory
 
 
@@ -70,4 +71,8 @@ def setup_smtp_relay(port, keymanager, smtp_host, smtp_port,
 
     # configure the use of this service with twistd
     factory = SMTPFactory(keymanager, config)
-    reactor.listenTCP(port, factory)
+    try:
+        reactor.listenTCP(port, factory)
+        signal(proto.SMTP_SERVICE_STARTED, str(smtp_port))
+    except CannotListenError:
+        signal(proto.SMTP_SERVICE_FAILED_TO_START, str(smtp_port))
