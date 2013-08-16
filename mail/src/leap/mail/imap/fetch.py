@@ -125,14 +125,15 @@ class LeapIncomingMail(object):
                 # XXX should check for _enc_scheme == "pubkey" || "none"
                 # that is what incoming mail uses.
                 encdata = doc.content[self.ENC_JSON_KEY]
-                d = defer.Deferred(self._decrypt_msg(doc, encdata))
-                d.addCallbacks(self._process_decrypted, log.msg)
+                defer.Deferred(self._decrypt_msg(doc, encdata))
             else:
                 logger.debug('This does not look like a proper msg.')
 
     def _decrypt_msg(self, doc, encdata):
         log.msg('decrypting msg')
         key = self._pkey
+        if len(encdata) == 0:
+            return
         decrdata = (self._keymanager.decrypt(
             encdata, key,
             # XXX get from public method instead
