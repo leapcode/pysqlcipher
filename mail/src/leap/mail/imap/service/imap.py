@@ -27,6 +27,7 @@ from twisted.internet.protocol import ServerFactory
 from twisted.mail import imap4
 from twisted.python import log
 
+from leap.common import events as leap_events
 from leap.common.check import leap_assert, leap_assert_type
 from leap.keymanager import KeyManager
 from leap.mail.imap.server import SoledadBackedAccount
@@ -41,6 +42,10 @@ INCOMING_CHECK_PERIOD = 5
 #INCOMING_CHECK_PERIOD = 60
 # The period between succesive checks of the incoming mail
 # queue (in seconds)
+
+from leap.common.events.events_pb2 import IMAP_SERVICE_STARTED
+from leap.common.events.events_pb2 import IMAP_SERVICE_FAILED_TO_START
+from leap.common.events.events_pb2 import IMAP_CLIENT_LOGIN
 
 
 class LeapIMAPServer(imap4.IMAP4Server):
@@ -84,6 +89,7 @@ class LeapIMAPServer(imap4.IMAP4Server):
 
     def authenticateLogin(self, username, password):
         # all is allowed so far. use realm instead
+        leap_events.signal(IMAP_CLIENT_LOGIN, True)
         return imap4.IAccount, self.theAccount, lambda: None
 
 
@@ -150,15 +156,21 @@ def run_service(*args, **kwargs):
     factory = LeapIMAPFactory(uuid, soledad)
 
     from twisted.internet import reactor
-    reactor.listenTCP(port, factory)
 
-    fetcher = LeapIncomingMail(
-        keymanager,
-        soledad,
-        factory.theAccount,
-        check_period)
-
-    fetcher.start_loop()
-
-    logger.debug("IMAP4 Server is RUNNING in port  %s" % (port,))
-    return fetcher
+    try:
+        reactor.listenTCP(port, factory)
+        fetcher = LeapIncomingMail(
+            keymanager,
+            soledad,
+            factory.theAccount,
+            check_period)
+    except Exception as exc:
+        # XXX cannot listen?
+        logger.error("Error launching IMAP service: %r" % (exc,))
+        leap_events.signal(IMAP_SERVICE_FAILED_TO_START, str(port))
+        return
+    else:
+        fetcher.start_loop()
+        logger.debug("IMAP4 Server is RUNNING in port  %s" % (port,))
+        leap_events.signal(IMAP_SERVICE_STARTED, str(port))
+        return fetcher
