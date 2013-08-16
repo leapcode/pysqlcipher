@@ -24,10 +24,11 @@ import logging
 import requests
 
 from leap.common.check import leap_assert, leap_assert_type
-from leap.keymanager.errors import (
-    KeyNotFound,
-    NoPasswordGiven,
-)
+from leap.common.events import signal
+from leap.common.events import events_pb2 as proto
+
+from leap.keymanager.errors import KeyNotFound
+
 from leap.keymanager.keys import (
     EncryptionKey,
     build_key_from_dict,
@@ -222,6 +223,7 @@ class KeyManager(object):
             self._api_version,
             self._uid)
         self._put(uri, data)
+        signal(proto.KEYMANAGER_DONE_UPLOADING_KEYS, self._address)
 
     def get_key(self, address, ktype, private=False, fetch_remote=True):
         """
@@ -246,15 +248,26 @@ class KeyManager(object):
             ktype in self._wrapper_map,
             'Unkown key type: %s.' % str(ktype))
         try:
+            signal(proto.KEYMANAGER_LOOKING_FOR_KEY, address)
             # return key if it exists in local database
-            return self._wrapper_map[ktype].get_key(address, private=private)
+            key = self._wrapper_map[ktype].get_key(address, private=private)
+            signal(proto.KEYMANAGER_KEY_FOUND, address)
+
+            return key
         except KeyNotFound:
+            signal(proto.KEYMANAGER_KEY_NOT_FOUND, address)
+
             # we will only try to fetch a key from nickserver if fetch_remote
             # is True and the key is not private.
             if fetch_remote is False or private is True:
                 raise
+
+            signal(proto.KEYMANAGER_LOOKING_FOR_KEY, address)
             self._fetch_keys_from_server(address)
-            return self._wrapper_map[ktype].get_key(address, private=False)
+            key = self._wrapper_map[ktype].get_key(address, private=False)
+            signal(proto.KEYMANAGER_KEY_FOUND, address)
+
+            return key
 
     def get_all_keys_in_local_db(self, private=False):
         """
@@ -296,7 +309,11 @@ class KeyManager(object):
         :return: The generated key.
         :rtype: EncryptionKey
         """
-        return self._wrapper_map[ktype].gen_key(self._address)
+        signal(proto.KEYMANAGER_STARTED_KEY_GENERATION, self._address)
+        key = self._wrapper_map[ktype].gen_key(self._address)
+        signal(proto.KEYMANAGER_FINISHED_KEY_GENERATION, self._address)
+
+        return key
 
     #
     # Setters/getters
