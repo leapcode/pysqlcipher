@@ -89,7 +89,7 @@ class LeapIMAPServer(imap4.IMAP4Server):
 
     def authenticateLogin(self, username, password):
         # all is allowed so far. use realm instead
-        leap_events.signal(IMAP_CLIENT_LOGIN, True)
+        leap_events.signal(IMAP_CLIENT_LOGIN, "1")
         return imap4.IAccount, self.theAccount, lambda: None
 
 

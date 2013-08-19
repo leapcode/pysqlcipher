@@ -182,7 +182,7 @@ class LeapIncomingMail(object):
             logger.warning("Error while decrypting msg: %r" % (exc,))
             decrdata = ""
             ok = False
-        leap_events.signal(IMAP_MSG_DECRYPTED, ok)
+        leap_events.signal(IMAP_MSG_DECRYPTED, "1" if ok else "0")
         # XXX TODO: defer this properly
         return self._process_decrypted(doc, decrdata)
 
