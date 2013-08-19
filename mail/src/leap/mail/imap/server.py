@@ -38,6 +38,8 @@ from twisted.python import log
 from leap.common.check import leap_assert, leap_assert_type
 from leap.soledad import Soledad
 from leap.soledad.sqlcipher import SQLCipherDatabase
+from leap.common.events import signal
+from leap.common.events import events_pb2 as proto
 
 logger = logging.getLogger(__name__)
 
