@@ -164,6 +164,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
     TYPE_SUBS_IDX = 'by-type-and-subscribed'
     TYPE_MBOX_SEEN_IDX = 'by-type-and-mbox-and-seen'
     TYPE_MBOX_RECT_IDX = 'by-type-and-mbox-and-recent'
+    TYPE_MBOX_RECT_SEEN_IDX = 'by-type-and-mbox-and-recent-and-seen'
 
     KTYPE = WithMsgFields.TYPE_KEY
     MBOX_VAL = WithMsgFields.TYPE_MBOX_VAL
@@ -180,6 +181,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         # messages
         TYPE_MBOX_SEEN_IDX: [KTYPE, MBOX_VAL, 'bool(seen)'],
         TYPE_MBOX_RECT_IDX: [KTYPE, MBOX_VAL, 'bool(recent)'],
+        TYPE_MBOX_RECT_SEEN_IDX: [KTYPE, MBOX_VAL, 'bool(recent)', 'bool(seen)'],
     }
 
     INBOX_NAME = "INBOX"
@@ -991,8 +993,8 @@ class MessageCollection(WithMsgFields, IndexedDB):
         """
         return (doc for doc in
                 self._soledad.get_from_index(
-                    SoledadBackedAccount.TYPE_MBOX_RECT_IDX,
-                    self.TYPE_MESSAGE_VAL, self.mbox, '1'))
+                    SoledadBackedAccount.TYPE_MBOX_RECT_SEEN_IDX,
+                    self.TYPE_MESSAGE_VAL, self.mbox, '1', '0'))
 
     def get_unseen(self):
         """
