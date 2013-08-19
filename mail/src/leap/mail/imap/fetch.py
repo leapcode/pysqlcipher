@@ -29,7 +29,8 @@ from twisted.internet.threads import deferToThread
 
 from leap.common import events as leap_events
 from leap.common.check import leap_assert, leap_assert_type
-from leap.soledad import Soledad
+from leap.soledad.client import Soledad
+from leap.soledad.common.crypto import ENC_SCHEME_KEY, ENC_JSON_KEY
 
 from leap.common.events.events_pb2 import IMAP_FETCHED_INCOMING
 from leap.common.events.events_pb2 import IMAP_MSG_PROCESSING
@@ -45,9 +46,6 @@ class LeapIncomingMail(object):
     """
     Fetches mail from the incoming queue.
     """
-
-    ENC_SCHEME_KEY = "_enc_scheme"
-    ENC_JSON_KEY = "_enc_json"
 
     RECENT_FLAG = "\\Recent"
 
@@ -156,11 +154,11 @@ class LeapIncomingMail(object):
             leap_events.signal(
                 IMAP_MSG_PROCESSING, str(index), str(num_mails))
             keys = doc.content.keys()
-            if self.ENC_SCHEME_KEY in keys and self.ENC_JSON_KEY in keys:
+            if ENC_SCHEME_KEY in keys and ENC_JSON_KEY in keys:
 
                 # XXX should check for _enc_scheme == "pubkey" || "none"
                 # that is what incoming mail uses.
-                encdata = doc.content[self.ENC_JSON_KEY]
+                encdata = doc.content[ENC_JSON_KEY]
                 d = defer.Deferred(self._decrypt_msg(doc, encdata))
                 d.addCallbacks(self._process_decrypted, log.msg)
             else:

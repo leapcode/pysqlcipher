@@ -32,7 +32,7 @@ from leap.common.check import leap_assert, leap_assert_type
 from leap.keymanager import KeyManager
 from leap.mail.imap.server import SoledadBackedAccount
 from leap.mail.imap.fetch import LeapIncomingMail
-from leap.soledad import Soledad
+from leap.soledad.client import Soledad
 
 IMAP_PORT = 1984
 # The default port in which imap service will run

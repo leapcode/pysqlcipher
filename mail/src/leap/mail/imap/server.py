@@ -36,8 +36,8 @@ from twisted.python import log
 #import u1db
 
 from leap.common.check import leap_assert, leap_assert_type
-from leap.soledad import Soledad
-from leap.soledad.sqlcipher import SQLCipherDatabase
+from leap.soledad.client import Soledad
+from leap.soledad.client.sqlcipher import SQLCipherDatabase
 
 logger = logging.getLogger(__name__)
 

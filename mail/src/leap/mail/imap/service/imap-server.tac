@@ -3,7 +3,7 @@ import os
 
 from xdg import BaseDirectory
 
-from leap.soledad import Soledad
+from leap.soledad.client import Soledad
 from leap.mail.imap.service import imap
 
 
