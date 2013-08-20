@@ -1,14 +1,42 @@
+# -*- coding: utf-8 -*-
+# fetch.py
+# Copyright (C) 2013 LEAP
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+Incoming mail fetcher.
+"""
 import logging
 import json
 import ssl
+import time
 
 from twisted.python import log
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 from twisted.internet.threads import deferToThread
 
+from leap.common import events as leap_events
 from leap.common.check import leap_assert, leap_assert_type
 from leap.soledad import Soledad
+
+from leap.common.events.events_pb2 import IMAP_FETCHED_INCOMING
+from leap.common.events.events_pb2 import IMAP_MSG_PROCESSING
+from leap.common.events.events_pb2 import IMAP_MSG_DECRYPTED
+from leap.common.events.events_pb2 import IMAP_MSG_SAVED_LOCALLY
+from leap.common.events.events_pb2 import IMAP_MSG_DELETED_INCOMING
+
 
 logger = logging.getLogger(__name__)
 
@@ -100,8 +128,12 @@ class LeapIncomingMail(object):
 
         try:
             self._soledad.sync()
+            fetched_ts = time.mktime(time.gmtime())
             doclist = self._soledad.get_from_index("just-mail", "*")
-            log.msg("there are %s mails" % (len(doclist),))
+            num_mails = len(doclist)
+            log.msg("there are %s mails" % (num_mails,))
+            leap_events.signal(
+                IMAP_FETCHED_INCOMING, str(num_mails), str(fetched_ts))
             return doclist
         except ssl.SSLError as exc:
             logger.warning('SSL Error while syncing soledad: %r' % (exc,))
@@ -117,8 +149,12 @@ class LeapIncomingMail(object):
         if not doclist:
             logger.debug("no docs found")
             return
-        for doc in doclist:
-            logger.debug("processing doc: %s" % doc)
+        num_mails = len(doclist)
+        for index, doc in enumerate(doclist):
+            logger.debug("processing doc %d of %d: %s" % (
+                index, num_mails, doc))
+            leap_events.signal(
+                IMAP_MSG_PROCESSING, str(index), str(num_mails))
             keys = doc.content.keys()
             if self.ENC_SCHEME_KEY in keys and self.ENC_JSON_KEY in keys:
 
@@ -132,13 +168,17 @@ class LeapIncomingMail(object):
     def _decrypt_msg(self, doc, encdata):
         log.msg('decrypting msg')
         key = self._pkey
-        if len(encdata) == 0:
-            return
-        decrdata = (self._keymanager.decrypt(
-            encdata, key,
-            # XXX get from public method instead
-            passphrase=self._soledad._passphrase))
-
+        try:
+            decrdata = (self._keymanager.decrypt(
+                encdata, key,
+                # XXX get from public method instead
+                passphrase=self._soledad._passphrase))
+            ok = True
+        except Exception as exc:
+            logger.warning("Error while decrypting msg: %r" % (exc,))
+            decrdata = ""
+            ok = False
+        leap_events.signal(IMAP_MSG_DECRYPTED, ok)
         # XXX TODO: defer this properly
         return self._process_decrypted(doc, decrdata)
 
@@ -184,8 +224,10 @@ class LeapIncomingMail(object):
                 rawmsg = rawmsg.replace(pgp_message, decrdata)
             # add to inbox and delete from soledad
             self._inbox.addMessage(rawmsg, (self.RECENT_FLAG,))
+            leap_events.signal(IMAP_MSG_SAVED_LOCALLY)
             doc_id = doc.doc_id
             self._soledad.delete_doc(doc)
             log.msg("deleted doc %s from incoming" % doc_id)
+            leap_events.signal(IMAP_MSG_DELETED_INCOMING)
         except Exception as e:
             logger.error("Problem processing incoming mail: %r" % (e,))
