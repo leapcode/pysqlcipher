@@ -36,6 +36,7 @@ from leap.common.events.events_pb2 import IMAP_MSG_PROCESSING
 from leap.common.events.events_pb2 import IMAP_MSG_DECRYPTED
 from leap.common.events.events_pb2 import IMAP_MSG_SAVED_LOCALLY
 from leap.common.events.events_pb2 import IMAP_MSG_DELETED_INCOMING
+from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
 
 
 logger = logging.getLogger(__name__)
@@ -134,6 +135,8 @@ class LeapIncomingMail(object):
             log.msg("there are %s mails" % (num_mails,))
             leap_events.signal(
                 IMAP_FETCHED_INCOMING, str(num_mails), str(fetched_ts))
+            leap_events.signal(
+                IMAP_UNREAD_MAIL, str(self._inbox.getUnseenCount()))
             return doclist
         except ssl.SSLError as exc:
             logger.warning('SSL Error while syncing soledad: %r' % (exc,))
@@ -178,7 +181,7 @@ class LeapIncomingMail(object):
             logger.warning("Error while decrypting msg: %r" % (exc,))
             decrdata = ""
             ok = False
-        leap_events.signal(IMAP_MSG_DECRYPTED, ok)
+        leap_events.signal(IMAP_MSG_DECRYPTED, "1" if ok else "0")
         # XXX TODO: defer this properly
         return self._process_decrypted(doc, decrdata)
 
