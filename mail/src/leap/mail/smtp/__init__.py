@@ -20,6 +20,7 @@ SMTP relay helper function.
 """
 
 from twisted.internet import reactor
+from twisted.internet.error import CannotListenError
 
 
 from leap.common.events import proto, signal
