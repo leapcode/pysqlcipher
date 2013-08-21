@@ -36,10 +36,7 @@ from twisted.python import log
 #import u1db
 
 from leap.common.check import leap_assert, leap_assert_type
-from leap.soledad import Soledad
-from leap.soledad.sqlcipher import SQLCipherDatabase
-from leap.common.events import signal
-from leap.common.events import events_pb2 as proto
+from leap.soledad.client import Soledad
 
 logger = logging.getLogger(__name__)
 

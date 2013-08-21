@@ -61,8 +61,8 @@ from leap.mail.imap.server import SoledadMailbox
 from leap.mail.imap.server import SoledadBackedAccount
 from leap.mail.imap.server import MessageCollection
 
-from leap.soledad import Soledad
-from leap.soledad import SoledadCrypto
+from leap.soledad.client import Soledad
+from leap.soledad.client import SoledadCrypto
 
 
 def strip(f):

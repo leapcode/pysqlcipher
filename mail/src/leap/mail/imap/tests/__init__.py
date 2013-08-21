@@ -22,8 +22,8 @@ import u1db
 
 from leap.common.testing.basetest import BaseLeapTest
 
-from leap.soledad import Soledad
-from leap.soledad.document import SoledadDocument
+from leap.soledad.client import Soledad
+from leap.soledad.common.document import SoledadDocument
 
 
 #-----------------------------------------------------------------------------

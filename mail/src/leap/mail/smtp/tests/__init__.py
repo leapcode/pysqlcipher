@@ -29,7 +29,7 @@ from mock import Mock
 from twisted.trial import unittest
 
 
-from leap.soledad import Soledad
+from leap.soledad.client import Soledad
 from leap.keymanager import (
     KeyManager,
     openpgp,
