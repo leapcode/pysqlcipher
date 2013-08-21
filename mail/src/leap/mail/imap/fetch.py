@@ -104,7 +104,6 @@ class LeapIncomingMail(object):
         Calls a deferred that will execute the fetch callback
         in a separate thread
         """
-        logger.debug('fetching mail...')
         d = deferToThread(self._sync_soledad)
         d.addCallbacks(self._process_doclist, self._sync_soledad_err)
         return d
@@ -125,7 +124,6 @@ class LeapIncomingMail(object):
 
     def _sync_soledad(self):
         log.msg('syncing soledad...')
-        logger.debug('in soledad sync')
 
         try:
             self._soledad.sync()
@@ -212,6 +210,7 @@ class LeapIncomingMail(object):
             return False
         logger.debug('got incoming message: %s' % (rawmsg,))
 
+        # XXX factor out gpg bits.
         try:
             pgp_beg = "-----BEGIN PGP MESSAGE-----"
             pgp_end = "-----END PGP MESSAGE-----"
