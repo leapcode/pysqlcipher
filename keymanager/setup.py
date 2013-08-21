@@ -32,7 +32,7 @@ install_requirements = [
 
 tests_requirements = [
     'mock',
-    'leap.soledad',
+    'leap.soledad.client',
 ]
 
 

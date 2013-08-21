@@ -23,7 +23,7 @@ Tests for the Key Manager.
 
 from mock import Mock
 from leap.common.testing.basetest import BaseLeapTest
-from leap.soledad import Soledad
+from leap.soledad.client import Soledad
 from leap.keymanager import (
     KeyManager,
     openpgp,
