@@ -20,12 +20,13 @@ Imap service initialization
 from copy import copy
 
 import logging
-logger = logging.getLogger(__name__)
 
 from twisted.internet.protocol import ServerFactory
-
+from twisted.internet.error import CannotListenError
 from twisted.mail import imap4
 from twisted.python import log
+
+logger = logging.getLogger(__name__)
 
 from leap.common import events as leap_events
 from leap.common.check import leap_assert, leap_assert_type
@@ -164,13 +165,17 @@ def run_service(*args, **kwargs):
             soledad,
             factory.theAccount,
             check_period)
+    except CannotListenError:
+        logger.error("IMAP Service failed to start: "
+                     "cannot listen in port %s" % (port,))
     except Exception as exc:
-        # XXX cannot listen?
         logger.error("Error launching IMAP service: %r" % (exc,))
-        leap_events.signal(IMAP_SERVICE_FAILED_TO_START, str(port))
-        return
     else:
+        # all good.
         fetcher.start_loop()
         logger.debug("IMAP4 Server is RUNNING in port  %s" % (port,))
         leap_events.signal(IMAP_SERVICE_STARTED, str(port))
         return fetcher
+
+    # not ok, signal error.
+    leap_events.signal(IMAP_SERVICE_FAILED_TO_START, str(port))

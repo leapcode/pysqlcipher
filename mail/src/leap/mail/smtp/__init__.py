@@ -18,10 +18,12 @@
 """
 SMTP relay helper function.
 """
+import logging
 
 from twisted.internet import reactor
 from twisted.internet.error import CannotListenError
 
+logger = logging.getLogger(__name__)
 
 from leap.common.events import proto, signal
 from leap.mail.smtp.smtprelay import SMTPFactory
@@ -76,4 +78,7 @@ def setup_smtp_relay(port, keymanager, smtp_host, smtp_port,
         reactor.listenTCP(port, factory)
         signal(proto.SMTP_SERVICE_STARTED, str(smtp_port))
     except CannotListenError:
+        logger.error("STMP Service failed to start: "
+                     "cannot listen in port %s" % (
+                         smtp_port,))
         signal(proto.SMTP_SERVICE_FAILED_TO_START, str(smtp_port))
