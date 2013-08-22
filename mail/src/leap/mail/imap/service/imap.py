@@ -35,14 +35,12 @@ from leap.mail.imap.server import SoledadBackedAccount
 from leap.mail.imap.fetch import LeapIncomingMail
 from leap.soledad.client import Soledad
 
-IMAP_PORT = 1984
 # The default port in which imap service will run
+IMAP_PORT = 1984
 
-# TODO: Make this configurable
-INCOMING_CHECK_PERIOD = 5
-#INCOMING_CHECK_PERIOD = 60
 # The period between succesive checks of the incoming mail
 # queue (in seconds)
+INCOMING_CHECK_PERIOD = 300
 
 from leap.common.events.events_pb2 import IMAP_SERVICE_STARTED
 from leap.common.events.events_pb2 import IMAP_SERVICE_FAILED_TO_START
