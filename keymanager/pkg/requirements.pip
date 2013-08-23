@@ -1,0 +1,4 @@
+leap.common>=0.3.0
+simplejson
+requests
+python-gnupg
