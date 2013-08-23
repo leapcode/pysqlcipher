@@ -1,2 +1,0 @@
-  o Make default imap fetch period 5 minutes. Client can config it
-    via environment variable for debug. Closes: #3409

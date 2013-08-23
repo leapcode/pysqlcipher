@@ -1,3 +1,22 @@
+0.3.1 Aug 23:
+  o Avoid logging dummy password on imap server. Closes: #3416
+  o Do not fail while processing an empty mail, just skip it. Fixes
+    #3457.
+  o Notify of unread email explicitly every time the mailbox is
+    sync'ed.
+  o Fix signals to emit only string in the contents instead of bool or
+    int values.
+  o Improve unseen filter of email.
+  o Make default imap fetch period 5 minutes. Client can config it via
+    environment variable for debug. Closes: #3409
+  o Refactor imap fetch code for better defer handling. Closes: #3423
+  o Emit signals to notify UI for SMTP relay events. Closes #3464.
+  o Add events for notifications about imap activity. Closes: #3480
+  o Update to new soledad package scheme (common, client and
+    server). Closes #3487.
+  o Improve packaging: add versioneer, parse_requirements,
+    classifiers.
+
 0.3.0 Aug 9:
   o Add dependency for leap.keymanager.
   o User 1984 default port for imap.

@@ -1,5 +1,0 @@
-  o Notify of unread email explicitly every time the mailbox is
-    sync'ed.
-  o Fix signals to emit only string in the contents instead of bool or
-    int values.
-  o Improve unseen filter of email.

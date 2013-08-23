@@ -1,2 +1,0 @@
-  o Do not fail while processing an empty mail, just skip it. Fixes
-    #3457.
