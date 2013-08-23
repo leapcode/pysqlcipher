@@ -123,7 +123,9 @@ class IndexedDB(object):
         if not self._soledad:
             logger.debug("NO SOLEDAD ON IMAP INITIALIZATION")
             return
-        db_indexes = dict(self._soledad.list_indexes())
+        db_indexes = dict()
+        if self._soledad is not None:
+            db_indexes = dict(self._soledad.list_indexes())
         for name, expression in SoledadBackedAccount.INDEXES.items():
             if name not in db_indexes:
                 # The index does not yet exist.
