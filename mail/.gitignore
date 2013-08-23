@@ -10,6 +10,7 @@ src/_trial_temp
 !.coveragerc
 !.tx
 !.gitignore
+!.gitattributes
 bin/
 core
 docs/_build

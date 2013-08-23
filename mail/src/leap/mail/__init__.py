@@ -27,3 +27,7 @@ Provide function for loading tests.
 
 # def load_tests():
 #     return unittest.defaultTestLoader.discover('./src/leap/mail')
+
+from ._version import get_versions
+__version__ = get_versions()['version']
+del get_versions

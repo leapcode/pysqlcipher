@@ -1,2 +1,4 @@
-leap.soledad>=0.0.2-dev
-twisted
+leap.soledad.client>=0.3.0
+leap.common>=0.3.0
+leap.keymanager>=0.3.0
+twisted  # >= 12.0.3 ??
