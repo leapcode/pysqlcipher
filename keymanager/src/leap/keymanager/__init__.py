@@ -451,3 +451,7 @@ class KeyManager(object):
         leap_assert(pubkey.__class__ in self._wrapper_map, 'Unknown key type.')
         leap_assert(pubkey.private is False, 'Key is not public.')
         return self._wrapper_map[pubkey.__class__].verify(data, pubkey)
+
+from ._version import get_versions
+__version__ = get_versions()['version']
+del get_versions
