@@ -1,3 +1,10 @@
+0.3.1 Aug 23:
+  o Signal different key related events, like key generation, key
+    upload.
+  o Update to new soledad package scheme (common, client and
+    server). Closes #3487.
+  o Packaging improvements: add versioneer and parse_requirements.
+
 0.3.0 Aug 9:
   o If a nickserver request fails in any way, notify and continue.
   o Options parameter in gnupg.GPG isn't supported by all versions, so
