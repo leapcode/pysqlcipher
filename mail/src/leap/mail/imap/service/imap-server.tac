@@ -1,10 +1,9 @@
 import ConfigParser
 import os
 
-from xdg import BaseDirectory
-
 from leap.soledad.client import Soledad
 from leap.mail.imap.service import imap
+from leap.common.config import get_path_prefix
 
 
 config = ConfigParser.ConfigParser()
@@ -34,7 +33,7 @@ def initialize_soledad_mailbox(user_uuid, soledad_pass, server_url,
     :rtype: Soledad instance
     """
 
-    base_config = BaseDirectory.xdg_config_home
+    base_config = get_path_prefix()
 
     secret_path = os.path.join(
         base_config, "leap", "soledad", "%s.secret" % user_uuid)
