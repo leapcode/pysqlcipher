@@ -301,9 +301,9 @@ class OpenPGPScheme(EncryptionScheme):
         Put key contained in ascii-armored C{key_data} in local storage.
 
         :param key_data: The key data to be stored.
-        :type key_data: str
+        :type key_data: str or unicode
         """
-        leap_assert_type(key_data, str)
+        leap_assert_type(key_data, (str, unicode))
         # TODO: add more checks for correct key data.
         leap_assert(key_data is not None, 'Data does not represent a key.')
 
