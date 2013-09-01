@@ -35,6 +35,8 @@ from twisted.python import log
 
 #import u1db
 
+from leap.common import events as leap_events
+from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
 from leap.common.check import leap_assert, leap_assert_type
 from leap.soledad.client import Soledad
 
@@ -1405,6 +1407,13 @@ class SoledadMailbox(WithMsgFields):
                 result.append((msg_id, msg))
         return tuple(result)
 
+    def _signal_unread_to_ui(self):
+        """
+        Sends unread event to ui.
+        """
+        leap_events.signal(
+            IMAP_UNREAD_MAIL, str(self.getUnseenCount()))
+
     def store(self, messages, flags, mode, uid):
         """
         Sets the flags of one or more messages.
@@ -1455,6 +1464,7 @@ class SoledadMailbox(WithMsgFields):
                 self._update(msg.setFlags(flags))
             result[msg_id] = msg.getFlags()
 
+        self._signal_unread_to_ui()
         return result
 
     def close(self):
