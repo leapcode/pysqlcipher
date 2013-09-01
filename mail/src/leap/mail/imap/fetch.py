@@ -150,6 +150,13 @@ class LeapIncomingMail(object):
             doclist = self._soledad.get_from_index("just-mail", "*")
         return doclist
 
+    def _signal_unread_to_ui(self):
+        """
+        Sends unread event to ui.
+        """
+        leap_events.signal(
+            IMAP_UNREAD_MAIL, str(self._inbox.getUnseenCount()))
+
     def _signal_fetch_to_ui(self, doclist):
         """
         Sends leap events to ui.
@@ -164,8 +171,7 @@ class LeapIncomingMail(object):
         log.msg("there are %s mails" % (num_mails,))
         leap_events.signal(
             IMAP_FETCHED_INCOMING, str(num_mails), str(fetched_ts))
-        leap_events.signal(
-            IMAP_UNREAD_MAIL, str(self._inbox.getUnseenCount()))
+        self._signal_unread_to_ui()
         return doclist
 
     def _sync_soledad_error(self, failure):
@@ -318,3 +324,4 @@ class LeapIncomingMail(object):
         self._soledad.delete_doc(doc)
         log.msg("deleted doc %s from incoming" % doc_id)
         leap_events.signal(IMAP_MSG_DELETED_INCOMING)
+        self._signal_unread_to_ui()
