@@ -219,6 +219,8 @@ class EncryptionScheme(object):
         """
         Initialize the database indexes.
         """
+        leap_assert(self._soledad is not None,
+                    "Cannot init indexes with null soledad")
         # Ask the database for currently existing indexes.
         db_indexes = dict(self._soledad.list_indexes())
         # Loop through the indexes we expect to find.
