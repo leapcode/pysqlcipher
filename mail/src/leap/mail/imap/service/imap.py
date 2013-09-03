@@ -157,7 +157,8 @@ def run_service(*args, **kwargs):
     from twisted.internet import reactor
 
     try:
-        reactor.listenTCP(port, factory)
+        reactor.listenTCP(port, factory,
+                          interface="localhost")
         fetcher = LeapIncomingMail(
             keymanager,
             soledad,

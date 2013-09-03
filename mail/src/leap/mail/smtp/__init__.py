@@ -77,7 +77,8 @@ def setup_smtp_relay(port, keymanager, smtp_host, smtp_port,
     # configure the use of this service with twistd
     factory = SMTPFactory(keymanager, config)
     try:
-        reactor.listenTCP(port, factory)
+        reactor.listenTCP(port, factory,
+                          interface="localhost")
         signal(proto.SMTP_SERVICE_STARTED, str(smtp_port))
         return factory
     except CannotListenError:
