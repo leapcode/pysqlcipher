@@ -1,3 +1,10 @@
+0.3.2 Sep 6:
+  o Make mail services bind to 127.0.0.1. Closes: #3627.
+  o Signal unread message to UI when message is saved locally. Closes: #3654.
+  o Signal unread to UI when flag in message change. Closes: #3662.
+  o Use dirspec instead of plain xdg. Closes #3574.
+  o SMTP service invocation returns factory instance.
+
 0.3.1 Aug 23:
   o Avoid logging dummy password on imap server. Closes: #3416
   o Do not fail while processing an empty mail, just skip it. Fixes
