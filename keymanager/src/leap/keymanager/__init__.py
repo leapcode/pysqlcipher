@@ -127,11 +127,16 @@ class KeyManager(object):
             self._ca_cert_path is not None,
             'We need the CA certificate path!')
         res = self._fetcher.get(uri, data=data, verify=self._ca_cert_path)
-        # assert that the response is valid
-        res.raise_for_status()
-        leap_assert(
-            res.headers['content-type'].startswith('application/json'),
-            'Content-type is not JSON.')
+        # Nickserver now returns 404 for key not found and 500 for
+        # other cases (like key too small), so we are skipping this
+        # check for the time being
+        # res.raise_for_status()
+
+        # Responses are now text/plain, although it's json anyway, but
+        # this will fail when it shouldn't
+        # leap_assert(
+        #     res.headers['content-type'].startswith('application/json'),
+        #     'Content-type is not JSON.')
         return res
 
     def _put(self, uri, data=None):

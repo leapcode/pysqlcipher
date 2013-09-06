@@ -1,3 +1,9 @@
+0.3.2 Sep 6:
+  o Do not raise exception when a GET request doesn't return 2XX
+    code. Nickserver uses error codes for more verbosity in the
+    result.
+  o Accept unicode ascii keys along with str.
+
 0.3.1 Aug 23:
   o Signal different key related events, like key generation, key
     upload.
