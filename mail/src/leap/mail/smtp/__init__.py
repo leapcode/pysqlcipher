@@ -37,22 +37,24 @@ def setup_smtp_relay(port, keymanager, smtp_host, smtp_port,
     This function sets up the SMTP relay configuration and the Twisted
     reactor.
 
-    @param port: The port in which to run the server.
-    @type port: int
-    @param keymanager: A Key Manager from where to get recipients' public
-        keys.
-    @type keymanager: leap.common.keymanager.KeyManager
-    @param smtp_host: The hostname of the remote SMTP server.
-    @type smtp_host: str
-    @param smtp_port:  The port of the remote SMTP server.
-    @type smtp_port: int
-    @param smtp_cert: The client certificate for authentication.
-    @type smtp_cert: str
-    @param smtp_key: The client key for authentication.
-    @type smtp_key: str
-    @param encrypted_only: Whether the SMTP relay should send unencrypted mail
-        or not.
-    @type encrypted_only: bool
+    :param port: The port in which to run the server.
+    :type port: int
+    :param keymanager: A Key Manager from where to get recipients' public
+                       keys.
+    :type keymanager: leap.common.keymanager.KeyManager
+    :param smtp_host: The hostname of the remote SMTP server.
+    :type smtp_host: str
+    :param smtp_port:  The port of the remote SMTP server.
+    :type smtp_port: int
+    :param smtp_cert: The client certificate for authentication.
+    :type smtp_cert: str
+    :param smtp_key: The client key for authentication.
+    :type smtp_key: str
+    :param encrypted_only: Whether the SMTP relay should send unencrypted mail
+                           or not.
+    :type encrypted_only: bool
+
+    :returns: SMTPFactory
     """
     # The configuration for the SMTP relay is a dict with the following
     # format:
@@ -75,8 +77,10 @@ def setup_smtp_relay(port, keymanager, smtp_host, smtp_port,
     # configure the use of this service with twistd
     factory = SMTPFactory(keymanager, config)
     try:
-        reactor.listenTCP(port, factory)
+        reactor.listenTCP(port, factory,
+                          interface="localhost")
         signal(proto.SMTP_SERVICE_STARTED, str(smtp_port))
+        return factory
     except CannotListenError:
         logger.error("STMP Service failed to start: "
                      "cannot listen in port %s" % (
