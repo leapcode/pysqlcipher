@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-setup file for leap.mail
+Setup file for leap.mail
 """
 from setuptools import setup
 from setuptools import find_packages
@@ -56,9 +56,9 @@ setup(
     license='GPLv3+',
     author='The LEAP Encryption Access Project',
     author_email='info@leap.se',
-    description='Mail Services in the LEAP Client project.',
+    description='Mail Services provided by Bitmask, the LEAP Client.',
     long_description=(
-        "Mail Services in the LEAP Client project."
+        "Mail Services provided by Bitmask, the LEAP Client."
     ),
     classifiers=trove_classifiers,
     namespace_packages=["leap"],

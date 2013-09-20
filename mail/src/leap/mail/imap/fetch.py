@@ -280,7 +280,6 @@ class LeapIncomingMail(object):
         rawmsg = msg.get(self.CONTENT_KEY, None)
         if not rawmsg:
             return False
-        logger.debug('got incoming message: %s' % (rawmsg,))
         data = self._maybe_decrypt_gpg_msg(rawmsg)
         return doc, data
 

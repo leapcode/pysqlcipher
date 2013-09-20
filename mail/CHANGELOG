@@ -1,3 +1,6 @@
+0.3.3 Sep 20:
+  o Remove cleartext mail from logs. Closes: #3877.
+
 0.3.2 Sep 6:
   o Make mail services bind to 127.0.0.1. Closes: #3627.
   o Signal unread message to UI when message is saved locally. Closes: #3654.
