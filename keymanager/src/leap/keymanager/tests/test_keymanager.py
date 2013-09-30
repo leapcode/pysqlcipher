@@ -28,7 +28,6 @@ from leap.keymanager import (
     KeyManager,
     openpgp,
     KeyNotFound,
-    NoPasswordGiven,
     errors,
 )
 from leap.keymanager.openpgp import OpenPGPKey
