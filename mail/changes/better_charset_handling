@@ -1,0 +1,2 @@
+  o Improve charset handling when exposing mails to the mail client. Related to
+    #3660.
