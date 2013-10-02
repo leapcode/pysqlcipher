@@ -14,11 +14,28 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
-
-
 """
 Key Manager is a Nicknym agent for LEAP client.
 """
+# let's do a little sanity check to see if we're using the wrong gnupg
+import sys
+
+try:
+    from gnupg.gnupg import GPGUtilities
+    assert(GPGUtilities)  # pyflakes happy
+    from gnupg import __version__
+    from distutils.version import LooseVersion as V
+    assert(V(__version__) >= V('1.2.2'))
+
+except ImportError, AssertionError:
+    print "Ooops! It looks like there is a conflict in the installed version "
+    print "of gnupg."
+    print "Disclaimer: Ideally, we would need to work a patch and propose the "
+    print "merge to upstream. But until then do: "
+    print
+    print "% pip uninstall python-gnupg"
+    print "% pip install gnupg"
+    sys.exit(1)
 
 import logging
 import requests
