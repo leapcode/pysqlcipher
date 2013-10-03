@@ -54,7 +54,7 @@ def setup_smtp_relay(port, keymanager, smtp_host, smtp_port,
                            or not.
     :type encrypted_only: bool
 
-    :returns: SMTPFactory
+    :returns: tuple of SMTPFactory, twisted.internet.tcp.Port
     """
     # The configuration for the SMTP relay is a dict with the following
     # format:
@@ -77,10 +77,10 @@ def setup_smtp_relay(port, keymanager, smtp_host, smtp_port,
     # configure the use of this service with twistd
     factory = SMTPFactory(keymanager, config)
     try:
-        reactor.listenTCP(port, factory,
-                          interface="localhost")
+        tport = reactor.listenTCP(port, factory,
+                                  interface="localhost")
         signal(proto.SMTP_SERVICE_STARTED, str(smtp_port))
-        return factory
+        return factory, tport
     except CannotListenError:
         logger.error("STMP Service failed to start: "
                      "cannot listen in port %s" % (
