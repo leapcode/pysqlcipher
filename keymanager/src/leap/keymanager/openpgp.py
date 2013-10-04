@@ -27,6 +27,8 @@ import re
 import shutil
 import tempfile
 
+from gnupg import GPG
+from gnupg.gnupg import GPGUtilities
 
 from leap.common.check import leap_assert, leap_assert_type
 from leap.keymanager import errors
@@ -38,7 +40,6 @@ from leap.keymanager.keys import (
     KEYMANAGER_KEY_TAG,
     TAGS_ADDRESS_PRIVATE_INDEX,
 )
-from leap.keymanager.gpg import GPGWrapper
 
 
 logger = logging.getLogger(__name__)
@@ -46,15 +47,15 @@ logger = logging.getLogger(__name__)
 
 class TempGPGWrapper(object):
     """
-    A context manager returning a temporary GPG wrapper keyring, which
-    contains exactly zero or one pubkeys, and zero or one privkeys.
-
-    Temporary unitary keyrings allow the to use GPG's facilities for exactly
-    one key. This function creates an empty temporary keyring and imports
-    C{keys} if it is not None.
+    A context manager that wraps a temporary GPG keyring which only contains
+    the keys given at object creation.
     """
+
     def __init__(self, keys=None, gpgbinary=None):
         """
+        Create an empty temporary keyring and import any given C{keys} into
+        it.
+
         :param keys: OpenPGP key, or list of.
         :type keys: OpenPGPKey or list of OpenPGPKeys
         :param gpgbinary: Name for GnuPG binary executable.
@@ -67,14 +68,15 @@ class TempGPGWrapper(object):
         if not isinstance(keys, list):
             keys = [keys]
         self._keys = keys
-        for key in filter(None, keys):
+        for key in keys:
             leap_assert_type(key, OpenPGPKey)
 
     def __enter__(self):
         """
-        Calls the unitary gpgwrapper initializer
+        Build and return a GPG keyring containing the keys given on
+        object creation.
 
-        :return: A GPG wrapper with a unitary keyring.
+        :return: A GPG instance containing the keys given on object creation.
         :rtype: gnupg.GPG
         """
         self._build_keyring()
@@ -82,19 +84,16 @@ class TempGPGWrapper(object):
 
     def __exit__(self, exc_type, exc_value, traceback):
         """
-        Ensures the gpgwrapper is properly destroyed.
+        Ensure the gpg is properly destroyed.
         """
         # TODO handle exceptions and log here
         self._destroy_keyring()
 
     def _build_keyring(self):
         """
-        Create an empty GPG keyring and import C{keys} into it.
+        Create a GPG keyring containing the keys given on object creation.
 
-        :param keys: List of keys to add to the keyring.
-        :type keys: list of OpenPGPKey
-
-        :return: A GPG wrapper with a unitary keyring.
+        :return: A GPG instance containing the keys given on object creation.
         :rtype: gnupg.GPG
         """
         privkeys = [key for key in self._keys if key and key.private is True]
@@ -111,14 +110,13 @@ class TempGPGWrapper(object):
         listkeys = lambda: self._gpg.list_keys()
         listsecretkeys = lambda: self._gpg.list_keys(secret=True)
 
-        self._gpg = GPGWrapper(
-            gnupghome=tempfile.mkdtemp(),
-            gpgbinary=self._gpgbinary)
+        self._gpg = GPG(binary=self._gpgbinary,
+                        homedir=tempfile.mkdtemp())
         leap_assert(len(listkeys()) is 0, 'Keyring not empty.')
 
         # import keys into the keyring:
         # concatenating ascii-armored keys, which is correctly
-        # understood by the GPGWrapper.
+        # understood by GPG.
 
         self._gpg.import_keys("".join(
             [x.key_data for x in publkeys + privkeys]))
@@ -135,7 +133,7 @@ class TempGPGWrapper(object):
 
     def _destroy_keyring(self):
         """
-        Securely erase a unitary keyring.
+        Securely erase the keyring.
         """
         # TODO: implement some kind of wiping of data or a more
         # secure way that
@@ -153,9 +151,9 @@ class TempGPGWrapper(object):
             raise
 
         finally:
-            leap_assert(self._gpg.gnupghome != os.path.expanduser('~/.gnupg'),
+            leap_assert(self._gpg.homedir != os.path.expanduser('~/.gnupg'),
                         "watch out! Tried to remove default gnupg home!")
-            shutil.rmtree(self._gpg.gnupghome)
+            shutil.rmtree(self._gpg.homedir)
 
 
 def _build_key_from_gpg(address, key, key_data):
@@ -406,16 +404,16 @@ class OpenPGPScheme(EncryptionScheme):
 
     def _temporary_gpgwrapper(self, keys=None):
         """
-        Returns a unitary gpg wrapper that implements context manager
-        protocol.
+        Return a gpg wrapper that implements the context manager protocol and
+        contains C{keys}.
 
         :param key_data: ASCII armored key data.
         :type key_data: str
         :param gpgbinary: Name for GnuPG binary executable.
         :type gpgbinary: C{str}
 
-        :return: a GPGWrapper instance
-        :rtype: GPGWrapper
+        :return: a TempGPGWrapper instance
+        :rtype: TempGPGWrapper
         """
         # TODO do here checks on key_data
         return TempGPGWrapper(
@@ -459,8 +457,9 @@ class OpenPGPScheme(EncryptionScheme):
         with self._temporary_gpgwrapper(keys) as gpg:
             result = gpg.encrypt(
                 data, pubkey.fingerprint,
-                sign=sign.key_id if sign else None,
-                passphrase=passphrase, symmetric=False)
+                default_key=sign.key_id if sign else None,
+                passphrase=passphrase, symmetric=False,
+                cipher_algo='AES256')
             # Here we cannot assert for correctness of sig because the sig is
             # in the ciphertext.
             # result.ok    - (bool) indicates if the operation succeeded
@@ -492,7 +491,8 @@ class OpenPGPScheme(EncryptionScheme):
             leap_assert(verify.private is False)
             keys.append(verify)
         with self._temporary_gpgwrapper(keys) as gpg:
-            result = gpg.decrypt(data, passphrase=passphrase)
+            result = gpg.decrypt(
+                data, passphrase=passphrase, always_trust=True)
             self._assert_gpg_result_ok(result)
             # verify signature
             if (verify is not None):
@@ -514,7 +514,8 @@ class OpenPGPScheme(EncryptionScheme):
         :rtype: bool
         """
         with self._temporary_gpgwrapper() as gpg:
-            return gpg.is_encrypted_asym(data)
+            gpgutil = GPGUtilities(gpg)
+            return gpgutil.is_encrypted_asym(data)
 
     def sign(self, data, privkey):
         """
@@ -535,7 +536,7 @@ class OpenPGPScheme(EncryptionScheme):
         # result.fingerprint - contains the fingerprint of the key used to
         #                      sign.
         with self._temporary_gpgwrapper(privkey) as gpg:
-            result = gpg.sign(data, keyid=privkey.key_id)
+            result = gpg.sign(data, default_key=privkey.key_id)
             rfprint = privkey.fingerprint
             privkey = gpg.list_keys(secret=True).pop()
             kfprint = privkey['fingerprint']

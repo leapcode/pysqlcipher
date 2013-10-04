@@ -1,3 +1,7 @@
+0.3.3 Oct 4:
+  o Add a sanity check for the correct version of gnupg.
+  o Update code to use gnupg 1.2.2 python module. Closes #2342.
+
 0.3.2 Sep 6:
   o Do not raise exception when a GET request doesn't return 2XX
     code. Nickserver uses error codes for more verbosity in the
