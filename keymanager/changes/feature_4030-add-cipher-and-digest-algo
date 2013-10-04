@@ -1,0 +1,2 @@
+  o Add option to choose cipher and digest algorithms when signing and
+    encrypting. Closes #4030.
