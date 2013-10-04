@@ -1,3 +1,9 @@
+0.3.4 Oct 4:
+  o Improve charset handling when exposing mails to the mail
+    client. Related to #3660.
+  o Return Twisted's smtp Port object to be able to stop listening to
+    it whenever we want. Related to #3873.
+
 0.3.3 Sep 20:
   o Remove cleartext mail from logs. Closes: #3877.
 

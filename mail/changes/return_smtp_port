@@ -1,2 +1,0 @@
-  o Return Twisted's smtp Port object to be able to stop listening to
-    it whenever we want. Related to #3873.
