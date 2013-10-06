@@ -391,7 +391,8 @@ class KeyManager(object):
     # encrypt/decrypt and sign/verify API
     #
 
-    def encrypt(self, data, pubkey, passphrase=None, sign=None):
+    def encrypt(self, data, pubkey, passphrase=None, sign=None,
+                cipher_algo='AES256'):
         """
         Encrypt C{data} using public @{key} and sign with C{sign} key.
 
@@ -401,6 +402,8 @@ class KeyManager(object):
         :type pubkey: EncryptionKey
         :param sign: The key used for signing.
         :type sign: EncryptionKey
+        :param cipher_algo: The cipher algorithm to use.
+        :type cipher_algo: str
 
         :return: The encrypted data.
         :rtype: str
@@ -436,7 +439,8 @@ class KeyManager(object):
         return self._wrapper_map[privkey.__class__].decrypt(
             data, privkey, passphrase, verify)
 
-    def sign(self, data, privkey):
+    def sign(self, data, privkey, digest_algo='SHA512', clearsign=False,
+             detach=True, binary=False):
         """
         Sign C{data} with C{privkey}.
 
@@ -445,6 +449,14 @@ class KeyManager(object):
 
         :param privkey: The private key to be used to sign.
         :type privkey: EncryptionKey
+        :param digest_algo: The hash digest to use.
+        :type digest_algo: str
+        :param clearsign: If True, create a cleartext signature.
+        :type clearsign: bool
+        :param detach: If True, create a detached signature.
+        :type detach: bool
+        :param binary: If True, do not ascii armour the output.
+        :type binary: bool
 
         :return: The signed data.
         :rtype: str
@@ -454,7 +466,9 @@ class KeyManager(object):
             privkey.__class__ in self._wrapper_map,
             'Unknown key type.')
         leap_assert(privkey.private is True, 'Key is not private.')
-        return self._wrapper_map[privkey.__class__].sign(data, privkey)
+        return self._wrapper_map[privkey.__class__].sign(
+            data, privkey, digest_algo=digest_algo, clearsign=clearsign,
+            detach=detach, binary=binary)
 
     def verify(self, data, pubkey):
         """
