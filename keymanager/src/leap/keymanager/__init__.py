@@ -25,7 +25,7 @@ try:
     assert(GPGUtilities)  # pyflakes happy
     from gnupg import __version__
     from distutils.version import LooseVersion as V
-    assert(V(__version__) >= V('1.2.2'))
+    assert(V(__version__) >= V('1.2.3'))
 
 except ImportError, AssertionError:
     print "Ooops! It looks like there is a conflict in the installed version "
