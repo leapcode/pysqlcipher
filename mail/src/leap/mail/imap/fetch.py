@@ -23,6 +23,8 @@ import ssl
 import threading
 import time
 
+from email.parser import Parser
+
 from twisted.python import log
 from twisted.internet.task import LoopingCall
 from twisted.internet.threads import deferToThread
@@ -41,6 +43,13 @@ from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
 
 
 logger = logging.getLogger(__name__)
+
+
+class MalformedMessage(Exception):
+    """
+    Raised when a given message is not well formed.
+    """
+    pass
 
 
 class LeapIncomingMail(object):
@@ -292,17 +301,58 @@ class LeapIncomingMail(object):
         :return: data, possibly descrypted.
         :rtype: str
         """
-        PGP_BEGIN = "-----BEGIN PGP MESSAGE-----"
-        PGP_END = "-----END PGP MESSAGE-----"
-        if PGP_BEGIN in data:
-            begin = data.find(PGP_BEGIN)
-            end = data.rfind(PGP_END)
-            pgp_message = data[begin:begin+end]
-
-            decrdata = (self._keymanager.decrypt(
-                pgp_message, self._pkey,
-                passphrase=self._soledad.passphrase))
-            data = data.replace(pgp_message, decrdata)
+        parser = Parser()
+        origmsg = parser.parsestr(data)
+        # handle multipart/encrypted messages
+        if origmsg.get_content_type() == 'multipart/encrypted':
+            # sanity check
+            payload = origmsg.get_payload()
+            if len(payload) != 2:
+                raise MalformedMessage(
+                    'Multipart/encrypted messages should have exactly 2 body '
+                    'parts (instead of %d).' % len(payload))
+            if payload[0].get_content_type() != 'application/pgp-encrypted':
+                raise MalformedMessage(
+                    "Multipart/encrypted messages' first body part should "
+                    "have content type equal to 'application/pgp-encrypted' "
+                    "(instead of %s)." % payload[0].get_content_type())
+            if payload[1].get_content_type() != 'application/octet-stream':
+                raise MalformedMessage(
+                    "Multipart/encrypted messages' second body part should "
+                    "have content type equal to 'octet-stream' (instead of "
+                    "%s)." % payload[1].get_content_type())
+            # parse message and get encrypted content
+            pgpencmsg = origmsg.get_payload()[1]
+            encdata = pgpencmsg.get_payload()
+            # decrypt and parse decrypted message
+            decrdata = self._keymanager.decrypt(
+                encdata, self._pkey,
+                passphrase=self._soledad.passphrase)
+            decrmsg = parser.parsestr(decrdata)
+            # replace headers back in original message
+            for hkey, hval in decrmsg.items():
+                try:
+                    # this will raise KeyError if header is not present
+                    origmsg.replace_header(hkey, hval)
+                except KeyError:
+                    origmsg[hkey] = hval
+            # replace payload by unencrypted payload
+            origmsg.set_payload(decrmsg.get_payload())
+            return origmsg.as_string(unixfrom=False)
+        else:
+            PGP_BEGIN = "-----BEGIN PGP MESSAGE-----"
+            PGP_END = "-----END PGP MESSAGE-----"
+            # handle inline PGP messages
+            if PGP_BEGIN in data:
+                begin = data.find(PGP_BEGIN)
+                end = data.rfind(PGP_END)
+                pgp_message = data[begin:begin+end]
+                decrdata = (self._keymanager.decrypt(
+                    pgp_message, self._pkey,
+                    passphrase=self._soledad.passphrase))
+                # replace encrypted by decrypted content
+                data = data.replace(pgp_message, decrdata)
+        # if message is not encrypted, return raw data
         return data
 
     def _add_message_locally(self, msgtuple):
