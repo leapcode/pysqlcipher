@@ -215,8 +215,7 @@ class LeapIncomingMail(object):
 
         docs_cb = []
         for index, doc in enumerate(doclist):
-            logger.debug("processing doc %d of %d: %s" % (
-                index, num_mails, doc))
+            logger.debug("processing doc %d of %d" % (index, num_mails))
             leap_events.signal(
                 IMAP_MSG_PROCESSING, str(index), str(num_mails))
             keys = doc.content.keys()
