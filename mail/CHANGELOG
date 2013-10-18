@@ -1,3 +1,7 @@
+0.3.5 Oct 18:
+  o Do not log mail doc contents.
+  o Comply with RFC 3156. Closes #4029.
+
 0.3.4 Oct 4:
   o Improve charset handling when exposing mails to the mail
     client. Related to #3660.
