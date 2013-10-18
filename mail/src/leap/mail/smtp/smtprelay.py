@@ -19,24 +19,38 @@
 LEAP SMTP encrypted relay.
 """
 
-from zope.interface import implements
+import re
 from StringIO import StringIO
+from email.Header import Header
+from email.utils import parseaddr
+from email.parser import Parser
+from email.mime.application import MIMEApplication
+
+from zope.interface import implements
 from OpenSSL import SSL
 from twisted.mail import smtp
 from twisted.internet.protocol import ServerFactory
 from twisted.internet import reactor, ssl
 from twisted.internet import defer
 from twisted.python import log
-from email.Header import Header
-from email.utils import parseaddr
-from email.parser import Parser
-
 
 from leap.common.check import leap_assert, leap_assert_type
 from leap.common.events import proto, signal
 from leap.keymanager import KeyManager
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.keymanager.errors import KeyNotFound
+from leap.mail.smtp.rfc3156 import (
+    MultipartSigned,
+    MultipartEncrypted,
+    PGPEncrypted,
+    PGPSignature,
+    RFC3156CompliantGenerator,
+    encode_base64_rec,
+)
+
+# replace email generator with a RFC 3156 compliant one.
+from email import generator
+generator.Generator = RFC3156CompliantGenerator
 
 
 #
@@ -260,7 +274,8 @@ class SMTPDelivery(object):
                 raise smtp.SMTPBadRcpt(user.dest.addrstr)
             log.msg("Warning: will send an unencrypted message (because "
                     "encrypted_only' is set to False).")
-            signal(proto.SMTP_RECIPIENT_ACCEPTED_UNENCRYPTED, user.dest.addrstr)
+            signal(
+                proto.SMTP_RECIPIENT_ACCEPTED_UNENCRYPTED, user.dest.addrstr)
         return lambda: EncryptedMessage(
             self._origin, user, self._km, self._config)
 
@@ -303,6 +318,16 @@ class CtxFactory(ssl.ClientContextFactory):
         return ctx
 
 
+def move_headers(origmsg, newmsg):
+    headers = origmsg.items()
+    unwanted_headers = ['content-type', 'mime-version', 'content-disposition',
+                        'content-transfer-encoding']
+    headers = filter(lambda x: x[0].lower() not in unwanted_headers, headers)
+    for hkey, hval in headers:
+        newmsg.add_header(hkey, hval)
+        del(origmsg[hkey])
+
+
 class EncryptedMessage(object):
     """
     Receive plaintext from client, encrypt it and send message to a
@@ -343,6 +368,10 @@ class EncryptedMessage(object):
         # initialize list for message's lines
         self.lines = []
 
+    #
+    # methods from smtp.IMessage
+    #
+
     def lineReceived(self, line):
         """
         Handle another line.
@@ -360,9 +389,8 @@ class EncryptedMessage(object):
         """
         log.msg("Message data complete.")
         self.lines.append('')  # add a trailing newline
-        self.parseMessage()
         try:
-            self._encrypt_and_sign()
+            self._maybe_encrypt_and_sign()
             return self.sendMessage()
         except KeyNotFound:
             return None
@@ -372,7 +400,7 @@ class EncryptedMessage(object):
         Separate message headers from body.
         """
         parser = Parser()
-        self._message = parser.parsestr('\r\n'.join(self.lines))
+        return parser.parsestr('\r\n'.join(self.lines))
 
     def connectionLost(self):
         """
@@ -416,7 +444,7 @@ class EncryptedMessage(object):
             message send.
         @rtype: twisted.internet.defer.Deferred
         """
-        msg = self._message.as_string(False)
+        msg = self._msg.as_string(False)
 
         log.msg("Connecting to SMTP server %s:%s" % (self._config[HOST_KEY],
                                                      self._config[PORT_KEY]))
@@ -442,46 +470,76 @@ class EncryptedMessage(object):
         d.addErrback(self.sendError)
         return d
 
-    def _encrypt_and_sign_payload_rec(self, message, pubkey, signkey):
-        """
-        Recursivelly descend in C{message}'s payload encrypting to C{pubkey}
-        and signing with C{signkey}.
+    #
+    # encryption methods
+    #
 
-        @param message: The message whose payload we want to encrypt.
-        @type message: email.message.Message
+    def _encrypt_and_sign(self, pubkey, signkey):
+        """
+        Create an RFC 3156 compliang PGP encrypted and signed message using
+        C{pubkey} to encrypt and C{signkey} to sign.
+
         @param pubkey: The public key used to encrypt the message.
         @type pubkey: leap.common.keymanager.openpgp.OpenPGPKey
         @param signkey: The private key used to sign the message.
         @type signkey: leap.common.keymanager.openpgp.OpenPGPKey
         """
-        if message.is_multipart() is False:
-            message.set_payload(
-                self._km.encrypt(
-                    message.get_payload(), pubkey, sign=signkey))
-        else:
-            for msg in message.get_payload():
-                self._encrypt_and_sign_payload_rec(msg, pubkey, signkey)
+        # parse original message from received lines
+        origmsg = self.parseMessage()
+        # create new multipart/encrypted message with 'pgp-encrypted' protocol
+        newmsg = MultipartEncrypted('application/pgp-encrypted')
+        # move (almost) all headers from original message to the new message
+        move_headers(origmsg, newmsg)
+        # create 'application/octet-stream' encrypted message
+        encmsg = MIMEApplication(
+            self._km.encrypt(origmsg.as_string(unixfrom=False), pubkey,
+                             sign=signkey),
+            _subtype='octet-stream', _encoder=lambda x: x)
+        encmsg.add_header('content-disposition', 'attachment',
+                          filename='msg.asc')
+        # create meta message
+        metamsg = PGPEncrypted()
+        metamsg.add_header('Content-Disposition', 'attachment')
+        # attach pgp message parts to new message
+        newmsg.attach(metamsg)
+        newmsg.attach(encmsg)
+        self._msg = newmsg
 
-    def _sign_payload_rec(self, message, signkey):
+    def _sign(self, signkey):
         """
-        Recursivelly descend in C{message}'s payload signing with C{signkey}.
+        Create an RFC 3156 compliant PGP signed MIME message using C{signkey}.
 
-        @param message: The message whose payload we want to encrypt.
-        @type message: email.message.Message
-        @param pubkey: The public key used to encrypt the message.
-        @type pubkey: leap.common.keymanager.openpgp.OpenPGPKey
         @param signkey: The private key used to sign the message.
         @type signkey: leap.common.keymanager.openpgp.OpenPGPKey
         """
-        if message.is_multipart() is False:
-            message.set_payload(
-                self._km.sign(
-                    message.get_payload(), signkey))
-        else:
-            for msg in message.get_payload():
-                self._sign_payload_rec(msg, signkey)
+        # parse original message from received lines
+        origmsg = self.parseMessage()
+        # create new multipart/signed message
+        newmsg = MultipartSigned('application/pgp-signature', 'pgp-sha512')
+        # move (almost) all headers from original message to the new message
+        move_headers(origmsg, newmsg)
+        # apply base64 content-transfer-encoding
+        encode_base64_rec(origmsg)
+        # get message text with headers and replace \n for \r\n
+        fp = StringIO()
+        g = RFC3156CompliantGenerator(
+            fp, mangle_from_=False, maxheaderlen=76)
+        g.flatten(origmsg)
+        msgtext = re.sub('\r?\n', '\r\n', fp.getvalue())
+        # make sure signed message ends with \r\n as per OpenPGP stantard.
+        if origmsg.is_multipart():
+            if not msgtext.endswith("\r\n"):
+                msgtext += "\r\n"
+        # calculate signature
+        signature = self._km.sign(msgtext, signkey, digest_algo='SHA512',
+                                  clearsign=False, detach=True, binary=False)
+        sigmsg = PGPSignature(signature)
+        # attach original message and signature to new message
+        newmsg.attach(origmsg)
+        newmsg.attach(sigmsg)
+        self._msg = newmsg
 
-    def _encrypt_and_sign(self):
+    def _maybe_encrypt_and_sign(self):
         """
         Encrypt the message body.
 
@@ -504,7 +562,7 @@ class EncryptedMessage(object):
             log.msg("Will encrypt the message to %s." % pubkey.fingerprint)
             signal(proto.SMTP_START_ENCRYPT_AND_SIGN,
                    "%s,%s" % (self._fromAddress.addrstr, to_address))
-            self._encrypt_and_sign_payload_rec(self._message, pubkey, signkey)
+            self._encrypt_and_sign(pubkey, signkey)
             signal(proto.SMTP_END_ENCRYPT_AND_SIGN,
                    "%s,%s" % (self._fromAddress.addrstr, to_address))
         except KeyNotFound:
@@ -513,5 +571,5 @@ class EncryptedMessage(object):
             # rejected in SMTPDelivery.validateTo().
             log.msg('Will send unencrypted message to %s.' % to_address)
             signal(proto.SMTP_START_SIGN, self._fromAddress.addrstr)
-            self._sign_payload_rec(self._message, signkey)
+            self._sign(signkey)
             signal(proto.SMTP_END_SIGN, self._fromAddress.addrstr)

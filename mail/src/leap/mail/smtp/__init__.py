@@ -86,3 +86,6 @@ def setup_smtp_relay(port, keymanager, smtp_host, smtp_port,
                      "cannot listen in port %s" % (
                          smtp_port,))
         signal(proto.SMTP_SERVICE_FAILED_TO_START, str(smtp_port))
+    except Exception as exc:
+        logger.error("Unhandled error while launching smtp relay service")
+        logger.exception(exc)
