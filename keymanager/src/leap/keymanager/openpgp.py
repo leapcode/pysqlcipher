@@ -433,7 +433,8 @@ class OpenPGPScheme(EncryptionScheme):
             raise errors.EncryptionDecryptionFailed(
                 'Failed to encrypt/decrypt: %s' % stderr)
 
-    def encrypt(self, data, pubkey, passphrase=None, sign=None):
+    def encrypt(self, data, pubkey, passphrase=None, sign=None,
+                cipher_algo='AES256'):
         """
         Encrypt C{data} using public @{pubkey} and sign with C{sign} key.
 
@@ -443,6 +444,8 @@ class OpenPGPScheme(EncryptionScheme):
         :type pubkey: OpenPGPKey
         :param sign: The key used for signing.
         :type sign: OpenPGPKey
+        :param cipher_algo: The cipher algorithm to use.
+        :type cipher_algo: str
 
         :return: The encrypted data.
         :rtype: str
@@ -459,7 +462,7 @@ class OpenPGPScheme(EncryptionScheme):
                 data, pubkey.fingerprint,
                 default_key=sign.key_id if sign else None,
                 passphrase=passphrase, symmetric=False,
-                cipher_algo='AES256')
+                cipher_algo=cipher_algo)
             # Here we cannot assert for correctness of sig because the sig is
             # in the ciphertext.
             # result.ok    - (bool) indicates if the operation succeeded
@@ -517,7 +520,8 @@ class OpenPGPScheme(EncryptionScheme):
             gpgutil = GPGUtilities(gpg)
             return gpgutil.is_encrypted_asym(data)
 
-    def sign(self, data, privkey):
+    def sign(self, data, privkey, digest_algo='SHA512', clearsign=False,
+             detach=True, binary=False):
         """
         Sign C{data} with C{privkey}.
 
@@ -526,6 +530,14 @@ class OpenPGPScheme(EncryptionScheme):
 
         :param privkey: The private key to be used to sign.
         :type privkey: OpenPGPKey
+        :param digest_algo: The hash digest to use.
+        :type digest_algo: str
+        :param clearsign: If True, create a cleartext signature.
+        :type clearsign: bool
+        :param detach: If True, create a detached signature.
+        :type detach: bool
+        :param binary: If True, do not ascii armour the output.
+        :type binary: bool
 
         :return: The ascii-armored signed data.
         :rtype: str
@@ -536,7 +548,9 @@ class OpenPGPScheme(EncryptionScheme):
         # result.fingerprint - contains the fingerprint of the key used to
         #                      sign.
         with self._temporary_gpgwrapper(privkey) as gpg:
-            result = gpg.sign(data, default_key=privkey.key_id)
+            result = gpg.sign(data, default_key=privkey.key_id,
+                              digest_algo=digest_algo, clearsign=clearsign,
+                              detach=detach, binary=binary)
             rfprint = privkey.fingerprint
             privkey = gpg.list_keys(secret=True).pop()
             kfprint = privkey['fingerprint']

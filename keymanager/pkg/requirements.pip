@@ -1,4 +1,6 @@
 leap.common>=0.3.0
 simplejson
 requests
-gnupg
+# if we bump the gnupg version, bump also the sanity check
+# in keymanager.__init__
+gnupg>=1.2.3
