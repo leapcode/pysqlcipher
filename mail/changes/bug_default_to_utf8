@@ -1,0 +1,2 @@
+  o Default to UTF-8 when there is no charset parsed from the mail
+    contents.

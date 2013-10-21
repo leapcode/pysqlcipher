@@ -711,6 +711,8 @@ class LeapMessage(WithMsgFields):
             # Miniparser for: Content-Type: <something>; charset=<charset>
             charset_re = r'''charset=(?P<charset>[\w|\d|-]*)'''
             charset = re.findall(charset_re, em["Content-Type"])[0]
+            if charset is None or len(charset) == 0:
+                charset = "UTF-8"
         except Exception:
             pass
         return charset
