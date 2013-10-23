@@ -1,0 +1,1 @@
+  o Return unicode decrypted text to avoid encoding issues. Related to #4000.
