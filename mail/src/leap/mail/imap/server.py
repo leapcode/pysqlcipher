@@ -179,7 +179,8 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         # messages
         TYPE_MBOX_SEEN_IDX: [KTYPE, MBOX_VAL, 'bool(seen)'],
         TYPE_MBOX_RECT_IDX: [KTYPE, MBOX_VAL, 'bool(recent)'],
-        TYPE_MBOX_RECT_SEEN_IDX: [KTYPE, MBOX_VAL, 'bool(recent)', 'bool(seen)'],
+        TYPE_MBOX_RECT_SEEN_IDX: [KTYPE, MBOX_VAL,
+                                  'bool(recent)', 'bool(seen)'],
     }
 
     INBOX_NAME = "INBOX"
