@@ -40,6 +40,7 @@ from leap.common.events.events_pb2 import IMAP_MSG_DECRYPTED
 from leap.common.events.events_pb2 import IMAP_MSG_SAVED_LOCALLY
 from leap.common.events.events_pb2 import IMAP_MSG_DELETED_INCOMING
 from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
+from leap.mail.utils import get_email_charset
 
 
 logger = logging.getLogger(__name__)
@@ -296,12 +297,17 @@ class LeapIncomingMail(object):
         Tries to decrypt a gpg message if data looks like one.
 
         :param data: the text to be decrypted.
-        :type data: str
+        :type data: unicode
         :return: data, possibly descrypted.
         :rtype: str
         """
+        leap_assert_type(data, unicode)
+
         parser = Parser()
+        encoding = get_email_charset(data)
+        data = data.encode(encoding)
         origmsg = parser.parsestr(data)
+
         # handle multipart/encrypted messages
         if origmsg.get_content_type() == 'multipart/encrypted':
             # sanity check
@@ -320,13 +326,21 @@ class LeapIncomingMail(object):
                     "Multipart/encrypted messages' second body part should "
                     "have content type equal to 'octet-stream' (instead of "
                     "%s)." % payload[1].get_content_type())
+
             # parse message and get encrypted content
             pgpencmsg = origmsg.get_payload()[1]
             encdata = pgpencmsg.get_payload()
+
             # decrypt and parse decrypted message
             decrdata = self._keymanager.decrypt(
                 encdata, self._pkey,
                 passphrase=self._soledad.passphrase)
+            try:
+                decrdata = decrdata.encode(encoding)
+            except (UnicodeEncodeError, UnicodeDecodeError) as e:
+                logger.error("Unicode error {0}".format(e))
+                decrdata = decrdata.encode(encoding, 'replace')
+
             decrmsg = parser.parsestr(decrdata)
             # replace headers back in original message
             for hkey, hval in decrmsg.items():
@@ -335,6 +349,7 @@ class LeapIncomingMail(object):
                     origmsg.replace_header(hkey, hval)
                 except KeyError:
                     origmsg[hkey] = hval
+
             # replace payload by unencrypted payload
             origmsg.set_payload(decrmsg.get_payload())
             return origmsg.as_string(unixfrom=False)
@@ -352,6 +367,10 @@ class LeapIncomingMail(object):
                 # replace encrypted by decrypted content
                 data = data.replace(pgp_message, decrdata)
         # if message is not encrypted, return raw data
+
+        if isinstance(data, unicode):
+            data = data.encode(encoding, 'replace')
+
         return data
 
     def _add_message_locally(self, msgtuple):
