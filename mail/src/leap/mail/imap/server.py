@@ -31,10 +31,6 @@ from twisted.mail import imap4
 from twisted.internet import defer
 from twisted.python import log
 
-#from twisted import cred
-
-#import u1db
-
 from leap.common import events as leap_events
 from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
 from leap.common.check import leap_assert, leap_assert_type
