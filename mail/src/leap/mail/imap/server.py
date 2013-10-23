@@ -18,9 +18,7 @@
 Soledad-backed IMAP Server.
 """
 import copy
-import email
 import logging
-import re
 import StringIO
 import cStringIO
 import time
@@ -41,6 +39,7 @@ from leap.common import events as leap_events
 from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
 from leap.common.check import leap_assert, leap_assert_type
 from leap.soledad.client import Soledad
+from leap.mail.utils import get_email_charset
 
 logger = logging.getLogger(__name__)
 
@@ -695,28 +694,6 @@ class LeapMessage(WithMsgFields):
     the more complex MIME-based interface.
     """
 
-    def _get_charset(self, content):
-        """
-        Mini parser to retrieve the charset of an email
-
-        :param content: mail contents
-        :type content: unicode
-
-        :returns: the charset as parsed from the contents
-        :rtype: str
-        """
-        charset = "UTF-8"
-        try:
-            em = email.message_from_string(content.encode("utf-8"))
-            # Miniparser for: Content-Type: <something>; charset=<charset>
-            charset_re = r'''charset=(?P<charset>[\w|\d|-]*)'''
-            charset = re.findall(charset_re, em["Content-Type"])[0]
-            if charset is None or len(charset) == 0:
-                charset = "UTF-8"
-        except Exception:
-            pass
-        return charset
-
     def open(self):
         """
         Return an file-like object opened for reading.
@@ -728,7 +705,7 @@ class LeapMessage(WithMsgFields):
         :rtype: StringIO
         """
         fd = cStringIO.StringIO()
-        charset = self._get_charset(self._doc.content.get(self.RAW_KEY, ''))
+        charset = get_email_charset(self._doc.content.get(self.RAW_KEY, ''))
         fd.write(self._doc.content.get(self.RAW_KEY, '').encode(charset))
         fd.seek(0)
         return fd
@@ -748,7 +725,7 @@ class LeapMessage(WithMsgFields):
         :rtype: StringIO
         """
         fd = StringIO.StringIO()
-        charset = self._get_charset(self._doc.content.get(self.RAW_KEY, ''))
+        charset = get_email_charset(self._doc.content.get(self.RAW_KEY, ''))
         fd.write(self._doc.content.get(self.RAW_KEY, '').encode(charset))
         # SHOULD use a separate BODY FIELD ...
         fd.seek(0)
