@@ -706,7 +706,13 @@ class LeapMessage(WithMsgFields):
         """
         fd = cStringIO.StringIO()
         charset = get_email_charset(self._doc.content.get(self.RAW_KEY, ''))
-        fd.write(self._doc.content.get(self.RAW_KEY, '').encode(charset))
+        content = self._doc.content.get(self.RAW_KEY, '')
+        try:
+            content = content.encode(charset)
+        except (UnicodeEncodeError, UnicodeDecodeError) as e:
+            logger.error("Unicode error {0}".format(e))
+            content = content.encode(charset, 'replace')
+        fd.write(content)
         fd.seek(0)
         return fd
 
@@ -726,7 +732,13 @@ class LeapMessage(WithMsgFields):
         """
         fd = StringIO.StringIO()
         charset = get_email_charset(self._doc.content.get(self.RAW_KEY, ''))
-        fd.write(self._doc.content.get(self.RAW_KEY, '').encode(charset))
+        content = self._doc.content.get(self.RAW_KEY, '')
+        try:
+            content = content.encode(charset)
+        except (UnicodeEncodeError, UnicodeDecodeError) as e:
+            logger.error("Unicode error {0}".format(e))
+            content = content.encode(charset, 'replace')
+        fd.write(content)
         # SHOULD use a separate BODY FIELD ...
         fd.seek(0)
         return fd
