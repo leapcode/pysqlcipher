@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# __init__.py
+# tests.py
 # Copyright (C) 2013 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
@@ -17,10 +17,16 @@
 
 
 """
-Client mail bits.
+Provide a function for loading tests.
 """
 
+import unittest
 
-from ._version import get_versions
-__version__ = get_versions()['version']
-del get_versions
+
+def load_tests():
+    suite = unittest.TestSuite()
+    for test in unittest.defaultTestLoader.discover(
+            './src/leap/mail/',
+            top_level_dir='./src/'):
+        suite.addTest(test)
+    return suite
