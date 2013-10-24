@@ -1,0 +1,1 @@
+  o Use TLS wrapper mode instead of STARTTLS. Closes #3637.
