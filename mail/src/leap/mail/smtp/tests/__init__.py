@@ -113,8 +113,8 @@ class TestCaseWithKeyManager(BaseLeapTest):
             'username': address,
             'password': '<password>',
             'encrypted_only': True,
-            'cert': 'blah',
-            'key': 'bleh',
+            'cert': 'src/leap/mail/smtp/tests/cert/server.crt',
+            'key': 'src/leap/mail/smtp/tests/cert/server.key',
         }
 
         class Response(object):

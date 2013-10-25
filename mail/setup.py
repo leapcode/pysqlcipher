@@ -64,7 +64,7 @@ setup(
     namespace_packages=["leap"],
     package_dir={'': 'src'},
     packages=find_packages('src'),
-    test_suite='leap.mail.load_tests',
+    test_suite='leap.mail.load_tests.load_tests',
     install_requires=utils.parse_requirements(),
     tests_require=utils.parse_requirements(
         reqfiles=['pkg/requirements-testing.pip']),
