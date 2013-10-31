@@ -40,7 +40,7 @@ from leap.common.events.events_pb2 import IMAP_MSG_DECRYPTED
 from leap.common.events.events_pb2 import IMAP_MSG_SAVED_LOCALLY
 from leap.common.events.events_pb2 import IMAP_MSG_DELETED_INCOMING
 from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
-from leap.mail.utils import get_email_charset
+from leap.common.mail import get_email_charset
 
 
 logger = logging.getLogger(__name__)
