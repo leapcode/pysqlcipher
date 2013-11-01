@@ -31,9 +31,6 @@ from twisted.internet.threads import deferToThread
 
 from leap.common import events as leap_events
 from leap.common.check import leap_assert, leap_assert_type
-from leap.soledad.client import Soledad
-from leap.soledad.common.crypto import ENC_SCHEME_KEY, ENC_JSON_KEY
-
 from leap.common.events.events_pb2 import IMAP_FETCHED_INCOMING
 from leap.common.events.events_pb2 import IMAP_MSG_PROCESSING
 from leap.common.events.events_pb2 import IMAP_MSG_DECRYPTED
@@ -41,6 +38,9 @@ from leap.common.events.events_pb2 import IMAP_MSG_SAVED_LOCALLY
 from leap.common.events.events_pb2 import IMAP_MSG_DELETED_INCOMING
 from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
 from leap.common.mail import get_email_charset
+from leap.keymanager import errors as keymanager_errors
+from leap.soledad.client import Soledad
+from leap.soledad.common.crypto import ENC_SCHEME_KEY, ENC_JSON_KEY
 
 
 logger = logging.getLogger(__name__)
@@ -198,6 +198,29 @@ class LeapIncomingMail(object):
             logger.warning('Unknown error while '
                            'syncing soledad: %r' % (err,))
 
+    def _log_err(self, failure):
+        """
+        Generic errback
+        """
+        err = failure.value
+        logger.error("error!: %r" % (err,))
+
+    def _decryption_error(self, failure):
+        """
+        Errback for decryption errors.
+        """
+        # XXX should signal unrecoverable maybe.
+        err = failure.value
+        logger.error("error decrypting msg: %s" % (err,))
+
+    def _saving_error(self, failure):
+        """
+        Errback for local save errors.
+        """
+        # XXX should signal unrecoverable maybe.
+        err = failure.value
+        logger.error("error saving msg locally: %s" % (err,))
+
     def _process_doclist(self, doclist):
         """
         Iterates through the doclist, checks if each doc
@@ -228,7 +251,13 @@ class LeapIncomingMail(object):
                 # Deferred chain for individual messages
                 d = deferToThread(self._decrypt_msg, doc, encdata)
                 d.addCallback(self._process_decrypted)
+                d.addErrback(self._log_err)
                 d.addCallback(self._add_message_locally)
+                d.addErrback(self._log_err)
+                # XXX check this, add_locally should not get called if we
+                # get an error in process
+                #d.addCallbacks(self._process_decrypted, self._decryption_error)
+                #d.addCallbacks(self._add_message_locally, self._saving_error)
                 docs_cb.append(d)
             else:
                 # Ooops, this does not.
@@ -289,8 +318,12 @@ class LeapIncomingMail(object):
         rawmsg = msg.get(self.CONTENT_KEY, None)
         if not rawmsg:
             return False
-        data = self._maybe_decrypt_gpg_msg(rawmsg)
-        return doc, data
+        try:
+            data = self._maybe_decrypt_gpg_msg(rawmsg)
+            return doc, data
+        except keymanager_errors.EncryptionDecryptionFailed as exc:
+            logger.error(exc)
+            raise
 
     def _maybe_decrypt_gpg_msg(self, data):
         """
@@ -384,6 +417,7 @@ class LeapIncomingMail(object):
                          incoming message
         :type msgtuple: (SoledadDocument, str)
         """
+        print "adding message locally....."
         doc, data = msgtuple
         self._inbox.addMessage(data, (self.RECENT_FLAG,))
         leap_events.signal(IMAP_MSG_SAVED_LOCALLY)

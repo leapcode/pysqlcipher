@@ -77,7 +77,7 @@ class LeapIMAPServer(imap4.IMAP4Server):
         #self.theAccount = theAccount
 
     def lineReceived(self, line):
-        if "login" in line:
+        if "login" in line.lower():
             # avoid to log the pass, even though we are using a dummy auth
             # by now.
             msg = line[:7] + " [...]"
@@ -160,7 +160,7 @@ def run_service(*args, **kwargs):
 
     try:
         tport = reactor.listenTCP(port, factory,
-                                 interface="localhost")
+                                  interface="localhost")
         fetcher = LeapIncomingMail(
             keymanager,
             soledad,
