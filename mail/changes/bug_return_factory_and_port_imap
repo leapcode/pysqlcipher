@@ -1,2 +1,0 @@
-  o Return the necessary references (factory, port) from IMAP4 launch
-    in order to be able to properly stop it. Related to #4199.

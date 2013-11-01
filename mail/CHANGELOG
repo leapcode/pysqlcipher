@@ -1,3 +1,13 @@
+0.3.6 Nov 1:
+  o Add support for non-ascii characters in emails. Closes #4000.
+  o Default to UTF-8 when there is no charset parsed from the mail
+    contents.
+  o Refactor get_email_charset to leap.common.
+  o Return the necessary references (factory, port) from IMAP4 launch
+    in order to be able to properly stop it. Related to #4199.
+  o Notify MUA of new mail, using IDLE as advertised. Closes: #3671
+  o Use TLS wrapper mode instead of STARTTLS. Closes #3637.
+
 0.3.5 Oct 18:
   o Do not log mail doc contents.
   o Comply with RFC 3156. Closes #4029.
