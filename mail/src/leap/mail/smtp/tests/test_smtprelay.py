@@ -23,8 +23,8 @@ SMTP relay tests.
 
 import re
 
-
 from datetime import datetime
+from gnupg._util import _make_binary_stream
 from twisted.test import proto_helpers
 from twisted.mail.smtp import (
     User,
@@ -32,7 +32,6 @@ from twisted.mail.smtp import (
     SMTPBadRcpt,
 )
 from mock import Mock
-
 
 from leap.mail.smtp.smtprelay import (
     SMTPFactory,
@@ -44,7 +43,6 @@ from leap.mail.smtp.tests import (
     ADDRESS_2,
 )
 from leap.keymanager import openpgp
-
 
 # some regexps
 IP_REGEX = "(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}" + \
@@ -127,11 +125,22 @@ class TestSmtpRelay(TestCaseWithKeyManager):
         for line in self.EMAIL_DATA[4:12]:
             m.lineReceived(line)
         m.eomReceived()
+        # assert structure of encrypted message
+        self.assertTrue('Content-Type' in m._msg)
+        self.assertEqual('multipart/encrypted', m._msg.get_content_type())
+        self.assertEqual('application/pgp-encrypted',
+                         m._msg.get_param('protocol'))
+        self.assertEqual(2, len(m._msg.get_payload()))
+        self.assertEqual('application/pgp-encrypted',
+                         m._msg.get_payload(0).get_content_type())
+        self.assertEqual('application/octet-stream',
+                         m._msg.get_payload(1).get_content_type())
         privkey = self._km.get_key(
             ADDRESS, openpgp.OpenPGPKey, private=True)
-        decrypted = self._km.decrypt(m._message.get_payload(), privkey)
+        decrypted = self._km.decrypt(
+            m._msg.get_payload(1).get_payload(), privkey)
         self.assertEqual(
-            '\r\n'.join(self.EMAIL_DATA[9:12]) + '\r\n',
+            '\n' + '\r\n'.join(self.EMAIL_DATA[9:12]) + '\r\n',
             decrypted,
             'Decrypted text differs from plaintext.')
 
@@ -149,14 +158,24 @@ class TestSmtpRelay(TestCaseWithKeyManager):
             m.lineReceived(line)
         # trigger encryption and signing
         m.eomReceived()
+        # assert structure of encrypted message
+        self.assertTrue('Content-Type' in m._msg)
+        self.assertEqual('multipart/encrypted', m._msg.get_content_type())
+        self.assertEqual('application/pgp-encrypted',
+                         m._msg.get_param('protocol'))
+        self.assertEqual(2, len(m._msg.get_payload()))
+        self.assertEqual('application/pgp-encrypted',
+                         m._msg.get_payload(0).get_content_type())
+        self.assertEqual('application/octet-stream',
+                         m._msg.get_payload(1).get_content_type())
         # decrypt and verify
         privkey = self._km.get_key(
             ADDRESS, openpgp.OpenPGPKey, private=True)
         pubkey = self._km.get_key(ADDRESS_2, openpgp.OpenPGPKey)
         decrypted = self._km.decrypt(
-            m._message.get_payload(), privkey, verify=pubkey)
+            m._msg.get_payload(1).get_payload(), privkey, verify=pubkey)
         self.assertEqual(
-            '\r\n'.join(self.EMAIL_DATA[9:12]) + '\r\n',
+            '\n' + '\r\n'.join(self.EMAIL_DATA[9:12]) + '\r\n',
             decrypted,
             'Decrypted text differs from plaintext.')
 
@@ -175,22 +194,34 @@ class TestSmtpRelay(TestCaseWithKeyManager):
             m.lineReceived(line)
         # trigger signing
         m.eomReceived()
+        # assert structure of signed message
+        self.assertTrue('Content-Type' in m._msg)
+        self.assertEqual('multipart/signed', m._msg.get_content_type())
+        self.assertEqual('application/pgp-signature',
+                         m._msg.get_param('protocol'))
+        self.assertEqual('pgp-sha512', m._msg.get_param('micalg'))
         # assert content of message
+        self.assertEqual(
+            m._msg.get_payload(0).get_payload(decode=True),
+            '\r\n'.join(self.EMAIL_DATA[9:13]))
+        # assert content of signature
         self.assertTrue(
-            m._message.get_payload().startswith(
-                '-----BEGIN PGP SIGNED MESSAGE-----\n' +
-                'Hash: SHA1\n\n' + 
-                ('\r\n'.join(self.EMAIL_DATA[9:12]) + '\r\n' +
-                '-----BEGIN PGP SIGNATURE-----\n')),
+            m._msg.get_payload(1).get_payload().startswith(
+                '-----BEGIN PGP SIGNATURE-----\n'),
             'Message does not start with signature header.')
         self.assertTrue(
-            m._message.get_payload().endswith(
+            m._msg.get_payload(1).get_payload().endswith(
                 '-----END PGP SIGNATURE-----\n'),
             'Message does not end with signature footer.')
         # assert signature is valid
         pubkey = self._km.get_key(ADDRESS_2, openpgp.OpenPGPKey)
+        # replace EOL before verifying (according to rfc3156)
+        signed_text = re.sub('\r?\n', '\r\n',
+                             m._msg.get_payload(0).as_string())
         self.assertTrue(
-            self._km.verify(m._message.get_payload(), pubkey),
+            self._km.verify(signed_text,
+                            pubkey,
+                            detached_sig=m._msg.get_payload(1).get_payload()),
             'Signature could not be verified.')
 
     def test_missing_key_rejects_address(self):

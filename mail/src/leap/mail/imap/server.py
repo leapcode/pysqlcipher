@@ -18,9 +18,7 @@
 Soledad-backed IMAP Server.
 """
 import copy
-import email
 import logging
-import re
 import StringIO
 import cStringIO
 import time
@@ -33,13 +31,10 @@ from twisted.mail import imap4
 from twisted.internet import defer
 from twisted.python import log
 
-#from twisted import cred
-
-#import u1db
-
 from leap.common import events as leap_events
 from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
 from leap.common.check import leap_assert, leap_assert_type
+from leap.common.mail import get_email_charset
 from leap.soledad.client import Soledad
 
 logger = logging.getLogger(__name__)
@@ -184,7 +179,8 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         # messages
         TYPE_MBOX_SEEN_IDX: [KTYPE, MBOX_VAL, 'bool(seen)'],
         TYPE_MBOX_RECT_IDX: [KTYPE, MBOX_VAL, 'bool(recent)'],
-        TYPE_MBOX_RECT_SEEN_IDX: [KTYPE, MBOX_VAL, 'bool(recent)', 'bool(seen)'],
+        TYPE_MBOX_RECT_SEEN_IDX: [KTYPE, MBOX_VAL,
+                                  'bool(recent)', 'bool(seen)'],
     }
 
     INBOX_NAME = "INBOX"
@@ -577,7 +573,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         return "<SoledadBackedAccount (%s)>" % self._account_name
 
 #######################################
-# Soledad Message, MessageCollection
+# LeapMessage, MessageCollection
 # and Mailbox
 #######################################
 
@@ -695,26 +691,6 @@ class LeapMessage(WithMsgFields):
     the more complex MIME-based interface.
     """
 
-    def _get_charset(self, content):
-        """
-        Mini parser to retrieve the charset of an email
-
-        :param content: mail contents
-        :type content: unicode
-
-        :returns: the charset as parsed from the contents
-        :rtype: str
-        """
-        charset = "UTF-8"
-        try:
-            em = email.message_from_string(content.encode("utf-8"))
-            # Miniparser for: Content-Type: <something>; charset=<charset>
-            charset_re = r'''charset=(?P<charset>[\w|\d|-]*)'''
-            charset = re.findall(charset_re, em["Content-Type"])[0]
-        except Exception:
-            pass
-        return charset
-
     def open(self):
         """
         Return an file-like object opened for reading.
@@ -726,8 +702,14 @@ class LeapMessage(WithMsgFields):
         :rtype: StringIO
         """
         fd = cStringIO.StringIO()
-        charset = self._get_charset(self._doc.content.get(self.RAW_KEY, ''))
-        fd.write(self._doc.content.get(self.RAW_KEY, '').encode(charset))
+        charset = get_email_charset(self._doc.content.get(self.RAW_KEY, ''))
+        content = self._doc.content.get(self.RAW_KEY, '')
+        try:
+            content = content.encode(charset)
+        except (UnicodeEncodeError, UnicodeDecodeError) as e:
+            logger.error("Unicode error {0}".format(e))
+            content = content.encode(charset, 'replace')
+        fd.write(content)
         fd.seek(0)
         return fd
 
@@ -746,8 +728,14 @@ class LeapMessage(WithMsgFields):
         :rtype: StringIO
         """
         fd = StringIO.StringIO()
-        charset = self._get_charset(self._doc.content.get(self.RAW_KEY, ''))
-        fd.write(self._doc.content.get(self.RAW_KEY, '').encode(charset))
+        charset = get_email_charset(self._doc.content.get(self.RAW_KEY, ''))
+        content = self._doc.content.get(self.RAW_KEY, '')
+        try:
+            content = content.encode(charset)
+        except (UnicodeEncodeError, UnicodeDecodeError) as e:
+            logger.error("Unicode error {0}".format(e))
+            content = content.encode(charset, 'replace')
+        fd.write(content)
         # SHOULD use a separate BODY FIELD ...
         fd.seek(0)
         return fd
@@ -1111,6 +1099,7 @@ class SoledadMailbox(WithMsgFields):
     which we instantiate and make accessible in the `messages` attribute.
     """
     implements(imap4.IMailboxInfo, imap4.IMailbox, imap4.ICloseableMailbox)
+    # XXX should finish the implementation of IMailboxListener
 
     messages = None
     _closed = False
@@ -1126,6 +1115,8 @@ class SoledadMailbox(WithMsgFields):
     CMD_UIDNEXT = "UIDNEXT"
     CMD_UIDVALIDITY = "UIDVALIDITY"
     CMD_UNSEEN = "UNSEEN"
+
+    listeners = []
 
     def __init__(self, mbox, soledad=None, rw=1):
         """
@@ -1159,15 +1150,35 @@ class SoledadMailbox(WithMsgFields):
         if not self.getFlags():
             self.setFlags(self.INIT_FLAGS)
 
-        # XXX what is/was this used for? --------
-        # ---> mail/imap4.py +1155,
-        #      _cbSelectWork makes use of this
-        # probably should implement hooks here
-        # using leap.common.events
-        self.listeners = []
-        self.addListener = self.listeners.append
-        self.removeListener = self.listeners.remove
-        #------------------------------------------
+        # the server itself is a listener to the mailbox.
+        # so we can notify it (and should!) after chanes in flags
+        # and number of messages.
+        print "emptying the listeners"
+        map(lambda i: self.listeners.remove(i), self.listeners)
+
+    def addListener(self, listener):
+        """
+        Rdds a listener to the listeners queue.
+
+        :param listener: listener to add
+        :type listener: an object that implements IMailboxListener
+        """
+        logger.debug('adding mailbox listener: %s' % listener)
+        self.listeners.append(listener)
+
+    def removeListener(self, listener):
+        """
+        Removes a listener from the listeners queue.
+
+        :param listener: listener to remove
+        :type listener: an object that implements IMailboxListener
+        """
+        logger.debug('removing mailbox listener: %s' % listener)
+        try:
+            self.listeners.remove(listener)
+        except ValueError:
+            logger.error(
+                "removeListener: cannot remove listener %s" % listener)
 
     def _get_mbox(self):
         """
@@ -1192,6 +1203,7 @@ class SoledadMailbox(WithMsgFields):
         #return map(str, self.INIT_FLAGS)
 
         # XXX CHECK against thunderbird XXX
+        # XXX I think this is slightly broken.. :/
 
         mbox = self._get_mbox()
         if not mbox:
@@ -1364,6 +1376,10 @@ class SoledadMailbox(WithMsgFields):
 
         self.messages.add_msg(message, flags=flags, date=date,
                               uid=uid_next)
+        exists = len(self.messages)
+        recent = len(self.messages.get_recent())
+        for listener in self.listeners:
+            listener.newMessages(exists, recent)
         return defer.succeed(None)
 
     # commands, do not rename methods

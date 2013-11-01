@@ -77,7 +77,7 @@ class LeapIMAPServer(imap4.IMAP4Server):
         #self.theAccount = theAccount
 
     def lineReceived(self, line):
-        if "login" in line:
+        if "login" in line.lower():
             # avoid to log the pass, even though we are using a dummy auth
             # by now.
             msg = line[:7] + " [...]"
@@ -141,7 +141,9 @@ def run_service(*args, **kwargs):
     Main entry point to run the service from the client.
 
     :returns: the LoopingCall instance that will have to be stoppped
-              before shutting down the client.
+              before shutting down the client, the port as returned by
+              the reactor when starts listening, and the factory for
+              the protocol.
     """
     leap_assert(len(args) == 2)
     soledad, keymanager = args
@@ -157,8 +159,8 @@ def run_service(*args, **kwargs):
     from twisted.internet import reactor
 
     try:
-        reactor.listenTCP(port, factory,
-                          interface="localhost")
+        tport = reactor.listenTCP(port, factory,
+                                  interface="localhost")
         fetcher = LeapIncomingMail(
             keymanager,
             soledad,
@@ -174,7 +176,7 @@ def run_service(*args, **kwargs):
         fetcher.start_loop()
         logger.debug("IMAP4 Server is RUNNING in port  %s" % (port,))
         leap_events.signal(IMAP_SERVICE_STARTED, str(port))
-        return fetcher
+        return fetcher, tport, factory
 
     # not ok, signal error.
     leap_events.signal(IMAP_SERVICE_FAILED_TO_START, str(port))

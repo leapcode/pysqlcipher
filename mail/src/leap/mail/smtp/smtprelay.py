@@ -17,6 +17,20 @@
 
 """
 LEAP SMTP encrypted relay.
+
+The following classes comprise the SMTP relay service:
+
+    * SMTPFactory - A twisted.internet.protocol.ServerFactory that provides
+      the SMTPDelivery protocol.
+    * SMTPDelivery - A twisted.mail.smtp.IMessageDelivery implementation. It
+      knows how to validate sender and receiver of messages and it generates
+      an EncryptedMessage for each recipient.
+    * SSLContextFactory - Contains the relevant ssl information for the
+      connection.
+    * EncryptedMessage - An implementation of twisted.mail.smtp.IMessage that
+      knows how to encrypt/sign itself before sending.
+
+
 """
 
 import re
@@ -173,7 +187,6 @@ class SMTPFactory(ServerFactory):
         @return: The protocol.
         @rtype: SMTPDelivery
         """
-        # If needed, we might use ESMTPDelivery here instead.
         smtpProtocol = smtp.SMTP(SMTPDelivery(self._km, self._config))
         smtpProtocol.factory = self
         return smtpProtocol
@@ -305,7 +318,7 @@ class SMTPDelivery(object):
 # EncryptedMessage
 #
 
-class CtxFactory(ssl.ClientContextFactory):
+class SSLContextFactory(ssl.ClientContextFactory):
     def __init__(self, cert, key):
         self.cert = cert
         self.key = key
@@ -450,6 +463,8 @@ class EncryptedMessage(object):
                                                      self._config[PORT_KEY]))
 
         d = defer.Deferred()
+        # we don't pass an ssl context factory to the ESMTPSenderFactory
+        # because ssl will be handled by reactor.connectSSL() below.
         factory = smtp.ESMTPSenderFactory(
             "",  # username is blank because server does not use auth.
             "",  # password is blank because server does not use auth.
@@ -457,15 +472,15 @@ class EncryptedMessage(object):
             self._user.dest.addrstr,
             StringIO(msg),
             d,
-            contextFactory=CtxFactory(self._config[CERT_KEY],
-                                      self._config[KEY_KEY]),
-            requireAuthentication=False)
+            requireAuthentication=False,
+            requireTransportSecurity=True)
         signal(proto.SMTP_SEND_MESSAGE_START, self._user.dest.addrstr)
-        reactor.connectTCP(
+        reactor.connectSSL(
             self._config[HOST_KEY],
             self._config[PORT_KEY],
-            factory
-        )
+            factory,
+            contextFactory=SSLContextFactory(self._config[CERT_KEY],
+                                             self._config[KEY_KEY]))
         d.addCallback(self.sendSuccess)
         d.addErrback(self.sendError)
         return d
