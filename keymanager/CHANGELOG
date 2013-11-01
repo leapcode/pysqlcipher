@@ -1,3 +1,7 @@
+0.3.5 Nov 1:
+  o Return unicode decrypted text to avoid encoding issues. Related to
+    #4000.
+
 0.3.4 Oct 18:
   o Add option to choose cipher and digest algorithms when signing and
     encrypting. Closes #4030.

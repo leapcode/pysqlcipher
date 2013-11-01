@@ -26,6 +26,7 @@ import os
 import re
 import shutil
 import tempfile
+import locale
 
 from gnupg import GPG
 from gnupg.gnupg import GPGUtilities
@@ -482,7 +483,7 @@ class OpenPGPScheme(EncryptionScheme):
         :type verify: OpenPGPKey
 
         :return: The decrypted data.
-        :rtype: str
+        :rtype: unicode
 
         @raise InvalidSignature: Raised if unable to verify the signature with
             C{verify} key.
@@ -504,7 +505,12 @@ class OpenPGPScheme(EncryptionScheme):
                     raise errors.InvalidSignature(
                         'Failed to verify signature with key %s: %s' %
                         (verify.key_id, stderr))
-            return result.data
+
+            # XXX: this is the encoding used by gpg module
+            # https://github.com/isislovecruft/python-gnupg/\
+            #   blob/master/gnupg/_meta.py#L121
+            encoding = locale.getpreferredencoding()
+            return result.data.decode(encoding, 'replace')
 
     def is_encrypted(self, data):
         """
