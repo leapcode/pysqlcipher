@@ -473,15 +473,18 @@ class KeyManager(object):
             data, privkey, digest_algo=digest_algo, clearsign=clearsign,
             detach=detach, binary=binary)
 
-    def verify(self, data, pubkey):
+    def verify(self, data, pubkey, detached_sig=None):
         """
-        Verify signed C{data} with C{pubkey}.
+        Verify signed C{data} with C{pubkey}, eventually using
+        C{detached_sig}.
 
         :param data: The data to be verified.
         :type data: str
-
         :param pubkey: The public key to be used on verification.
         :type pubkey: EncryptionKey
+        :param detached_sig: A detached signature. If given, C{data} is
+                             verified using this detached signature.
+        :type detached_sig: str
 
         :return: The signed data.
         :rtype: str
@@ -489,7 +492,8 @@ class KeyManager(object):
         leap_assert_type(pubkey, EncryptionKey)
         leap_assert(pubkey.__class__ in self._wrapper_map, 'Unknown key type.')
         leap_assert(pubkey.private is False, 'Key is not public.')
-        return self._wrapper_map[pubkey.__class__].verify(data, pubkey)
+        return self._wrapper_map[pubkey.__class__].verify(
+            data, pubkey, detached_sig=detached_sig)
 
 from ._version import get_versions
 __version__ = get_versions()['version']

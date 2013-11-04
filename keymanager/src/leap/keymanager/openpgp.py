@@ -30,6 +30,7 @@ import locale
 
 from gnupg import GPG
 from gnupg.gnupg import GPGUtilities
+from gnupg._util import _make_binary_stream
 
 from leap.common.check import leap_assert, leap_assert_type
 from leap.keymanager import errors
@@ -570,15 +571,18 @@ class OpenPGPScheme(EncryptionScheme):
                 '%s != %s' % (rfprint, kfprint))
         return result.data
 
-    def verify(self, data, pubkey):
+    def verify(self, data, pubkey, detached_sig=None):
         """
-        Verify signed C{data} with C{pubkey}.
+        Verify signed C{data} with C{pubkey}, eventually using
+        C{detached_sig}.
 
         :param data: The data to be verified.
         :type data: str
-
         :param pubkey: The public key to be used on verification.
         :type pubkey: OpenPGPKey
+        :param detached_sig: A detached signature. If given, C{data} is
+                             verified against this detached signature.
+        :type detached_sig: str
 
         :return: The ascii-armored signed data.
         :rtype: str
@@ -586,7 +590,20 @@ class OpenPGPScheme(EncryptionScheme):
         leap_assert_type(pubkey, OpenPGPKey)
         leap_assert(pubkey.private is False)
         with self._temporary_gpgwrapper(pubkey) as gpg:
-            result = gpg.verify(data)
+            result = None
+            if detached_sig is None:
+                result = gpg.verify(data)
+            else:
+                # to verify using a detached sig we have to use
+                # gpg.verify_file(), which receives the data as a binary
+                # stream and the name of a file containing the signature.
+                sf, sfname = tempfile.mkstemp()
+                sfd = os.fdopen(sf, 'w')
+                sfd.write(detached_sig)
+                sfd.close()
+                df = _make_binary_stream(data, gpg._encoding)
+                result = gpg.verify_file(df, sig_file=sfname)
+                df.close()
             gpgpubkey = gpg.list_keys().pop()
             valid = result.valid
             rfprint = result.fingerprint
