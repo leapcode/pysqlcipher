@@ -340,15 +340,18 @@ class EncryptionScheme(object):
         pass
 
     @abstractmethod
-    def verify(self, data, pubkey):
+    def verify(self, data, pubkey, detached_sig=None):
         """
-        Verify signed C{data} with C{pubkey}.
+        Verify signed C{data} with C{pubkey}, eventually using
+        C{detached_sig}.
 
         :param data: The data to be verified.
         :type data: str
-
         :param pubkey: The public key to be used on verification.
         :type pubkey: EncryptionKey
+        :param detached_sig: A detached signature. If given, C{data} is
+                             verified against this sdetached signature.
+        :type detached_sig: str
 
         :return: The signed data.
         :rtype: str

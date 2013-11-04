@@ -294,7 +294,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         pgp.put_ascii_key(PRIVATE_KEY)
         data = 'data'
         privkey = pgp.get_key(ADDRESS, private=True)
-        signed = pgp.sign(data, privkey)
+        signed = pgp.sign(data, privkey, detach=False)
         pubkey = pgp.get_key(ADDRESS, private=False)
         self.assertTrue(pgp.verify(signed, pubkey))
 
@@ -313,6 +313,16 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         res = pgp.decrypt(
             encrypted_and_signed, privkey2, verify=pubkey)
         self.assertTrue(data, res)
+
+    def test_sign_verify_detached_sig(self):
+        pgp = openpgp.OpenPGPScheme(
+            self._soledad, gpgbinary=GPG_BINARY_PATH)
+        pgp.put_ascii_key(PRIVATE_KEY)
+        data = 'data'
+        privkey = pgp.get_key(ADDRESS, private=True)
+        signature = pgp.sign(data, privkey, detach=True)
+        pubkey = pgp.get_key(ADDRESS, private=False)
+        self.assertTrue(pgp.verify(data, pubkey, detached_sig=signature))
 
 
 class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
@@ -490,7 +500,7 @@ class KeyManagerCryptoTestCase(KeyManagerWithSoledadTestCase):
         privkey = km.get_key(
             ADDRESS, OpenPGPKey, private=True, fetch_remote=False)
         # encrypt
-        signdata = km.sign(self.RAW_DATA, privkey)
+        signdata = km.sign(self.RAW_DATA, privkey, detach=False)
         self.assertNotEqual(self.RAW_DATA, signdata)
         # get public key for verifying
         pubkey = km.get_key(
