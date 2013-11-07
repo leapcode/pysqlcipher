@@ -102,8 +102,10 @@ class TestSmtpRelay(TestCaseWithKeyManager):
                         '250 Sender address accepted',
                         '250 Recipient address accepted',
                         '354 Continue']
-        proto = SMTPFactory(
-            self._km, self._config).buildProtocol(('127.0.0.1', 0))
+        proto = SMTPFactory(u'anotheruser@leap.se',
+            self._km, self._config['host'], self._config['port'],
+            self._config['cert'], self._config['key'],
+            self._config['encrypted_only']).buildProtocol(('127.0.0.1', 0))
         transport = proto_helpers.StringTransport()
         proto.makeConnection(transport)
         for i, line in enumerate(self.EMAIL_DATA):
@@ -117,11 +119,15 @@ class TestSmtpRelay(TestCaseWithKeyManager):
         """
         Test if message gets encrypted to destination email.
         """
-        proto = SMTPFactory(
-            self._km, self._config).buildProtocol(('127.0.0.1', 0))
+        proto = SMTPFactory(u'anotheruser@leap.se',
+            self._km, self._config['host'], self._config['port'],
+            self._config['cert'], self._config['key'],
+            self._config['encrypted_only']).buildProtocol(('127.0.0.1', 0))
         fromAddr = Address(ADDRESS_2)
         dest = User(ADDRESS, 'relay.leap.se', proto, ADDRESS)
-        m = EncryptedMessage(fromAddr, dest, self._km, self._config)
+        m = EncryptedMessage(
+            fromAddr, dest, self._km, self._config['host'],
+            self._config['port'], self._config['cert'], self._config['key'])
         for line in self.EMAIL_DATA[4:12]:
             m.lineReceived(line)
         m.eomReceived()
@@ -149,11 +155,15 @@ class TestSmtpRelay(TestCaseWithKeyManager):
         Test if message gets encrypted to destination email and signed with
         sender key.
         """
-        proto = SMTPFactory(
-            self._km, self._config).buildProtocol(('127.0.0.1', 0))
+        proto = SMTPFactory(u'anotheruser@leap.se',
+            self._km, self._config['host'], self._config['port'],
+            self._config['cert'], self._config['key'],
+            self._config['encrypted_only']).buildProtocol(('127.0.0.1', 0))
         user = User(ADDRESS, 'relay.leap.se', proto, ADDRESS)
         fromAddr = Address(ADDRESS_2)
-        m = EncryptedMessage(fromAddr, user, self._km, self._config)
+        m = EncryptedMessage(
+            fromAddr, user, self._km, self._config['host'],
+            self._config['port'], self._config['cert'], self._config['key'])
         for line in self.EMAIL_DATA[4:12]:
             m.lineReceived(line)
         # trigger encryption and signing
@@ -185,11 +195,15 @@ class TestSmtpRelay(TestCaseWithKeyManager):
         """
         # mock the key fetching
         self._km.fetch_keys_from_server = Mock(return_value=[])
-        proto = SMTPFactory(
-            self._km, self._config).buildProtocol(('127.0.0.1', 0))
+        proto = SMTPFactory(u'anotheruser@leap.se',
+            self._km, self._config['host'], self._config['port'],
+            self._config['cert'], self._config['key'],
+            self._config['encrypted_only']).buildProtocol(('127.0.0.1', 0))
         user = User('ihavenopubkey@nonleap.se', 'relay.leap.se', proto, ADDRESS)
         fromAddr = Address(ADDRESS_2)
-        m = EncryptedMessage(fromAddr, user, self._km, self._config)
+        m = EncryptedMessage(
+            fromAddr, user, self._km, self._config['host'],
+            self._config['port'], self._config['cert'], self._config['key'])
         for line in self.EMAIL_DATA[4:12]:
             m.lineReceived(line)
         # trigger signing
@@ -237,8 +251,10 @@ class TestSmtpRelay(TestCaseWithKeyManager):
         # mock the key fetching
         self._km.fetch_keys_from_server = Mock(return_value=[])
         # prepare the SMTP factory
-        proto = SMTPFactory(
-            self._km, self._config).buildProtocol(('127.0.0.1', 0))
+        proto = SMTPFactory(u'anotheruser@leap.se',
+            self._km, self._config['host'], self._config['port'],
+            self._config['cert'], self._config['key'],
+            self._config['encrypted_only']).buildProtocol(('127.0.0.1', 0))
         transport = proto_helpers.StringTransport()
         proto.makeConnection(transport)
         proto.lineReceived(self.EMAIL_DATA[0] + '\r\n')
@@ -263,11 +279,11 @@ class TestSmtpRelay(TestCaseWithKeyManager):
         pgp.delete_key(pubkey)
         # mock the key fetching
         self._km.fetch_keys_from_server = Mock(return_value=[])
-        # change the configuration
-        self._config['encrypted_only'] = False
-        # prepare the SMTP factory
-        proto = SMTPFactory(
-            self._km, self._config).buildProtocol(('127.0.0.1', 0))
+        # prepare the SMTP factory with encrypted only equal to false
+        proto = SMTPFactory(u'anotheruser@leap.se',
+            self._km, self._config['host'], self._config['port'],
+            self._config['cert'], self._config['key'],
+            False).buildProtocol(('127.0.0.1', 0))
         transport = proto_helpers.StringTransport()
         proto.makeConnection(transport)
         proto.lineReceived(self.EMAIL_DATA[0] + '\r\n')

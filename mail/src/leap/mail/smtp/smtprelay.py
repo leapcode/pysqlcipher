@@ -68,67 +68,15 @@ generator.Generator = RFC3156CompliantGenerator
 
 
 #
-# Exceptions
-#
-
-class MalformedConfig(Exception):
-    """
-    Raised when the configuration dictionary passed as parameter is malformed.
-    """
-    pass
-
-
-#
 # Helper utilities
 #
-
-HOST_KEY = 'host'
-PORT_KEY = 'port'
-CERT_KEY = 'cert'
-KEY_KEY = 'key'
-ENCRYPTED_ONLY_KEY = 'encrypted_only'
-
-
-def assert_config_structure(config):
-    """
-    Assert that C{config} is a dict with the following structure:
-
-        {
-            HOST_KEY: '<str>',
-            PORT_KEY: <int>,
-            CERT_KEY: '<str>',
-            KEY_KEY: '<str>',
-            ENCRYPTED_ONLY_KEY: <bool>,
-        }
-
-    @param config: The dictionary to check.
-    @type config: dict
-    """
-    # assert smtp config structure is valid
-    leap_assert_type(config, dict)
-    leap_assert(HOST_KEY in config)
-    leap_assert_type(config[HOST_KEY], str)
-    leap_assert(PORT_KEY in config)
-    leap_assert_type(config[PORT_KEY], int)
-    leap_assert(CERT_KEY in config)
-    leap_assert_type(config[CERT_KEY], (str, unicode))
-    leap_assert(KEY_KEY in config)
-    leap_assert_type(config[KEY_KEY], (str, unicode))
-    leap_assert(ENCRYPTED_ONLY_KEY in config)
-    leap_assert_type(config[ENCRYPTED_ONLY_KEY], bool)
-    # assert received params are not empty
-    leap_assert(config[HOST_KEY] != '')
-    leap_assert(config[PORT_KEY] is not 0)
-    leap_assert(config[CERT_KEY] != '')
-    leap_assert(config[KEY_KEY] != '')
-
 
 def validate_address(address):
     """
     Validate C{address} as defined in RFC 2822.
 
-    @param address: The address to be validated.
-    @type address: str
+    :param address: The address to be validated.
+    :type address: str
 
     @return: A valid address.
     @rtype: str
@@ -153,45 +101,60 @@ class SMTPFactory(ServerFactory):
     Factory for an SMTP server with encrypted relaying capabilities.
     """
 
-    def __init__(self, userid, keymanager, config):
+    def __init__(self, userid, keymanager, host, port, cert, key,
+                 encrypted_only):
         """
         Initialize the SMTP factory.
 
-        @param keymanager: A KeyManager for retrieving recipient's keys.
-        @type keymanager: leap.common.keymanager.KeyManager
-        @param config: A dictionary with smtp configuration. Should have
-            the following structure:
-                {
-                    HOST_KEY: '<str>',
-                    PORT_KEY: <int>,
-                    CERT_KEY: '<str>',
-                    KEY_KEY: '<str>',
-                    ENCRYPTED_ONLY_KEY: <bool>,
-                }
-        @type config: dict
-        @param userid: The user currently logged in
-        @type userid: unicode
+        :param userid: The user currently logged in
+        :type userid: unicode
+        :param keymanager: A KeyManager for retrieving recipient's keys.
+        :type keymanager: leap.common.keymanager.KeyManager
+        :param host: The hostname of the remote SMTP server.
+        :type host: str
+        :param port: The port of the remote SMTP server.
+        :type port: int
+        :param cert: The client certificate for authentication.
+        :type cert: str
+        :param key: The client key for authentication.
+        :type key: str
+        :param encrypted_only: Whether the SMTP relay should send unencrypted mail
+                               or not.
+        :type encrypted_only: bool
         """
         # assert params
         leap_assert_type(keymanager, KeyManager)
-        assert_config_structure(config)
+        leap_assert_type(host, str)
+        leap_assert(host != '')
+        leap_assert_type(port, int)
+        leap_assert(port is not 0)
+        leap_assert_type(cert, str)
+        leap_assert(cert != '')
+        leap_assert_type(key, str)
+        leap_assert(key != '')
+        leap_assert_type(encrypted_only, bool)
         # and store them
         self._userid = userid
         self._km = keymanager
-        self._config = config
+        self._host = host
+        self._port = port
+        self._cert = cert
+        self._key = key
+        self._encrypted_only = encrypted_only
 
     def buildProtocol(self, addr):
         """
         Return a protocol suitable for the job.
 
-        @param addr: An address, e.g. a TCP (host, port).
-        @type addr:  twisted.internet.interfaces.IAddress
+        :param addr: An address, e.g. a TCP (host, port).
+        :type addr:  twisted.internet.interfaces.IAddress
 
         @return: The protocol.
         @rtype: SMTPDelivery
         """
-        smtpProtocol = smtp.SMTP(SMTPDelivery(self._userid, self._km,
-                                              self._config))
+        smtpProtocol = smtp.SMTP(SMTPDelivery(
+            self._userid, self._km, self._host, self._port, self._cert,
+            self._key, self._encrypted_only))
         smtpProtocol.factory = self
         return smtpProtocol
 
@@ -207,49 +170,53 @@ class SMTPDelivery(object):
 
     implements(smtp.IMessageDelivery)
 
-    def __init__(self, userid, keymanager, config):
+    def __init__(self, userid, keymanager, host, port, cert, key,
+                 encrypted_only):
         """
         Initialize the SMTP delivery object.
 
-        @param keymanager: A KeyManager for retrieving recipient's keys.
-        @type keymanager: leap.common.keymanager.KeyManager
-        @param config: A dictionary with smtp configuration. Should have
-            the following structure:
-                {
-                    HOST_KEY: '<str>',
-                    PORT_KEY: <int>,
-                    CERT_KEY: '<str>',
-                    KEY_KEY: '<str>',
-                    ENCRYPTED_ONLY_KEY: <bool>,
-                }
-        @type config: dict
-        @param userid: The user currently logged in
-        @type userid: unicode
+        :param userid: The user currently logged in
+        :type userid: unicode
+        :param keymanager: A KeyManager for retrieving recipient's keys.
+        :type keymanager: leap.common.keymanager.KeyManager
+        :param host: The hostname of the remote SMTP server.
+        :type host: str
+        :param port: The port of the remote SMTP server.
+        :type port: int
+        :param cert: The client certificate for authentication.
+        :type cert: str
+        :param key: The client key for authentication.
+        :type key: str
+        :param encrypted_only: Whether the SMTP relay should send unencrypted mail
+                               or not.
+        :type encrypted_only: bool
         """
-        # assert params
-        leap_assert_type(keymanager, KeyManager)
-        assert_config_structure(config)
-        # and store them
         self._userid = userid
         self._km = keymanager
-        self._config = config
+        self._userid = userid
+        self._km = keymanager
+        self._host = host
+        self._port = port
+        self._cert = cert
+        self._key = key
+        self._encrypted_only = encrypted_only
         self._origin = None
 
     def receivedHeader(self, helo, origin, recipients):
         """
         Generate the 'Received:' header for a message.
 
-        @param helo: The argument to the HELO command and the client's IP
+        :param helo: The argument to the HELO command and the client's IP
             address.
-        @type helo: (str, str)
-        @param origin: The address the message is from.
-        @type origin: twisted.mail.smtp.Address
-        @param recipients: A list of the addresses for which this message is
+        :type helo: (str, str)
+        :param origin: The address the message is from.
+        :type origin: twisted.mail.smtp.Address
+        :param recipients: A list of the addresses for which this message is
             bound.
-        @type: list of twisted.mail.smtp.User
+        :type: list of twisted.mail.smtp.User
 
         @return: The full "Received" header string.
-        @type: str
+        :type: str
         """
         myHostname, clientIP = helo
         headerValue = "by %s from %s with ESMTP ; %s" % (
@@ -269,8 +236,8 @@ class SMTPDelivery(object):
         In the end, it returns an encrypted message object that is able to
         send itself to the C{user}'s address.
 
-        @param user: The user whose address we wish to validate.
-        @type: twisted.mail.smtp.User
+        :param user: The user whose address we wish to validate.
+        :type: twisted.mail.smtp.User
 
         @return: A Deferred which becomes, or a callable which takes no
             arguments and returns an object implementing IMessage. This will
@@ -290,7 +257,7 @@ class SMTPDelivery(object):
             signal(proto.SMTP_RECIPIENT_ACCEPTED_ENCRYPTED, user.dest.addrstr)
         except KeyNotFound:
             # if key was not found, check config to see if will send anyway.
-            if self._config[ENCRYPTED_ONLY_KEY]:
+            if self._encrypted_only:
                 signal(proto.SMTP_RECIPIENT_REJECTED, user.dest.addrstr)
                 raise smtp.SMTPBadRcpt(user.dest.addrstr)
             log.msg("Warning: will send an unencrypted message (because "
@@ -298,17 +265,18 @@ class SMTPDelivery(object):
             signal(
                 proto.SMTP_RECIPIENT_ACCEPTED_UNENCRYPTED, user.dest.addrstr)
         return lambda: EncryptedMessage(
-            self._origin, user, self._km, self._config)
+            self._origin, user, self._km, self._host, self._port, self._cert,
+            self._key)
 
     def validateFrom(self, helo, origin):
         """
         Validate the address from which the message originates.
 
-        @param helo: The argument to the HELO command and the client's IP
+        :param helo: The argument to the HELO command and the client's IP
             address.
-        @type: (str, str)
-        @param origin: The address the message is from.
-        @type origin: twisted.mail.smtp.Address
+        :type: (str, str)
+        :param origin: The address the message is from.
+        :type origin: twisted.mail.smtp.Address
 
         @return: origin or a Deferred whose callback will be passed origin.
         @rtype: Deferred or Address
@@ -360,36 +328,36 @@ class EncryptedMessage(object):
     """
     implements(smtp.IMessage)
 
-    def __init__(self, fromAddress, user, keymanager, config):
+    def __init__(self, fromAddress, user, keymanager, host, port, cert, key):
         """
         Initialize the encrypted message.
 
-        @param fromAddress: The address of the sender.
-        @type fromAddress: twisted.mail.smtp.Address
-        @param user: The recipient of this message.
-        @type user: twisted.mail.smtp.User
-        @param keymanager: A KeyManager for retrieving recipient's keys.
-        @type keymanager: leap.common.keymanager.KeyManager
-        @param config: A dictionary with smtp configuration. Should have
-            the following structure:
-                {
-                    HOST_KEY: '<str>',
-                    PORT_KEY: <int>,
-                    CERT_KEY: '<str>',
-                    KEY_KEY: '<str>',
-                    ENCRYPTED_ONLY_KEY: <bool>,
-                }
-        @type config: dict
+        :param fromAddress: The address of the sender.
+        :type fromAddress: twisted.mail.smtp.Address
+        :param user: The recipient of this message.
+        :type user: twisted.mail.smtp.User
+        :param keymanager: A KeyManager for retrieving recipient's keys.
+        :type keymanager: leap.common.keymanager.KeyManager
+        :param host: The hostname of the remote SMTP server.
+        :type host: str
+        :param port: The port of the remote SMTP server.
+        :type port: int
+        :param cert: The client certificate for authentication.
+        :type cert: str
+        :param key: The client key for authentication.
+        :type key: str
         """
         # assert params
         leap_assert_type(user, smtp.User)
         leap_assert_type(keymanager, KeyManager)
-        assert_config_structure(config)
         # and store them
         self._fromAddress = fromAddress
         self._user = user
         self._km = keymanager
-        self._config = config
+        self._host = host
+        self._port = port
+        self._cert = cert
+        self._key = key
         # initialize list for message's lines
         self.lines = []
 
@@ -401,8 +369,8 @@ class EncryptedMessage(object):
         """
         Handle another line.
 
-        @param line: The received line.
-        @type line: str
+        :param line: The received line.
+        :type line: str
         """
         self.lines.append(line)
 
@@ -441,8 +409,8 @@ class EncryptedMessage(object):
         """
         Callback for a successful send.
 
-        @param r: The result from the last previous callback in the chain.
-        @type r: anything
+        :param r: The result from the last previous callback in the chain.
+        :type r: anything
         """
         log.msg(r)
         signal(proto.SMTP_SEND_MESSAGE_SUCCESS, self._user.dest.addrstr)
@@ -451,8 +419,8 @@ class EncryptedMessage(object):
         """
         Callback for an unsuccessfull send.
 
-        @param e: The result from the last errback.
-        @type e: anything
+        :param e: The result from the last errback.
+        :type e: anything
         """
         log.msg(e)
         log.err()
@@ -471,8 +439,7 @@ class EncryptedMessage(object):
         """
         msg = self._msg.as_string(False)
 
-        log.msg("Connecting to SMTP server %s:%s" % (self._config[HOST_KEY],
-                                                     self._config[PORT_KEY]))
+        log.msg("Connecting to SMTP server %s:%s" % (self._host, self._port))
 
         d = defer.Deferred()
         # we don't pass an ssl context factory to the ESMTPSenderFactory
@@ -488,11 +455,8 @@ class EncryptedMessage(object):
             requireTransportSecurity=True)
         signal(proto.SMTP_SEND_MESSAGE_START, self._user.dest.addrstr)
         reactor.connectSSL(
-            self._config[HOST_KEY],
-            self._config[PORT_KEY],
-            factory,
-            contextFactory=SSLContextFactory(self._config[CERT_KEY],
-                                             self._config[KEY_KEY]))
+            self._host, self._port, factory,
+            contextFactory=SSLContextFactory(self._cert, self._key))
         d.addCallback(self.sendSuccess)
         d.addErrback(self.sendError)
         return d
@@ -506,10 +470,10 @@ class EncryptedMessage(object):
         Create an RFC 3156 compliang PGP encrypted and signed message using
         C{pubkey} to encrypt and C{signkey} to sign.
 
-        @param pubkey: The public key used to encrypt the message.
-        @type pubkey: leap.common.keymanager.openpgp.OpenPGPKey
-        @param signkey: The private key used to sign the message.
-        @type signkey: leap.common.keymanager.openpgp.OpenPGPKey
+        :param pubkey: The public key used to encrypt the message.
+        :type pubkey: leap.common.keymanager.openpgp.OpenPGPKey
+        :param signkey: The private key used to sign the message.
+        :type signkey: leap.common.keymanager.openpgp.OpenPGPKey
         """
         # create new multipart/encrypted message with 'pgp-encrypted' protocol
         newmsg = MultipartEncrypted('application/pgp-encrypted')
@@ -534,8 +498,8 @@ class EncryptedMessage(object):
         """
         Create an RFC 3156 compliant PGP signed MIME message using C{signkey}.
 
-        @param signkey: The private key used to sign the message.
-        @type signkey: leap.common.keymanager.openpgp.OpenPGPKey
+        :param signkey: The private key used to sign the message.
+        :type signkey: leap.common.keymanager.openpgp.OpenPGPKey
         """
         # create new multipart/signed message
         newmsg = MultipartSigned('application/pgp-signature', 'pgp-sha512')
