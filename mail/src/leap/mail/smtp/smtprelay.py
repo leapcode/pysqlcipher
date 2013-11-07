@@ -153,7 +153,7 @@ class SMTPFactory(ServerFactory):
     Factory for an SMTP server with encrypted relaying capabilities.
     """
 
-    def __init__(self, keymanager, config):
+    def __init__(self, userid, keymanager, config):
         """
         Initialize the SMTP factory.
 
@@ -169,11 +169,14 @@ class SMTPFactory(ServerFactory):
                     ENCRYPTED_ONLY_KEY: <bool>,
                 }
         @type config: dict
+        @param userid: The user currently logged in
+        @type userid: unicode
         """
         # assert params
         leap_assert_type(keymanager, KeyManager)
         assert_config_structure(config)
         # and store them
+        self._userid = userid
         self._km = keymanager
         self._config = config
 
@@ -187,7 +190,8 @@ class SMTPFactory(ServerFactory):
         @return: The protocol.
         @rtype: SMTPDelivery
         """
-        smtpProtocol = smtp.SMTP(SMTPDelivery(self._km, self._config))
+        smtpProtocol = smtp.SMTP(SMTPDelivery(self._userid, self._km,
+                                              self._config))
         smtpProtocol.factory = self
         return smtpProtocol
 
@@ -203,7 +207,7 @@ class SMTPDelivery(object):
 
     implements(smtp.IMessageDelivery)
 
-    def __init__(self, keymanager, config):
+    def __init__(self, userid, keymanager, config):
         """
         Initialize the SMTP delivery object.
 
@@ -219,11 +223,14 @@ class SMTPDelivery(object):
                     ENCRYPTED_ONLY_KEY: <bool>,
                 }
         @type config: dict
+        @param userid: The user currently logged in
+        @type userid: unicode
         """
         # assert params
         leap_assert_type(keymanager, KeyManager)
         assert_config_structure(config)
         # and store them
+        self._userid = userid
         self._km = keymanager
         self._config = config
         self._origin = None
@@ -310,6 +317,10 @@ class SMTPDelivery(object):
         """
         # accept mail from anywhere. To reject an address, raise
         # smtp.SMTPBadSender here.
+        if str(origin) != str(self._userid):
+            log.msg("Rejecting sender {0}, expected {1}".format(origin,
+                                                                self._userid))
+            raise smtp.SMTPBadSender(origin)
         self._origin = origin
         return origin
 

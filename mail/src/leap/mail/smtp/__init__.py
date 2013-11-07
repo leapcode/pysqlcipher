@@ -29,7 +29,7 @@ from leap.common.events import proto, signal
 from leap.mail.smtp.smtprelay import SMTPFactory
 
 
-def setup_smtp_relay(port, keymanager, smtp_host, smtp_port,
+def setup_smtp_relay(port, userid, keymanager, smtp_host, smtp_port,
                      smtp_cert, smtp_key, encrypted_only):
     """
     Setup SMTP relay to run with Twisted.
@@ -39,6 +39,8 @@ def setup_smtp_relay(port, keymanager, smtp_host, smtp_port,
 
     :param port: The port in which to run the server.
     :type port: int
+    :param userid: The user currently logged in
+    :type userid: unicode
     :param keymanager: A Key Manager from where to get recipients' public
                        keys.
     :type keymanager: leap.common.keymanager.KeyManager
@@ -75,7 +77,7 @@ def setup_smtp_relay(port, keymanager, smtp_host, smtp_port,
     }
 
     # configure the use of this service with twistd
-    factory = SMTPFactory(keymanager, config)
+    factory = SMTPFactory(userid, keymanager, config)
     try:
         tport = reactor.listenTCP(port, factory,
                                   interface="localhost")

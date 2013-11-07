@@ -1,0 +1,2 @@
+  o Reject senders that aren't the user that is currently logged
+    in. Fixes #3952.
