@@ -284,7 +284,8 @@ class SMTPDelivery(object):
         # try to find recipient's public key
         try:
             address = validate_address(user.dest.addrstr)
-            pubkey = self._km.get_key(address, OpenPGPKey)
+            # verify if recipient key is available in keyring
+            self._km.get_key(address, OpenPGPKey)  # might raise KeyNotFound
             log.msg("Accepting mail for %s..." % user.dest.addrstr)
             signal(proto.SMTP_RECIPIENT_ACCEPTED_ENCRYPTED, user.dest.addrstr)
         except KeyNotFound:
@@ -510,15 +511,13 @@ class EncryptedMessage(object):
         @param signkey: The private key used to sign the message.
         @type signkey: leap.common.keymanager.openpgp.OpenPGPKey
         """
-        # parse original message from received lines
-        origmsg = self.parseMessage()
         # create new multipart/encrypted message with 'pgp-encrypted' protocol
         newmsg = MultipartEncrypted('application/pgp-encrypted')
         # move (almost) all headers from original message to the new message
-        move_headers(origmsg, newmsg)
+        move_headers(self._origmsg, newmsg)
         # create 'application/octet-stream' encrypted message
         encmsg = MIMEApplication(
-            self._km.encrypt(origmsg.as_string(unixfrom=False), pubkey,
+            self._km.encrypt(self._origmsg.as_string(unixfrom=False), pubkey,
                              sign=signkey),
             _subtype='octet-stream', _encoder=lambda x: x)
         encmsg.add_header('content-disposition', 'attachment',
@@ -538,22 +537,20 @@ class EncryptedMessage(object):
         @param signkey: The private key used to sign the message.
         @type signkey: leap.common.keymanager.openpgp.OpenPGPKey
         """
-        # parse original message from received lines
-        origmsg = self.parseMessage()
         # create new multipart/signed message
         newmsg = MultipartSigned('application/pgp-signature', 'pgp-sha512')
         # move (almost) all headers from original message to the new message
-        move_headers(origmsg, newmsg)
+        move_headers(self._origmsg, newmsg)
         # apply base64 content-transfer-encoding
-        encode_base64_rec(origmsg)
+        encode_base64_rec(self._origmsg)
         # get message text with headers and replace \n for \r\n
         fp = StringIO()
         g = RFC3156CompliantGenerator(
             fp, mangle_from_=False, maxheaderlen=76)
-        g.flatten(origmsg)
+        g.flatten(self._origmsg)
         msgtext = re.sub('\r?\n', '\r\n', fp.getvalue())
         # make sure signed message ends with \r\n as per OpenPGP stantard.
-        if origmsg.is_multipart():
+        if self._origmsg.is_multipart():
             if not msgtext.endswith("\r\n"):
                 msgtext += "\r\n"
         # calculate signature
@@ -561,23 +558,46 @@ class EncryptedMessage(object):
                                   clearsign=False, detach=True, binary=False)
         sigmsg = PGPSignature(signature)
         # attach original message and signature to new message
-        newmsg.attach(origmsg)
+        newmsg.attach(self._origmsg)
         newmsg.attach(sigmsg)
         self._msg = newmsg
 
     def _maybe_encrypt_and_sign(self):
         """
-        Encrypt the message body.
+        Attempt to encrypt and sign the outgoing message.
 
-        Fetch the recipient key and encrypt the content to the
-        recipient. If a key is not found, then the behaviour depends on the
-        configuration parameter ENCRYPTED_ONLY_KEY. If it is False, the message
-        is sent unencrypted and a warning is logged. If it is True, the
-        encryption fails with a KeyNotFound exception.
+        The behaviour of this method depends on:
 
-        @raise KeyNotFound: Raised when the recipient key was not found and
-            the ENCRYPTED_ONLY_KEY configuration parameter is set to True.
+            1. the original message's content-type, and
+            2. the availability of the recipient's public key.
+
+        If the original message's content-type is "multipart/encrypted", then
+        the original message is not altered. For any other content-type, the
+        method attempts to fetch the recipient's public key. If the
+        recipient's public key is available, the message is encrypted and
+        signed; otherwise it is only signed.
+
+        Note that, if the C{encrypted_only} configuration is set to True and
+        the recipient's public key is not available, then the recipient
+        address would have been rejected in SMTPDelivery.validateTo().
+
+        The following table summarizes the overall behaviour of the relay:
+
+        +---------------------------------------------------+----------------+
+        | content-type        | rcpt pubkey | enforce encr. | action         |
+        +---------------------+-------------+---------------+----------------+
+        | multipart/encrypted | any         | any           | pass           |
+        | other               | available   | any           | encrypt + sign |
+        | other               | unavailable | yes           | reject         |
+        | other               | unavailable | no            | sign           |
+        +---------------------+-------------+---------------+----------------+
         """
+        # pass if the original message's content-type is "multipart/encrypted"
+        self._origmsg = self.parseMessage()
+        if self._origmsg.get_content_type() == 'multipart/encrypted':
+            self._msg = self._origmsg
+            return
+
         from_address = validate_address(self._fromAddress.addrstr)
         signkey = self._km.get_key(from_address, OpenPGPKey, private=True)
         log.msg("Will sign the message with %s." % signkey.fingerprint)
