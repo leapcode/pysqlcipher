@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# smtprelay.py
+# gateway.py
 # Copyright (C) 2013 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
@@ -16,9 +16,9 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 """
-LEAP SMTP encrypted relay.
+LEAP SMTP encrypted gateway.
 
-The following classes comprise the SMTP relay service:
+The following classes comprise the SMTP gateway service:
 
     * SMTPFactory - A twisted.internet.protocol.ServerFactory that provides
       the SMTPDelivery protocol.
@@ -98,7 +98,7 @@ def validate_address(address):
 
 class SMTPFactory(ServerFactory):
     """
-    Factory for an SMTP server with encrypted relaying capabilities.
+    Factory for an SMTP server with encrypted gatewaying capabilities.
     """
 
     def __init__(self, userid, keymanager, host, port, cert, key,
@@ -118,8 +118,8 @@ class SMTPFactory(ServerFactory):
         :type cert: str
         :param key: The client key for authentication.
         :type key: str
-        :param encrypted_only: Whether the SMTP relay should send unencrypted mail
-                               or not.
+        :param encrypted_only: Whether the SMTP gateway should send unencrypted
+                               mail or not.
         :type encrypted_only: bool
         """
         # assert params
@@ -128,9 +128,9 @@ class SMTPFactory(ServerFactory):
         leap_assert(host != '')
         leap_assert_type(port, int)
         leap_assert(port is not 0)
-        leap_assert_type(cert, str)
+        leap_assert_type(cert, unicode)
         leap_assert(cert != '')
-        leap_assert_type(key, str)
+        leap_assert_type(key, unicode)
         leap_assert(key != '')
         leap_assert_type(encrypted_only, bool)
         # and store them
@@ -187,8 +187,8 @@ class SMTPDelivery(object):
         :type cert: str
         :param key: The client key for authentication.
         :type key: str
-        :param encrypted_only: Whether the SMTP relay should send unencrypted mail
-                               or not.
+        :param encrypted_only: Whether the SMTP gateway should send unencrypted
+                               mail or not.
         :type encrypted_only: bool
         """
         self._userid = userid
@@ -545,7 +545,7 @@ class EncryptedMessage(object):
         the recipient's public key is not available, then the recipient
         address would have been rejected in SMTPDelivery.validateTo().
 
-        The following table summarizes the overall behaviour of the relay:
+        The following table summarizes the overall behaviour of the gateway:
 
         +---------------------------------------------------+----------------+
         | content-type        | rcpt pubkey | enforce encr. | action         |

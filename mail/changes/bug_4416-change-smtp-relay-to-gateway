@@ -1,0 +1,1 @@
+  o Change SMTP service name from "relay" to "gateway". Closes #4416.

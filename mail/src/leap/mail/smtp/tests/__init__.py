@@ -17,7 +17,7 @@
 
 
 """
-Base classes and keys for SMTP relay tests.
+Base classes and keys for SMTP gateway tests.
 """
 
 import os

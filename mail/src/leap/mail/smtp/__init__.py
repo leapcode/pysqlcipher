@@ -16,7 +16,7 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 """
-SMTP relay helper function.
+SMTP gateway helper function.
 """
 import logging
 
@@ -26,15 +26,15 @@ from twisted.internet.error import CannotListenError
 logger = logging.getLogger(__name__)
 
 from leap.common.events import proto, signal
-from leap.mail.smtp.smtprelay import SMTPFactory
+from leap.mail.smtp.gateway import SMTPFactory
 
 
-def setup_smtp_relay(port, userid, keymanager, smtp_host, smtp_port,
+def setup_smtp_gateway(port, userid, keymanager, smtp_host, smtp_port,
                      smtp_cert, smtp_key, encrypted_only):
     """
-    Setup SMTP relay to run with Twisted.
+    Setup SMTP gateway to run with Twisted.
 
-    This function sets up the SMTP relay configuration and the Twisted
+    This function sets up the SMTP gateway configuration and the Twisted
     reactor.
 
     :param port: The port in which to run the server.
@@ -52,7 +52,7 @@ def setup_smtp_relay(port, userid, keymanager, smtp_host, smtp_port,
     :type smtp_cert: str
     :param smtp_key: The client key for authentication.
     :type smtp_key: str
-    :param encrypted_only: Whether the SMTP relay should send unencrypted mail
+    :param encrypted_only: Whether the SMTP gateway should send unencrypted mail
                            or not.
     :type encrypted_only: bool
 
@@ -70,5 +70,5 @@ def setup_smtp_relay(port, userid, keymanager, smtp_host, smtp_port,
                      "cannot listen in port %s" % port)
         signal(proto.SMTP_SERVICE_FAILED_TO_START, str(port))
     except Exception as exc:
-        logger.error("Unhandled error while launching smtp relay service")
+        logger.error("Unhandled error while launching smtp gateway service")
         logger.exception(exc)
