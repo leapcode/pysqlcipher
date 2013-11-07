@@ -28,6 +28,7 @@ from email.parser import Parser
 from twisted.python import log
 from twisted.internet.task import LoopingCall
 from twisted.internet.threads import deferToThread
+from zope.proxy import sameProxiedObjects
 
 from leap.common import events as leap_events
 from leap.common.check import leap_assert, leap_assert_type
@@ -39,6 +40,7 @@ from leap.common.events.events_pb2 import IMAP_MSG_DELETED_INCOMING
 from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
 from leap.common.mail import get_email_charset
 from leap.keymanager import errors as keymanager_errors
+from leap.keymanager.openpgp import OpenPGPKey
 from leap.soledad.client import Soledad
 from leap.soledad.common.crypto import ENC_SCHEME_KEY, ENC_JSON_KEY
 
@@ -66,7 +68,7 @@ class LeapIncomingMail(object):
     fetching_lock = threading.Lock()
 
     def __init__(self, keymanager, soledad, imap_account,
-                 check_period):
+                 check_period, userid):
 
         """
         Initialize LeapIMAP.
@@ -88,14 +90,14 @@ class LeapIncomingMail(object):
         leap_assert_type(soledad, Soledad)
         leap_assert(check_period, "need a period to check incoming mail")
         leap_assert_type(check_period, int)
+        leap_assert(userid, "need a userid to initialize")
 
         self._keymanager = keymanager
         self._soledad = soledad
         self.imapAccount = imap_account
         self._inbox = self.imapAccount.getMailbox('inbox')
+        self._userid = userid
 
-        self._pkey = self._keymanager.get_all_keys_in_local_db(
-            private=True).pop()
         self._loop = None
         self._check_period = check_period
 
@@ -106,6 +108,13 @@ class LeapIncomingMail(object):
         Create needed indexes on soledad.
         """
         self._soledad.create_index("just-mail", "incoming")
+
+    @property
+    def _pkey(self):
+        if sameProxiedObjects(self._keymanager, None):
+            logger.warning('tried to get key, but null keymanager found')
+            return None
+        return self._keymanager.get_key(self._userid, OpenPGPKey, private=True)
 
     #
     # Public API: fetch, start_loop, stop.
@@ -118,6 +127,8 @@ class LeapIncomingMail(object):
         Calls a deferred that will execute the fetch callback
         in a separate thread
         """
+        logger.debug("fetching mail for: %s %s" % (
+            self._soledad.uuid, self._userid))
         if not self.fetching_lock.locked():
             d = deferToThread(self._sync_soledad)
             d.addCallbacks(self._signal_fetch_to_ui, self._sync_soledad_error)
@@ -334,6 +345,7 @@ class LeapIncomingMail(object):
         :return: data, possibly descrypted.
         :rtype: str
         """
+        # TODO split this method
         leap_assert_type(data, unicode)
 
         parser = Parser()
@@ -417,7 +429,6 @@ class LeapIncomingMail(object):
                          incoming message
         :type msgtuple: (SoledadDocument, str)
         """
-        print "adding message locally....."
         doc, data = msgtuple
         self._inbox.addMessage(data, (self.RECENT_FLAG,))
         leap_events.signal(IMAP_MSG_SAVED_LOCALLY)

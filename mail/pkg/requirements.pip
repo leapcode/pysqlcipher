@@ -3,3 +3,4 @@ leap.soledad.client>=0.3.0
 leap.common>=0.3.5
 leap.keymanager>=0.3.4
 twisted  # >= 12.0.3 ??
+zope.proxy

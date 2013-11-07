@@ -29,7 +29,7 @@ from twisted.python import log
 logger = logging.getLogger(__name__)
 
 from leap.common import events as leap_events
-from leap.common.check import leap_assert, leap_assert_type
+from leap.common.check import leap_assert, leap_assert_type, leap_check
 from leap.keymanager import KeyManager
 from leap.mail.imap.server import SoledadBackedAccount
 from leap.mail.imap.fetch import LeapIncomingMail
@@ -152,6 +152,8 @@ def run_service(*args, **kwargs):
 
     port = kwargs.get('port', IMAP_PORT)
     check_period = kwargs.get('check_period', INCOMING_CHECK_PERIOD)
+    userid = kwargs.get('userid', None)
+    leap_check(userid is not None, "need an user id")
 
     uuid = soledad._get_uuid()
     factory = LeapIMAPFactory(uuid, soledad)
@@ -165,7 +167,8 @@ def run_service(*args, **kwargs):
             keymanager,
             soledad,
             factory.theAccount,
-            check_period)
+            check_period,
+            userid)
     except CannotListenError:
         logger.error("IMAP Service failed to start: "
                      "cannot listen in port %s" % (port,))
