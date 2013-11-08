@@ -2,14 +2,14 @@ Source: pysqlcipher
 Maintainer: Ben Carrillo <ben@futeisha.org>
 Section: python
 Priority: optional
-Build-Depends: python-all-dev (>= 2.6.6-3), libsqlcipher-dev, debhelper (>= 9)
+Build-Depends: python-all-dev (>= 2.6.6-3), libsqlcipher-dev (>=2.2.1-2), debhelper (>= 9)
 Standards-Version: 3.9.4
 Uploaders: Micah Anderson <micah@debian.org>
 X-Python-Version: >= 2.5
 
 Package: python-sqlcipher
 Architecture: any
-Depends: libsqlcipher0 (>=2.1.1-2), ${misc:Depends}, ${python:Depends}, ${shlibs:Depends}
+Depends: libsqlcipher0 (>=2.2.1-2), ${misc:Depends}, ${python:Depends}, ${shlibs:Depends}
 Description: DB-API 2.0 interface for SQLCIPHER 3.x
  Python interface to SQLCipher
  .

@@ -1,4 +1,4 @@
-pysqlcipher (2.6.3-1) unstable; urgency=low
+pysqlcipher (2.6.3.1) unstable; urgency=low
 
   * Use libsqlcipher0 2.2.1-2, that uses SQLITE_TEMP_STORE=2. See #726464
 
