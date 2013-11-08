@@ -2,6 +2,9 @@
 # Uncomment this to turn on verbose mode.
 #DH_VERBOSE=1
 
+# Prevent setuptools/distribute from accessing the internet.
+export http_proxy = http://127.0.0.1:9
+
 %:
 	dh $@ --with python2 --buildsystem=python_distutils
 
@@ -21,3 +24,4 @@ override_dh_auto_clean:
 	rm -rf build
 	rm -rf docs/_build 
 	rm -rf *.egg-info
+	find \( -name '._*' -o -name '*.pyc' \) -delete
