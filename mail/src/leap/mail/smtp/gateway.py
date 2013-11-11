@@ -14,7 +14,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
-
 """
 LEAP SMTP encrypted gateway.
 
@@ -32,7 +31,6 @@ The following classes comprise the SMTP gateway service:
 
 
 """
-
 import re
 from StringIO import StringIO
 from email.Header import Header
@@ -46,6 +44,7 @@ from twisted.mail import smtp
 from twisted.internet.protocol import ServerFactory
 from twisted.internet import reactor, ssl
 from twisted.internet import defer
+from twisted.internet.threads import deferToThread
 from twisted.python import log
 
 from leap.common.check import leap_assert, leap_assert_type
@@ -70,6 +69,9 @@ generator.Generator = RFC3156CompliantGenerator
 #
 # Helper utilities
 #
+
+LOCAL_FQDN = "bitmask.local"
+
 
 def validate_address(address):
     """
@@ -96,10 +98,25 @@ def validate_address(address):
 # SMTPFactory
 #
 
+class SMTPHeloLocalhost(smtp.SMTP):
+    """
+    An SMTP class that ensures a proper FQDN
+    for localhost.
+
+    This avoids a problem in which unproperly configured providers
+    would complain about the helo not being a fqdn.
+    """
+
+    def __init__(self, *args):
+        smtp.SMTP.__init__(self, *args)
+        self.host = LOCAL_FQDN
+
+
 class SMTPFactory(ServerFactory):
     """
     Factory for an SMTP server with encrypted gatewaying capabilities.
     """
+    domain = LOCAL_FQDN
 
     def __init__(self, userid, keymanager, host, port, cert, key,
                  encrypted_only):
@@ -152,7 +169,7 @@ class SMTPFactory(ServerFactory):
         @return: The protocol.
         @rtype: SMTPDelivery
         """
-        smtpProtocol = smtp.SMTP(SMTPDelivery(
+        smtpProtocol = SMTPHeloLocalhost(SMTPDelivery(
             self._userid, self._km, self._host, self._port, self._cert,
             self._key, self._encrypted_only))
         smtpProtocol.factory = self
@@ -379,21 +396,14 @@ class EncryptedMessage(object):
         Handle end of message.
 
         This method will encrypt and send the message.
+
+        :returns: a deferred
         """
         log.msg("Message data complete.")
         self.lines.append('')  # add a trailing newline
-        try:
-            self._maybe_encrypt_and_sign()
-            return self.sendMessage()
-        except KeyNotFound:
-            return None
-
-    def parseMessage(self):
-        """
-        Separate message headers from body.
-        """
-        parser = Parser()
-        return parser.parsestr('\r\n'.join(self.lines))
+        d = deferToThread(self._maybe_encrypt_and_sign)
+        d.addCallbacks(self.sendMessage, self.skipNoKeyErrBack)
+        return d
 
     def connectionLost(self):
         """
@@ -405,6 +415,37 @@ class EncryptedMessage(object):
         # unexpected loss of connection; don't save
         self.lines = []
 
+    # ends IMessage implementation
+
+    def skipNoKeyErrBack(self, failure):
+        """
+        Errback that ignores a KeyNotFound
+
+        :param failure: the failure
+        :type Failure: Failure
+        """
+        err = failure.value
+        if failure.check(KeyNotFound):
+            pass
+        else:
+            raise err
+
+    def parseMessage(self):
+        """
+        Separate message headers from body.
+        """
+        parser = Parser()
+        return parser.parsestr('\r\n'.join(self.lines))
+
+    def sendQueued(self, r):
+        """
+        Callback for the queued message.
+
+        :param r: The result from the last previous callback in the chain.
+        :type r: anything
+        """
+        log.msg(r)
+
     def sendSuccess(self, r):
         """
         Callback for a successful send.
@@ -415,33 +456,40 @@ class EncryptedMessage(object):
         log.msg(r)
         signal(proto.SMTP_SEND_MESSAGE_SUCCESS, self._user.dest.addrstr)
 
-    def sendError(self, e):
+    def sendError(self, failure):
         """
         Callback for an unsuccessfull send.
 
         :param e: The result from the last errback.
         :type e: anything
         """
-        log.msg(e)
-        log.err()
         signal(proto.SMTP_SEND_MESSAGE_ERROR, self._user.dest.addrstr)
+        err = failure.value
+        log.err(err)
+        raise err
 
-    def sendMessage(self):
+    def sendMessage(self, *args):
         """
-        Send the message.
+        Sends the message.
 
-        This method will prepare the message (headers and possibly encrypted
-        body) and send it using the ESMTPSenderFactory.
-
-        @return: A deferred with callbacks for error and success of this
-            message send.
-        @rtype: twisted.internet.defer.Deferred
+        :return: A deferred with callbacks for error and success of this
+                 #message send.
+        :rtype: twisted.internet.defer.Deferred
         """
+        d = deferToThread(self._route_msg)
+        d.addCallbacks(self.sendQueued, self.sendError)
+        return
+
+    def _route_msg(self):
+        """
+        Sends the msg using the ESMTPSenderFactory.
+        """
+        log.msg("Connecting to SMTP server %s:%s" % (self._host, self._port))
         msg = self._msg.as_string(False)
 
-        log.msg("Connecting to SMTP server %s:%s" % (self._host, self._port))
-
+        # we construct a defer to pass to the ESMTPSenderFactory
         d = defer.Deferred()
+        d.addCallbacks(self.sendSuccess, self.sendError)
         # we don't pass an ssl context factory to the ESMTPSenderFactory
         # because ssl will be handled by reactor.connectSSL() below.
         factory = smtp.ESMTPSenderFactory(
@@ -451,15 +499,14 @@ class EncryptedMessage(object):
             self._user.dest.addrstr,
             StringIO(msg),
             d,
+            heloFallback=True,
             requireAuthentication=False,
             requireTransportSecurity=True)
+        factory.domain = LOCAL_FQDN
         signal(proto.SMTP_SEND_MESSAGE_START, self._user.dest.addrstr)
         reactor.connectSSL(
             self._host, self._port, factory,
             contextFactory=SSLContextFactory(self._cert, self._key))
-        d.addCallback(self.sendSuccess)
-        d.addErrback(self.sendError)
-        return d
 
     #
     # encryption methods
