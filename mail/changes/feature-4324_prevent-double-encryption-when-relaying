@@ -1,0 +1,2 @@
+  o Prevent already encrypted outgoing messages from being encrypted again.
+    Closes #4324.
