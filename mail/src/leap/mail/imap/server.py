@@ -1153,7 +1153,6 @@ class SoledadMailbox(WithMsgFields):
         # the server itself is a listener to the mailbox.
         # so we can notify it (and should!) after chanes in flags
         # and number of messages.
-        print "emptying the listeners"
         map(lambda i: self.listeners.remove(i), self.listeners)
 
     def addListener(self, listener):
