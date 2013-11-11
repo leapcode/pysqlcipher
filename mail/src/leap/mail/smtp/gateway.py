@@ -210,8 +210,6 @@ class SMTPDelivery(object):
         """
         self._userid = userid
         self._km = keymanager
-        self._userid = userid
-        self._km = keymanager
         self._host = host
         self._port = port
         self._cert = cert
@@ -236,10 +234,10 @@ class SMTPDelivery(object):
         :type: str
         """
         myHostname, clientIP = helo
-        headerValue = "by %s from %s with ESMTP ; %s" % (
-            myHostname, clientIP, smtp.rfc822date())
+        headerValue = "by bitmask.local from %s with ESMTP ; %s" % (
+            clientIP, smtp.rfc822date())
         # email.Header.Header used for automatic wrapping of long lines
-        return "Received: %s" % Header(headerValue)
+        return "Received: %s" % Header(s=headerValue, header_name='Received')
 
     def validateTo(self, user):
         """
@@ -326,16 +324,6 @@ class SSLContextFactory(ssl.ClientContextFactory):
         ctx.use_certificate_file(self.cert)
         ctx.use_privatekey_file(self.key)
         return ctx
-
-
-def move_headers(origmsg, newmsg):
-    headers = origmsg.items()
-    unwanted_headers = ['content-type', 'mime-version', 'content-disposition',
-                        'content-transfer-encoding']
-    headers = filter(lambda x: x[0].lower() not in unwanted_headers, headers)
-    for hkey, hval in headers:
-        newmsg.add_header(hkey, hval)
-        del(origmsg[hkey])
 
 
 class EncryptedMessage(object):
@@ -518,14 +506,14 @@ class EncryptedMessage(object):
         C{pubkey} to encrypt and C{signkey} to sign.
 
         :param pubkey: The public key used to encrypt the message.
-        :type pubkey: leap.common.keymanager.openpgp.OpenPGPKey
+        :type pubkey: OpenPGPKey
         :param signkey: The private key used to sign the message.
-        :type signkey: leap.common.keymanager.openpgp.OpenPGPKey
+        :type signkey: OpenPGPKey
         """
         # create new multipart/encrypted message with 'pgp-encrypted' protocol
         newmsg = MultipartEncrypted('application/pgp-encrypted')
         # move (almost) all headers from original message to the new message
-        move_headers(self._origmsg, newmsg)
+        self._fix_headers(self._origmsg, newmsg, signkey)
         # create 'application/octet-stream' encrypted message
         encmsg = MIMEApplication(
             self._km.encrypt(self._origmsg.as_string(unixfrom=False), pubkey,
@@ -551,7 +539,7 @@ class EncryptedMessage(object):
         # create new multipart/signed message
         newmsg = MultipartSigned('application/pgp-signature', 'pgp-sha512')
         # move (almost) all headers from original message to the new message
-        move_headers(self._origmsg, newmsg)
+        self._fix_headers(self._origmsg, newmsg, signkey)
         # apply base64 content-transfer-encoding
         encode_base64_rec(self._origmsg)
         # get message text with headers and replace \n for \r\n
@@ -630,3 +618,60 @@ class EncryptedMessage(object):
             signal(proto.SMTP_START_SIGN, self._fromAddress.addrstr)
             self._sign(signkey)
             signal(proto.SMTP_END_SIGN, self._fromAddress.addrstr)
+
+    def _fix_headers(self, origmsg, newmsg, signkey):
+        """
+        Move some headers from C{origmsg} to C{newmsg}, delete unwanted
+        headers from C{origmsg} and add new headers to C{newms}.
+
+        Outgoing messages are either encrypted and signed or just signed
+        before being sent. Because of that, they are packed inside new
+        messages and some manipulation has to be made on their headers.
+
+        Allowed headers for passing through:
+
+            - From
+            - Date
+            - To
+            - Subject
+            - Reply-To
+            - References
+            - In-Reply-To
+            - Cc
+
+        Headers to be added:
+
+            - Message-ID (i.e. should not use origmsg's Message-Id)
+            - Received (this is added automatically by twisted smtp API)
+            - OpenPGP (see #4447)
+
+        Headers to be deleted:
+
+            - User-Agent
+
+        :param origmsg: The original message.
+        :type origmsg: email.message.Message
+        :param newmsg: The new message being created.
+        :type newmsg: email.message.Message
+        :param signkey: The key used to sign C{newmsg}
+        :type signkey: OpenPGPKey
+        """
+        # move headers from origmsg to newmsg
+        headers = origmsg.items()
+        passthrough = [
+            'from', 'date', 'to', 'subject', 'reply-to', 'references',
+            'in-reply-to', 'cc'
+        ]
+        headers = filter(lambda x: x[0].lower() in passthrough, headers)
+        for hkey, hval in headers:
+            newmsg.add_header(hkey, hval)
+            del(origmsg[hkey])
+        # add a new message-id to newmsg
+        newmsg.add_header('Message-Id', smtp.messageid())
+        # add openpgp header to newmsg
+        username, domain = signkey.address.split('@')
+        newmsg.add_header(
+            'OpenPGP', 'id=%s' % signkey.key_id,
+            url='https://%s/openpgp/%s' % (domain, username))
+        # delete user-agent from origmsg
+        del(origmsg['user-agent'])
