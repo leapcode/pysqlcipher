@@ -1,0 +1,1 @@
+  o Uses deferToThread for sendMail. Closes #3937

@@ -72,6 +72,7 @@ generator.Generator = RFC3156CompliantGenerator
 
 LOCAL_FQDN = "bitmask.local"
 
+
 def validate_address(address):
     """
     Validate C{address} as defined in RFC 2822.
@@ -98,6 +99,13 @@ def validate_address(address):
 #
 
 class SMTPHeloLocalhost(smtp.SMTP):
+    """
+    An SMTP class that ensures a proper FQDN
+    for localhost.
+
+    This avoids a problem in which unproperly configured providers
+    would complain about the helo not being a fqdn.
+    """
 
     def __init__(self, *args):
         smtp.SMTP.__init__(self, *args)
@@ -388,21 +396,14 @@ class EncryptedMessage(object):
         Handle end of message.
 
         This method will encrypt and send the message.
+
+        :returns: a deferred
         """
         log.msg("Message data complete.")
         self.lines.append('')  # add a trailing newline
-        try:
-            self._maybe_encrypt_and_sign()
-            return self.sendMessage()
-        except KeyNotFound:
-            return None
-
-    def parseMessage(self):
-        """
-        Separate message headers from body.
-        """
-        parser = Parser()
-        return parser.parsestr('\r\n'.join(self.lines))
+        d = deferToThread(self._maybe_encrypt_and_sign)
+        d.addCallbacks(self.sendMessage, self.skipNoKeyErrBack)
+        return d
 
     def connectionLost(self):
         """
@@ -414,12 +415,34 @@ class EncryptedMessage(object):
         # unexpected loss of connection; don't save
         self.lines = []
 
+    # ends IMessage implementation
+
+    def skipNoKeyErrBack(self, failure):
+        """
+        Errback that ignores a KeyNotFound
+
+        :param failure: the failure
+        :type Failure: Failure
+        """
+        err = failure.value
+        if failure.check(KeyNotFound):
+            pass
+        else:
+            raise err
+
+    def parseMessage(self):
+        """
+        Separate message headers from body.
+        """
+        parser = Parser()
+        return parser.parsestr('\r\n'.join(self.lines))
+
     def sendQueued(self, r):
         """
         Callback for the queued message.
 
-        @param r: The result from the last previous callback in the chain.
-        @type r: anything
+        :param r: The result from the last previous callback in the chain.
+        :type r: anything
         """
         log.msg(r)
 
@@ -445,35 +468,24 @@ class EncryptedMessage(object):
         log.err(err)
         raise err
 
-    def sendMessage(self):
+    def sendMessage(self, *args):
         """
         Sends the message.
-        @return: A deferred with callbacks for error and success of this
-            message send.
-        @rtype: twisted.internet.defer.Deferred
+
+        :return: A deferred with callbacks for error and success of this
+                 #message send.
+        :rtype: twisted.internet.defer.Deferred
         """
-        # FIXME this should not be blocking the main ui, since it returns
-        # a deferred and it has its own cb set. ???!
-        d = deferToThread(self._sendMessage)
-        d.addCallbacks(self._route_msg, self.sendError)
+        d = deferToThread(self._route_msg)
         d.addCallbacks(self.sendQueued, self.sendError)
-        return d
+        return
 
-    def _sendMessage(self):
-        """
-        Send the message.
-
-        This method will prepare the message (headers and possibly encrypted
-        body)
-        """
-        msg = self._msg.as_string(False)
-        return msg
-
-    def _route_msg(self, msg):
+    def _route_msg(self):
         """
         Sends the msg using the ESMTPSenderFactory.
         """
         log.msg("Connecting to SMTP server %s:%s" % (self._host, self._port))
+        msg = self._msg.as_string(False)
 
         # we construct a defer to pass to the ESMTPSenderFactory
         d = defer.Deferred()
