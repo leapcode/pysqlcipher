@@ -21,12 +21,14 @@ Infrastructure for using OpenPGP keys in Key Manager.
 """
 
 
+import locale
 import logging
 import os
 import re
 import shutil
+import sys
 import tempfile
-import locale
+
 from contextlib import closing
 
 from gnupg import GPG
@@ -516,6 +518,10 @@ class OpenPGPScheme(EncryptionScheme):
             # https://github.com/isislovecruft/python-gnupg/\
             #   blob/master/gnupg/_meta.py#L121
             encoding = locale.getpreferredencoding()
+            if encoding is None:
+                encoding = sys.stdin.encoding
+            if encoding is None:
+                encoding = 'utf-8'
             return result.data.decode(encoding, 'replace')
 
     def is_encrypted(self, data):
