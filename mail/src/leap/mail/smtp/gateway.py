@@ -71,6 +71,8 @@ generator.Generator = RFC3156CompliantGenerator
 # Helper utilities
 #
 
+LOCAL_FQDN = "bitmask.local"
+
 def validate_address(address):
     """
     Validate C{address} as defined in RFC 2822.
@@ -96,10 +98,18 @@ def validate_address(address):
 # SMTPFactory
 #
 
+class SMTPHeloLocalhost(smtp.SMTP):
+
+    def __init__(self, *args):
+        smtp.SMTP.__init__(self, *args)
+        self.host = LOCAL_FQDN
+
+
 class SMTPFactory(ServerFactory):
     """
     Factory for an SMTP server with encrypted gatewaying capabilities.
     """
+    domain = LOCAL_FQDN
 
     def __init__(self, userid, keymanager, host, port, cert, key,
                  encrypted_only):
@@ -152,7 +162,7 @@ class SMTPFactory(ServerFactory):
         @return: The protocol.
         @rtype: SMTPDelivery
         """
-        smtpProtocol = smtp.SMTP(SMTPDelivery(
+        smtpProtocol = SMTPHeloLocalhost(SMTPDelivery(
             self._userid, self._km, self._host, self._port, self._cert,
             self._key, self._encrypted_only))
         smtpProtocol.factory = self
@@ -451,8 +461,10 @@ class EncryptedMessage(object):
             self._user.dest.addrstr,
             StringIO(msg),
             d,
+            heloFallback=True,
             requireAuthentication=False,
             requireTransportSecurity=True)
+        factory.domain = LOCAL_FQDN
         signal(proto.SMTP_SEND_MESSAGE_START, self._user.dest.addrstr)
         reactor.connectSSL(
             self._host, self._port, factory,
