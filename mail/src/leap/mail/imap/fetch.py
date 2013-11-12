@@ -387,6 +387,8 @@ class LeapIncomingMail(object):
                 decrdata = decrdata.encode(encoding, 'replace')
 
             decrmsg = parser.parsestr(decrdata)
+            # remove original message's multipart/encrypted content-type
+            del(origmsg['content-type'])
             # replace headers back in original message
             for hkey, hval in decrmsg.items():
                 try:
