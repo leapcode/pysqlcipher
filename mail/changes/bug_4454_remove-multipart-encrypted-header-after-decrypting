@@ -1,0 +1,2 @@
+  o Remove 'multipart/encrypted' header after decrypting incoming mail. Closes
+    #4454.
