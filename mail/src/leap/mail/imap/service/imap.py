@@ -25,6 +25,7 @@ from twisted.internet.protocol import ServerFactory
 from twisted.internet.error import CannotListenError
 from twisted.mail import imap4
 from twisted.python import log
+from twisted import cred
 
 logger = logging.getLogger(__name__)
 
@@ -54,10 +55,13 @@ class LeapIMAPServer(imap4.IMAP4Server):
     def __init__(self, *args, **kwargs):
         # pop extraneous arguments
         soledad = kwargs.pop('soledad', None)
-        user = kwargs.pop('user', None)
+        uuid = kwargs.pop('uuid', None)
+        userid = kwargs.pop('userid', None)
         leap_assert(soledad, "need a soledad instance")
         leap_assert_type(soledad, Soledad)
-        leap_assert(user, "need a user in the initialization")
+        leap_assert(uuid, "need a user in the initialization")
+
+        self._userid = userid
 
         # initialize imap server!
         imap4.IMAP4Server.__init__(self, *args, **kwargs)
@@ -77,6 +81,12 @@ class LeapIMAPServer(imap4.IMAP4Server):
         #self.theAccount = theAccount
 
     def lineReceived(self, line):
+        """
+        Attempt to parse a single line from the server.
+
+        :param line: the line from the server, without the line delimiter.
+        :type line: str
+        """
         if "login" in line.lower():
             # avoid to log the pass, even though we are using a dummy auth
             # by now.
@@ -87,7 +97,21 @@ class LeapIMAPServer(imap4.IMAP4Server):
         imap4.IMAP4Server.lineReceived(self, line)
 
     def authenticateLogin(self, username, password):
-        # all is allowed so far. use realm instead
+        """
+        Lookup the account with the given parameters, and deny
+        the improper combinations.
+
+        :param username: the username that is attempting authentication.
+        :type username: str
+        :param password: the password to authenticate with.
+        :type password: str
+        """
+        # XXX this should use portal:
+        # return portal.login(cred.credentials.UsernamePassword(user, pass)
+        if username != self._userid:
+            # bad username, reject.
+            raise cred.error.UnauthorizedLogin()
+        # any dummy password is allowed so far. use realm instead!
         leap_events.signal(IMAP_CLIENT_LOGIN, "1")
         return imap4.IAccount, self.theAccount, lambda: None
 
@@ -108,28 +132,32 @@ class LeapIMAPFactory(ServerFactory):
     capabilities.
     """
 
-    def __init__(self, user, soledad):
+    def __init__(self, uuid, userid, soledad):
         """
         Initializes the server factory.
 
-        :param user: user ID. **right now it's uuid**
-                     this might change!
-        :type user: str
+        :param uuid: user uuid
+        :type uuid: str
+
+        :param userid: user id (user@provider.org)
+        :type userid: str
 
         :param soledad: soledad instance
         :type soledad: Soledad
         """
-        self._user = user
+        self._uuid = uuid
+        self._userid = userid
         self._soledad = soledad
 
         theAccount = SoledadBackedAccount(
-            user, soledad=soledad)
+            uuid, soledad=soledad)
         self.theAccount = theAccount
 
     def buildProtocol(self, addr):
         "Return a protocol suitable for the job."
         imapProtocol = LeapIMAPServer(
-            user=self._user,
+            uuid=self._uuid,
+            userid=self._userid,
             soledad=self._soledad)
         imapProtocol.theAccount = self.theAccount
         imapProtocol.factory = self
@@ -156,7 +184,7 @@ def run_service(*args, **kwargs):
     leap_check(userid is not None, "need an user id")
 
     uuid = soledad._get_uuid()
-    factory = LeapIMAPFactory(uuid, soledad)
+    factory = LeapIMAPFactory(uuid, userid, soledad)
 
     from twisted.internet import reactor
 

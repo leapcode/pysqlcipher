@@ -23,6 +23,7 @@ import StringIO
 import cStringIO
 import time
 
+from collections import defaultdict
 from email.parser import Parser
 
 from zope.interface import implements
@@ -241,6 +242,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
 
         :rtype: SoledadDocument
         """
+        # XXX only upper for INBOX ---
         name = name.upper()
         doc = self._soledad.get_from_index(
             self.TYPE_MBOX_IDX, self.MBOX_KEY, name)
@@ -274,6 +276,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         :returns: a a SoledadMailbox instance
         :rtype: SoledadMailbox
         """
+        # XXX only upper for INBOX
         name = name.upper()
         if name not in self.mailboxes:
             raise imap4.MailboxException("No such mailbox")
@@ -299,6 +302,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         :returns: True if successful
         :rtype: bool
         """
+        # XXX only upper for INBOX
         name = name.upper()
         # XXX should check mailbox name for RFC-compliant form
 
@@ -360,6 +364,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
 
         :rtype: bool
         """
+        # XXX only upper for INBOX
         name = name.upper()
 
         if name not in self.mailboxes:
@@ -385,6 +390,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
                       names. use with care.
         :type force: bool
         """
+        # XXX only upper for INBOX
         name = name.upper()
         if not name in self.mailboxes:
             raise imap4.MailboxException("No such mailbox")
@@ -422,6 +428,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         :param newname: new name of the mailbox
         :type newname: str
         """
+        # XXX only upper for INBOX
         oldname = oldname.upper()
         newname = newname.upper()
 
@@ -487,7 +494,6 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         # maybe we should store subscriptions in another
         # document...
         if not name in self.mailboxes:
-            print "not this mbox"
             self.addMailbox(name)
         mbox = self._get_mailbox_by_name(name)
 
@@ -785,6 +791,7 @@ class LeapMessage(WithMsgFields):
         return dict(filter_by_cond)
 
     # --- no multipart for now
+    # XXX Fix MULTIPART SUPPORT!
 
     def isMultipart(self):
         return False
@@ -967,6 +974,7 @@ class MessageCollection(WithMsgFields, IndexedDB):
         docs = self._soledad.get_from_index(
             SoledadBackedAccount.TYPE_MBOX_UID_IDX,
             self.TYPE_MESSAGE_VAL, self.mbox, str(uid))
+
         return docs[0] if docs else None
 
     def get_msg_by_uid(self, uid):
@@ -984,6 +992,47 @@ class MessageCollection(WithMsgFields, IndexedDB):
         if doc:
             return LeapMessage(doc)
 
+    def get_by_index(self, index):
+        """
+        Retrieves a mesage document by mailbox index.
+
+        :param index: the index of the sequence (zero-indexed)
+        :type index: int
+        """
+        try:
+            return self.get_all()[index]
+        except IndexError:
+            return None
+
+    def get_msg_by_index(self, index):
+        """
+        Retrieves a LeapMessage by sequence index.
+
+        :param index: the index of the sequence (zero-indexed)
+        :type index: int
+        """
+        doc = self.get_by_index(index)
+        if doc:
+            return LeapMessage(doc)
+
+    def is_deleted(self, doc):
+        """
+        Returns whether a given doc is deleted or not.
+
+        :param doc: the document to check
+        :rtype: bool
+        """
+        return self.DELETED_FLAG in doc.content[self.FLAGS_KEY]
+
+    def get_last(self):
+        """
+        Gets the last LeapMessage
+        """
+        _all = self.get_all()
+        if not _all:
+            return None
+        return LeapMessage(_all[-1])
+
     def get_all(self):
         """
         Get all message documents for the selected mailbox.
@@ -993,9 +1042,13 @@ class MessageCollection(WithMsgFields, IndexedDB):
         :rtype: list of SoledadDocument
         """
         # XXX this should return LeapMessage instances
-        return self._soledad.get_from_index(
+        all_docs = [doc for doc in self._soledad.get_from_index(
             SoledadBackedAccount.TYPE_MBOX_IDX,
-            self.TYPE_MESSAGE_VAL, self.mbox)
+            self.TYPE_MESSAGE_VAL, self.mbox)]
+            #if not self.is_deleted(doc)]
+        # highly inneficient, but first let's grok it and then
+        # let's worry about efficiency.
+        return sorted(all_docs, key=lambda item: item.content['uid'])
 
     def unseen_iter(self):
         """
@@ -1075,8 +1128,11 @@ class MessageCollection(WithMsgFields, IndexedDB):
         :return: LeapMessage or None if not found.
         :rtype: LeapMessage
         """
+        #try:
+            #return self.get_msg_by_uid(uid)
         try:
-            return self.get_msg_by_uid(uid)
+            return [doc
+                    for doc in self.get_all()][uid - 1]
         except IndexError:
             return None
 
@@ -1116,7 +1172,7 @@ class SoledadMailbox(WithMsgFields):
     CMD_UIDVALIDITY = "UIDVALIDITY"
     CMD_UNSEEN = "UNSEEN"
 
-    listeners = []
+    _listeners = defaultdict(set)
 
     def __init__(self, mbox, soledad=None, rw=1):
         """
@@ -1150,10 +1206,18 @@ class SoledadMailbox(WithMsgFields):
         if not self.getFlags():
             self.setFlags(self.INIT_FLAGS)
 
-        # the server itself is a listener to the mailbox.
-        # so we can notify it (and should!) after chanes in flags
-        # and number of messages.
-        map(lambda i: self.listeners.remove(i), self.listeners)
+    @property
+    def listeners(self):
+        """
+        Returns listeners for this mbox.
+
+        The server itself is a listener to the mailbox.
+        so we can notify it (and should!) after changes in flags
+        and number of messages.
+
+        :rtype: set
+        """
+        return self._listeners[self.mbox]
 
     def addListener(self, listener):
         """
@@ -1163,7 +1227,7 @@ class SoledadMailbox(WithMsgFields):
         :type listener: an object that implements IMailboxListener
         """
         logger.debug('adding mailbox listener: %s' % listener)
-        self.listeners.append(listener)
+        self.listeners.add(listener)
 
     def removeListener(self, listener):
         """
@@ -1172,25 +1236,24 @@ class SoledadMailbox(WithMsgFields):
         :param listener: listener to remove
         :type listener: an object that implements IMailboxListener
         """
-        logger.debug('removing mailbox listener: %s' % listener)
-        try:
-            self.listeners.remove(listener)
-        except ValueError:
-            logger.error(
-                "removeListener: cannot remove listener %s" % listener)
+        self.listeners.remove(listener)
 
     def _get_mbox(self):
         """
         Returns mailbox document.
 
-        :return: A SoledadDocument containing this mailbox.
-        :rtype: SoledadDocument
+        :return: A SoledadDocument containing this mailbox, or None if
+                 the query failed.
+        :rtype: SoledadDocument or None.
         """
-        query = self._soledad.get_from_index(
-            SoledadBackedAccount.TYPE_MBOX_IDX,
-            self.TYPE_MBOX_VAL, self.mbox)
-        if query:
-            return query.pop()
+        try:
+            query = self._soledad.get_from_index(
+                SoledadBackedAccount.TYPE_MBOX_IDX,
+                self.TYPE_MBOX_VAL, self.mbox)
+            if query:
+                return query.pop()
+        except Exception as exc:
+            logger.error("Unhandled error %r" % exc)
 
     def getFlags(self):
         """
@@ -1287,8 +1350,12 @@ class SoledadMailbox(WithMsgFields):
 
         :rtype: int
         """
-        # XXX reimplement with proper index
-        return self.messages.count() + 1
+        last = self.messages.get_last()
+        if last:
+            nextuid = last.getUID() + 1
+        else:
+            nextuid = 1
+        return nextuid
 
     def getMessageCount(self):
         """
@@ -1375,6 +1442,8 @@ class SoledadMailbox(WithMsgFields):
 
         self.messages.add_msg(message, flags=flags, date=date,
                               uid=uid_next)
+
+        # XXX recent should not include deleted...??
         exists = len(self.messages)
         recent = len(self.messages.get_recent())
         for listener in self.listeners:
@@ -1434,16 +1503,35 @@ class SoledadMailbox(WithMsgFields):
         :rtype: A tuple of two-tuples of message sequence numbers and
                 LeapMessage
         """
-        # XXX implement sequence numbers (uid = 0)
         result = []
+        sequence = True if uid == 0 else False
 
         if not messages.last:
-            messages.last = self.messages.count()
+            try:
+                iter(messages)
+            except TypeError:
+                # looks like we cannot iterate
+                last = self.messages.get_last()
+                uid_last = last.getUID()
+                messages.last = uid_last
 
-        for msg_id in messages:
-            msg = self.messages.get_msg_by_uid(msg_id)
-            if msg:
-                result.append((msg_id, msg))
+        # for sequence numbers (uid = 0)
+        if sequence:
+            for msg_id in messages:
+                msg = self.messages.get_msg_by_index(msg_id - 1)
+                if msg:
+                    result.append((msg.getUID(), msg))
+                else:
+                    print "fetch %s, no msg found!!!" % msg_id
+
+        else:
+            for msg_id in messages:
+                msg = self.messages.get_msg_by_uid(msg_id)
+                if msg:
+                    result.append((msg_id, msg))
+                else:
+                    print "fetch %s, no msg found!!!" % msg_id
+
         return tuple(result)
 
     def _signal_unread_to_ui(self):
