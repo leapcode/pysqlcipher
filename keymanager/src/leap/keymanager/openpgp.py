@@ -35,7 +35,7 @@ from gnupg import GPG
 from gnupg.gnupg import GPGUtilities
 from gnupg._util import _make_binary_stream
 
-from leap.common.check import leap_assert, leap_assert_type
+from leap.common.check import leap_assert, leap_assert_type, leap_check
 from leap.keymanager import errors
 from leap.keymanager.keys import (
     EncryptionKey,
@@ -303,16 +303,22 @@ class OpenPGPScheme(EncryptionScheme):
             raise errors.KeyNotFound(address)
         return build_key_from_dict(OpenPGPKey, address, doc.content)
 
-    def put_ascii_key(self, key_data):
+    def parse_ascii_key(self, key_data):
         """
-        Put key contained in ascii-armored C{key_data} in local storage.
+        Parses an ascii armored key (or key pair) data and returns
+        the OpenPGPKey keys.
 
-        :param key_data: The key data to be stored.
+        :param key_data: the key data to be parsed.
         :type key_data: str or unicode
+
+        :returns: the public key and private key (if applies) for that data.
+        :rtype: (public, private) -> tuple(OpenPGPKey, OpenPGPKey)
+                the tuple may have one or both components None
         """
         leap_assert_type(key_data, (str, unicode))
         # TODO: add more checks for correct key data.
         leap_assert(key_data is not None, 'Data does not represent a key.')
+        mail_regex = '.*<([\w.-]+@[\w.-]+)>.*'
 
         with self._temporary_gpgwrapper() as gpg:
             # TODO: inspect result, or use decorator
@@ -325,31 +331,54 @@ class OpenPGPScheme(EncryptionScheme):
             except IndexError:
                 pass
             pubkey = gpg.list_keys(secret=False).pop()  # unitary keyring
+
             # extract adress from first uid on key
-            match = re.match('.*<([\w.-]+@[\w.-]+)>.*', pubkey['uids'].pop())
+            match = re.match(mail_regex, pubkey['uids'].pop())
             leap_assert(match is not None, 'No user address in key data.')
             address = match.group(1)
+
             if privkey is not None:
-                match = re.match(
-                    '.*<([\w.-]+@[\w.-]+)>.*', privkey['uids'].pop())
+                match = re.match(mail_regex, privkey['uids'].pop())
                 leap_assert(match is not None, 'No user address in key data.')
                 privaddress = match.group(1)
-                leap_assert(
-                    address == privaddress,
-                    'Addresses in pub and priv key differ.')
-                leap_assert(
-                    pubkey['fingerprint'] == privkey['fingerprint'],
-                    'Fingerprints for pub and priv key differ.')
-                # insert private key in storage
+
+                # build private key
                 openpgp_privkey = _build_key_from_gpg(
-                    address, privkey,
+                    privaddress, privkey,
                     gpg.export_keys(privkey['fingerprint'], secret=True))
-                self.put_key(openpgp_privkey)
-            # insert public key in storage
+
+                leap_check(address == privaddress,
+                           'Addresses in public and private key differ.',
+                           errors.KeyAddressMismatch)
+                leap_check(pubkey['fingerprint'] == privkey['fingerprint'],
+                           'Fingerprints for public and private key differ.',
+                           errors.KeyFingerprintMismatch)
+
+            # build public key
             openpgp_pubkey = _build_key_from_gpg(
                 address, pubkey,
                 gpg.export_keys(pubkey['fingerprint'], secret=False))
+
+            return (openpgp_pubkey, openpgp_privkey)
+
+    def put_ascii_key(self, key_data):
+        """
+        Put key contained in ascii-armored C{key_data} in local storage.
+
+        :param key_data: The key data to be stored.
+        :type key_data: str or unicode
+        """
+        leap_assert_type(key_data, (str, unicode))
+
+        try:
+            openpgp_pubkey, openpgp_privkey = self.parse_ascii_key(key_data)
+        except (errors.KeyAddressMismatch, errors.KeyFingerprintMismatch) as e:
+            leap_assert(False, repr(e))
+
+        if openpgp_pubkey is not None:
             self.put_key(openpgp_pubkey)
+        if openpgp_privkey is not None:
+            self.put_key(openpgp_privkey)
 
     def put_key(self, key):
         """
