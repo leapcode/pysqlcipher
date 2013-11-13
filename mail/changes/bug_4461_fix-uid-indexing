@@ -1,0 +1,4 @@
+  o Fix several bugs with imap mailbox getUIDNext and notifiers that were breaking
+    the mail indexing after message deletion. This solves also the perceived
+    mismatch between the number of unread mails reported by bitmask_client and
+    the number reported by MUAs. Closes: #4461

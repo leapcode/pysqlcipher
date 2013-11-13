@@ -141,16 +141,19 @@ class LeapIncomingMail(object):
         """
         Starts a loop to fetch mail.
         """
-        self._loop = LoopingCall(self.fetch)
-        self._loop.start(self._check_period)
+        if self._loop is None:
+            self._loop = LoopingCall(self.fetch)
+            self._loop.start(self._check_period)
+        else:
+            logger.warning("Tried to start an already running fetching loop.")
 
     def stop(self):
         """
         Stops the loop that fetches mail.
         """
-        # XXX should cancel ongoing fetches too.
         if self._loop and self._loop.running is True:
             self._loop.stop()
+            self._loop = None
 
     #
     # Private methods.
@@ -214,7 +217,7 @@ class LeapIncomingMail(object):
         Generic errback
         """
         err = failure.value
-        logger.error("error!: %r" % (err,))
+        logger.exception("error!: %r" % (err,))
 
     def _decryption_error(self, failure):
         """
