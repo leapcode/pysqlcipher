@@ -84,3 +84,15 @@ class SignFailed(Exception):
     Raised when failed to sign.
     """
     pass
+
+
+class KeyAddressMismatch(Exception):
+    """
+    A mismatch between addresses.
+    """
+
+
+class KeyFingerprintMismatch(Exception):
+    """
+    A mismatch between fingerprints.
+    """
