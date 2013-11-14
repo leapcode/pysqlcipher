@@ -1,0 +1,2 @@
+  o New openpgp method: parse_ascii_keys.
+  o Expose openpgp methods in keymanager (parse_ascii_keys, put_key, delete_key).
