@@ -424,10 +424,14 @@ class OpenPGPScheme(EncryptionScheme):
         """
         Remove C{key} from storage.
 
+        May raise:
+            errors.KeyNotFound
+            errors.KeyAttributesDiffer
+
         :param key: The key to be removed.
         :type key: EncryptionKey
         """
-        leap_assert(key.__class__ is OpenPGPKey, 'Wrong key type.')
+        leap_assert_type(key, OpenPGPKey)
         stored_key = self.get_key(key.address, private=key.private)
         if stored_key is None:
             raise errors.KeyNotFound(key)
