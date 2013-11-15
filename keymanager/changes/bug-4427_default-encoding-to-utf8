@@ -1,2 +1,0 @@
-  o Default encoding to 'utf-8' in case of system encodings not set. Closes
-    #4427.

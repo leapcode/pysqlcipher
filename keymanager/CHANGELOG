@@ -1,3 +1,11 @@
+0.3.6 Nov 15:
+  o Default encoding to 'utf-8' in case of system encodings not
+    set. Closes #4427.
+  o Add verification of detached signatures. Closes #4375.
+  o New openpgp method: parse_ascii_keys.
+  o Expose openpgp methods in keymanager (parse_ascii_keys, put_key,
+    delete_key).
+
 0.3.5 Nov 1:
   o Return unicode decrypted text to avoid encoding issues. Related to
     #4000.
