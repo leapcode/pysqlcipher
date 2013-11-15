@@ -17,7 +17,7 @@
 
 
 """
-Base classes and keys for SMTP relay tests.
+Base classes and keys for SMTP gateway tests.
 """
 
 import os
@@ -59,7 +59,7 @@ class TestCaseWithKeyManager(BaseLeapTest):
         # setup our own stuff
         address = 'leap@leap.se'  # user's address in the form user@provider
         uuid = 'leap@leap.se'
-        passphrase = '123'
+        passphrase = u'123'
         secrets_path = os.path.join(self.tempdir, 'secret.gpg')
         local_db_path = os.path.join(self.tempdir, 'soledad.u1db')
         server_url = 'http://provider/'
@@ -88,6 +88,8 @@ class TestCaseWithKeyManager(BaseLeapTest):
 
             get_doc = Mock(return_value=None)
             put_doc = Mock(side_effect=_put_doc_side_effect)
+            lock = Mock(return_value=('atoken', 300))
+            unlock = Mock(return_value=True)
 
             def __call__(self):
                 return self
