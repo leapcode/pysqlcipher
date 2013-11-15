@@ -1,3 +1,23 @@
+0.3.7 Nov 15:
+  o Uses deferToThread for sendMail. Closes #3937
+  o Update pkey to allow multiple accounts. Solves: #4394
+  o Change SMTP service name from "relay" to "gateway". Closes #4416.
+  o Identify ourselves with a fqdn, always. Closes: #4441
+  o Remove 'multipart/encrypted' header after decrypting incoming
+    mail. Closes #4454.
+  o Fix several bugs with imap mailbox getUIDNext and notifiers that
+    were breaking the mail indexing after message deletion. This
+    solves also the perceived mismatch between the number of unread
+    mails reported by bitmask_client and the number reported by
+    MUAs. Closes: #4461
+  o Check username in authentications. Closes: #4299
+  o Reject senders that aren't the user that is currently logged
+    in. Fixes #3952.
+  o Prevent already encrypted outgoing messages from being encrypted
+    again. Closes #4324.
+  o Correctly handle email headers when gatewaying messages. Also add
+    OpenPGP header. Closes #4322 and #4447.
+
 0.3.6 Nov 1:
   o Add support for non-ascii characters in emails. Closes #4000.
   o Default to UTF-8 when there is no charset parsed from the mail
@@ -23,7 +43,8 @@
 
 0.3.2 Sep 6:
   o Make mail services bind to 127.0.0.1. Closes: #3627.
-  o Signal unread message to UI when message is saved locally. Closes: #3654.
+  o Signal unread message to UI when message is saved locally. Closes:
+    #3654.
   o Signal unread to UI when flag in message change. Closes: #3662.
   o Use dirspec instead of plain xdg. Closes #3574.
   o SMTP service invocation returns factory instance.

@@ -1,2 +1,0 @@
-  o Correctly handle email headers when gatewaying messages. Also add
-    OpenPGP header. Closes #4322 and #4447.
