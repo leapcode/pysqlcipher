@@ -473,15 +473,18 @@ class KeyManager(object):
             data, privkey, digest_algo=digest_algo, clearsign=clearsign,
             detach=detach, binary=binary)
 
-    def verify(self, data, pubkey):
+    def verify(self, data, pubkey, detached_sig=None):
         """
-        Verify signed C{data} with C{pubkey}.
+        Verify signed C{data} with C{pubkey}, eventually using
+        C{detached_sig}.
 
         :param data: The data to be verified.
         :type data: str
-
         :param pubkey: The public key to be used on verification.
         :type pubkey: EncryptionKey
+        :param detached_sig: A detached signature. If given, C{data} is
+                             verified using this detached signature.
+        :type detached_sig: str
 
         :return: The signed data.
         :rtype: str
@@ -489,7 +492,50 @@ class KeyManager(object):
         leap_assert_type(pubkey, EncryptionKey)
         leap_assert(pubkey.__class__ in self._wrapper_map, 'Unknown key type.')
         leap_assert(pubkey.private is False, 'Key is not public.')
-        return self._wrapper_map[pubkey.__class__].verify(data, pubkey)
+        return self._wrapper_map[pubkey.__class__].verify(
+            data, pubkey, detached_sig=detached_sig)
+
+    def parse_openpgp_ascii_key(self, key_data):
+        """
+        Parses an ascii armored key (or key pair) data and returns
+        the OpenPGPKey keys.
+
+        :param key_data: the key data to be parsed.
+        :type key_data: str or unicode
+
+        :returns: the public key and private key (if applies) for that data.
+        :rtype: (public, private) -> tuple(OpenPGPKey, OpenPGPKey)
+                the tuple may have one or both components None
+        """
+        return self._wrapper_map[OpenPGPKey].parse_ascii_key(key_data)
+
+    def delete_key(self, key):
+        """
+        Remove C{key} from storage.
+
+        May raise:
+            openpgp.errors.KeyNotFound
+            openpgp.errors.KeyAttributesDiffer
+
+        :param key: The key to be removed.
+        :type key: EncryptionKey
+        """
+        try:
+            self._wrapper_map[type(key)].delete_key(key)
+        except IndexError as e:
+            leap_assert(False, "Unsupported key type. Error {0!r}".format(e))
+
+    def put_key(self, key):
+        """
+        Put C{key} in local storage.
+
+        :param key: The key to be stored.
+        :type key: OpenPGPKey
+        """
+        try:
+            self._wrapper_map[type(key)].put_key(key)
+        except IndexError as e:
+            leap_assert(False, "Unsupported key type. Error {0!r}".format(e))
 
 from ._version import get_versions
 __version__ = get_versions()['version']
