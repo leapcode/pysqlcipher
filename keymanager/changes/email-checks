@@ -1,0 +1,3 @@
+  o Remove address check when sending email and rely in the email client to
+    verify that is correct. Closes #4491.
+  o Support sending encrypted mails to addresses using the '+' sign.
