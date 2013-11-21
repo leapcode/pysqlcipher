@@ -1,0 +1,2 @@
+  o Add a header to incoming emails that reflects if a valid signature was
+    found when decrypting. Closes #4354.

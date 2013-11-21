@@ -923,7 +923,6 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         """
         self.server.theAccount.addMailbox('test-mailbox-e',
                                           creation_ts=42)
-        #import ipdb; ipdb.set_trace()
 
         self.examinedArgs = None
 
@@ -1108,16 +1107,15 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         mb = SimpleLEAPServer.theAccount.getMailbox('ROOT/SUBTHING')
         self.assertEqual(1, len(mb.messages))
 
-        #import ipdb; ipdb.set_trace()
         self.assertEqual(
             ['\\SEEN', '\\DELETED'],
-            mb.messages[1]['flags'])
+            mb.messages[1].content['flags'])
 
         self.assertEqual(
             'Tue, 17 Jun 2003 11:22:16 -0600 (MDT)',
-            mb.messages[1]['date'])
+            mb.messages[1].content['date'])
 
-        self.assertEqual(open(infile).read(), mb.messages[1]['raw'])
+        self.assertEqual(open(infile).read(), mb.messages[1].content['raw'])
 
     def testPartialAppend(self):
         """
@@ -1152,11 +1150,11 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         self.assertEqual(1, len(mb.messages))
         self.assertEqual(
             ['\\SEEN',],
-            mb.messages[1]['flags']
+            mb.messages[1].content['flags']
         )
         self.assertEqual(
-            'Right now', mb.messages[1]['date'])
-        self.assertEqual(open(infile).read(), mb.messages[1]['raw'])
+            'Right now', mb.messages[1].content['date'])
+        self.assertEqual(open(infile).read(), mb.messages[1].content['raw'])
 
     def testCheck(self):
         """
@@ -1214,7 +1212,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
     def _cbTestClose(self, ignored, m):
         self.assertEqual(len(m.messages), 1)
         self.assertEqual(
-            m.messages[1]['subject'],
+            m.messages[1].content['subject'],
             'Message 2')
 
         self.failUnless(m.closed)
@@ -1257,7 +1255,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
     def _cbTestExpunge(self, ignored, m):
         self.assertEqual(len(m.messages), 1)
         self.assertEqual(
-            m.messages[1]['subject'],
+            m.messages[1].content['subject'],
             'Message 2')
         self.assertEqual(self.results, [0, 1])
         # XXX fix this thing with the indexes...
