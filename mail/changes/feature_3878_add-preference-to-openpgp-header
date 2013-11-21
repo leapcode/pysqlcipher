@@ -1,0 +1,2 @@
+  o Add 'signencrypt' preference to OpenPGP header on outgoing email. Closes
+    #3878".

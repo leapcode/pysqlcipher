@@ -683,6 +683,7 @@ class EncryptedMessage(object):
         username, domain = signkey.address.split('@')
         newmsg.add_header(
             'OpenPGP', 'id=%s' % signkey.key_id,
-            url='https://%s/key/%s' % (domain, username))
+            url='https://%s/key/%s' % (domain, username),
+            preference='signencrypt')
         # delete user-agent from origmsg
         del(origmsg['user-agent'])
