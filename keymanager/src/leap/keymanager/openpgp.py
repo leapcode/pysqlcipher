@@ -297,7 +297,6 @@ class OpenPGPScheme(EncryptionScheme):
         :rtype: OpenPGPKey
         @raise KeyNotFound: If the key was not found on local storage.
         """
-        leap_assert(is_address(address), 'Not an user address: %s' % address)
         doc = self._get_key_doc(address, private)
         if doc is None:
             raise errors.KeyNotFound(address)
