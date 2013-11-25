@@ -471,14 +471,18 @@ class OpenPGPScheme(EncryptionScheme):
     def _assert_gpg_result_ok(result):
         """
         Check if GPG result is 'ok' and log stderr outputs.
-        :param result: The GPG results
-        :type result:
+
+        :param result: GPG results, which have a field calld 'ok' that states
+                       whether the gpg operation was successful or not.
+        :type result: object
+
+        :raise GPGError: Raised when the gpg operation was not successful.
         """
         stderr = getattr(result, 'stderr', None)
         if stderr:
             logger.debug("%s" % (stderr,))
         if getattr(result, 'ok', None) is not True:
-            raise errors.EncryptionDecryptionFailed(
+            raise errors.GPGError(
                 'Failed to encrypt/decrypt: %s' % stderr)
 
     def encrypt(self, data, pubkey, passphrase=None, sign=None,
@@ -497,6 +501,8 @@ class OpenPGPScheme(EncryptionScheme):
 
         :return: The encrypted data.
         :rtype: str
+
+        :raise EncryptError: Raised if failed encrypting for some reason.
         """
         leap_assert_type(pubkey, OpenPGPKey)
         leap_assert(pubkey.private is False, 'Key is not public.')
@@ -515,8 +521,12 @@ class OpenPGPScheme(EncryptionScheme):
             # in the ciphertext.
             # result.ok    - (bool) indicates if the operation succeeded
             # result.data  - (bool) contains the result of the operation
-            self._assert_gpg_result_ok(result)
-            return result.data
+            try:
+                self._assert_gpg_result_ok(result)
+                return result.data
+            except errors.GPGError as e:
+                logger.error('Failed to decrypt: %s.' % str(e))
+                raise error.EncryptError()
 
     def decrypt(self, data, privkey, passphrase=None, verify=None):
         """
@@ -535,8 +545,9 @@ class OpenPGPScheme(EncryptionScheme):
         :return: The decrypted data.
         :rtype: unicode
 
-        @raise InvalidSignature: Raised if unable to verify the signature with
-            C{verify} key.
+        :raise DecryptError: Raised if failed decrypting for some reason.
+        :raise InvalidSignature: Raised if unable to verify the signature with
+                                 C{verify} key.
         """
         leap_assert(privkey.private is True, 'Key is not private.')
         keys = [privkey]
@@ -545,26 +556,31 @@ class OpenPGPScheme(EncryptionScheme):
             leap_assert(verify.private is False)
             keys.append(verify)
         with self._temporary_gpgwrapper(keys) as gpg:
-            result = gpg.decrypt(
-                data, passphrase=passphrase, always_trust=True)
-            self._assert_gpg_result_ok(result)
-            # verify signature
-            if (verify is not None):
-                if result.valid is False or \
-                        verify.fingerprint != result.pubkey_fingerprint:
-                    raise errors.InvalidSignature(
-                        'Failed to verify signature with key %s: %s' %
-                        (verify.key_id, result.stderr))
+            try:
+                result = gpg.decrypt(
+                    data, passphrase=passphrase, always_trust=True)
+                self._assert_gpg_result_ok(result)
+                # verify signature
+                if (verify is not None):
+                    if result.valid is False or \
+                            verify.fingerprint != result.pubkey_fingerprint:
+                        raise errors.InvalidSignature(
+                            'Failed to verify signature with key %s: %s' %
+                            (verify.key_id, result.stderr))
 
-            # XXX: this is the encoding used by gpg module
-            # https://github.com/isislovecruft/python-gnupg/\
-            #   blob/master/gnupg/_meta.py#L121
-            encoding = locale.getpreferredencoding()
-            if encoding is None:
-                encoding = sys.stdin.encoding
-            if encoding is None:
-                encoding = 'utf-8'
-            return result.data.decode(encoding, 'replace')
+                # XXX: this is the encoding used by gpg module
+                # https://github.com/isislovecruft/python-gnupg/\
+                #   blob/master/gnupg/_meta.py#L121
+                encoding = locale.getpreferredencoding()
+                if encoding is None:
+                    encoding = sys.stdin.encoding
+                if encoding is None:
+                    encoding = 'utf-8'
+                return result.data.decode(encoding, 'replace')
+            except errors.GPGError as e:
+                logger.error('Failed to decrypt: %s.' % str(e))
+                raise errors.DecryptError(str(e))
+
 
     def is_encrypted(self, data):
         """
