@@ -333,6 +333,8 @@ class EncryptedMessage(object):
     """
     implements(smtp.IMessage)
 
+    FOOTER_STRING = "I prefer encrypted email"
+
     def __init__(self, fromAddress, user, keymanager, host, port, cert, key):
         """
         Initialize the encrypted message.
@@ -597,7 +599,16 @@ class EncryptedMessage(object):
             self._msg = self._origmsg
             return
 
+        # add a nice footer to the outgoing message
         from_address = validate_address(self._fromAddress.addrstr)
+        username, domain = from_address.split('@')
+        self.lines.append('--')
+        self.lines.append('%s - https://%s/key/%s.' %
+                          (self.FOOTER_STRING, domain, username))
+        self.lines.append('')
+        self._origmsg = self.parseMessage()
+
+        # get sender and recipient data
         signkey = self._km.get_key(from_address, OpenPGPKey, private=True)
         log.msg("Will sign the message with %s." % signkey.fingerprint)
         to_address = validate_address(self._user.dest.addrstr)
@@ -672,6 +683,7 @@ class EncryptedMessage(object):
         username, domain = signkey.address.split('@')
         newmsg.add_header(
             'OpenPGP', 'id=%s' % signkey.key_id,
-            url='https://%s/openpgp/%s' % (domain, username))
+            url='https://%s/key/%s' % (domain, username),
+            preference='signencrypt')
         # delete user-agent from origmsg
         del(origmsg['user-agent'])

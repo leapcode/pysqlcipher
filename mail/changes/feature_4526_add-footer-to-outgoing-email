@@ -1,0 +1,2 @@
+  o Add a footer to outgoing email pointing to the address where sender keys
+    can be fetched. Closes #4526.
