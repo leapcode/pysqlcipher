@@ -324,7 +324,7 @@ class LeapIncomingMail(object):
             success = True
         except Exception as exc:
             # XXX move this to errback !!!
-            logger.warning("Error while decrypting msg: %r" % (exc,))
+            logger.error("Error while decrypting msg: %r" % (exc,))
             decrdata = ""
         leap_events.signal(IMAP_MSG_DECRYPTED, "1" if success else "0")
         return doc, decrdata
@@ -352,12 +352,8 @@ class LeapIncomingMail(object):
         rawmsg = msg.get(self.CONTENT_KEY, None)
         if not rawmsg:
             return False
-        try:
-            data = self._maybe_decrypt_msg(rawmsg)
-            return doc, data
-        except keymanager_errors.EncryptionDecryptionFailed as exc:
-            logger.error(exc)
-            raise
+        data = self._maybe_decrypt_msg(rawmsg)
+        return doc, data
 
     def _maybe_decrypt_msg(self, data):
         """
@@ -444,9 +440,15 @@ class LeapIncomingMail(object):
         # parse message and get encrypted content
         pgpencmsg = msg.get_payload()[1]
         encdata = pgpencmsg.get_payload()
-        # decrypt and parse decrypted message
-        decrdata, valid_sig = self._decrypt_and_verify_data(
-            encdata, senderPubkey)
+        # decrypt or fail gracefully
+        try:
+            decrdata, valid_sig = self._decrypt_and_verify_data(
+                encdata, senderPubkey)
+        except keymanager_errors.DecryptError as e:
+            logger.warning('Failed to decrypt encrypted message (%s). '
+                           'Storing message without modifications.' % str(e))
+            return msg, False  # return original message
+        # decrypted successully, now fix encoding and parse
         try:
             decrdata = decrdata.encode(encoding)
         except (UnicodeEncodeError, UnicodeDecodeError) as e:
@@ -495,10 +497,14 @@ class LeapIncomingMail(object):
             begin = data.find(PGP_BEGIN)
             end = data.find(PGP_END)
             pgp_message = data[begin:end+len(PGP_END)]
-            decrdata, valid_sig = self._decrypt_and_verify_data(
-                pgp_message, senderPubkey)
-            # replace encrypted by decrypted content
-            data = data.replace(pgp_message, decrdata)
+            try:
+                decrdata, valid_sig = self._decrypt_and_verify_data(
+                    pgp_message, senderPubkey)
+                # replace encrypted by decrypted content
+                data = data.replace(pgp_message, decrdata)
+            except keymanager_errors.DecryptError:
+                logger.warning('Failed to decrypt potential inline encrypted '
+                               'message. Storing message as is...')
         # if message is not encrypted, return raw data
         if isinstance(data, unicode):
             data = data.encode(encoding, 'replace')
@@ -518,6 +524,8 @@ class LeapIncomingMail(object):
         :return: The decrypted data and a boolean stating whether the
                  signature could be verified.
         :rtype: (str, bool)
+
+        :raise DecryptError: Raised if failed to decrypt.
         """
         valid_sig = False
         try:
