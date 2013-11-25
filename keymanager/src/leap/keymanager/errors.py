@@ -58,21 +58,21 @@ class InvalidSignature(Exception):
     pass
 
 
-class EncryptionFailed(Exception):
+class EncryptError(Exception):
     """
     Raised upon failures of encryption.
     """
     pass
 
 
-class DecryptionFailed(Exception):
+class DecryptError(Exception):
     """
     Raised upon failures of decryption.
     """
     pass
 
 
-class EncryptionDecryptionFailed(Exception):
+class GPGError(Exception):
     """
     Raised upon failures of encryption/decryption.
     """
