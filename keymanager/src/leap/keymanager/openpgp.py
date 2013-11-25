@@ -341,6 +341,7 @@ class OpenPGPScheme(EncryptionScheme):
             leap_assert(match is not None, 'No user address in key data.')
             address = match.group(1)
 
+            openpgp_privkey = None
             if privkey is not None:
                 match = re.match(mail_regex, privkey['uids'].pop())
                 leap_assert(match is not None, 'No user address in key data.')
@@ -374,6 +375,7 @@ class OpenPGPScheme(EncryptionScheme):
         """
         leap_assert_type(key_data, (str, unicode))
 
+        openpgp_privkey = None
         try:
             openpgp_pubkey, openpgp_privkey = self.parse_ascii_key(key_data)
         except (errors.KeyAddressMismatch, errors.KeyFingerprintMismatch) as e:
@@ -524,6 +526,9 @@ class OpenPGPScheme(EncryptionScheme):
         :type data: str
         :param privkey: The key used to decrypt.
         :type privkey: OpenPGPKey
+        :param passphrase: The passphrase for the secret key used for
+                           decryption.
+        :type passphrase: str
         :param verify: The key used to verify a signature.
         :type verify: OpenPGPKey
 
@@ -549,7 +554,7 @@ class OpenPGPScheme(EncryptionScheme):
                         verify.fingerprint != result.pubkey_fingerprint:
                     raise errors.InvalidSignature(
                         'Failed to verify signature with key %s: %s' %
-                        (verify.key_id, stderr))
+                        (verify.key_id, result.stderr))
 
             # XXX: this is the encoding used by gpg module
             # https://github.com/isislovecruft/python-gnupg/\
@@ -612,7 +617,7 @@ class OpenPGPScheme(EncryptionScheme):
             if result.fingerprint is None:
                 raise errors.SignFailed(
                     'Failed to sign with key %s: %s' %
-                    (privkey['keyid'], stderr))
+                    (privkey['keyid'], result.stderr))
             leap_assert(
                 result.fingerprint == kfprint,
                 'Signature and private key fingerprints mismatch: '
