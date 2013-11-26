@@ -1512,7 +1512,10 @@ class SoledadMailbox(WithMsgFields):
             except TypeError:
                 # looks like we cannot iterate
                 last = self.messages.get_last()
-                uid_last = last.getUID()
+                if last is None:
+                    uid_last = 1
+                else:
+                    uid_last = last.getUID()
                 messages.last = uid_last
 
         # for sequence numbers (uid = 0)
