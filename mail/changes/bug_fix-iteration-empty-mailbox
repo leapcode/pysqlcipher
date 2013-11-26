@@ -1,0 +1,1 @@
+  o Allow to iterate in an empty mailbox during fetch. Closes: #4603

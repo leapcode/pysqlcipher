@@ -1,0 +1,1 @@
+  o Fix a bug when adding a message with empty flags. Closes: #4496
