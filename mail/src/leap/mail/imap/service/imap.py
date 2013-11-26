@@ -41,7 +41,7 @@ IMAP_PORT = 1984
 
 # The period between succesive checks of the incoming mail
 # queue (in seconds)
-INCOMING_CHECK_PERIOD = 300
+INCOMING_CHECK_PERIOD = 60
 
 from leap.common.events.events_pb2 import IMAP_SERVICE_STARTED
 from leap.common.events.events_pb2 import IMAP_SERVICE_FAILED_TO_START
