@@ -1438,12 +1438,14 @@ class SoledadMailbox(WithMsgFields):
         """
         # XXX we should treat the message as an IMessage from here
         uid_next = self.getUIDNext()
-        flags = tuple(str(flag) for flag in flags)
+        if flags is None:
+            flags = tuple()
+        else:
+            flags = tuple(str(flag) for flag in flags)
 
         self.messages.add_msg(message, flags=flags, date=date,
                               uid=uid_next)
 
-        # XXX recent should not include deleted...??
         exists = len(self.messages)
         recent = len(self.messages.get_recent())
         for listener in self.listeners:
