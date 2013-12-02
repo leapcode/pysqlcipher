@@ -1,0 +1,2 @@
+  o Serialize Soledad Writes for new messages. Fixes segmentation fault when sqlcipher was
+    been concurrently accessed from many threads. Closes: #4606

@@ -61,7 +61,15 @@ class MalformedMessage(Exception):
 
 class LeapIncomingMail(object):
     """
-    Fetches mail from the incoming queue.
+    Fetches and process mail from the incoming pool.
+
+    This object has public methods start_loop and stop that will
+    actually initiate a LoopingCall with check_period recurrency.
+    The LoopingCall itself will invoke the fetch method each time
+    that the check_period expires.
+
+    This loop will sync the soledad db with the remote server and
+    process all the documents found tagged as incoming mail.
     """
 
     RECENT_FLAG = "\\Recent"
@@ -85,7 +93,7 @@ class LeapIncomingMail(object):
                  check_period, userid):
 
         """
-        Initialize LeapIMAP.
+        Initialize LeapIncomingMail..
 
         :param keymanager: a keymanager instance
         :type keymanager: keymanager.KeyManager
@@ -162,6 +170,7 @@ class LeapIncomingMail(object):
             logger.warning("Tried to start an already running fetching loop.")
 
     def stop(self):
+        # XXX change the name to stop_loop, for consistency.
         """
         Stops the loop that fetches mail.
         """
@@ -185,7 +194,9 @@ class LeapIncomingMail(object):
         with self.fetching_lock:
             log.msg('syncing soledad...')
             self._soledad.sync()
+            log.msg('soledad synced.')
             doclist = self._soledad.get_from_index("just-mail", "*")
+
         return doclist
 
     def _signal_unread_to_ui(self):
@@ -249,6 +260,8 @@ class LeapIncomingMail(object):
         err = failure.value
         logger.error("error saving msg locally: %s" % (err,))
 
+    # process incoming mail.
+
     def _process_doclist(self, doclist):
         """
         Iterates through the doclist, checks if each doc
@@ -267,7 +280,7 @@ class LeapIncomingMail(object):
 
         docs_cb = []
         for index, doc in enumerate(doclist):
-            logger.debug("processing doc %d of %d" % (index, num_mails))
+            logger.debug("processing doc %d of %d" % (index + 1, num_mails))
             leap_events.signal(
                 IMAP_MSG_PROCESSING, str(index), str(num_mails))
             keys = doc.content.keys()
@@ -275,15 +288,13 @@ class LeapIncomingMail(object):
                 # Ok, this looks like a legit msg.
                 # Let's process it!
                 # Deferred chain for individual messages
+
+                # XXX use an IConsumer instead... ?
                 d = deferToThread(self._decrypt_doc, doc)
                 d.addCallback(self._process_decrypted_doc)
                 d.addErrback(self._log_err)
                 d.addCallback(self._add_message_locally)
                 d.addErrback(self._log_err)
-                # XXX check this, add_locally should not get called if we
-                # get an error in process
-                #d.addCallbacks(self._process_decrypted, self._decryption_error)
-                #d.addCallbacks(self._add_message_locally, self._saving_error)
                 docs_cb.append(d)
             else:
                 # Ooops, this does not.
@@ -317,6 +328,7 @@ class LeapIncomingMail(object):
         """
         log.msg('decrypting msg')
         success = False
+
         try:
             decrdata = self._keymanager.decrypt(
                 doc.content[ENC_JSON_KEY],
@@ -341,6 +353,7 @@ class LeapIncomingMail(object):
         :return: a SoledadDocument and the processed data.
         :rtype: (doc, data)
         """
+        log.msg('processing decrypted doc')
         doc, data = msgtuple
         msg = json.loads(data)
         if not isinstance(msg, dict):
@@ -364,6 +377,7 @@ class LeapIncomingMail(object):
         :return: data, possibly descrypted.
         :rtype: str
         """
+        log.msg('maybe decrypting doc')
         leap_assert_type(data, unicode)
 
         # parse the original message
@@ -384,7 +398,6 @@ class LeapIncomingMail(object):
                 pass
 
         valid_sig = False  # we will add a header saying if sig is valid
-        decrdata = ''
         if msg.get_content_type() == 'multipart/encrypted':
             decrmsg, valid_sig = self._decrypt_multipart_encrypted_msg(
                 msg, encoding, senderPubkey)
@@ -400,7 +413,7 @@ class LeapIncomingMail(object):
         else:
             decrmsg.add_header(
                 self.LEAP_SIGNATURE_HEADER,
-                self.LEAP_SIGNATURE_VALID if valid_sig else \
+                self.LEAP_SIGNATURE_VALID if valid_sig else
                 self.LEAP_SIGNATURE_INVALID,
                 pubkey=senderPubkey.key_id)
 
@@ -420,6 +433,7 @@ class LeapIncomingMail(object):
         :return: A unitary tuple containing a decrypted message.
         :rtype: (Message)
         """
+        log.msg('decrypting multipart encrypted msg')
         msg = copy.deepcopy(msg)
         # sanity check
         payload = msg.get_payload()
@@ -470,7 +484,7 @@ class LeapIncomingMail(object):
         return msg, valid_sig
 
     def _maybe_decrypt_inline_encrypted_msg(self, origmsg, encoding,
-                                                senderPubkey):
+                                            senderPubkey):
         """
         Possibly decrypt an inline OpenPGP encrypted message.
 
@@ -484,6 +498,7 @@ class LeapIncomingMail(object):
         :return: A unitary tuple containing a decrypted message.
         :rtype: (Message)
         """
+        log.msg('maybe decrypting inline encrypted msg')
         # serialize the original message
         buf = StringIO()
         g = Generator(buf)
@@ -527,6 +542,7 @@ class LeapIncomingMail(object):
 
         :raise DecryptError: Raised if failed to decrypt.
         """
+        log.msg('decrypting and verifying data')
         valid_sig = False
         try:
             decrdata = self._keymanager.decrypt(
@@ -550,6 +566,7 @@ class LeapIncomingMail(object):
                          incoming message
         :type msgtuple: (SoledadDocument, str)
         """
+        log.msg('adding message to local db')
         doc, data = msgtuple
         self._inbox.addMessage(data, (self.RECENT_FLAG,))
         leap_events.signal(IMAP_MSG_SAVED_LOCALLY)
