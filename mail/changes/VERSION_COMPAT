@@ -8,4 +8,5 @@
 #
 # BEGIN DEPENDENCY LIST -------------------------
 # leap.foo.bar>=x.y.z
+leap.soledad.client 0.5.0 # get_count_by_index
 

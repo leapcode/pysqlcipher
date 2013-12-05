@@ -370,8 +370,11 @@ class IMAP4HelperMixin(BaseLeapTest):
     def _ebGeneral(self, failure):
         self.client.transport.loseConnection()
         self.server.transport.loseConnection()
-        log.err(failure, "Problem with %r" % (self.function,))
-        failure.trap(Exception)
+        # can we do something similar?
+        # I guess this was ok with trial, but not in noseland...
+        #log.err(failure, "Problem with %r" % (self.function,))
+        raise failure.value
+        #failure.trap(Exception)
 
     def loopback(self):
         return loopback.loopbackAsync(self.server, self.client)
@@ -393,7 +396,7 @@ class MessageCollectionTestCase(IMAP4HelperMixin, unittest.TestCase):
         We override mixin method since we are only testing
         MessageCollection interface in this particular TestCase
         """
-        self.messages = MessageCollection("testmbox", self._soledad._db)
+        self.messages = MessageCollection("testmbox", self._soledad)
         for m in self.messages.get_all():
             self.messages.remove(m)
 
@@ -429,7 +432,6 @@ class MessageCollectionTestCase(IMAP4HelperMixin, unittest.TestCase):
         """
         Add multiple messages
         """
-        # XXX watch out! we're serializing with a delay...
         mc = self.messages
         self.assertEqual(self.messages.count(), 0)
         mc.add_msg('Stuff', subject="test1")
@@ -440,6 +442,38 @@ class MessageCollectionTestCase(IMAP4HelperMixin, unittest.TestCase):
         self.assertEqual(self.messages.count(), 3)
         mc.add_msg('Stuff', subject="test4")
         self.assertEqual(self.messages.count(), 4)
+        mc.add_msg('Stuff', subject="test5")
+        mc.add_msg('Stuff', subject="test6")
+        mc.add_msg('Stuff', subject="test7")
+        mc.add_msg('Stuff', subject="test8")
+        mc.add_msg('Stuff', subject="test9")
+        mc.add_msg('Stuff', subject="test10")
+        self.assertEqual(self.messages.count(), 10)
+
+    def testRecentCount(self):
+        """
+        Test the recent count
+        """
+        mc = self.messages
+        self.assertEqual(self.messages.count_recent(), 0)
+        mc.add_msg('Stuff', subject="test1", uid=1)
+        # For the semantics defined in the RFC, we auto-add the
+        # recent flag by default.
+        self.assertEqual(self.messages.count_recent(), 1)
+        mc.add_msg('Stuff', subject="test2", uid=2, flags=('\\Deleted',))
+        self.assertEqual(self.messages.count_recent(), 2)
+        mc.add_msg('Stuff', subject="test3", uid=3, flags=('\\Recent',))
+        self.assertEqual(self.messages.count_recent(), 3)
+        mc.add_msg('Stuff', subject="test4", uid=4,
+                   flags=('\\Deleted', '\\Recent'))
+        self.assertEqual(self.messages.count_recent(), 4)
+
+        for m in mc:
+            msg = self.messages.get_msg_by_uid(m.get('uid'))
+            msg_newflags = msg.removeFlags(('\\Recent',))
+            self._soledad.put_doc(msg_newflags)
+
+        self.assertEqual(mc.count_recent(), 0)
 
     def testFilterByMailbox(self):
         """
