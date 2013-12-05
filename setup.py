@@ -21,8 +21,6 @@
 # 2. Altered source versions must be plainly marked as such, and must not be
 #    misrepresented as being the original software.
 # 3. This notice may not be removed or altered from any source distribution.
-
-import glob
 import os
 import re
 import sys
@@ -47,8 +45,8 @@ sqlite = "sqlite"
 
 PYSQLITE_EXPERIMENTAL = False
 
-#DEV_VERSION = None
-DEV_VERSION = "02"
+DEV_VERSION = None
+#DEV_VERSION = "02"
 
 sources = ["src/module.c", "src/connection.c", "src/cursor.c", "src/cache.c",
            "src/microprotocols.c", "src/prepare_protocol.c", "src/statement.c",
