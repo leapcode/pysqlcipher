@@ -1,3 +1,10 @@
+0.3.7 Dec 6:
+  o Fix error return values on openpgp backend.
+  o Remove address check when sending email and rely in the email
+    client to verify that is correct. Closes #4491.
+  o Support sending encrypted mails to addresses using the '+' sign.
+  o Improve exception names and handling.
+
 0.3.6 Nov 15:
   o Default encoding to 'utf-8' in case of system encodings not
     set. Closes #4427.

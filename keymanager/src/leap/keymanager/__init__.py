@@ -425,6 +425,9 @@ class KeyManager(object):
         :type data: str
         :param privkey: The key used to decrypt.
         :type privkey: OpenPGPKey
+        :param passphrase: The passphrase for the secret key used for
+                           decryption.
+        :type passphrase: str
         :param verify: The key used to verify a signature.
         :type verify: OpenPGPKey
 
