@@ -21,7 +21,7 @@ from twisted.python import log
 
 
 class TrivialPrompter(basic.LineReceiver):
-    #from os import linesep as delimiter
+    # from os import linesep as delimiter
 
     promptDeferred = None
 
@@ -42,6 +42,7 @@ class TrivialPrompter(basic.LineReceiver):
 
 
 class SimpleIMAP4Client(imap4.IMAP4Client):
+
     """
     Add callbacks when the client receives greeting messages from
     an IMAP server.
@@ -98,8 +99,8 @@ def cbServerGreeting(proto, username, password):
     # Try to authenticate securely
     return proto.authenticate(
         password).addCallback(
-            cbAuthentication, proto).addErrback(
-                ebAuthentication, proto, username, password)
+        cbAuthentication, proto).addErrback(
+        ebAuthentication, proto, username, password)
 
 
 def ebConnection(reason):
