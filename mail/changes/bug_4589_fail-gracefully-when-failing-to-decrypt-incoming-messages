@@ -1,1 +1,0 @@
-  o Fail gracefully when failing to decrypt incoming messages. Closes #4589.
