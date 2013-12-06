@@ -27,6 +27,7 @@ from collections import defaultdict
 from email.parser import Parser
 
 from zope.interface import implements
+from zope.proxy import sameProxiedObjects
 
 from twisted.mail import imap4
 from twisted.internet import defer
@@ -36,6 +37,7 @@ from leap.common import events as leap_events
 from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
 from leap.common.check import leap_assert, leap_assert_type
 from leap.common.mail import get_email_charset
+from leap.mail.messageflow import IMessageConsumer, MessageProducer
 from leap.soledad.client import Soledad
 
 logger = logging.getLogger(__name__)
@@ -816,6 +818,32 @@ class LeapMessage(WithMsgFields):
         return self._doc.content.get(key, None)
 
 
+class SoledadDocWriter(object):
+    """
+    This writer will create docs serially in the local soledad database.
+    """
+
+    implements(IMessageConsumer)
+
+    def __init__(self, soledad):
+        """
+        Initialize the writer.
+
+        :param soledad: the soledad instance
+        :type soledad: Soledad
+        """
+        self._soledad = soledad
+
+    def consume(self, item):
+        """
+        Creates a new document in soledad db.
+
+        :param item: object to update. content of the document to be inserted.
+        :type item: dict
+        """
+        self._soledad.create_doc(item)
+
+
 class MessageCollection(WithMsgFields, IndexedDB):
     """
     A collection of messages, surprisingly.
@@ -874,6 +902,16 @@ class MessageCollection(WithMsgFields, IndexedDB):
         self._soledad = soledad
         self.initialize_db()
         self._parser = Parser()
+
+        # I think of someone like nietzsche when reading this
+
+        # this will be the producer that will enqueue the content
+        # to be processed serially by the consumer (the writer). We just
+        # need to `put` the new material on its plate.
+
+        self._soledad_writer = MessageProducer(
+            SoledadDocWriter(soledad),
+            period=0.2)
 
     def _get_empty_msg(self):
         """
@@ -947,7 +985,9 @@ class MessageCollection(WithMsgFields, IndexedDB):
         # ...should get a sanity check here.
         content[self.UID_KEY] = uid
 
-        return self._soledad.create_doc(content)
+        self._soledad_writer.put(content)
+        # XXX have to decide what shall we do with errors with this change...
+        #return self._soledad.create_doc(content)
 
     def remove(self, msg):
         """
@@ -1041,7 +1081,11 @@ class MessageCollection(WithMsgFields, IndexedDB):
         :return: a list of u1db documents
         :rtype: list of SoledadDocument
         """
-        # XXX this should return LeapMessage instances
+        if sameProxiedObjects(self._soledad, None):
+            logger.warning('Tried to get messages but soledad is None!')
+            return []
+
+        #f XXX this should return LeapMessage instances
         all_docs = [doc for doc in self._soledad.get_from_index(
             SoledadBackedAccount.TYPE_MBOX_IDX,
             self.TYPE_MESSAGE_VAL, self.mbox)]
@@ -1438,12 +1482,14 @@ class SoledadMailbox(WithMsgFields):
         """
         # XXX we should treat the message as an IMessage from here
         uid_next = self.getUIDNext()
-        flags = tuple(str(flag) for flag in flags)
+        if flags is None:
+            flags = tuple()
+        else:
+            flags = tuple(str(flag) for flag in flags)
 
         self.messages.add_msg(message, flags=flags, date=date,
                               uid=uid_next)
 
-        # XXX recent should not include deleted...??
         exists = len(self.messages)
         recent = len(self.messages.get_recent())
         for listener in self.listeners:
@@ -1512,7 +1558,10 @@ class SoledadMailbox(WithMsgFields):
             except TypeError:
                 # looks like we cannot iterate
                 last = self.messages.get_last()
-                uid_last = last.getUID()
+                if last is None:
+                    uid_last = 1
+                else:
+                    uid_last = last.getUID()
                 messages.last = uid_last
 
         # for sequence numbers (uid = 0)

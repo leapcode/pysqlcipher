@@ -1,3 +1,19 @@
+0.3.8 Dec 6:
+  o Fail gracefully when failing to decrypt incoming messages. Closes
+    #4589.
+  o Fix a bug when adding a message with empty flags. Closes #4496
+  o Allow to iterate in an empty mailbox during fetch. Closes #4603
+  o Add 'signencrypt' preference to OpenPGP header on outgoing
+    email. Closes #3878.
+  o Add a header to incoming emails that reflects if a valid signature
+    was found when decrypting. Closes #4354.
+  o Add a footer to outgoing email pointing to the address where
+    sender keys can be fetched. Closes #4526.
+  o Serialize Soledad Writes for new messages. Fixes segmentation
+    fault when sqlcipher was been concurrently accessed from many
+    threads. Closes #4606
+  o Set remote mail polling time to 60 seconds. Closes #4499
+
 0.3.7 Nov 15:
   o Uses deferToThread for sendMail. Closes #3937
   o Update pkey to allow multiple accounts. Solves: #4394

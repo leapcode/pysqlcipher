@@ -22,7 +22,6 @@ SMTP gateway tests.
 
 
 import re
-
 from datetime import datetime
 from gnupg._util import _make_binary_stream
 from twisted.test import proto_helpers
@@ -131,6 +130,9 @@ class TestSmtpGateway(TestCaseWithKeyManager):
         for line in self.EMAIL_DATA[4:12]:
             m.lineReceived(line)
         m.eomReceived()
+        # we need to call the following explicitelly because it was deferred
+        # inside the previous method
+        m._maybe_encrypt_and_sign()
         # assert structure of encrypted message
         self.assertTrue('Content-Type' in m._msg)
         self.assertEqual('multipart/encrypted', m._msg.get_content_type())
@@ -146,7 +148,8 @@ class TestSmtpGateway(TestCaseWithKeyManager):
         decrypted = self._km.decrypt(
             m._msg.get_payload(1).get_payload(), privkey)
         self.assertEqual(
-            '\n' + '\r\n'.join(self.EMAIL_DATA[9:12]) + '\r\n',
+            '\n' + '\r\n'.join(self.EMAIL_DATA[9:12]) + '\r\n\r\n--\r\n' +
+            'I prefer encrypted email - https://leap.se/key/anotheruser.\r\n',
             decrypted,
             'Decrypted text differs from plaintext.')
 
@@ -168,6 +171,9 @@ class TestSmtpGateway(TestCaseWithKeyManager):
             m.lineReceived(line)
         # trigger encryption and signing
         m.eomReceived()
+        # we need to call the following explicitelly because it was deferred
+        # inside the previous method
+        m._maybe_encrypt_and_sign()
         # assert structure of encrypted message
         self.assertTrue('Content-Type' in m._msg)
         self.assertEqual('multipart/encrypted', m._msg.get_content_type())
@@ -185,7 +191,8 @@ class TestSmtpGateway(TestCaseWithKeyManager):
         decrypted = self._km.decrypt(
             m._msg.get_payload(1).get_payload(), privkey, verify=pubkey)
         self.assertEqual(
-            '\n' + '\r\n'.join(self.EMAIL_DATA[9:12]) + '\r\n',
+            '\n' + '\r\n'.join(self.EMAIL_DATA[9:12]) + '\r\n\r\n--\r\n' +
+            'I prefer encrypted email - https://leap.se/key/anotheruser.\r\n',
             decrypted,
             'Decrypted text differs from plaintext.')
 
@@ -208,6 +215,9 @@ class TestSmtpGateway(TestCaseWithKeyManager):
             m.lineReceived(line)
         # trigger signing
         m.eomReceived()
+        # we need to call the following explicitelly because it was deferred
+        # inside the previous method
+        m._maybe_encrypt_and_sign()
         # assert structure of signed message
         self.assertTrue('Content-Type' in m._msg)
         self.assertEqual('multipart/signed', m._msg.get_content_type())
@@ -216,8 +226,9 @@ class TestSmtpGateway(TestCaseWithKeyManager):
         self.assertEqual('pgp-sha512', m._msg.get_param('micalg'))
         # assert content of message
         self.assertEqual(
-            m._msg.get_payload(0).get_payload(decode=True),
-            '\r\n'.join(self.EMAIL_DATA[9:13]))
+            '\r\n'.join(self.EMAIL_DATA[9:13])+'\r\n--\r\n' +
+            'I prefer encrypted email - https://leap.se/key/anotheruser.\r\n',
+            m._msg.get_payload(0).get_payload(decode=True))
         # assert content of signature
         self.assertTrue(
             m._msg.get_payload(1).get_payload().startswith(
