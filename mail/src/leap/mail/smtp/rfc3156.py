@@ -361,7 +361,7 @@ class PGPSignature(MIMEApplication):
     """
     def __init__(self, _data, name='signature.asc'):
         MIMEApplication.__init__(self, _data, 'pgp-signature',
-            _encoder=lambda x: x, name=name)
+                                 encoder=lambda x: x, name=name)
         self.add_header('Content-Description', 'OpenPGP Digital Signature')
 
 

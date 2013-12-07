@@ -54,7 +54,7 @@ import twisted.cred.credentials
 import twisted.cred.portal
 
 
-#import u1db
+# import u1db
 
 from leap.common.testing.basetest import BaseLeapTest
 from leap.mail.imap.server import SoledadMailbox
@@ -120,17 +120,19 @@ def initialize_soledad(email, gnupg_home, tempdir):
     return _soledad
 
 
-##########################################
+#
 # Simple LEAP IMAP4 Server for testing
-##########################################
+#
 
 class SimpleLEAPServer(imap4.IMAP4Server):
+
     """
     A Simple IMAP4 Server with mailboxes backed by Soledad.
 
     This should be pretty close to the real LeapIMAP4Server that we
     will be instantiating as a service, minus the authentication bits.
     """
+
     def __init__(self, *args, **kw):
 
         soledad = kw.pop('soledad', None)
@@ -153,7 +155,7 @@ class SimpleLEAPServer(imap4.IMAP4Server):
 
     def lineReceived(self, line):
         if self.timeoutTest:
-            #Do not send a respones
+            # Do not send a respones
             return
 
         imap4.IMAP4Server.lineReceived(self, line)
@@ -168,6 +170,7 @@ class SimpleLEAPServer(imap4.IMAP4Server):
 
 
 class TestRealm:
+
     """
     A minimal auth realm for testing purposes only
     """
@@ -177,12 +180,13 @@ class TestRealm:
         return imap4.IAccount, self.theAccount, lambda: None
 
 
-######################################
+#
 # Simple IMAP4 Client for testing
-######################################
+#
 
 
 class SimpleClient(imap4.IMAP4Client):
+
     """
     A Simple IMAP4 Client to test our
     Soledad-LEAPServer
@@ -210,6 +214,7 @@ class SimpleClient(imap4.IMAP4Client):
 
 
 class IMAP4HelperMixin(BaseLeapTest):
+
     """
     MixIn containing several utilities to be shared across
     different TestCases
@@ -245,13 +250,13 @@ class IMAP4HelperMixin(BaseLeapTest):
         # Soledad: config info
         cls.gnupg_home = "%s/gnupg" % cls.tempdir
         cls.email = 'leap@leap.se'
-        #cls.db1_file = "%s/db1.u1db" % cls.tempdir
-        #cls.db2_file = "%s/db2.u1db" % cls.tempdir
+        # cls.db1_file = "%s/db1.u1db" % cls.tempdir
+        # cls.db2_file = "%s/db2.u1db" % cls.tempdir
         # open test dbs
-        #cls._db1 = u1db.open(cls.db1_file, create=True,
-                              #document_factory=SoledadDocument)
-        #cls._db2 = u1db.open(cls.db2_file, create=True,
-                              #document_factory=SoledadDocument)
+        # cls._db1 = u1db.open(cls.db1_file, create=True,
+                              # document_factory=SoledadDocument)
+        # cls._db2 = u1db.open(cls.db2_file, create=True,
+                              # document_factory=SoledadDocument)
 
         # initialize soledad by hand so we can control keys
         cls._soledad = initialize_soledad(
@@ -261,7 +266,7 @@ class IMAP4HelperMixin(BaseLeapTest):
 
         # now we're passing the mailbox name, so we
         # should get this into a partial or something.
-        #cls.sm = SoledadMailbox("mailbox", soledad=cls._soledad)
+        # cls.sm = SoledadMailbox("mailbox", soledad=cls._soledad)
         # XXX REFACTOR --- self.server (in setUp) is initializing
         # a SoledadBackedAccount
 
@@ -273,8 +278,8 @@ class IMAP4HelperMixin(BaseLeapTest):
         Restores the old path and home environment variables.
         Removes the temporal dir created for tests.
         """
-        #cls._db1.close()
-        #cls._db2.close()
+        # cls._db1.close()
+        # cls._db2.close()
         cls._soledad.close()
 
         os.environ["PATH"] = cls.old_path
@@ -328,8 +333,8 @@ class IMAP4HelperMixin(BaseLeapTest):
             acct.delete(mb)
 
         # FIXME add again
-        #for subs in acct.subscriptions:
-            #acct.unsubscribe(subs)
+        # for subs in acct.subscriptions:
+            # acct.unsubscribe(subs)
 
         del self.server
         del self.client
@@ -375,9 +380,11 @@ class IMAP4HelperMixin(BaseLeapTest):
 #
 
 class MessageCollectionTestCase(IMAP4HelperMixin, unittest.TestCase):
+
     """
     Tests for the MessageCollection class
     """
+
     def setUp(self):
         """
         setUp method for each test
@@ -434,6 +441,7 @@ class MessageCollectionTestCase(IMAP4HelperMixin, unittest.TestCase):
 
 
 class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
+
     """
     Tests for the generic behavior of the LeapIMAP4Server
     which, right now, it's just implemented in this test file as
@@ -1149,7 +1157,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         mb = SimpleLEAPServer.theAccount.getMailbox('PARTIAL/SUBTHING')
         self.assertEqual(1, len(mb.messages))
         self.assertEqual(
-            ['\\SEEN',],
+            ['\\SEEN', ],
             mb.messages[1].content['flags']
         )
         self.assertEqual(
@@ -1262,6 +1270,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
 
 
 class IMAP4ServerSearchTestCase(IMAP4HelperMixin, unittest.TestCase):
+
     """
     Tests for the behavior of the search_* functions in L{imap4.IMAP4Server}.
     """

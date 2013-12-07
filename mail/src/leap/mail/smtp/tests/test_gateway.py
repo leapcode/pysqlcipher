@@ -101,10 +101,16 @@ class TestSmtpGateway(TestCaseWithKeyManager):
                         '250 Sender address accepted',
                         '250 Recipient address accepted',
                         '354 Continue']
-        proto = SMTPFactory(u'anotheruser@leap.se',
-            self._km, self._config['host'], self._config['port'],
+
+        # XXX this bit can be refactored away in a helper
+        # method...
+        proto = SMTPFactory(
+            u'anotheruser@leap.se',
+            self._km, self._config['host'],
+            self._config['port'],
             self._config['cert'], self._config['key'],
             self._config['encrypted_only']).buildProtocol(('127.0.0.1', 0))
+        # snip...
         transport = proto_helpers.StringTransport()
         proto.makeConnection(transport)
         for i, line in enumerate(self.EMAIL_DATA):
@@ -118,8 +124,10 @@ class TestSmtpGateway(TestCaseWithKeyManager):
         """
         Test if message gets encrypted to destination email.
         """
-        proto = SMTPFactory(u'anotheruser@leap.se',
-            self._km, self._config['host'], self._config['port'],
+        proto = SMTPFactory(
+            u'anotheruser@leap.se',
+            self._km, self._config['host'],
+            self._config['port'],
             self._config['cert'], self._config['key'],
             self._config['encrypted_only']).buildProtocol(('127.0.0.1', 0))
         fromAddr = Address(ADDRESS_2)
@@ -158,8 +166,10 @@ class TestSmtpGateway(TestCaseWithKeyManager):
         Test if message gets encrypted to destination email and signed with
         sender key.
         """
-        proto = SMTPFactory(u'anotheruser@leap.se',
-            self._km, self._config['host'], self._config['port'],
+        proto = SMTPFactory(
+            u'anotheruser@leap.se',
+            self._km, self._config['host'],
+            self._config['port'],
             self._config['cert'], self._config['key'],
             self._config['encrypted_only']).buildProtocol(('127.0.0.1', 0))
         user = User(ADDRESS, 'gateway.leap.se', proto, ADDRESS)
@@ -202,11 +212,14 @@ class TestSmtpGateway(TestCaseWithKeyManager):
         """
         # mock the key fetching
         self._km.fetch_keys_from_server = Mock(return_value=[])
-        proto = SMTPFactory(u'anotheruser@leap.se',
-            self._km, self._config['host'], self._config['port'],
+        proto = SMTPFactory(
+            u'anotheruser@leap.se',
+            self._km, self._config['host'],
+            self._config['port'],
             self._config['cert'], self._config['key'],
             self._config['encrypted_only']).buildProtocol(('127.0.0.1', 0))
-        user = User('ihavenopubkey@nonleap.se', 'gateway.leap.se', proto, ADDRESS)
+        user = User('ihavenopubkey@nonleap.se',
+                    'gateway.leap.se', proto, ADDRESS)
         fromAddr = Address(ADDRESS_2)
         m = EncryptedMessage(
             fromAddr, user, self._km, self._config['host'],
@@ -226,7 +239,7 @@ class TestSmtpGateway(TestCaseWithKeyManager):
         self.assertEqual('pgp-sha512', m._msg.get_param('micalg'))
         # assert content of message
         self.assertEqual(
-            '\r\n'.join(self.EMAIL_DATA[9:13])+'\r\n--\r\n' +
+            '\r\n'.join(self.EMAIL_DATA[9:13]) + '\r\n--\r\n' +
             'I prefer encrypted email - https://leap.se/key/anotheruser.\r\n',
             m._msg.get_payload(0).get_payload(decode=True))
         # assert content of signature
@@ -262,8 +275,10 @@ class TestSmtpGateway(TestCaseWithKeyManager):
         # mock the key fetching
         self._km.fetch_keys_from_server = Mock(return_value=[])
         # prepare the SMTP factory
-        proto = SMTPFactory(u'anotheruser@leap.se',
-            self._km, self._config['host'], self._config['port'],
+        proto = SMTPFactory(
+            u'anotheruser@leap.se',
+            self._km, self._config['host'],
+            self._config['port'],
             self._config['cert'], self._config['key'],
             self._config['encrypted_only']).buildProtocol(('127.0.0.1', 0))
         transport = proto_helpers.StringTransport()
@@ -291,8 +306,10 @@ class TestSmtpGateway(TestCaseWithKeyManager):
         # mock the key fetching
         self._km.fetch_keys_from_server = Mock(return_value=[])
         # prepare the SMTP factory with encrypted only equal to false
-        proto = SMTPFactory(u'anotheruser@leap.se',
-            self._km, self._config['host'], self._config['port'],
+        proto = SMTPFactory(
+            u'anotheruser@leap.se',
+            self._km, self._config['host'],
+            self._config['port'],
             self._config['cert'], self._config['key'],
             False).buildProtocol(('127.0.0.1', 0))
         transport = proto_helpers.StringTransport()
