@@ -294,7 +294,7 @@ class OpenPGPScheme(EncryptionScheme):
         @raise KeyNotFound: If the key was not found on local storage.
         """
         # Remove the identity suffix after the '+' until the '@'
-        # e.g.: test_user+something@provider.com becomes test_user@probider.com
+        # e.g.: test_user+something@provider.com becomes test_user@provider.com
         # since the key belongs to the identity without the '+' suffix.
         address = re.sub(r'\+.*\@', '@', address)
 
