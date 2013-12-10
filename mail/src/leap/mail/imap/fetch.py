@@ -511,7 +511,7 @@ class LeapIncomingMail(object):
         if PGP_BEGIN in data:
             begin = data.find(PGP_BEGIN)
             end = data.find(PGP_END)
-            pgp_message = data[begin:end+len(PGP_END)]
+            pgp_message = data[begin:end + len(PGP_END)]
             try:
                 decrdata, valid_sig = self._decrypt_and_verify_data(
                     pgp_message, senderPubkey)
