@@ -25,6 +25,7 @@ XXX add authors from the original twisted tests.
 @license: GPLv3, see included LICENSE file
 """
 # XXX review license of the original tests!!!
+from nose.twistedtools import deferred
 
 try:
     from cStringIO import StringIO
@@ -370,6 +371,7 @@ class IMAP4HelperMixin(BaseLeapTest):
         self.client.transport.loseConnection()
         self.server.transport.loseConnection()
         log.err(failure, "Problem with %r" % (self.function,))
+        failure.trap(Exception)
 
     def loopback(self):
         return loopback.loopbackAsync(self.server, self.client)
@@ -426,8 +428,11 @@ class MessageCollectionTestCase(IMAP4HelperMixin, unittest.TestCase):
         Test that queries filter by selected mailbox
         """
         mc = self.messages
+        self.assertEqual(self.messages.count(), 0)
         mc.add_msg('', subject="test1")
+        self.assertEqual(self.messages.count(), 1)
         mc.add_msg('', subject="test2")
+        self.assertEqual(self.messages.count(), 2)
         mc.add_msg('', subject="test3")
         self.assertEqual(self.messages.count(), 3)
 
@@ -459,6 +464,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
     # mailboxes operations
     #
 
+    @deferred(timeout=None)
     def testCreate(self):
         """
         Test whether we can create mailboxes
@@ -497,6 +503,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         answers.sort()
         self.assertEqual(mbox, [a.upper() for a in answers])
 
+    @deferred(timeout=None)
     def testDelete(self):
         """
         Test whether we can delete mailboxes
@@ -545,6 +552,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
                                                            failure.Failure)))
         return d
 
+    @deferred(timeout=None)
     def testNonExistentDelete(self):
         """
         Test what happens if we try to delete a non-existent mailbox.
@@ -570,6 +578,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
                                                  'No such mailbox'))
         return d
 
+    @deferred(timeout=None)
     def testIllegalDelete(self):
         """
         Try deleting a mailbox with sub-folders, and \NoSelect flag set.
@@ -604,6 +613,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
                       self.assertEqual(str(self.failure.value), expected))
         return d
 
+    @deferred(timeout=None)
     def testRename(self):
         """
         Test whether we can rename a mailbox
@@ -627,6 +637,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
                           ['NEWNAME']))
         return d
 
+    @deferred(timeout=None)
     def testIllegalInboxRename(self):
         """
         Try to rename inbox. We expect it to fail. Then it would be not
@@ -654,6 +665,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
                           self.stashed, failure.Failure)))
         return d
 
+    @deferred(timeout=None)
     def testHierarchicalRename(self):
         """
         Try to rename hierarchical mailboxes
@@ -680,6 +692,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         mboxes.sort()
         self.assertEqual(mboxes, [s.upper() for s in expected])
 
+    @deferred(timeout=None)
     def testSubscribe(self):
         """
         Test whether we can mark a mailbox as subscribed to
@@ -701,6 +714,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
                           ['THIS/MBOX']))
         return d
 
+    @deferred(timeout=None)
     def testUnsubscribe(self):
         """
         Test whether we can unsubscribe from a set of mailboxes
@@ -725,6 +739,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
                           ['THAT/MBOX']))
         return d
 
+    @deferred(timeout=None)
     def testSelect(self):
         """
         Try to select a mailbox
@@ -764,6 +779,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
     # capabilities
     #
 
+    @deferred(timeout=None)
     def testCapability(self):
         caps = {}
 
@@ -779,6 +795,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
 
         return d.addCallback(lambda _: self.assertEqual(expected, caps))
 
+    @deferred(timeout=None)
     def testCapabilityWithAuth(self):
         caps = {}
         self.server.challengers[
@@ -803,6 +820,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
     # authentication
     #
 
+    @deferred(timeout=None)
     def testLogout(self):
         """
         Test log out
@@ -817,6 +835,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         d = self.loopback()
         return d.addCallback(lambda _: self.assertEqual(self.loggedOut, 1))
 
+    @deferred(timeout=None)
     def testNoop(self):
         """
         Test noop command
@@ -832,6 +851,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         d = self.loopback()
         return d.addCallback(lambda _: self.assertEqual(self.responses, []))
 
+    @deferred(timeout=None)
     def testLogin(self):
         """
         Test login
@@ -848,6 +868,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         self.assertEqual(self.server.account, SimpleLEAPServer.theAccount)
         self.assertEqual(self.server.state, 'auth')
 
+    @deferred(timeout=None)
     def testFailedLogin(self):
         """
         Test bad login
@@ -866,6 +887,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         self.assertEqual(self.server.account, None)
         self.assertEqual(self.server.state, 'unauth')
 
+    @deferred(timeout=None)
     def testLoginRequiringQuoting(self):
         """
         Test login requiring quoting
@@ -890,6 +912,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
     # Inspection
     #
 
+    @deferred(timeout=None)
     def testNamespace(self):
         """
         Test retrieving namespace
@@ -914,6 +937,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
                                                  [[['', '/']], [], []]))
         return d
 
+    @deferred(timeout=None)
     def testExamine(self):
         """
         L{IMAP4Client.examine} issues an I{EXAMINE} command to the server and
@@ -983,6 +1007,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         d2 = self.loopback()
         return defer.gatherResults([d1, d2]).addCallback(lambda _: self.listed)
 
+    @deferred(timeout=None)
     def testList(self):
         """
         Test List command
@@ -999,22 +1024,21 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         ))
         return d
 
-    # XXX implement subscriptions
-    '''
+    @deferred(timeout=None)
     def testLSub(self):
         """
         Test LSub command
         """
-        SimpleLEAPServer.theAccount.subscribe('ROOT/SUBTHINGL')
+        SimpleLEAPServer.theAccount.subscribe('ROOT/SUBTHINGL2')
 
         def lsub():
             return self.client.lsub('root', '%')
         d = self._listSetup(lsub)
         d.addCallback(self.assertEqual,
-                      [(SoledadMailbox.INIT_FLAGS, "/", "ROOT/SUBTHINGL")])
+                      [(SoledadMailbox.INIT_FLAGS, "/", "ROOT/SUBTHINGL2")])
         return d
-    '''
 
+    @deferred(timeout=None)
     def testStatus(self):
         """
         Test Status command
@@ -1046,6 +1070,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         ))
         return d
 
+    @deferred(timeout=None)
     def testFailedStatus(self):
         """
         Test failed status command with a non-existent mailbox
@@ -1085,6 +1110,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
     # messages
     #
 
+    @deferred(timeout=None)
     def testFullAppend(self):
         """
         Test appending a full message to the mailbox
@@ -1125,6 +1151,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
 
         self.assertEqual(open(infile).read(), mb.messages[1].content['raw'])
 
+    @deferred(timeout=None)
     def testPartialAppend(self):
         """
         Test partially appending a message to the mailbox
@@ -1151,10 +1178,12 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         d1.addCallbacks(self._cbStopClient, self._ebGeneral)
         d2 = self.loopback()
         d = defer.gatherResults([d1, d2])
-        return d.addCallback(self._cbTestPartialAppend, infile)
+        return d.addCallback(
+            self._cbTestPartialAppend, infile)
 
     def _cbTestPartialAppend(self, ignored, infile):
         mb = SimpleLEAPServer.theAccount.getMailbox('PARTIAL/SUBTHING')
+
         self.assertEqual(1, len(mb.messages))
         self.assertEqual(
             ['\\SEEN', ],
@@ -1164,6 +1193,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
             'Right now', mb.messages[1].content['date'])
         self.assertEqual(open(infile).read(), mb.messages[1].content['raw'])
 
+    @deferred(timeout=None)
     def testCheck(self):
         """
         Test check command
@@ -1187,6 +1217,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
 
         # Okay, that was fun
 
+    @deferred(timeout=None)
     def testClose(self):
         """
         Test closing the mailbox. We expect to get deleted all messages flagged
@@ -1222,9 +1253,9 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         self.assertEqual(
             m.messages[1].content['subject'],
             'Message 2')
-
         self.failUnless(m.closed)
 
+    @deferred(timeout=None)
     def testExpunge(self):
         """
         Test expunge command
