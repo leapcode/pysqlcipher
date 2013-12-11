@@ -834,14 +834,19 @@ class SoledadDocWriter(object):
         """
         self._soledad = soledad
 
-    def consume(self, item):
+    def consume(self, queue):
         """
         Creates a new document in soledad db.
 
-        :param item: object to update. content of the document to be inserted.
-        :type item: dict
+        :param queue: queue to get item from, with content of the document
+                      to be inserted.
+        :type queue: Queue
         """
-        self._soledad.create_doc(item)
+        empty = queue.empty()
+        while not empty:
+            item = queue.get()
+            self._soledad.create_doc(item)
+            empty = queue.empty()
 
 
 class MessageCollection(WithMsgFields, IndexedDB):
@@ -911,7 +916,7 @@ class MessageCollection(WithMsgFields, IndexedDB):
 
         self._soledad_writer = MessageProducer(
             SoledadDocWriter(soledad),
-            period=0.2)
+            period=0.1)
 
     def _get_empty_msg(self):
         """
@@ -941,6 +946,7 @@ class MessageCollection(WithMsgFields, IndexedDB):
         :param uid: the message uid for this mailbox
         :type uid: int
         """
+        logger.debug('adding message')
         if flags is None:
             flags = tuple()
         leap_assert_type(flags, tuple)
@@ -985,6 +991,7 @@ class MessageCollection(WithMsgFields, IndexedDB):
         # ...should get a sanity check here.
         content[self.UID_KEY] = uid
 
+        logger.debug('enqueuing message for write')
         self._soledad_writer.put(content)
         # XXX have to decide what shall we do with errors with this change...
         #return self._soledad.create_doc(content)
@@ -1518,9 +1525,9 @@ class SoledadMailbox(WithMsgFields):
         """
         if not self.isWriteable():
             raise imap4.ReadOnlyMailbox
-
         delete = []
         deleted = []
+
         for m in self.messages.get_all():
             if self.DELETED_FLAG in m.content[self.FLAGS_KEY]:
                 delete.append(m)
