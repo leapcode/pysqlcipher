@@ -394,6 +394,8 @@ class MessageCollectionTestCase(IMAP4HelperMixin, unittest.TestCase):
         MessageCollection interface in this particular TestCase
         """
         self.messages = MessageCollection("testmbox", self._soledad._db)
+        for m in self.messages.get_all():
+            self.messages.remove(m)
 
     def tearDown(self):
         """
@@ -422,6 +424,22 @@ class MessageCollectionTestCase(IMAP4HelperMixin, unittest.TestCase):
                 "uid": 1,
             })
         self.assertEqual(self.messages.count(), 0)
+
+    def testMultipleAdd(self):
+        """
+        Add multiple messages
+        """
+        # XXX watch out! we're serializing with a delay...
+        mc = self.messages
+        self.assertEqual(self.messages.count(), 0)
+        mc.add_msg('Stuff', subject="test1")
+        self.assertEqual(self.messages.count(), 1)
+        mc.add_msg('Stuff', subject="test2")
+        self.assertEqual(self.messages.count(), 2)
+        mc.add_msg('Stuff', subject="test3")
+        self.assertEqual(self.messages.count(), 3)
+        mc.add_msg('Stuff', subject="test4")
+        self.assertEqual(self.messages.count(), 4)
 
     def testFilterByMailbox(self):
         """
@@ -1265,8 +1283,11 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         m = SimpleLEAPServer.theAccount.getMailbox(name)
         m.messages.add_msg('', subject="Message 1",
                            flags=('\\Deleted', 'AnotherFlag'))
+        self.failUnless(m.messages.count() == 1)
         m.messages.add_msg('', subject="Message 2", flags=('AnotherFlag',))
+        self.failUnless(m.messages.count() == 2)
         m.messages.add_msg('', subject="Message 3", flags=('\\Deleted',))
+        self.failUnless(m.messages.count() == 3)
 
         def login():
             return self.client.login('testuser', 'password-test')
@@ -1292,7 +1313,8 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         return d.addCallback(self._cbTestExpunge, m)
 
     def _cbTestExpunge(self, ignored, m):
-        self.assertEqual(len(m.messages), 1)
+        # we only left 1 mssage with no deleted flag
+        self.assertEqual(m.messages.count(), 1)
         self.assertEqual(
             m.messages[1].content['subject'],
             'Message 2')
