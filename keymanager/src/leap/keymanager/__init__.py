@@ -46,6 +46,7 @@ import requests
 from leap.common.check import leap_assert, leap_assert_type
 from leap.common.events import signal
 from leap.common.events import events_pb2 as proto
+from leap.common.decorators import memoized_method
 
 from leap.keymanager.errors import KeyNotFound
 
@@ -250,6 +251,7 @@ class KeyManager(object):
         self._put(uri, data)
         signal(proto.KEYMANAGER_DONE_UPLOADING_KEYS, self._address)
 
+    @memoized_method
     def get_key(self, address, ktype, private=False, fetch_remote=True):
         """
         Return a key of type C{ktype} bound to C{address}.
@@ -266,9 +268,10 @@ class KeyManager(object):
 
         :return: A key of type C{ktype} bound to C{address}.
         :rtype: EncryptionKey
-        @raise KeyNotFound: If the key was not found both locally and in
-            keyserver.
+        :raise KeyNotFound: If the key was not found both locally and in
+                            keyserver.
         """
+        logger.debug("getting key for %s" % (address,))
         leap_assert(
             ktype in self._wrapper_map,
             'Unkown key type: %s.' % str(ktype))
