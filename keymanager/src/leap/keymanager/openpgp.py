@@ -14,13 +14,9 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
-
-
 """
 Infrastructure for using OpenPGP keys in Key Manager.
 """
-
-
 import locale
 import logging
 import os
@@ -298,7 +294,7 @@ class OpenPGPScheme(EncryptionScheme):
         @raise KeyNotFound: If the key was not found on local storage.
         """
         # Remove the identity suffix after the '+' until the '@'
-        # e.g.: test_user+something@provider.com becomes test_user@probider.com
+        # e.g.: test_user+something@provider.com becomes test_user@provider.com
         # since the key belongs to the identity without the '+' suffix.
         address = re.sub(r'\+.*\@', '@', address)
 
@@ -580,7 +576,6 @@ class OpenPGPScheme(EncryptionScheme):
             except errors.GPGError as e:
                 logger.error('Failed to decrypt: %s.' % str(e))
                 raise errors.DecryptError(str(e))
-
 
     def is_encrypted(self, data):
         """
