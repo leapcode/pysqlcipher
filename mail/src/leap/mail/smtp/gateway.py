@@ -603,7 +603,7 @@ class EncryptedMessage(object):
         from_address = validate_address(self._fromAddress.addrstr)
         username, domain = from_address.split('@')
         self.lines.append('--')
-        self.lines.append('%s - https://%s/key/%s.' %
+        self.lines.append('%s - https://%s/key/%s' %
                           (self.FOOTER_STRING, domain, username))
         self.lines.append('')
         self._origmsg = self.parseMessage()
