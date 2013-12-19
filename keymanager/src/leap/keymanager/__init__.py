@@ -252,6 +252,12 @@ class KeyManager(object):
         signal(proto.KEYMANAGER_DONE_UPLOADING_KEYS, self._address)
 
     @memoized_method
+    def get_key_from_cache(self, *args, **kwargs):
+        """
+        Public interface to `get_key`, that is memoized.
+        """
+        return self.get_key(*args, **kwargs)
+
     def get_key(self, address, ktype, private=False, fetch_remote=True):
         """
         Return a key of type C{ktype} bound to C{address}.
