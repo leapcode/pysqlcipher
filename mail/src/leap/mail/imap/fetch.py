@@ -392,7 +392,7 @@ class LeapIncomingMail(object):
         if fromHeader is not None:
             _, senderAddress = parseaddr(fromHeader)
             try:
-                senderPubkey = self._keymanager.get_key(
+                senderPubkey = self._keymanager.get_key_from_cache(
                     senderAddress, OpenPGPKey)
             except keymanager_errors.KeyNotFound:
                 pass
