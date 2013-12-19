@@ -31,7 +31,9 @@ from zope.proxy import sameProxiedObjects
 
 from twisted.mail import imap4
 from twisted.internet import defer
+from twisted.internet.threads import deferToThread
 from twisted.python import log
+
 
 from leap.common import events as leap_events
 from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
@@ -1648,7 +1650,8 @@ class SoledadMailbox(WithMsgFields):
                     print "fetch %s, no msg found!!!" % msg_id
 
         if self.isWriteable():
-            self._unset_recent_flag()
+            deferToThread(self._unset_recent_flag)
+
         return tuple(result)
 
     def _unset_recent_flag(self):
@@ -1668,6 +1671,7 @@ class SoledadMailbox(WithMsgFields):
         session is the first session to be notified about a message,
         then that message SHOULD be considered recent.
         """
+        log.msg('unsetting recent flags...')
         for msg in (LeapMessage(doc) for doc in self.messages.recent_iter()):
             newflags = msg.removeFlags((WithMsgFields.RECENT_FLAG,))
             self._update(newflags)

@@ -1,0 +1,2 @@
+  o deferToThread unsetting of recent flag. this was holding the new
+    mails from being displayed soonish. 
