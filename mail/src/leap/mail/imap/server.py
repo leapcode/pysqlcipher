@@ -755,7 +755,7 @@ class LeapMessage(WithMsgFields):
             logger.error("Unicode error {0}".format(e))
             content = content.encode(charset, 'replace')
         fd.write(content)
-        # SHOULD use a separate BODY FIELD ...
+        # XXX SHOULD use a separate BODY FIELD ...
         fd.seek(0)
         return fd
 
@@ -856,7 +856,12 @@ class SoledadDocWriter(object):
         empty = queue.empty()
         while not empty:
             item = queue.get()
-            self._soledad.create_doc(item)
+            payload = item['payload']
+            mode = item['mode']
+            if mode == "create":
+                self._soledad.create_doc(payload)
+            elif mode == "put":
+                self._soledad.put_doc(payload)
             empty = queue.empty()
 
 
@@ -925,7 +930,7 @@ class MessageCollection(WithMsgFields, IndexedDB):
         # to be processed serially by the consumer (the writer). We just
         # need to `put` the new material on its plate.
 
-        self._soledad_writer = MessageProducer(
+        self.soledad_writer = MessageProducer(
             SoledadDocWriter(soledad),
             period=0.1)
 
@@ -1003,7 +1008,10 @@ class MessageCollection(WithMsgFields, IndexedDB):
         content[self.UID_KEY] = uid
 
         logger.debug('enqueuing message for write')
-        self._soledad_writer.put(content)
+
+        # XXX create namedtuple
+        self.soledad_writer.put({"mode": "create",
+                                 "payload": content})
         # XXX have to decide what shall we do with errors with this change...
         #return self._soledad.create_doc(content)
 
@@ -1650,7 +1658,7 @@ class SoledadMailbox(WithMsgFields):
                     print "fetch %s, no msg found!!!" % msg_id
 
         if self.isWriteable():
-            deferToThread(self._unset_recent_flag)
+            self._unset_recent_flag()
 
         return tuple(result)
 
@@ -1761,8 +1769,9 @@ class SoledadMailbox(WithMsgFields):
         """
         Updates document in u1db database
         """
-        #log.msg('updating doc... %s ' % doc)
-        self._soledad.put_doc(doc)
+        # XXX create namedtuple
+        self.messages.soledad_writer.put({"mode": "put",
+                                          "payload": doc})
 
     def __repr__(self):
         """
