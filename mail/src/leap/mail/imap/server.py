@@ -1431,7 +1431,7 @@ class SoledadMailbox(WithMsgFields):
         mbox = self._get_mbox()
         key = self.LAST_UID_KEY
 
-        count = mbox.getMessageCount()
+        count = self.getMessageCount()
 
         # XXX safety-catch. If we do get duplicates,
         # we want to avoid further duplication.
