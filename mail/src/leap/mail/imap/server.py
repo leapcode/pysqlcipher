@@ -1430,7 +1430,22 @@ class SoledadMailbox(WithMsgFields):
         leap_assert(isinstance(uid, int), "uid has to be int")
         mbox = self._get_mbox()
         key = self.LAST_UID_KEY
-        mbox.content[key] = uid
+
+        count = mbox.getMessageCount()
+
+        # XXX safety-catch. If we do get duplicates,
+        # we want to avoid further duplication.
+
+        if uid >= count:
+            value = uid
+        else:
+            # something is wrong,
+            # just set the last uid
+            # beyond the max msg count.
+            logger.debug("WRONG uid < count. Setting last uid to ", count)
+            value = count
+
+        mbox.content[key] = value
         self._soledad.put_doc(mbox)
 
     last_uid = property(
