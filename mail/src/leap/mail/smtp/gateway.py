@@ -52,6 +52,7 @@ from leap.common.events import proto, signal
 from leap.keymanager import KeyManager
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.keymanager.errors import KeyNotFound
+from leap.mail import __version__
 from leap.mail.smtp.rfc3156 import (
     MultipartSigned,
     MultipartEncrypted,
@@ -492,7 +493,7 @@ class EncryptedMessage(object):
             heloFallback=True,
             requireAuthentication=False,
             requireTransportSecurity=True)
-        factory.domain = LOCAL_FQDN
+        factory.domain = __version__
         signal(proto.SMTP_SEND_MESSAGE_START, self._user.dest.addrstr)
         reactor.connectSSL(
             self._host, self._port, factory,
