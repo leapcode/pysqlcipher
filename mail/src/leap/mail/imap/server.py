@@ -1675,7 +1675,7 @@ class SoledadMailbox(WithMsgFields):
         if self.isWriteable():
             self._unset_recent_flag()
 
-        return tuple(result)
+        return tuple(result[:100])
 
     def _unset_recent_flag(self):
         """
