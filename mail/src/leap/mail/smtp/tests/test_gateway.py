@@ -137,7 +137,8 @@ class TestSmtpGateway(TestCaseWithKeyManager):
             self._config['port'], self._config['cert'], self._config['key'])
         for line in self.EMAIL_DATA[4:12]:
             m.lineReceived(line)
-        m.eomReceived()
+        #m.eomReceived()  # this includes a defer, so we avoid calling it here
+        m.lines.append('')  # add a trailing newline
         # we need to call the following explicitelly because it was deferred
         # inside the previous method
         m._maybe_encrypt_and_sign()
@@ -157,7 +158,7 @@ class TestSmtpGateway(TestCaseWithKeyManager):
             m._msg.get_payload(1).get_payload(), privkey)
         self.assertEqual(
             '\n' + '\r\n'.join(self.EMAIL_DATA[9:12]) + '\r\n\r\n--\r\n' +
-            'I prefer encrypted email - https://leap.se/key/anotheruser.\r\n',
+            'I prefer encrypted email - https://leap.se/key/anotheruser\r\n',
             decrypted,
             'Decrypted text differs from plaintext.')
 
@@ -180,7 +181,8 @@ class TestSmtpGateway(TestCaseWithKeyManager):
         for line in self.EMAIL_DATA[4:12]:
             m.lineReceived(line)
         # trigger encryption and signing
-        m.eomReceived()
+        #m.eomReceived()  # this includes a defer, so we avoid calling it here
+        m.lines.append('')  # add a trailing newline
         # we need to call the following explicitelly because it was deferred
         # inside the previous method
         m._maybe_encrypt_and_sign()
@@ -202,7 +204,7 @@ class TestSmtpGateway(TestCaseWithKeyManager):
             m._msg.get_payload(1).get_payload(), privkey, verify=pubkey)
         self.assertEqual(
             '\n' + '\r\n'.join(self.EMAIL_DATA[9:12]) + '\r\n\r\n--\r\n' +
-            'I prefer encrypted email - https://leap.se/key/anotheruser.\r\n',
+            'I prefer encrypted email - https://leap.se/key/anotheruser\r\n',
             decrypted,
             'Decrypted text differs from plaintext.')
 
@@ -227,7 +229,8 @@ class TestSmtpGateway(TestCaseWithKeyManager):
         for line in self.EMAIL_DATA[4:12]:
             m.lineReceived(line)
         # trigger signing
-        m.eomReceived()
+        #m.eomReceived()  # this includes a defer, so we avoid calling it here
+        m.lines.append('')  # add a trailing newline
         # we need to call the following explicitelly because it was deferred
         # inside the previous method
         m._maybe_encrypt_and_sign()
@@ -240,7 +243,7 @@ class TestSmtpGateway(TestCaseWithKeyManager):
         # assert content of message
         self.assertEqual(
             '\r\n'.join(self.EMAIL_DATA[9:13]) + '\r\n--\r\n' +
-            'I prefer encrypted email - https://leap.se/key/anotheruser.\r\n',
+            'I prefer encrypted email - https://leap.se/key/anotheruser\r\n',
             m._msg.get_payload(0).get_payload(decode=True))
         # assert content of signature
         self.assertTrue(
