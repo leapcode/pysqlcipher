@@ -389,7 +389,9 @@ class LeapIncomingMail(object):
         # try to obtain sender public key
         senderPubkey = None
         fromHeader = msg.get('from', None)
-        if fromHeader is not None:
+        if fromHeader is not None \
+                and (msg.get_content_type() == 'multipart/encrypted' \
+                     or msg.get_content_type() == 'multipart/signed'):
             _, senderAddress = parseaddr(fromHeader)
             try:
                 senderPubkey = self._keymanager.get_key_from_cache(
