@@ -22,6 +22,7 @@ import logging
 import StringIO
 import cStringIO
 import time
+import re
 
 from collections import defaultdict
 from email.parser import Parser
@@ -205,6 +206,8 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         WithMsgFields.LAST_UID_KEY: 0
     }
 
+    INBOX_RE = re.compile(INBOX_NAME, re.IGNORECASE)
+
     def __init__(self, account_name, soledad=None):
         """
         Creates a SoledadAccountIndex that keeps track of the mailboxes
@@ -222,7 +225,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         # XXX SHOULD assert too that the name matches the user/uuid with which
         # soledad has been initialized.
 
-        self._account_name = account_name.upper()
+        self._account_name = self._parse_mailbox_name(account_name)
         self._soledad = soledad
 
         self.initialize_db()
@@ -241,19 +244,30 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         """
         return copy.deepcopy(self.EMPTY_MBOX)
 
+    def _parse_mailbox_name(self, name):
+        """
+        :param name: the name of the mailbox
+        :type name: unicode
+
+        :rtype: unicode
+        """
+        if self.INBOX_RE.match(name):
+            # ensure inital INBOX is uppercase
+            return self.INBOX_NAME + name[len(self.INBOX_NAME):]
+        return name
+
     def _get_mailbox_by_name(self, name):
         """
-        Returns an mbox document by name.
+        Return an mbox document by name.
 
         :param name: the name of the mailbox
         :type name: str
 
         :rtype: SoledadDocument
         """
-        # XXX only upper for INBOX ---
-        name = name.upper()
         doc = self._soledad.get_from_index(
-            self.TYPE_MBOX_IDX, self.MBOX_KEY, name)
+            self.TYPE_MBOX_IDX, self.MBOX_KEY,
+            self._parse_mailbox_name(name))
         return doc[0] if doc else None
 
     @property
@@ -261,7 +275,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         """
         A list of the current mailboxes for this account.
         """
-        return [str(doc.content[self.MBOX_KEY])
+        return [doc.content[self.MBOX_KEY]
                 for doc in self._soledad.get_from_index(
                     self.TYPE_IDX, self.MBOX_KEY)]
 
@@ -270,7 +284,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         """
         A list of the current subscriptions for this account.
         """
-        return [str(doc.content[self.MBOX_KEY])
+        return [doc.content[self.MBOX_KEY]
                 for doc in self._soledad.get_from_index(
                     self.TYPE_SUBS_IDX, self.MBOX_KEY, '1')]
 
@@ -284,8 +298,8 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         :returns: a a SoledadMailbox instance
         :rtype: SoledadMailbox
         """
-        # XXX only upper for INBOX
-        name = name.upper()
+        name = self._parse_mailbox_name(name)
+
         if name not in self.mailboxes:
             raise imap4.MailboxException("No such mailbox")
 
@@ -297,12 +311,12 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
 
     def addMailbox(self, name, creation_ts=None):
         """
-        Adds a mailbox to the account.
+        Add a mailbox to the account.
 
         :param name: the name of the mailbox
         :type name: str
 
-        :param creation_ts: a optional creation timestamp to be used as
+        :param creation_ts: an optional creation timestamp to be used as
                             mailbox id. A timestamp will be used if no
                             one is provided.
         :type creation_ts: int
@@ -310,9 +324,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         :returns: True if successful
         :rtype: bool
         """
-        # XXX only upper for INBOX
-        name = name.upper()
-        # XXX should check mailbox name for RFC-compliant form
+        name = self._parse_mailbox_name(name)
 
         if name in self.mailboxes:
             raise imap4.MailboxCollision, name
@@ -321,7 +333,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
             # by default, we pass an int value
             # taken from the current time
             # we make sure to take enough decimals to get a unique
-            # maibox-uidvalidity.
+            # mailbox-uidvalidity.
             creation_ts = int(time.time() * 10E2)
 
         mbox = self._get_empty_mailbox()
@@ -346,8 +358,8 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         :raise MailboxException: Raised if this mailbox cannot be added.
         """
         # TODO raise MailboxException
-
-        paths = filter(None, pathspec.split('/'))
+        paths = filter(None,
+            self._parse_mailbox_name(pathspec).split('/'))
         for accum in range(1, len(paths)):
             try:
                 self.addMailbox('/'.join(paths[:accum]))
@@ -372,13 +384,12 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
 
         :rtype: bool
         """
-        # XXX only upper for INBOX
-        name = name.upper()
+        name = self._parse_mailbox_name(name)
 
         if name not in self.mailboxes:
             return None
 
-        self.selected = str(name)
+        self.selected = name
 
         return SoledadMailbox(
             name, rw=readwrite,
@@ -398,8 +409,8 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
                       names. use with care.
         :type force: bool
         """
-        # XXX only upper for INBOX
-        name = name.upper()
+        name = self._parse_mailbox_name(name)
+
         if not name in self.mailboxes:
             raise imap4.MailboxException("No such mailbox")
 
@@ -436,9 +447,8 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         :param newname: new name of the mailbox
         :type newname: str
         """
-        # XXX only upper for INBOX
-        oldname = oldname.upper()
-        newname = newname.upper()
+        oldname = self._parse_mailbox_name(oldname)
+        newname = self._parse_mailbox_name(newname)
 
         if oldname not in self.mailboxes:
             raise imap4.NoSuchMailbox, oldname
@@ -516,7 +526,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         :param name: name of the mailbox
         :type name: str
         """
-        name = name.upper()
+        name = self._parse_mailbox_name(name)
         if name not in self.subscriptions:
             self._set_subscription(name, True)
 
@@ -527,7 +537,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         :param name: name of the mailbox
         :type name: str
         """
-        name = name.upper()
+        name = self._parse_mailbox_name(name)
         if name not in self.subscriptions:
             raise imap4.MailboxException, "Not currently subscribed to " + name
         self._set_subscription(name, False)
@@ -549,7 +559,8 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         :type wildcard: str
         """
         # XXX use wildcard in index query
-        ref = self._inferiorNames(ref.upper())
+        ref = self._inferiorNames(
+            self._parse_mailbox_name(ref))
         wildcard = imap4.wildcardToRegexp(wildcard, '/')
         return [(i, self.getMailbox(i)) for i in ref if wildcard.match(i)]
 
