@@ -21,20 +21,17 @@ import copy
 import logging
 import StringIO
 import cStringIO
-import os
 import time
 import re
 
 from collections import defaultdict, namedtuple
 from email.parser import Parser
-from functools import wraps
 
 from zope.interface import implements
 from zope.proxy import sameProxiedObjects
 
 from twisted.mail import imap4
 from twisted.internet import defer
-from twisted.internet.threads import deferToThread
 from twisted.python import log
 
 from u1db import errors as u1db_errors
@@ -44,68 +41,10 @@ from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
 from leap.common.check import leap_assert, leap_assert_type
 from leap.common.mail import get_email_charset
 from leap.mail.messageflow import IMessageConsumer, MessageProducer
+from leap.mail.decorators import deferred
 from leap.soledad.client import Soledad
 
 logger = logging.getLogger(__name__)
-
-
-def deferred(f):
-    '''
-    Decorator, for deferring methods to Threads.
-
-    It will do a deferToThread of the decorated method
-    unless the environment variable LEAPMAIL_DEBUG is set.
-
-    It uses a descriptor to delay the definition of the
-    method wrapper.
-    '''
-    class descript(object):
-        def __init__(self, f):
-            self.f = f
-
-        def __get__(self, instance, klass):
-            if instance is None:
-                # Class method was requested
-                return self.make_unbound(klass)
-            return self.make_bound(instance)
-
-        def _errback(self, failure):
-            err = failure.value
-            logger.warning('error in method: %s' % (self.f.__name__))
-            log.err(err)
-
-        def make_unbound(self, klass):
-
-            @wraps(self.f)
-            def wrapper(*args, **kwargs):
-                '''This documentation will vanish :)'''
-                raise TypeError(
-                    'unbound method {}() must be called with {} instance '
-                    'as first argument (got nothing instead)'.format(
-                        self.f.__name__,
-                        klass.__name__)
-                )
-            return wrapper
-
-        def make_bound(self, instance):
-
-            @wraps(self.f)
-            def wrapper(*args, **kwargs):
-                '''This documentation will disapear :)'''
-
-                if not os.environ.get('LEAPMAIL_DEBUG'):
-                    d = deferToThread(self.f, instance, *args, **kwargs)
-                    d.addErrback(self._errback)
-                    return d
-                else:
-                    return self.f(instance, *args, **kwargs)
-
-            # This instance does not need the descriptor anymore,
-            # let it find the wrapper directly next time:
-            setattr(instance, self.f.__name__, wrapper)
-            return wrapper
-
-    return descript(f)
 
 
 class MissingIndexError(Exception):
@@ -248,6 +187,8 @@ class MailParser(object):
             return self._parser.parse
         if isinstance(o, basestring):
             return self._parser.parsestr
+        # fallback
+        return self._parser.parsestr
 
     def _stringify(self, o):
         """
@@ -942,8 +883,8 @@ class LeapMessage(fields, MailParser, MBoxParser):
         Return True if this message is multipart.
         """
         if self._cdoc:
-            retval = self._cdoc.content.get(self.MULTIPART_KEY, False)
-            print "MULTIPART? ", retval
+            retval = self._fdoc.content.get(self.MULTIPART_KEY, False)
+            return retval
 
     def getSubPart(self, part):
         """
@@ -1197,6 +1138,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         msg = self._get_parsed_msg(raw)
         headers = dict(msg)
 
+        logger.debug("adding. is multipart:%s" % msg.is_multipart())
         flags_doc[self.MULTIPART_KEY] = msg.is_multipart()
         # XXX get lower case for keys?
         # XXX get headers doc
@@ -1464,7 +1406,9 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
     def addListener(self, listener):
         """
-        Rdds a listener to the listeners queue.
+        Adds a listener to the listeners queue.
+        The server adds itself as a listener when there is a SELECT,
+        so it can send EXIST commands.
 
         :param listener: listener to add
         :type listener: an object that implements IMailboxListener
@@ -1716,6 +1660,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :return: a deferred that evals to None
         """
         # XXX we should treat the message as an IMessage from here
+        leap_assert_type(message, basestring)
         uid_next = self.getUIDNext()
         logger.debug('Adding msg with UID :%s' % uid_next)
         if flags is None:
@@ -1823,12 +1768,11 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
         else:
             for msg_id in messages:
-                print "getting msg by uid", msg_id
                 msg = self.messages.get_msg_by_uid(msg_id)
                 if msg:
                     result.append((msg_id, msg))
                 else:
-                    print "fetch %s, no msg found!!!" % msg_id
+                    logger.debug("fetch %s, no msg found!!!" % msg_id)
 
         if self.isWriteable():
             self._unset_recent_flag()
