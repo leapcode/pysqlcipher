@@ -521,7 +521,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         """
         Test whether we can create mailboxes
         """
-        succeed = ('testbox', 'test/box', 'test/', 'test/box/box', 'FOOBOX')
+        succeed = ('testbox', 'test/box', 'test/', 'test/box/box', 'foobox')
         fail = ('testbox', 'test/box')
 
         def cb():
@@ -553,7 +553,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         answers = ['foobox', 'testbox', 'test/box', 'test', 'test/box/box']
         mbox.sort()
         answers.sort()
-        self.assertEqual(mbox, [a.upper() for a in answers])
+        self.assertEqual(mbox, [a for a in answers])
 
     @deferred(timeout=None)
     def testDelete(self):
@@ -686,7 +686,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         d.addCallback(lambda _:
                       self.assertEqual(
                           SimpleLEAPServer.theAccount.mailboxes,
-                          ['NEWNAME']))
+                          ['newname']))
         return d
 
     @deferred(timeout=None)
@@ -742,7 +742,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         mboxes = SimpleLEAPServer.theAccount.mailboxes
         expected = ['newname', 'newname/m1', 'newname/m2']
         mboxes.sort()
-        self.assertEqual(mboxes, [s.upper() for s in expected])
+        self.assertEqual(mboxes, [s for s in expected])
 
     @deferred(timeout=None)
     def testSubscribe(self):
@@ -763,7 +763,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         d.addCallback(lambda _:
                       self.assertEqual(
                           SimpleLEAPServer.theAccount.subscriptions,
-                          ['THIS/MBOX']))
+                          ['this/mbox']))
         return d
 
     @deferred(timeout=None)
@@ -771,8 +771,8 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         """
         Test whether we can unsubscribe from a set of mailboxes
         """
-        SimpleLEAPServer.theAccount.subscribe('THIS/MBOX')
-        SimpleLEAPServer.theAccount.subscribe('THAT/MBOX')
+        SimpleLEAPServer.theAccount.subscribe('this/mbox')
+        SimpleLEAPServer.theAccount.subscribe('that/mbox')
 
         def login():
             return self.client.login('testuser', 'password-test')
@@ -788,7 +788,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         d.addCallback(lambda _:
                       self.assertEqual(
                           SimpleLEAPServer.theAccount.subscriptions,
-                          ['THAT/MBOX']))
+                          ['that/mbox']))
         return d
 
     @deferred(timeout=None)
@@ -1029,7 +1029,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         return d.addCallback(self._cbTestExamine)
 
     def _cbTestExamine(self, ignored):
-        mbox = self.server.theAccount.getMailbox('TEST-MAILBOX-E')
+        mbox = self.server.theAccount.getMailbox('test-mailbox-e')
         self.assertEqual(self.server.mbox.messages.mbox, mbox.messages.mbox)
         self.assertEqual(self.examinedArgs, {
             'EXISTS': 0, 'RECENT': 0, 'UIDVALIDITY': 42,
@@ -1070,8 +1070,8 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         d.addCallback(lambda listed: self.assertEqual(
             sortNest(listed),
             sortNest([
-                (SoledadMailbox.INIT_FLAGS, "/", "ROOT/SUBTHINGL"),
-                (SoledadMailbox.INIT_FLAGS, "/", "ROOT/ANOTHER-THING")
+                (SoledadMailbox.INIT_FLAGS, "/", "root/subthingl"),
+                (SoledadMailbox.INIT_FLAGS, "/", "root/another-thing")
             ])
         ))
         return d
@@ -1081,13 +1081,13 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         """
         Test LSub command
         """
-        SimpleLEAPServer.theAccount.subscribe('ROOT/SUBTHINGL2')
+        SimpleLEAPServer.theAccount.subscribe('root/subthingl2')
 
         def lsub():
             return self.client.lsub('root', '%')
         d = self._listSetup(lsub)
         d.addCallback(self.assertEqual,
-                      [(SoledadMailbox.INIT_FLAGS, "/", "ROOT/SUBTHINGL2")])
+                      [(SoledadMailbox.INIT_FLAGS, "/", "root/subthingl2")])
         return d
 
     @deferred(timeout=None)
@@ -1190,7 +1190,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         return d.addCallback(self._cbTestFullAppend, infile)
 
     def _cbTestFullAppend(self, ignored, infile):
-        mb = SimpleLEAPServer.theAccount.getMailbox('ROOT/SUBTHING')
+        mb = SimpleLEAPServer.theAccount.getMailbox('root/subthing')
         self.assertEqual(1, len(mb.messages))
 
         self.assertEqual(
