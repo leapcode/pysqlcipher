@@ -21,11 +21,13 @@ import copy
 import logging
 import StringIO
 import cStringIO
+import os
 import time
 import re
 
 from collections import defaultdict
 from email.parser import Parser
+from functools import wraps
 
 from zope.interface import implements
 from zope.proxy import sameProxiedObjects
@@ -35,6 +37,7 @@ from twisted.internet import defer
 from twisted.internet.threads import deferToThread
 from twisted.python import log
 
+from u1db import errors as u1db_errors
 
 from leap.common import events as leap_events
 from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
@@ -44,6 +47,65 @@ from leap.mail.messageflow import IMessageConsumer, MessageProducer
 from leap.soledad.client import Soledad
 
 logger = logging.getLogger(__name__)
+
+
+def deferred(f):
+    '''
+    Decorator, for deferring methods to Threads.
+
+    It will do a deferToThread of the decorated method
+    unless the environment variable LEAPMAIL_DEBUG is set.
+
+    It uses a descriptor to delay the definition of the
+    method wrapper.
+    '''
+    class descript(object):
+        def __init__(self, f):
+            self.f = f
+
+        def __get__(self, instance, klass):
+            if instance is None:
+                # Class method was requested
+                return self.make_unbound(klass)
+            return self.make_bound(instance)
+
+        def _errback(self, failure):
+            err = failure.value
+            #logger.error(err)
+            log.err(err)
+
+        def make_unbound(self, klass):
+
+            @wraps(self.f)
+            def wrapper(*args, **kwargs):
+                '''This documentation will vanish :)'''
+                raise TypeError(
+                    'unbound method {}() must be called with {} instance '
+                    'as first argument (got nothing instead)'.format(
+                        self.f.__name__,
+                        klass.__name__)
+                )
+            return wrapper
+
+        def make_bound(self, instance):
+
+            @wraps(self.f)
+            def wrapper(*args, **kwargs):
+                '''This documentation will disapear :)'''
+
+                if not os.environ.get('LEAPMAIL_DEBUG'):
+                    d = deferToThread(self.f, instance, *args, **kwargs)
+                    d.addErrback(self._errback)
+                    return d
+                else:
+                    return self.f(instance, *args, **kwargs)
+
+            # This instance does not need the descriptor anymore,
+            # let it find the wrapper directly next time:
+            setattr(instance, self.f.__name__, wrapper)
+            return wrapper
+
+    return descript(f)
 
 
 class MissingIndexError(Exception):
@@ -870,9 +932,19 @@ class SoledadDocWriter(object):
             payload = item['payload']
             mode = item['mode']
             if mode == "create":
-                self._soledad.create_doc(payload)
+                call = self._soledad.create_doc
             elif mode == "put":
-                self._soledad.put_doc(payload)
+                call = self._soledad.put_doc
+
+            # should handle errors
+            try:
+                call(payload)
+            except u1db_errors.RevisionConflict as exc:
+                logger.error("Error: %r" % (exc,))
+                # XXX DEBUG -- remove-me
+                #logger.debug("conflicting doc: %s" % payload)
+                raise exc
+
             empty = queue.empty()
 
 
@@ -954,6 +1026,7 @@ class MessageCollection(WithMsgFields, IndexedDB):
         """
         return copy.deepcopy(self.EMPTY_MSG)
 
+    @deferred
     def add_msg(self, raw, subject=None, flags=None, date=None, uid=1):
         """
         Creates a new message document.
@@ -1639,6 +1712,7 @@ class SoledadMailbox(WithMsgFields):
         # more generically
         return [x for x in range(len(deleted))]
 
+    @deferred
     def fetch(self, messages, uid):
         """
         Retrieve one or more messages in this mailbox.
@@ -1668,6 +1742,7 @@ class SoledadMailbox(WithMsgFields):
 
         # for sequence numbers (uid = 0)
         if sequence:
+            logger.debug("Getting msg by index: INEFFICIENT call!")
             for msg_id in messages:
                 msg = self.messages.get_msg_by_index(msg_id - 1)
                 if msg:
@@ -1686,8 +1761,11 @@ class SoledadMailbox(WithMsgFields):
         if self.isWriteable():
             self._unset_recent_flag()
 
-        return tuple(result[:100])
+        # XXX workaround for hangs in thunderbird
+        #return tuple(result[:100])
+        return tuple(result)
 
+    @deferred
     def _unset_recent_flag(self):
         """
         Unsets `Recent` flag from a tuple of messages.
@@ -1706,10 +1784,12 @@ class SoledadMailbox(WithMsgFields):
         then that message SHOULD be considered recent.
         """
         log.msg('unsetting recent flags...')
+
         for msg in (LeapMessage(doc) for doc in self.messages.recent_iter()):
             newflags = msg.removeFlags((WithMsgFields.RECENT_FLAG,))
             self._update(newflags)
 
+    @deferred
     def _signal_unread_to_ui(self):
         """
         Sends unread event to ui.
@@ -1717,6 +1797,7 @@ class SoledadMailbox(WithMsgFields):
         unseen = self.getUnseenCount()
         leap_events.signal(IMAP_UNREAD_MAIL, str(unseen))
 
+    @deferred
     def store(self, messages, flags, mode, uid):
         """
         Sets the flags of one or more messages.
@@ -1774,6 +1855,7 @@ class SoledadMailbox(WithMsgFields):
         self._signal_unread_to_ui()
         return result
 
+    @deferred
     def close(self):
         """
         Expunge and mark as closed
