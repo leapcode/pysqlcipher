@@ -25,7 +25,7 @@ import os
 import time
 import re
 
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from email.parser import Parser
 from functools import wraps
 
@@ -71,7 +71,7 @@ def deferred(f):
 
         def _errback(self, failure):
             err = failure.value
-            #logger.error(err)
+            logger.warning('error in method: %s' % (self.f.__name__))
             log.err(err)
 
         def make_unbound(self, klass):
@@ -133,6 +133,8 @@ class WithMsgFields(object):
     RAW_KEY = "raw"
     SUBJECT_KEY = "subject"
     UID_KEY = "uid"
+    MULTIPART_KEY = "multi"
+    SIZE_KEY = "size"
 
     # Mailbox specific keys
     CLOSED_KEY = "closed"
@@ -145,6 +147,8 @@ class WithMsgFields(object):
     TYPE_KEY = "type"
     TYPE_MESSAGE_VAL = "msg"
     TYPE_MBOX_VAL = "mbox"
+    TYPE_FLAGS_VAL = "flags"
+    # should add also a headers val
 
     INBOX_VAL = "inbox"
 
@@ -165,6 +169,8 @@ class WithMsgFields(object):
     # Fields in mail object
     SUBJECT_FIELD = "Subject"
     DATE_FIELD = "Date"
+
+fields = WithMsgFields  # alias for convenience
 
 
 class IndexedDB(object):
@@ -209,12 +215,79 @@ class IndexedDB(object):
             self._soledad.create_index(name, *expression)
 
 
+class MailParser(object):
+    """
+    Mixin with utility methods to parse raw messages.
+    """
+    def __init__(self):
+        """
+        Initializes the mail parser.
+        """
+        self._parser = Parser()
+
+    def _get_parsed_msg(self, raw):
+        """
+        Return a parsed Message.
+
+        :param raw: the raw string to parse
+        :type raw: basestring, or StringIO object
+        """
+        msg = self._get_parser_fun(raw)(raw, True)
+        return msg
+
+    def _get_parser_fun(self, o):
+        """
+        Retunn the proper parser function for an object.
+
+        :param o: object
+        :type o: object
+        :param parser: an instance of email.parser.Parser
+        :type parser: email.parser.Parser
+        """
+        if isinstance(o, (cStringIO.OutputType, StringIO.StringIO)):
+            return self._parser.parse
+        if isinstance(o, basestring):
+            return self._parser.parsestr
+
+    def _stringify(self, o):
+        """
+        Return a string object.
+
+        :param o: object
+        :type o: object
+        """
+        if isinstance(o, (cStringIO.OutputType, StringIO.StringIO)):
+            return o.getvalue()
+        else:
+            return o
+
+
+class MBoxParser(object):
+    """
+    Utility function to parse mailbox names.
+    """
+    INBOX_NAME = "INBOX"
+    INBOX_RE = re.compile(INBOX_NAME, re.IGNORECASE)
+
+    def _parse_mailbox_name(self, name):
+        """
+        :param name: the name of the mailbox
+        :type name: unicode
+
+        :rtype: unicode
+        """
+        if self.INBOX_RE.match(name):
+            # ensure inital INBOX is uppercase
+            return self.INBOX_NAME + name[len(self.INBOX_NAME):]
+        return name
+
+
 #######################################
 # Soledad Account
 #######################################
 
 
-class SoledadBackedAccount(WithMsgFields, IndexedDB):
+class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
     """
     An implementation of IAccount and INamespacePresenteer
     that is backed by Soledad Encrypted Documents.
@@ -254,12 +327,11 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
                                   'bool(recent)', 'bool(seen)'],
     }
 
-    INBOX_NAME = "INBOX"
     MBOX_KEY = MBOX_VAL
 
     EMPTY_MBOX = {
         WithMsgFields.TYPE_KEY: MBOX_KEY,
-        WithMsgFields.TYPE_MBOX_VAL: INBOX_NAME,
+        WithMsgFields.TYPE_MBOX_VAL: MBoxParser.INBOX_NAME,
         WithMsgFields.SUBJECT_KEY: "",
         WithMsgFields.FLAGS_KEY: [],
         WithMsgFields.CLOSED_KEY: False,
@@ -267,8 +339,6 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         WithMsgFields.RW_KEY: 1,
         WithMsgFields.LAST_UID_KEY: 0
     }
-
-    INBOX_RE = re.compile(INBOX_NAME, re.IGNORECASE)
 
     def __init__(self, account_name, soledad=None):
         """
@@ -305,18 +375,6 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         :rtype: dict
         """
         return copy.deepcopy(self.EMPTY_MBOX)
-
-    def _parse_mailbox_name(self, name):
-        """
-        :param name: the name of the mailbox
-        :type name: unicode
-
-        :rtype: unicode
-        """
-        if self.INBOX_RE.match(name):
-            # ensure inital INBOX is uppercase
-            return self.INBOX_NAME + name[len(self.INBOX_NAME):]
-        return name
 
     def _get_mailbox_by_name(self, name):
         """
@@ -420,7 +478,8 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
         :raise MailboxException: Raised if this mailbox cannot be added.
         """
         # TODO raise MailboxException
-        paths = filter(None,
+        paths = filter(
+            None,
             self._parse_mailbox_name(pathspec).split('/'))
         for accum in range(1, len(paths)):
             try:
@@ -665,19 +724,43 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB):
 #######################################
 
 
-class LeapMessage(WithMsgFields):
+class LeapMessage(fields, MailParser, MBoxParser):
 
-    implements(imap4.IMessage, imap4.IMessageFile)
+    implements(imap4.IMessage)
 
-    def __init__(self, doc):
+    def __init__(self, soledad, uid, mbox):
         """
         Initializes a LeapMessage.
 
-        :param doc: A SoledadDocument containing the internal
-                    representation of the message
-        :type doc: SoledadDocument
+        :param soledad: a Soledad instance
+        :type soledad: Soledad
+        :param uid: the UID for the message.
+        :type uid: int or basestring
+        :param mbox: the mbox this message belongs to
+        :type mbox: basestring
         """
-        self._doc = doc
+        MailParser.__init__(self)
+        self._soledad = soledad
+        self._uid = int(uid)
+        self._mbox = self._parse_mailbox_name(mbox)
+
+        self.__cdoc = None
+
+    @property
+    def _fdoc(self):
+        """
+        An accessor to the flags docuemnt
+        """
+        return self._get_flags_doc()
+
+    @property
+    def _cdoc(self):
+        """
+        An accessor to the content docuemnt
+        """
+        if not self.__cdoc:
+            self.__cdoc = self._get_content_doc()
+        return self.__cdoc
 
     def getUID(self):
         """
@@ -686,11 +769,7 @@ class LeapMessage(WithMsgFields):
         :return: uid for this message
         :rtype: int
         """
-        # XXX debug, to remove after a while...
-        if not self._doc:
-            log.msg('BUG!!! ---- message has no doc!')
-            return
-        return self._doc.content[self.UID_KEY]
+        return self._uid
 
     def getFlags(self):
         """
@@ -699,9 +778,13 @@ class LeapMessage(WithMsgFields):
         :return: The flags, represented as strings
         :rtype: tuple
         """
-        if self._doc is None:
+        if self._uid is None:
             return []
-        flags = self._doc.content.get(self.FLAGS_KEY, None)
+
+        flags = []
+        flag_doc = self._fdoc
+        if flag_doc:
+            flags = flag_doc.content.get(self.FLAGS_KEY, None)
         if flags:
             flags = map(str, flags)
         return tuple(flags)
@@ -722,12 +805,13 @@ class LeapMessage(WithMsgFields):
         :rtype: SoledadDocument
         """
         leap_assert(isinstance(flags, tuple), "flags need to be a tuple")
-        log.msg('setting flags')
-        doc = self._doc
+        log.msg('setting flags: %s' % (self._uid))
+
+        doc = self._fdoc
         doc.content[self.FLAGS_KEY] = flags
         doc.content[self.SEEN_KEY] = self.SEEN_FLAG in flags
         doc.content[self.RECENT_KEY] = self.RECENT_FLAG in flags
-        return doc
+        self._soledad.put_doc(doc)
 
     def addFlags(self, flags):
         """
@@ -743,7 +827,7 @@ class LeapMessage(WithMsgFields):
         """
         leap_assert(isinstance(flags, tuple), "flags need to be a tuple")
         oldflags = self.getFlags()
-        return self.setFlags(tuple(set(flags + oldflags)))
+        self.setFlags(tuple(set(flags + oldflags)))
 
     def removeFlags(self, flags):
         """
@@ -759,7 +843,7 @@ class LeapMessage(WithMsgFields):
         """
         leap_assert(isinstance(flags, tuple), "flags need to be a tuple")
         oldflags = self.getFlags()
-        return self.setFlags(tuple(set(oldflags) - set(flags)))
+        self.setFlags(tuple(set(oldflags) - set(flags)))
 
     def getInternalDate(self):
         """
@@ -768,48 +852,14 @@ class LeapMessage(WithMsgFields):
         :rtype: C{str}
         :return: An RFC822-formatted date string.
         """
-        return str(self._doc.content.get(self.DATE_KEY, ''))
-
-    #
-    # IMessageFile
-    #
-
-    """
-    Optional message interface for representing messages as files.
-
-    If provided by message objects, this interface will be used instead
-    the more complex MIME-based interface.
-    """
-
-    def open(self):
-        """
-        Return an file-like object opened for reading.
-
-        Reading from the returned file will return all the bytes
-        of which this message consists.
-
-        :return: file-like object opened fore reading.
-        :rtype: StringIO
-        """
-        fd = cStringIO.StringIO()
-        content = self._doc.content.get(self.RAW_KEY, '')
-        charset = get_email_charset(
-            unicode(self._doc.content.get(self.RAW_KEY, '')))
-        try:
-            content = content.encode(charset)
-        except (UnicodeEncodeError, UnicodeDecodeError) as e:
-            logger.error("Unicode error {0}".format(e))
-            content = content.encode(charset, 'replace')
-        fd.write(content)
-        fd.seek(0)
-        return fd
+        return str(self._cdoc.content.get(self.DATE_KEY, ''))
 
     #
     # IMessagePart
     #
 
-    # XXX should implement the rest of IMessagePart interface:
-    # (and do not use the open above)
+    # XXX we should implement this interface too for the subparts
+    # so we allow nested parts...
 
     def getBodyFile(self):
         """
@@ -819,15 +869,21 @@ class LeapMessage(WithMsgFields):
         :rtype: StringIO
         """
         fd = StringIO.StringIO()
-        content = self._doc.content.get(self.RAW_KEY, '')
+
+        cdoc = self._cdoc
+        content = cdoc.content.get(self.RAW_KEY, '')
         charset = get_email_charset(
-            unicode(self._doc.content.get(self.RAW_KEY, '')))
+            unicode(cdoc.content.get(self.RAW_KEY, '')))
         try:
             content = content.encode(charset)
         except (UnicodeEncodeError, UnicodeDecodeError) as e:
             logger.error("Unicode error {0}".format(e))
             content = content.encode(charset, 'replace')
-        fd.write(content)
+
+        raw = self._get_raw_msg()
+        msg = self._get_parsed_msg(raw)
+        body = msg.get_payload()
+        fd.write(body)
         # XXX SHOULD use a separate BODY FIELD ...
         fd.seek(0)
         return fd
@@ -839,13 +895,18 @@ class LeapMessage(WithMsgFields):
         :return: size of the message, in octets
         :rtype: int
         """
-        return self.getBodyFile().len
+        size = self._cdoc.content.get(self.SIZE_KEY, False)
+        if not size:
+            # XXX fallback, should remove when all migrated.
+            size = self.getBodyFile().len
+        return size
 
     def _get_headers(self):
         """
         Return the headers dict stored in this message document.
         """
-        return self._doc.content.get(self.HEADERS_KEY, {})
+        # XXX get from the headers doc
+        return self._cdoc.content.get(self.HEADERS_KEY, {})
 
     def getHeaders(self, negate, *names):
         """
@@ -876,30 +937,90 @@ class LeapMessage(WithMsgFields):
             if cond(key)]
         return dict(filter_by_cond)
 
-    # --- no multipart for now
-    # XXX Fix MULTIPART SUPPORT!
-
     def isMultipart(self):
-        return False
+        """
+        Return True if this message is multipart.
+        """
+        if self._cdoc:
+            retval = self._cdoc.content.get(self.MULTIPART_KEY, False)
+            print "MULTIPART? ", retval
 
-    def getSubPart(part):
-        return None
+    def getSubPart(self, part):
+        """
+        Retrieve a MIME submessage
+
+        :type part: C{int}
+        :param part: The number of the part to retrieve, indexed from 0.
+        :raise IndexError: Raised if the specified part does not exist.
+        :raise TypeError: Raised if this message is not multipart.
+        :rtype: Any object implementing C{IMessagePart}.
+        :return: The specified sub-part.
+        """
+        if not self.isMultipart():
+            raise TypeError
+
+        msg = self._get_parsed_msg()
+        # XXX should wrap IMessagePart
+        return msg.get_payload()[part]
 
     #
     # accessors
     #
 
+    def _get_flags_doc(self):
+        """
+        Return the document that keeps the flags for this
+        message.
+        """
+        flag_docs = self._soledad.get_from_index(
+            SoledadBackedAccount.TYPE_MBOX_UID_IDX,
+            fields.TYPE_FLAGS_VAL, self._mbox, str(self._uid))
+        flag_doc = flag_docs[0] if flag_docs else None
+        return flag_doc
+
+    def _get_content_doc(self):
+        """
+        Return the document that keeps the flags for this
+        message.
+        """
+        cont_docs = self._soledad.get_from_index(
+            SoledadBackedAccount.TYPE_MBOX_UID_IDX,
+            fields.TYPE_MESSAGE_VAL, self._mbox, str(self._uid))
+        cont_doc = cont_docs[0] if cont_docs else None
+        return cont_doc
+
+    def _get_raw_msg(self):
+        """
+        Return the raw msg.
+        :rtype: basestring
+        """
+        return self._cdoc.content.get(self.RAW_KEY, '')
+
     def __getitem__(self, key):
         """
         Return the content of the message document.
 
-        @param key: The key
-        @type key: str
+        :param key: The key
+        :type key: str
 
-        @return: The content value indexed by C{key} or None
-        @rtype: str
+        :return: The content value indexed by C{key} or None
+        :rtype: str
         """
-        return self._doc.content.get(key, None)
+        return self._cdoc.content.get(key, None)
+
+    def does_exist(self):
+        """
+        Return True if there is actually a message for this
+        UID and mbox.
+        """
+        return bool(self._fdoc)
+
+
+SoledadWriterPayload = namedtuple(
+    'SoledadWriterPayload', ['mode', 'payload'])
+
+SoledadWriterPayload.CREATE = 1
+SoledadWriterPayload.PUT = 2
 
 
 class SoledadDocWriter(object):
@@ -929,26 +1050,22 @@ class SoledadDocWriter(object):
         empty = queue.empty()
         while not empty:
             item = queue.get()
-            payload = item['payload']
-            mode = item['mode']
-            if mode == "create":
+            if item.mode == SoledadWriterPayload.CREATE:
                 call = self._soledad.create_doc
-            elif mode == "put":
+            elif item.mode == SoledadWriterPayload.PUT:
                 call = self._soledad.put_doc
 
             # should handle errors
             try:
-                call(payload)
+                call(item.payload)
             except u1db_errors.RevisionConflict as exc:
                 logger.error("Error: %r" % (exc,))
-                # XXX DEBUG -- remove-me
-                #logger.debug("conflicting doc: %s" % payload)
                 raise exc
 
             empty = queue.empty()
 
 
-class MessageCollection(WithMsgFields, IndexedDB):
+class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
     """
     A collection of messages, surprisingly.
 
@@ -959,16 +1076,27 @@ class MessageCollection(WithMsgFields, IndexedDB):
     # XXX this should be able to produce a MessageSet methinks
 
     EMPTY_MSG = {
-        WithMsgFields.TYPE_KEY: WithMsgFields.TYPE_MESSAGE_VAL,
-        WithMsgFields.UID_KEY: 1,
-        WithMsgFields.MBOX_KEY: WithMsgFields.INBOX_VAL,
-        WithMsgFields.SUBJECT_KEY: "",
-        WithMsgFields.DATE_KEY: "",
-        WithMsgFields.SEEN_KEY: False,
-        WithMsgFields.RECENT_KEY: True,
-        WithMsgFields.FLAGS_KEY: [],
-        WithMsgFields.HEADERS_KEY: {},
-        WithMsgFields.RAW_KEY: "",
+        fields.TYPE_KEY: fields.TYPE_MESSAGE_VAL,
+        fields.UID_KEY: 1,
+        fields.MBOX_KEY: fields.INBOX_VAL,
+
+        fields.SUBJECT_KEY: "",
+        fields.DATE_KEY: "",
+        fields.RAW_KEY: "",
+
+        # XXX should separate headers into another doc
+        fields.HEADERS_KEY: {},
+    }
+
+    EMPTY_FLAGS = {
+        fields.TYPE_KEY: fields.TYPE_FLAGS_VAL,
+        fields.UID_KEY: 1,
+        fields.MBOX_KEY: fields.INBOX_VAL,
+
+        fields.FLAGS_KEY: [],
+        fields.SEEN_KEY: False,
+        fields.RECENT_KEY: True,
+        fields.MULTIPART_KEY: False,
     }
 
     # get from SoledadBackedAccount the needed index-related constants
@@ -987,25 +1115,17 @@ class MessageCollection(WithMsgFields, IndexedDB):
         :param soledad: Soledad database
         :type soledad: Soledad instance
         """
-        # XXX pass soledad directly
-
+        MailParser.__init__(self)
         leap_assert(mbox, "Need a mailbox name to initialize")
         leap_assert(mbox.strip() != "", "mbox cannot be blank space")
         leap_assert(isinstance(mbox, (str, unicode)),
                     "mbox needs to be a string")
         leap_assert(soledad, "Need a soledad instance to initialize")
 
-        # This is a wrapper now!...
-        # should move assertion there...
-        #leap_assert(isinstance(soledad._db, SQLCipherDatabase),
-                    #"soledad._db must be an instance of SQLCipherDatabase")
-
         # okay, all in order, keep going...
-
-        self.mbox = mbox.upper()
+        self.mbox = self._parse_mailbox_name(mbox)
         self._soledad = soledad
         self.initialize_db()
-        self._parser = Parser()
 
         # I think of someone like nietzsche when reading this
 
@@ -1015,7 +1135,7 @@ class MessageCollection(WithMsgFields, IndexedDB):
 
         self.soledad_writer = MessageProducer(
             SoledadDocWriter(soledad),
-            period=0.1)
+            period=0.05)
 
     def _get_empty_msg(self):
         """
@@ -1025,6 +1145,15 @@ class MessageCollection(WithMsgFields, IndexedDB):
         :rtype: dict
         """
         return copy.deepcopy(self.EMPTY_MSG)
+
+    def _get_empty_flags_doc(self):
+        """
+        Returns an empty doc for storing flags.
+
+        :return:
+        :rtype:
+        """
+        return copy.deepcopy(self.EMPTY_FLAGS)
 
     @deferred
     def add_msg(self, raw, subject=None, flags=None, date=None, uid=1):
@@ -1046,58 +1175,57 @@ class MessageCollection(WithMsgFields, IndexedDB):
         :param uid: the message uid for this mailbox
         :type uid: int
         """
+        # TODO: split in smaller methods
         logger.debug('adding message')
         if flags is None:
             flags = tuple()
         leap_assert_type(flags, tuple)
 
-        def stringify(o):
-            if isinstance(o, (cStringIO.OutputType, StringIO.StringIO)):
-                return o.getvalue()
-            else:
-                return o
+        content_doc = self._get_empty_msg()
+        flags_doc = self._get_empty_flags_doc()
 
-        content = self._get_empty_msg()
-        content[self.MBOX_KEY] = self.mbox
+        content_doc[self.MBOX_KEY] = self.mbox
+        flags_doc[self.MBOX_KEY] = self.mbox
+        # ...should get a sanity check here.
+        content_doc[self.UID_KEY] = uid
+        flags_doc[self.UID_KEY] = uid
 
         if flags:
-            content[self.FLAGS_KEY] = map(stringify, flags)
-            content[self.SEEN_KEY] = self.SEEN_FLAG in flags
+            flags_doc[self.FLAGS_KEY] = map(self._stringify, flags)
+            flags_doc[self.SEEN_KEY] = self.SEEN_FLAG in flags
 
-        def _get_parser_fun(o):
-            if isinstance(o, (cStringIO.OutputType, StringIO.StringIO)):
-                return self._parser.parse
-            if isinstance(o, (str, unicode)):
-                return self._parser.parsestr
-
-        msg = _get_parser_fun(raw)(raw, True)
+        msg = self._get_parsed_msg(raw)
         headers = dict(msg)
 
+        flags_doc[self.MULTIPART_KEY] = msg.is_multipart()
         # XXX get lower case for keys?
-        content[self.HEADERS_KEY] = headers
+        # XXX get headers doc
+        content_doc[self.HEADERS_KEY] = headers
         # set subject based on message headers and eventually replace by
         # subject given as param
         if self.SUBJECT_FIELD in headers:
-            content[self.SUBJECT_KEY] = headers[self.SUBJECT_FIELD]
+            content_doc[self.SUBJECT_KEY] = headers[self.SUBJECT_FIELD]
         if subject is not None:
-            content[self.SUBJECT_KEY] = subject
-        content[self.RAW_KEY] = stringify(raw)
+            content_doc[self.SUBJECT_KEY] = subject
+
+        # XXX could separate body into its own doc
+        # but should also separate multiparts
+        # that should be wrapped in MessagePart
+        content_doc[self.RAW_KEY] = self._stringify(raw)
+        content_doc[self.SIZE_KEY] = len(raw)
 
         if not date and self.DATE_FIELD in headers:
-            content[self.DATE_KEY] = headers[self.DATE_FIELD]
+            content_doc[self.DATE_KEY] = headers[self.DATE_FIELD]
         else:
-            content[self.DATE_KEY] = date
-
-        # ...should get a sanity check here.
-        content[self.UID_KEY] = uid
+            content_doc[self.DATE_KEY] = date
 
         logger.debug('enqueuing message for write')
 
-        # XXX create namedtuple
-        self.soledad_writer.put({"mode": "create",
-                                 "payload": content})
-        # XXX have to decide what shall we do with errors with this change...
-        #return self._soledad.create_doc(content)
+        ptuple = SoledadWriterPayload
+        self.soledad_writer.put(ptuple(
+            mode=ptuple.CREATE, payload=content_doc))
+        self.soledad_writer.put(ptuple(
+            mode=ptuple.CREATE, payload=flags_doc))
 
     def remove(self, msg):
         """
@@ -1110,23 +1238,6 @@ class MessageCollection(WithMsgFields, IndexedDB):
 
     # getters
 
-    def get_by_uid(self, uid):
-        """
-        Retrieves a message document by UID.
-
-        :param uid: the message uid to query by
-        :type uid: int
-
-        :return: A SoledadDocument instance matching the query,
-                 or None if not found.
-        :rtype: SoledadDocument
-        """
-        docs = self._soledad.get_from_index(
-            SoledadBackedAccount.TYPE_MBOX_UID_IDX,
-            self.TYPE_MESSAGE_VAL, self.mbox, str(uid))
-
-        return docs[0] if docs else None
-
     def get_msg_by_uid(self, uid):
         """
         Retrieves a LeapMessage by UID.
@@ -1138,43 +1249,10 @@ class MessageCollection(WithMsgFields, IndexedDB):
                  or None if not found.
         :rtype: LeapMessage
         """
-        doc = self.get_by_uid(uid)
-        if doc:
-            return LeapMessage(doc)
-
-    def get_by_index(self, index):
-        """
-        Retrieves a mesage document by mailbox index.
-
-        :param index: the index of the sequence (zero-indexed)
-        :type index: int
-        """
-        # XXX inneficient! ---- we should keep an index document
-        # with uid -- doc_uuid :)
-        try:
-            return self.get_all()[index]
-        except IndexError:
+        msg = LeapMessage(self._soledad, uid, self.mbox)
+        if not msg.does_exist():
             return None
-
-    def get_msg_by_index(self, index):
-        """
-        Retrieves a LeapMessage by sequence index.
-
-        :param index: the index of the sequence (zero-indexed)
-        :type index: int
-        """
-        doc = self.get_by_index(index)
-        if doc:
-            return LeapMessage(doc)
-
-    def is_deleted(self, doc):
-        """
-        Returns whether a given doc is deleted or not.
-
-        :param doc: the document to check
-        :rtype: bool
-        """
-        return self.DELETED_FLAG in doc.content[self.FLAGS_KEY]
+        return msg
 
     def get_all(self):
         """
@@ -1184,18 +1262,19 @@ class MessageCollection(WithMsgFields, IndexedDB):
         :return: a list of u1db documents
         :rtype: list of SoledadDocument
         """
+        # TODO change to get_all_docs and turn this
+        # into returning messages
         if sameProxiedObjects(self._soledad, None):
             logger.warning('Tried to get messages but soledad is None!')
             return []
 
-        #f XXX this should return LeapMessage instances
         all_docs = [doc for doc in self._soledad.get_from_index(
             SoledadBackedAccount.TYPE_MBOX_IDX,
-            self.TYPE_MESSAGE_VAL, self.mbox)]
-        # highly inneficient, but first let's grok it and then
-        # let's worry about efficiency.
+            fields.TYPE_FLAGS_VAL, self.mbox)]
 
-        # XXX FIXINDEX
+        # inneficient, but first let's grok it and then
+        # let's worry about efficiency.
+        # XXX FIXINDEX -- should implement order by in soledad
         return sorted(all_docs, key=lambda item: item.content['uid'])
 
     def count(self):
@@ -1206,7 +1285,7 @@ class MessageCollection(WithMsgFields, IndexedDB):
         """
         count = self._soledad.get_count_from_index(
             SoledadBackedAccount.TYPE_MBOX_IDX,
-            self.TYPE_MESSAGE_VAL, self.mbox)
+            fields.TYPE_FLAGS_VAL, self.mbox)
         return count
 
     # unseen messages
@@ -1215,13 +1294,13 @@ class MessageCollection(WithMsgFields, IndexedDB):
         """
         Get an iterator for the message docs with no `seen` flag
 
-        :return: iterator through unseen message docs
+        :return: iterator through unseen message doc UIDs
         :rtype: iterable
         """
-        return (doc for doc in
+        return (doc.content[self.UID_KEY] for doc in
                 self._soledad.get_from_index(
                     SoledadBackedAccount.TYPE_MBOX_SEEN_IDX,
-                    self.TYPE_MESSAGE_VAL, self.mbox, '0'))
+                    self.TYPE_FLAGS_VAL, self.mbox, '0'))
 
     def count_unseen(self):
         """
@@ -1232,7 +1311,7 @@ class MessageCollection(WithMsgFields, IndexedDB):
         """
         count = self._soledad.get_count_from_index(
             SoledadBackedAccount.TYPE_MBOX_SEEN_IDX,
-            self.TYPE_MESSAGE_VAL, self.mbox, '0')
+            self.TYPE_FLAGS_VAL, self.mbox, '0')
         return count
 
     def get_unseen(self):
@@ -1242,7 +1321,8 @@ class MessageCollection(WithMsgFields, IndexedDB):
         :returns: a list of LeapMessages
         :rtype: list
         """
-        return [LeapMessage(doc) for doc in self.unseen_iter()]
+        return [LeapMessage(self._soledad, docid, self.mbox)
+                for docid in self.unseen_iter()]
 
     # recent messages
 
@@ -1253,10 +1333,10 @@ class MessageCollection(WithMsgFields, IndexedDB):
         :return: iterator through recent message docs
         :rtype: iterable
         """
-        return (doc for doc in
+        return (doc.content[self.UID_KEY] for doc in
                 self._soledad.get_from_index(
                     SoledadBackedAccount.TYPE_MBOX_RECT_IDX,
-                    self.TYPE_MESSAGE_VAL, self.mbox, '1'))
+                    self.TYPE_FLAGS_VAL, self.mbox, '1'))
 
     def get_recent(self):
         """
@@ -1265,7 +1345,8 @@ class MessageCollection(WithMsgFields, IndexedDB):
         :returns: a list of LeapMessages
         :rtype: list
         """
-        return [LeapMessage(doc) for doc in self.recent_iter()]
+        return [LeapMessage(self._soledad, docid, self.mbox)
+                for docid in self.recent_iter()]
 
     def count_recent(self):
         """
@@ -1276,7 +1357,7 @@ class MessageCollection(WithMsgFields, IndexedDB):
         """
         count = self._soledad.get_count_from_index(
             SoledadBackedAccount.TYPE_MBOX_RECT_IDX,
-            self.TYPE_MESSAGE_VAL, self.mbox, '1')
+            self.TYPE_FLAGS_VAL, self.mbox, '1')
         return count
 
     def __len__(self):
@@ -1297,23 +1378,6 @@ class MessageCollection(WithMsgFields, IndexedDB):
         # XXX return LeapMessage instead?! (change accordingly)
         return (m.content for m in self.get_all())
 
-    def __getitem__(self, uid):
-        """
-        Allows indexing as a list, with msg uid as the index.
-
-        :param uid: an integer index
-        :type uid: int
-
-        :return: LeapMessage or None if not found.
-        :rtype: LeapMessage
-        """
-        # XXX FIXME inneficcient, we are evaulating.
-        try:
-            return [doc
-                    for doc in self.get_all()][uid - 1]
-        except IndexError:
-            return None
-
     def __repr__(self):
         """
         Representation string for this object.
@@ -1321,10 +1385,11 @@ class MessageCollection(WithMsgFields, IndexedDB):
         return u"<MessageCollection: mbox '%s' (%s)>" % (
             self.mbox, self.count())
 
-    # XXX should implement __eq__ also
+    # XXX should implement __eq__ also !!! --- use a hash
+    # of content for that, will be used for dedup.
 
 
-class SoledadMailbox(WithMsgFields):
+class SoledadMailbox(WithMsgFields, MBoxParser):
     """
     A Soledad-backed IMAP mailbox.
 
@@ -1373,7 +1438,7 @@ class SoledadMailbox(WithMsgFields):
         #leap_assert(isinstance(soledad._db, SQLCipherDatabase),
                     #"soledad._db must be an instance of SQLCipherDatabase")
 
-        self.mbox = mbox
+        self.mbox = self._parse_mailbox_name(mbox)
         self.rw = rw
 
         self._soledad = soledad
@@ -1440,11 +1505,6 @@ class SoledadMailbox(WithMsgFields):
         :returns: tuple of flags for this mailbox
         :rtype: tuple of str
         """
-        #return map(str, self.INIT_FLAGS)
-
-        # XXX CHECK against thunderbird XXX
-        # XXX I think this is slightly broken.. :/
-
         mbox = self._get_mbox()
         if not mbox:
             return None
@@ -1458,7 +1518,6 @@ class SoledadMailbox(WithMsgFields):
         :param flags: a tuple with the flags
         :type flags: tuple of str
         """
-        # TODO -- fix also getFlags
         leap_assert(isinstance(flags, tuple),
                     "flags expected to be a tuple")
         mbox = self._get_mbox()
@@ -1526,7 +1585,7 @@ class SoledadMailbox(WithMsgFields):
             # something is wrong,
             # just set the last uid
             # beyond the max msg count.
-            logger.debug("WRONG uid < count. Setting last uid to ", count)
+            logger.debug("WRONG uid < count. Setting last uid to %s", count)
             value = count
 
         mbox.content[key] = value
@@ -1634,7 +1693,7 @@ class SoledadMailbox(WithMsgFields):
         if self.CMD_RECENT in names:
             r[self.CMD_RECENT] = self.getRecentCount()
         if self.CMD_UIDNEXT in names:
-            r[self.CMD_UIDNEXT] = self.getMessageCount() + 1
+            r[self.CMD_UIDNEXT] = self.last_uid + 1
         if self.CMD_UIDVALIDITY in names:
             r[self.CMD_UIDVALIDITY] = self.getUID()
         if self.CMD_UNSEEN in names:
@@ -1664,17 +1723,34 @@ class SoledadMailbox(WithMsgFields):
         else:
             flags = tuple(str(flag) for flag in flags)
 
+        d = self._do_add_messages(message, flags, date, uid_next)
+        d.addCallback(self._notify_new)
+
+    @deferred
+    def _do_add_messages(self, message, flags, date, uid_next):
+        """
+        Calls to the messageCollection add_msg method (deferred to thread).
+        Invoked from addMessage.
+        """
         self.messages.add_msg(message, flags=flags, date=date,
                               uid=uid_next)
 
+    def _notify_new(self, *args):
+        """
+        Notify of new messages to all the listeners.
+
+        :param args: ignored.
+        """
         exists = self.getMessageCount()
         recent = self.getRecentCount()
-        logger.debug("there are %s messages, %s recent" % (
+        logger.debug("NOTIFY: there are %s messages, %s recent" % (
             exists,
             recent))
-        for listener in self.listeners:
-            listener.newMessages(exists, recent)
-        return defer.succeed(None)
+
+        logger.debug("listeners: %s", str(self.listeners))
+        for l in self.listeners:
+            logger.debug('notifying...')
+            l.newMessages(exists, recent)
 
     # commands, do not rename methods
 
@@ -1743,15 +1819,11 @@ class SoledadMailbox(WithMsgFields):
         # for sequence numbers (uid = 0)
         if sequence:
             logger.debug("Getting msg by index: INEFFICIENT call!")
-            for msg_id in messages:
-                msg = self.messages.get_msg_by_index(msg_id - 1)
-                if msg:
-                    result.append((msg.getUID(), msg))
-                else:
-                    print "fetch %s, no msg found!!!" % msg_id
+            raise NotImplementedError
 
         else:
             for msg_id in messages:
+                print "getting msg by uid", msg_id
                 msg = self.messages.get_msg_by_uid(msg_id)
                 if msg:
                     result.append((msg_id, msg))
@@ -1760,9 +1832,10 @@ class SoledadMailbox(WithMsgFields):
 
         if self.isWriteable():
             self._unset_recent_flag()
+        self._signal_unread_to_ui()
 
         # XXX workaround for hangs in thunderbird
-        #return tuple(result[:100])
+        #return tuple(result[:100])  # --- doesn't show all!!
         return tuple(result)
 
     @deferred
@@ -1784,10 +1857,9 @@ class SoledadMailbox(WithMsgFields):
         then that message SHOULD be considered recent.
         """
         log.msg('unsetting recent flags...')
-
-        for msg in (LeapMessage(doc) for doc in self.messages.recent_iter()):
-            newflags = msg.removeFlags((WithMsgFields.RECENT_FLAG,))
-            self._update(newflags)
+        for msg in self.messages.get_recent():
+            msg.removeFlags((fields.RECENT_FLAG,))
+        self._signal_unread_to_ui()
 
     @deferred
     def _signal_unread_to_ui(self):
@@ -1842,14 +1914,14 @@ class SoledadMailbox(WithMsgFields):
 
         result = {}
         for msg_id in messages:
-            print "MSG ID = %s" % msg_id
+            log.msg("MSG ID = %s" % msg_id)
             msg = self.messages.get_msg_by_uid(msg_id)
             if mode == 1:
-                self._update(msg.addFlags(flags))
+                msg.addFlags(flags)
             elif mode == -1:
-                self._update(msg.removeFlags(flags))
+                msg.removeFlags(flags)
             elif mode == 0:
-                self._update(msg.setFlags(flags))
+                msg.setFlags(flags)
             result[msg_id] = msg.getFlags()
 
         self._signal_unread_to_ui()
@@ -1872,14 +1944,6 @@ class SoledadMailbox(WithMsgFields):
         docs = self.messages.get_all()
         for doc in docs:
             self.messages._soledad.delete_doc(doc)
-
-    def _update(self, doc):
-        """
-        Updates document in u1db database
-        """
-        # XXX create namedtuple
-        self.messages.soledad_writer.put({"mode": "put",
-                                          "payload": doc})
 
     def __repr__(self):
         """
