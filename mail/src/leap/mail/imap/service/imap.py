@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 from leap.common import events as leap_events
 from leap.common.check import leap_assert, leap_assert_type, leap_check
 from leap.keymanager import KeyManager
-from leap.mail.imap.server import SoledadBackedAccount
+from leap.mail.imap.account import SoledadBackedAccount
 from leap.mail.imap.fetch import LeapIncomingMail
 from leap.soledad.client import Soledad
 
