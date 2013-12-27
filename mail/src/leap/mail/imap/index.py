@@ -21,7 +21,7 @@ import logging
 
 from leap.common.check import leap_assert, leap_assert_type
 
-from leap.mail.imap.account import SoledadBackedAccount
+from leap.mail.imap.fields import fields
 
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ class IndexedDB(object):
         db_indexes = dict()
         if self._soledad is not None:
             db_indexes = dict(self._soledad.list_indexes())
-        for name, expression in SoledadBackedAccount.INDEXES.items():
+        for name, expression in fields.INDEXES.items():
             if name not in db_indexes:
                 # The index does not yet exist.
                 self._soledad.create_index(name, *expression)

@@ -17,7 +17,13 @@
 """
 Soledad Mailbox.
 """
+import copy
+import threading
 import logging
+import time
+import StringIO
+import cStringIO
+
 from collections import defaultdict
 
 from twisted.internet import defer
@@ -45,9 +51,14 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
     The low-level database methods are contained in MessageCollection class,
     which we instantiate and make accessible in the `messages` attribute.
     """
-    implements(imap4.IMailboxInfo, imap4.IMailbox, imap4.ICloseableMailbox)
+    implements(
+        imap4.IMailbox,
+        imap4.IMailboxInfo,
+        imap4.ICloseableMailbox,
+        imap4.IMessageCopier)
+
     # XXX should finish the implementation of IMailboxListener
-    # XXX should implement IMessageCopier too
+    # XXX should implement ISearchableMailbox too
 
     messages = None
     _closed = False
@@ -65,6 +76,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
     CMD_UNSEEN = "UNSEEN"
 
     _listeners = defaultdict(set)
+    next_uid_lock = threading.Lock()
 
     def __init__(self, mbox, soledad=None, rw=1):
         """
@@ -284,8 +296,9 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
         :rtype: int
         """
-        self.last_uid += 1
-        return self.last_uid
+        with self.next_uid_lock:
+            self.last_uid += 1
+            return self.last_uid
 
     def getMessageCount(self):
         """
@@ -366,6 +379,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
         :return: a deferred that evals to None
         """
+        if isinstance(message, (cStringIO.OutputType, StringIO.StringIO)):
+            message = message.getvalue()
         # XXX we should treat the message as an IMessage from here
         leap_assert_type(message, basestring)
         uid_next = self.getUIDNext()
@@ -375,11 +390,12 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         else:
             flags = tuple(str(flag) for flag in flags)
 
-        d = self._do_add_messages(message, flags, date, uid_next)
+        d = self._do_add_message(message, flags, date, uid_next)
         d.addCallback(self._notify_new)
+        return d
 
     @deferred
-    def _do_add_messages(self, message, flags, date, uid_next):
+    def _do_add_message(self, message, flags, date, uid_next):
         """
         Calls to the messageCollection add_msg method (deferred to thread).
         Invoked from addMessage.
@@ -420,28 +436,21 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         # we should postpone the removal
         self._soledad.delete_doc(self._get_mbox())
 
+    @deferred
     def expunge(self):
         """
         Remove all messages flagged \\Deleted
         """
         if not self.isWriteable():
             raise imap4.ReadOnlyMailbox
-        delete = []
         deleted = []
-
-        for m in self.messages.get_all_docs():
-            # XXX should operate with LeapMessages instead,
-            # so we don't expose the implementation.
-            # (so, iterate for m in self.messages)
-            if self.DELETED_FLAG in m.content[self.FLAGS_KEY]:
-                delete.append(m)
-        for m in delete:
-            deleted.append(m.content)
-            self.messages.remove(m)
-
-        # XXX should return the UIDs of the deleted messages
-        # more generically
-        return [x for x in range(len(deleted))]
+        for m in self.messages:
+            if self.DELETED_FLAG in m.getFlags():
+                self.messages.remove(m)
+                # XXX this would ve more efficient if we can just pass
+                # a sequence of uids.
+                deleted.append(m.getUID())
+        return deleted
 
     @deferred
     def fetch(self, messages, uid):
@@ -510,6 +519,17 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         session is the first session to be notified about a message,
         then that message SHOULD be considered recent.
         """
+        # TODO this fucker, for the sake of correctness, is messing with
+        # the whole collection of flag docs.
+
+        # Possible ways of action:
+        # 1. Ignore it, we want fun.
+        # 2. Trigger it with a delay
+        # 3. Route it through a queue with lesser priority than the
+        #    regularar writer.
+
+        # hmm let's try 2. in a quickndirty way...
+        time.sleep(1)
         log.msg('unsetting recent flags...')
         for msg in self.messages.get_recent():
             msg.removeFlags((fields.RECENT_FLAG,))
@@ -570,6 +590,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         for msg_id in messages:
             log.msg("MSG ID = %s" % msg_id)
             msg = self.messages.get_msg_by_uid(msg_id)
+            if not msg:
+                return result
             if mode == 1:
                 msg.addFlags(flags)
             elif mode == -1:
@@ -589,15 +611,36 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         self.expunge()
         self.closed = True
 
-    #@deferred
-    #def copy(self, messageObject):
-        #"""
-        #Copy the given message object into this mailbox.
-        #"""
-        # XXX should just:
-        # 1. Get the message._fdoc
-        # 2. Change the UID to UIDNext for this mailbox
-        # 3. Add implements IMessageCopier
+    # IMessageCopier
+
+    @deferred
+    def copy(self, messageObject):
+        """
+        Copy the given message object into this mailbox.
+        """
+        uid_next = self.getUIDNext()
+        msg = messageObject
+
+        # XXX should use a public api instead
+        fdoc = msg._fdoc
+        if not fdoc:
+            logger.debug("Tried to copy a MSG with no fdoc")
+            return
+
+        new_fdoc = copy.deepcopy(fdoc.content)
+        new_fdoc[self.UID_KEY] = uid_next
+        new_fdoc[self.MBOX_KEY] = self.mbox
+
+        d = self._do_add_doc(new_fdoc)
+        d.addCallback(self._notify_new)
+
+    @deferred
+    def _do_add_doc(self, doc):
+        """
+        Defers the adding of a new doc.
+        :param doc: document to be created in soledad.
+        """
+        self._soledad.create_doc(doc)
 
     # convenience fun
 

@@ -25,17 +25,34 @@ class WithMsgFields(object):
     Container class for class-attributes to be shared by
     several message-related classes.
     """
-    # Internal representation of Message
-    DATE_KEY = "date"
-    HEADERS_KEY = "headers"
-    FLAGS_KEY = "flags"
-    MBOX_KEY = "mbox"
+    # indexing
     CONTENT_HASH_KEY = "chash"
-    RAW_KEY = "raw"
-    SUBJECT_KEY = "subject"
+    PAYLOAD_HASH_KEY = "phash"
+
+    # Internal representation of Message
+
+    # flags doc
     UID_KEY = "uid"
+    MBOX_KEY = "mbox"
+    SEEN_KEY = "seen"
+    RECENT_KEY = "recent"
+    FLAGS_KEY = "flags"
     MULTIPART_KEY = "multi"
     SIZE_KEY = "size"
+
+    # headers
+    HEADERS_KEY = "headers"
+    NUM_PARTS_KEY = "numparts"
+    PARTS_MAP_KEY = "partmap"
+    DATE_KEY = "date"
+    SUBJECT_KEY = "subject"
+
+    # attachment
+    PART_NUMBER_KEY = "part"
+    RAW_KEY = "raw"
+
+    # content
+    BODY_KEY = "body"
 
     # Mailbox specific keys
     CLOSED_KEY = "closed"
@@ -54,10 +71,6 @@ class WithMsgFields(object):
     # should add also a headers val
 
     INBOX_VAL = "inbox"
-
-    # Flags for SoledadDocument for indexing.
-    SEEN_KEY = "seen"
-    RECENT_KEY = "recent"
 
     # Flags in Mailbox and Message
     SEEN_FLAG = "\\Seen"
@@ -82,7 +95,9 @@ class WithMsgFields(object):
     TYPE_SUBS_IDX = 'by-type-and-subscribed'
     TYPE_MBOX_SEEN_IDX = 'by-type-and-mbox-and-seen'
     TYPE_MBOX_RECT_IDX = 'by-type-and-mbox-and-recent'
-    TYPE_HASH_IDX = 'by-type-and-hash'
+    TYPE_C_HASH_IDX = 'by-type-and-contenthash'
+    TYPE_C_HASH_PART_IDX = 'by-type-and-contenthash-and-partnumber'
+    TYPE_P_HASH_IDX = 'by-type-and-payloadhash'
 
     # Tomas created the `recent and seen index`, but the semantic is not too
     # correct since the recent flag is volatile.
@@ -90,7 +105,9 @@ class WithMsgFields(object):
 
     KTYPE = TYPE_KEY
     MBOX_VAL = TYPE_MBOX_VAL
-    HASH_VAL = CONTENT_HASH_KEY
+    CHASH_VAL = CONTENT_HASH_KEY
+    PHASH_VAL = PAYLOAD_HASH_KEY
+    PART_VAL = PART_NUMBER_KEY
 
     INDEXES = {
         # generic
@@ -102,7 +119,11 @@ class WithMsgFields(object):
         TYPE_SUBS_IDX: [KTYPE, 'bool(subscribed)'],
 
         # content, headers doc
-        TYPE_HASH_IDX: [KTYPE, HASH_VAL],
+        TYPE_C_HASH_IDX: [KTYPE, CHASH_VAL],
+        # attachment docs
+        TYPE_C_HASH_PART_IDX: [KTYPE, CHASH_VAL, PART_VAL],
+        # attachment payload dedup
+        TYPE_P_HASH_IDX: [KTYPE, PHASH_VAL],
 
         # messages
         TYPE_MBOX_SEEN_IDX: [KTYPE, MBOX_VAL, 'bool(seen)'],
