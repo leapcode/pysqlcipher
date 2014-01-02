@@ -19,13 +19,10 @@ Useful decorators for mail package.
 """
 import logging
 import os
-import sys
-import traceback
 
 from functools import wraps
 
 from twisted.internet.threads import deferToThread
-from twisted.python import log
 
 logger = logging.getLogger(__name__)
 
@@ -41,27 +38,68 @@ def deferred(f):
     method wrapper.
     """
     class descript(object):
+        """
+        The class to be used as decorator.
+
+        It takes any method as the passed object.
+        """
+
         def __init__(self, f):
+            """
+            Initializes the decorator object.
+
+            :param f: the decorated function
+            :type f: callable
+            """
             self.f = f
 
         def __get__(self, instance, klass):
+            """
+            Descriptor implementation.
+
+            At creation time, the decorated `method` is unbound.
+
+            It will dispatch the make_unbound method if we still do not
+            have an instance available, and the make_bound method when the
+            method has already been bound to the instance.
+
+            :param instance: the instance of the class, or None if not exist.
+            :type instance: instantiated class or None.
+            """
             if instance is None:
                 # Class method was requested
                 return self.make_unbound(klass)
             return self.make_bound(instance)
 
         def _errback(self, failure):
-            err = failure.value
-            logger.warning('error in method: %s' % (self.f.__name__))
-            logger.exception(err)
-            log.err(err)
+            """
+            Errorback that logs the exception catched.
+
+            :param failure: a twisted failure
+            :type failure: Failure
+            """
+            logger.warning('Error in method: %s' % (self.f.__name__))
+            logger.exception(failure.getTraceback())
 
         def make_unbound(self, klass):
+            """
+            Return a wrapped function with the unbound call, during the
+            early access to the decortad method. This gets passed
+            only the class (not the instance since it does not yet exist).
+
+            :param klass: the class to which the still unbound method belongs
+            :type klass: type
+            """
 
             @wraps(self.f)
             def wrapper(*args, **kwargs):
                 """
-                this doc will vanish
+                We're temporarily wrapping the decorated method, but this
+                should not be called, since our application should use
+                the bound-wrapped method after this decorator class has been
+                used.
+
+                This documentation will vanish at runtime.
                 """
                 raise TypeError(
                     'unbound method {}() must be called with {} instance '
@@ -72,11 +110,23 @@ def deferred(f):
             return wrapper
 
         def make_bound(self, instance):
+            """
+            Return a function that wraps the bound method call,
+            after we are able to access the instance object.
+
+            :param instance: an instance of the class the decorated method,
+                             now bound, belongs to.
+            :type instance: object
+            """
 
             @wraps(self.f)
             def wrapper(*args, **kwargs):
                 """
-                This documentation will disapear
+                Do a proper function wrapper that defers the decorated method
+                call to a separated thread if the LEAPMAIL_DEBUG
+                environment variable is set.
+
+                This documentation will vanish at runtime.
                 """
                 if not os.environ.get('LEAPMAIL_DEBUG'):
                     d = deferToThread(self.f, instance, *args, **kwargs)

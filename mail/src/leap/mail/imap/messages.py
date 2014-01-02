@@ -695,6 +695,9 @@ class LeapMessage(fields, MailParser, MBoxParser):
 SoledadWriterPayload = namedtuple(
     'SoledadWriterPayload', ['mode', 'payload'])
 
+# TODO we could consider using enum here:
+# https://pypi.python.org/pypi/enum
+
 SoledadWriterPayload.CREATE = 1
 SoledadWriterPayload.PUT = 2
 SoledadWriterPayload.BODY_CREATE = 3
@@ -758,7 +761,7 @@ class SoledadDocWriter(object):
     Message deduplication.
 
     We do a query for the content hashes before writing to our beloved
-    slcipher backend of Soledad. This means, by now, that:
+    sqlcipher backend of Soledad. This means, by now, that:
 
     1. We will not store the same attachment twice, only the hash of it.
     2. We will not store the same message body twice, only the hash of it.

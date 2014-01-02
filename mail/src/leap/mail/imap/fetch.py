@@ -455,8 +455,8 @@ class LeapIncomingMail(object):
         :param senderPubkey: The key of the sender of the message.
         :type senderPubkey: OpenPGPKey
 
-        :return: A unitary tuple containing a decrypted message and
-                 a bool indicating wether the signature is valid.
+        :return: A tuple containing a decrypted message and
+                 a bool indicating whether the signature is valid.
         :rtype: (Message, bool)
         """
         log.msg('maybe decrypting inline encrypted msg')
