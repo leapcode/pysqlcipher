@@ -20,9 +20,11 @@ LeapMessage and MessageCollection.
 import copy
 import logging
 import StringIO
-from collections import namedtuple
+
+from collections import defaultdict, namedtuple
 
 from twisted.mail import imap4
+from twisted.internet import defer
 from twisted.python import log
 from u1db import errors as u1db_errors
 from zope.interface import implements
@@ -182,6 +184,7 @@ class MessageAttachment(object):
         if not self._msg:
             return {}
         headers = dict(self._msg.items())
+
         names = map(lambda s: s.upper(), names)
         if negate:
             cond = lambda key: key.upper() not in names
@@ -329,6 +332,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
         doc.content[self.FLAGS_KEY] = flags
         doc.content[self.SEEN_KEY] = self.SEEN_FLAG in flags
         doc.content[self.RECENT_KEY] = self.RECENT_FLAG in flags
+        doc.content[self.DEL_KEY] = self.DELETED_FLAG in flags
         self._soledad.put_doc(doc)
 
     def addFlags(self, flags):
@@ -455,6 +459,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
         headers = self._get_headers()
         if not headers:
             return {'content-type': ''}
+
         names = map(lambda s: s.upper(), names)
         if negate:
             cond = lambda key: key.upper() not in names
@@ -465,8 +470,8 @@ class LeapMessage(fields, MailParser, MBoxParser):
 
             # twisted imap server expects headers to be lowercase
         head = dict(
-            map(str, (key, value)) if key.lower() != "content-type"
-            else map(str, (key.lower(), value))
+            (str(key), map(str, value)) if key.lower() != "content-type"
+            else (str(key.lower(), map(str, value)))
             for (key, value) in head.items())
 
         # unpack and filter original dict by negate-condition
@@ -670,6 +675,9 @@ class LeapMessage(fields, MailParser, MBoxParser):
         # until we think about a good way of deorphaning.
         # Maybe a crawler of unreferenced docs.
 
+        uid = self._uid
+        print "removing...", uid
+
         fd = self._get_flags_doc()
         hd = self._get_headers_doc()
         #bd = self._get_body_doc()
@@ -682,7 +690,11 @@ class LeapMessage(fields, MailParser, MBoxParser):
             #docs.append(ad)
 
         for d in filter(None, docs):
-            self._soledad.delete_doc(d)
+            try:
+                self._soledad.delete_doc(d)
+            except Exception as exc:
+                logger.error(exc)
+        return uid
 
     def does_exist(self):
         """
@@ -849,6 +861,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
             fields.SEEN_KEY: False,
             fields.RECENT_KEY: True,
+            fields.DEL_KEY: False,
             fields.FLAGS_KEY: [],
             fields.MULTIPART_KEY: False,
             fields.SIZE_KEY: 0
@@ -921,7 +934,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
         self.soledad_writer = MessageProducer(
             SoledadDocWriter(soledad),
-            period=0.05)
+            period=0.02)
 
     def _get_empty_doc(self, _type=FLAGS_DOC):
         """
@@ -966,7 +979,9 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
             (self.FLAGS_DOC, self.HEADERS_DOC, self.BODY_DOC))
 
         msg = self._get_parsed_msg(raw)
-        headers = dict(msg)
+        headers = defaultdict(list)
+        for k, v in msg.items():
+            headers[k].append(v)
         raw_str = msg.as_string()
         chash = self._get_hash(msg)
         multi = msg.is_multipart()
@@ -987,7 +1002,8 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                     inner_parts.append(p)
         else:
             body = msg.get_payload()
-        logger.debug("adding msg (multipart:%s)" % multi)
+        logger.debug("adding msg with uid %s (multipart:%s)" % (
+            uid, multi))
 
         # flags doc ---------------------------------------
         fd[self.MBOX_KEY] = self.mbox
@@ -998,26 +1014,33 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         if flags:
             fd[self.FLAGS_KEY] = map(self._stringify, flags)
             fd[self.SEEN_KEY] = self.SEEN_FLAG in flags
-            fd[self.RECENT_KEY] = self.RECENT_FLAG in flags
+            fd[self.DEL_KEY] = self.DELETED_FLAG in flags
+            fd[self.RECENT_KEY] = True  # set always by default
 
         # headers doc ----------------------------------------
         hd[self.CONTENT_HASH_KEY] = chash
         hd[self.HEADERS_KEY] = headers
+
+        print "headers"
+        import pprint
+        pprint.pprint(headers)
+
         if not subject and self.SUBJECT_FIELD in headers:
-            hd[self.SUBJECT_KEY] = headers[self.SUBJECT_FIELD]
+            hd[self.SUBJECT_KEY] = first(headers[self.SUBJECT_FIELD])
         else:
             hd[self.SUBJECT_KEY] = subject
         if not date and self.DATE_FIELD in headers:
-            hd[self.DATE_KEY] = headers[self.DATE_FIELD]
+            hd[self.DATE_KEY] = first(headers[self.DATE_FIELD])
         else:
             hd[self.DATE_KEY] = date
         if multi:
+            # XXX fix for multipart nested case
             hd[self.NUM_PARTS_KEY] = len(msg.get_payload())
 
         # body doc
         bd[self.CONTENT_HASH_KEY] = chash
         bd[self.BODY_KEY] = body
-        # in an ideal world, we would not need to save a copy of the
+        # XXX in an ideal world, we would not need to save a copy of the
         # raw message. But we'll keep it until we can be sure that
         # we can rebuild the original message from the parts.
         bd[self.RAW_KEY] = raw_str
@@ -1062,14 +1085,29 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
             self.soledad_writer.put(ptuple(
                 mode=ptuple.ATTACHMENT_CREATE, payload=at))
 
+    def _remove_cb(self, result):
+        return result
+
+    def remove_all_deleted(self):
+        """
+        Removes all messages flagged as deleted.
+        """
+        delete_deferl = []
+        for msg in self.get_deleted():
+            delete_deferl.append(msg.remove())
+        d1 = defer.gatherResults(delete_deferl, consumeErrors=True)
+        d1.addCallback(self._remove_cb)
+        return d1
+
     def remove(self, msg):
         """
-        Removes a message.
-
-        :param msg: a  Leapmessage instance
+        Remove a given msg.
+        :param msg: the message to be removed
         :type msg: LeapMessage
         """
-        msg.remove()
+        d = msg.remove()
+        d.addCallback(self._remove_cb)
+        return d
 
     # getters
 
@@ -1178,7 +1216,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
     def recent_iter(self):
         """
-        Get an iterator for the message docs with `recent` flag.
+        Get an iterator for the message UIDs with `recent` flag.
 
         :return: iterator through recent message docs
         :rtype: iterable
@@ -1209,6 +1247,30 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
             fields.TYPE_MBOX_RECT_IDX,
             fields.TYPE_FLAGS_VAL, self.mbox, '1')
         return count
+
+    # deleted messages
+
+    def deleted_iter(self):
+        """
+        Get an iterator for the message UIDs with `deleted` flag.
+
+        :return: iterator through deleted message docs
+        :rtype: iterable
+        """
+        return (doc.content[self.UID_KEY] for doc in
+                self._soledad.get_from_index(
+                    fields.TYPE_MBOX_DEL_IDX,
+                    fields.TYPE_FLAGS_VAL, self.mbox, '1'))
+
+    def get_deleted(self):
+        """
+        Get all messages with the `Deleted` flag.
+
+        :returns: a generator of LeapMessages
+        :rtype: generator
+        """
+        return (LeapMessage(self._soledad, docid, self.mbox)
+                for docid in self.deleted_iter())
 
     def __len__(self):
         """

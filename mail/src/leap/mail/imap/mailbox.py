@@ -390,18 +390,17 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         else:
             flags = tuple(str(flag) for flag in flags)
 
-        d = self._do_add_message(message, flags, date, uid_next)
+        d = self._do_add_message(message, flags=flags, date=date, uid=uid_next)
         d.addCallback(self._notify_new)
         return d
 
     @deferred
-    def _do_add_message(self, message, flags, date, uid_next):
+    def _do_add_message(self, message, flags, date, uid):
         """
         Calls to the messageCollection add_msg method (deferred to thread).
         Invoked from addMessage.
         """
-        self.messages.add_msg(message, flags=flags, date=date,
-                              uid=uid_next)
+        self.messages.add_msg(message, flags=flags, date=date, uid=uid)
 
     def _notify_new(self, *args):
         """
@@ -436,21 +435,29 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         # we should postpone the removal
         self._soledad.delete_doc(self._get_mbox())
 
-    @deferred
+    def _close_cb(self, result):
+        self.closed = True
+
+    def close(self):
+        """
+        Expunge and mark as closed
+        """
+        d = self.expunge()
+        d.addCallback(self._close_cb)
+        return d
+
+    def _expunge_cb(self, result):
+        return result
+
     def expunge(self):
         """
         Remove all messages flagged \\Deleted
         """
         if not self.isWriteable():
             raise imap4.ReadOnlyMailbox
-        deleted = []
-        for m in self.messages:
-            if self.DELETED_FLAG in m.getFlags():
-                self.messages.remove(m)
-                # XXX this would ve more efficient if we can just pass
-                # a sequence of uids.
-                deleted.append(m.getUID())
-        return deleted
+        d = self.messages.remove_all_deleted()
+        d.addCallback(self._expunge_cb)
+        return d
 
     @deferred
     def fetch(self, messages, uid):
@@ -602,14 +609,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
         self._signal_unread_to_ui()
         return result
-
-    @deferred
-    def close(self):
-        """
-        Expunge and mark as closed
-        """
-        self.expunge()
-        self.closed = True
 
     # IMessageCopier
 

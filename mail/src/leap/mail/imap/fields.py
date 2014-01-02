@@ -35,6 +35,7 @@ class WithMsgFields(object):
     UID_KEY = "uid"
     MBOX_KEY = "mbox"
     SEEN_KEY = "seen"
+    DEL_KEY = "deleted"
     RECENT_KEY = "recent"
     FLAGS_KEY = "flags"
     MULTIPART_KEY = "multi"
@@ -95,6 +96,7 @@ class WithMsgFields(object):
     TYPE_SUBS_IDX = 'by-type-and-subscribed'
     TYPE_MBOX_SEEN_IDX = 'by-type-and-mbox-and-seen'
     TYPE_MBOX_RECT_IDX = 'by-type-and-mbox-and-recent'
+    TYPE_MBOX_DEL_IDX = 'by-type-and-mbox-and-deleted'
     TYPE_C_HASH_IDX = 'by-type-and-contenthash'
     TYPE_C_HASH_PART_IDX = 'by-type-and-contenthash-and-partnumber'
     TYPE_P_HASH_IDX = 'by-type-and-payloadhash'
@@ -128,6 +130,7 @@ class WithMsgFields(object):
         # messages
         TYPE_MBOX_SEEN_IDX: [KTYPE, MBOX_VAL, 'bool(seen)'],
         TYPE_MBOX_RECT_IDX: [KTYPE, MBOX_VAL, 'bool(recent)'],
+        TYPE_MBOX_DEL_IDX: [KTYPE, MBOX_VAL, 'bool(deleted)'],
         TYPE_MBOX_RECT_SEEN_IDX: [KTYPE, MBOX_VAL,
                                   'bool(recent)', 'bool(seen)'],
     }

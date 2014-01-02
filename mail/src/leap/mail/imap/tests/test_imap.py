@@ -25,7 +25,7 @@ XXX add authors from the original twisted tests.
 @license: GPLv3, see included LICENSE file
 """
 # XXX review license of the original tests!!!
-from nose.twistedtools import deferred
+from email import parser
 
 try:
     from cStringIO import StringIO
@@ -36,9 +36,13 @@ import os
 import types
 import tempfile
 import shutil
+import time
+
+from itertools import chain
 
 
 from mock import Mock
+from nose.twistedtools import deferred, stop_reactor
 
 
 from twisted.mail import imap4
@@ -58,9 +62,9 @@ import twisted.cred.portal
 # import u1db
 
 from leap.common.testing.basetest import BaseLeapTest
-from leap.mail.imap.server import SoledadMailbox
-from leap.mail.imap.server import SoledadBackedAccount
-from leap.mail.imap.server import MessageCollection
+from leap.mail.imap.account import SoledadBackedAccount
+from leap.mail.imap.mailbox import SoledadMailbox
+from leap.mail.imap.messages import MessageCollection
 
 from leap.soledad.client import Soledad
 from leap.soledad.client import SoledadCrypto
@@ -321,6 +325,9 @@ class IMAP4HelperMixin(BaseLeapTest):
         for mb in self.server.theAccount.mailboxes:
             self.server.theAccount.delete(mb)
 
+        # email parser
+        self.parser = parser.Parser()
+
     def tearDown(self):
         """
         tearDown method called after each test.
@@ -389,6 +396,7 @@ class MessageCollectionTestCase(IMAP4HelperMixin, unittest.TestCase):
     """
     Tests for the MessageCollection class
     """
+    count = 0
 
     def setUp(self):
         """
@@ -396,34 +404,35 @@ class MessageCollectionTestCase(IMAP4HelperMixin, unittest.TestCase):
         We override mixin method since we are only testing
         MessageCollection interface in this particular TestCase
         """
-        self.messages = MessageCollection("testmbox", self._soledad)
-        for m in self.messages.get_all():
-            self.messages.remove(m)
+        self.messages = MessageCollection("testmbox%s" % (self.count,),
+                                          self._soledad)
+        MessageCollectionTestCase.count += 1
 
     def tearDown(self):
         """
         tearDown method for each test
-        Delete the message collection
         """
         del self.messages
+
+    def wait(self):
+        time.sleep(2)
 
     def testEmptyMessage(self):
         """
         Test empty message and collection
         """
-        em = self.messages._get_empty_msg()
+        em = self.messages._get_empty_doc()
         self.assertEqual(
             em,
             {
-                "date": '',
                 "flags": [],
-                "headers": {},
                 "mbox": "inbox",
-                "raw": "",
                 "recent": True,
                 "seen": False,
-                "subject": "",
-                "type": "msg",
+                "deleted": False,
+                "multi": False,
+                "size": 0,
+                "type": "flags",
                 "uid": 1,
             })
         self.assertEqual(self.messages.count(), 0)
@@ -432,23 +441,22 @@ class MessageCollectionTestCase(IMAP4HelperMixin, unittest.TestCase):
         """
         Add multiple messages
         """
+        # TODO really profile addition
         mc = self.messages
+        print "messages", self.messages
         self.assertEqual(self.messages.count(), 0)
-        mc.add_msg('Stuff', subject="test1")
-        self.assertEqual(self.messages.count(), 1)
-        mc.add_msg('Stuff', subject="test2")
-        self.assertEqual(self.messages.count(), 2)
-        mc.add_msg('Stuff', subject="test3")
-        self.assertEqual(self.messages.count(), 3)
-        mc.add_msg('Stuff', subject="test4")
+        mc.add_msg('Stuff', uid=1, subject="test1")
+        mc.add_msg('Stuff', uid=2, subject="test2")
+        mc.add_msg('Stuff', uid=3, subject="test3")
+        mc.add_msg('Stuff', uid=4, subject="test4")
+        self.wait()
         self.assertEqual(self.messages.count(), 4)
-        mc.add_msg('Stuff', subject="test5")
-        mc.add_msg('Stuff', subject="test6")
-        mc.add_msg('Stuff', subject="test7")
-        mc.add_msg('Stuff', subject="test8")
-        mc.add_msg('Stuff', subject="test9")
-        mc.add_msg('Stuff', subject="test10")
-        self.assertEqual(self.messages.count(), 10)
+        mc.add_msg('Stuff', uid=5, subject="test5")
+        mc.add_msg('Stuff', uid=6, subject="test6")
+        mc.add_msg('Stuff', uid=7, subject="test7")
+        self.wait()
+        self.assertEqual(self.messages.count(), 7)
+        self.wait()
 
     def testRecentCount(self):
         """
@@ -456,45 +464,48 @@ class MessageCollectionTestCase(IMAP4HelperMixin, unittest.TestCase):
         """
         mc = self.messages
         self.assertEqual(self.messages.count_recent(), 0)
-        mc.add_msg('Stuff', subject="test1", uid=1)
+        mc.add_msg('Stuff', uid=1, subject="test1")
         # For the semantics defined in the RFC, we auto-add the
         # recent flag by default.
+        self.wait()
         self.assertEqual(self.messages.count_recent(), 1)
-        mc.add_msg('Stuff', subject="test2", uid=2, flags=('\\Deleted',))
+        mc.add_msg('Stuff', subject="test2", uid=2,
+                   flags=('\\Deleted',))
+        self.wait()
         self.assertEqual(self.messages.count_recent(), 2)
-        mc.add_msg('Stuff', subject="test3", uid=3, flags=('\\Recent',))
+        mc.add_msg('Stuff', subject="test3", uid=3,
+                   flags=('\\Recent',))
+        self.wait()
         self.assertEqual(self.messages.count_recent(), 3)
         mc.add_msg('Stuff', subject="test4", uid=4,
                    flags=('\\Deleted', '\\Recent'))
+        self.wait()
         self.assertEqual(self.messages.count_recent(), 4)
 
-        for m in mc:
-            msg = self.messages.get_msg_by_uid(m.get('uid'))
-            msg_newflags = msg.removeFlags(('\\Recent',))
-            self._soledad.put_doc(msg_newflags)
-
+        for msg in mc:
+            msg.removeFlags(('\\Recent',))
         self.assertEqual(mc.count_recent(), 0)
 
     def testFilterByMailbox(self):
         """
         Test that queries filter by selected mailbox
         """
+        def wait():
+            time.sleep(1)
+
         mc = self.messages
         self.assertEqual(self.messages.count(), 0)
-        mc.add_msg('', subject="test1")
-        self.assertEqual(self.messages.count(), 1)
-        mc.add_msg('', subject="test2")
-        self.assertEqual(self.messages.count(), 2)
-        mc.add_msg('', subject="test3")
+        mc.add_msg('', uid=1, subject="test1")
+        mc.add_msg('', uid=2, subject="test2")
+        mc.add_msg('', uid=3, subject="test3")
+        wait()
         self.assertEqual(self.messages.count(), 3)
-
-        newmsg = mc._get_empty_msg()
+        newmsg = mc._get_empty_doc()
         newmsg['mailbox'] = "mailbox/foo"
-        newmsg['subject'] = "test another mailbox"
         mc._soledad.create_doc(newmsg)
         self.assertEqual(mc.count(), 3)
         self.assertEqual(
-            len(mc._soledad.get_from_index(mc.TYPE_IDX, "*")), 4)
+            len(mc._soledad.get_from_index(mc.TYPE_IDX, "flags")), 4)
 
 
 class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
@@ -1174,16 +1185,20 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         def login():
             return self.client.login('testuser', 'password-test')
 
+        def wait():
+            time.sleep(0.5)
+
         def append():
             return self.client.append(
                 'root/subthing',
                 message,
-                ['\\SEEN', '\\DELETED'],
+                ('\\SEEN', '\\DELETED'),
                 'Tue, 17 Jun 2003 11:22:16 -0600 (MDT)',
             )
 
         d1 = self.connected.addCallback(strip(login))
         d1.addCallbacks(strip(append), self._ebGeneral)
+        d1.addCallbacks(strip(wait), self._ebGeneral)
         d1.addCallbacks(self._cbStopClient, self._ebGeneral)
         d2 = self.loopback()
         d = defer.gatherResults([d1, d2])
@@ -1191,17 +1206,31 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
 
     def _cbTestFullAppend(self, ignored, infile):
         mb = SimpleLEAPServer.theAccount.getMailbox('root/subthing')
+        time.sleep(0.5)
         self.assertEqual(1, len(mb.messages))
 
+        msg = mb.messages.get_msg_by_uid(1)
         self.assertEqual(
-            ['\\SEEN', '\\DELETED'],
-            mb.messages[1].content['flags'])
+            ('\\SEEN', '\\DELETED'),
+            msg.getFlags())
 
         self.assertEqual(
             'Tue, 17 Jun 2003 11:22:16 -0600 (MDT)',
-            mb.messages[1].content['date'])
+            msg.getInternalDate())
 
-        self.assertEqual(open(infile).read(), mb.messages[1].content['raw'])
+        parsed = self.parser.parse(open(infile))
+        body = parsed.get_payload()
+        headers = parsed.items()
+        self.assertEqual(
+            body,
+            msg.getBodyFile().read())
+
+        msg_headers = msg.getHeaders(True, "",)
+        gotheaders = list(chain(
+            *[[(k, item) for item in v] for (k, v) in msg_headers.items()]))
+
+        self.assertItemsEqual(
+            headers, gotheaders)
 
     @deferred(timeout=None)
     def testPartialAppend(self):
@@ -1209,11 +1238,13 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         Test partially appending a message to the mailbox
         """
         infile = util.sibpath(__file__, 'rfc822.message')
-        message = open(infile)
         SimpleLEAPServer.theAccount.addMailbox('PARTIAL/SUBTHING')
 
         def login():
             return self.client.login('testuser', 'password-test')
+
+        def wait():
+            time.sleep(1)
 
         def append():
             message = file(infile)
@@ -1226,6 +1257,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
                 )
             )
         d1 = self.connected.addCallback(strip(login))
+        d1.addCallbacks(strip(wait), self._ebGeneral)
         d1.addCallbacks(strip(append), self._ebGeneral)
         d1.addCallbacks(self._cbStopClient, self._ebGeneral)
         d2 = self.loopback()
@@ -1235,15 +1267,20 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
 
     def _cbTestPartialAppend(self, ignored, infile):
         mb = SimpleLEAPServer.theAccount.getMailbox('PARTIAL/SUBTHING')
-
+        time.sleep(1)
         self.assertEqual(1, len(mb.messages))
+        msg = mb.messages.get_msg_by_uid(1)
         self.assertEqual(
-            ['\\SEEN', ],
-            mb.messages[1].content['flags']
+            ('\\SEEN', ),
+            msg.getFlags()
         )
+        #self.assertEqual(
+            #'Right now', msg.getInternalDate())
+        parsed = self.parser.parse(open(infile))
+        body = parsed.get_payload()
         self.assertEqual(
-            'Right now', mb.messages[1].content['date'])
-        self.assertEqual(open(infile).read(), mb.messages[1].content['raw'])
+            body,
+            msg.getBodyFile().read())
 
     @deferred(timeout=None)
     def testCheck(self):
@@ -1279,13 +1316,18 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         self.server.theAccount.addMailbox(name)
 
         m = SimpleLEAPServer.theAccount.getMailbox(name)
-        m.messages.add_msg('', subject="Message 1",
+        m.messages.add_msg('test 1', uid=1, subject="Message 1",
                            flags=('\\Deleted', 'AnotherFlag'))
-        m.messages.add_msg('', subject="Message 2", flags=('AnotherFlag',))
-        m.messages.add_msg('', subject="Message 3", flags=('\\Deleted',))
+        m.messages.add_msg('test 2', uid=2, subject="Message 2",
+                           flags=('AnotherFlag',))
+        m.messages.add_msg('test 3', uid=3, subject="Message 3",
+                           flags=('\\Deleted',))
 
         def login():
             return self.client.login('testuser', 'password-test')
+
+        def wait():
+            time.sleep(1)
 
         def select():
             return self.client.select(name)
@@ -1294,6 +1336,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
             return self.client.close()
 
         d = self.connected.addCallback(strip(login))
+        d.addCallbacks(strip(wait), self._ebGeneral)
         d.addCallbacks(strip(select), self._ebGeneral)
         d.addCallbacks(strip(close), self._ebGeneral)
         d.addCallbacks(self._cbStopClient, self._ebGeneral)
@@ -1302,8 +1345,10 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
 
     def _cbTestClose(self, ignored, m):
         self.assertEqual(len(m.messages), 1)
+        messages = [msg for msg in m.messages]
+        self.assertFalse(messages[0] is None)
         self.assertEqual(
-            m.messages[1].content['subject'],
+            messages[0]._hdoc.content['subject'],
             'Message 2')
         self.failUnless(m.closed)
 
@@ -1315,16 +1360,18 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         name = 'mailbox-expunge'
         SimpleLEAPServer.theAccount.addMailbox(name)
         m = SimpleLEAPServer.theAccount.getMailbox(name)
-        m.messages.add_msg('', subject="Message 1",
+        m.messages.add_msg('test 1', uid=1, subject="Message 1",
                            flags=('\\Deleted', 'AnotherFlag'))
-        self.failUnless(m.messages.count() == 1)
-        m.messages.add_msg('', subject="Message 2", flags=('AnotherFlag',))
-        self.failUnless(m.messages.count() == 2)
-        m.messages.add_msg('', subject="Message 3", flags=('\\Deleted',))
-        self.failUnless(m.messages.count() == 3)
+        m.messages.add_msg('test 2', uid=2, subject="Message 2",
+                           flags=('AnotherFlag',))
+        m.messages.add_msg('test 3', uid=3, subject="Message 3",
+                           flags=('\\Deleted',))
 
         def login():
             return self.client.login('testuser', 'password-test')
+
+        def wait():
+            time.sleep(2)
 
         def select():
             return self.client.select('mailbox-expunge')
@@ -1338,6 +1385,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
 
         self.results = None
         d1 = self.connected.addCallback(strip(login))
+        d1.addCallbacks(strip(wait), self._ebGeneral)
         d1.addCallbacks(strip(select), self._ebGeneral)
         d1.addCallbacks(strip(expunge), self._ebGeneral)
         d1.addCallbacks(expunged, self._ebGeneral)
@@ -1348,12 +1396,13 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
 
     def _cbTestExpunge(self, ignored, m):
         # we only left 1 mssage with no deleted flag
-        self.assertEqual(m.messages.count(), 1)
+        self.assertEqual(len(m.messages), 1)
+        messages = [msg for msg in m.messages]
         self.assertEqual(
-            m.messages[1].content['subject'],
+            messages[0]._hdoc.content['subject'],
             'Message 2')
-        self.assertEqual(self.results, [0, 1])
-        # XXX fix this thing with the indexes...
+        # the uids of the deleted messages
+        self.assertItemsEqual(self.results, [1, 3])
 
 
 class IMAP4ServerSearchTestCase(IMAP4HelperMixin, unittest.TestCase):
@@ -1363,3 +1412,10 @@ class IMAP4ServerSearchTestCase(IMAP4HelperMixin, unittest.TestCase):
     """
     # XXX coming soon to your screens!
     pass
+
+
+def tearDownModule():
+    """
+    Tear down functions for module level
+    """
+    stop_reactor()
