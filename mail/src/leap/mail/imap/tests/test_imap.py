@@ -357,11 +357,11 @@ class IMAP4HelperMixin(BaseLeapTest):
 
         # XXX we also should put this in a mailbox!
 
-        self._soledad.messages.add_msg('', subject="test1")
-        self._soledad.messages.add_msg('', subject="test2")
-        self._soledad.messages.add_msg('', subject="test3")
+        self._soledad.messages.add_msg('', uid=1, subject="test1")
+        self._soledad.messages.add_msg('', uid=2, subject="test2")
+        self._soledad.messages.add_msg('', uid=3, subject="test3")
         # XXX should change Flags too
-        self._soledad.messages.add_msg('', subject="test4")
+        self._soledad.messages.add_msg('', uid=4, subject="test4")
 
     def delete_all_docs(self):
         """
@@ -1405,10 +1405,78 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         self.assertItemsEqual(self.results, [1, 3])
 
 
+class StoreAndFetchTestCase(unittest.TestCase, IMAP4HelperMixin):
+    """
+    Several tests to check that the internal storage representation
+    is able to render the message structures as we expect them.
+    """
+    # TODO get rid of the fucking sleeps with a proper defer
+    # management.
+
+    def setUp(self):
+        IMAP4HelperMixin.setUp(self)
+        MBOX_NAME = "multipart/SIGNED"
+        self.received_messages = self.received_uid = None
+        self.result = None
+
+        self.server.state = 'select'
+
+        infile = util.sibpath(__file__, 'rfc822.multi-signed.message')
+        raw = open(infile).read()
+
+        self.server.theAccount.addMailbox(MBOX_NAME)
+        mbox = self.server.theAccount.getMailbox(MBOX_NAME)
+        time.sleep(1)
+        self.server.mbox = mbox
+        self.server.mbox.messages.add_msg(raw, uid=1)
+        time.sleep(1)
+
+    def addListener(self, x):
+        pass
+
+    def removeListener(self, x):
+        pass
+
+    def _fetchWork(self, uids):
+
+        def result(R):
+            self.result = R
+
+        self.connected.addCallback(
+            lambda _: self.function(
+                uids, uid=1)  # do NOT use seq numbers!
+            ).addCallback(result).addCallback(
+            self._cbStopClient).addErrback(self._ebGeneral)
+
+        d = loopback.loopbackTCP(self.server, self.client, noisy=False)
+        d.addCallback(lambda x: self.assertEqual(self.result, self.expected))
+        return d
+
+    @deferred(timeout=None)
+    def testMultiBody(self):
+        """
+        Test that a multipart signed message is retrieved the same
+        as we stored it.
+        """
+        time.sleep(1)
+        self.function = self.client.fetchBody
+        messages = '1'
+
+        # XXX review. This probably should give everything?
+
+        self.expected = {1: {
+            'RFC822.TEXT': 'This is an example of a signed message,\n'
+                           'with attachments.\n\n\n--=20\n'
+                           'Nihil sine chao! =E2=88=B4\n',
+            'UID': '1'}}
+        print "test multi: fetch uid", messages
+        return self._fetchWork(messages)
+
+
 class IMAP4ServerSearchTestCase(IMAP4HelperMixin, unittest.TestCase):
 
     """
-    Tests for the behavior of the search_* functions in L{imap4.IMAP4Server}.
+    Tests for the behavior of the search_* functions in L{imap5.IMAP4Server}.
     """
     # XXX coming soon to your screens!
     pass

@@ -478,6 +478,11 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
                 LeapMessage
         """
         result = []
+
+        # XXX DEBUG -------------
+        print "getting uid", uid
+        print "in mbox", self.mbox
+
         sequence = True if uid == 0 else False
 
         if not messages.last:
