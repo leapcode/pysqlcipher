@@ -33,6 +33,7 @@ from zope.proxy import sameProxiedObjects
 from leap.common.check import leap_assert, leap_assert_type
 from leap.common.decorators import memoized_method
 from leap.common.mail import get_email_charset
+from leap.mail.utils import first
 from leap.mail.decorators import deferred
 from leap.mail.imap.index import IndexedDB
 from leap.mail.imap.fields import fields, WithMsgFields
@@ -40,16 +41,6 @@ from leap.mail.imap.parser import MailParser, MBoxParser
 from leap.mail.messageflow import IMessageConsumer, MessageProducer
 
 logger = logging.getLogger(__name__)
-
-
-def first(things):
-    """
-    Return the head of a collection.
-    """
-    try:
-        return things[0]
-    except (IndexError, TypeError):
-        return None
 
 
 class MessageBody(object):
