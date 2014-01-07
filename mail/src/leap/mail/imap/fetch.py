@@ -404,7 +404,7 @@ class LeapIncomingMail(object):
         """
         log.msg('decrypting multipart encrypted msg')
         msg = copy.deepcopy(msg)
-        self._multipart_sanity_check(msg)
+        self._msg_multipart_sanity_check(msg)
 
         # parse message and get encrypted content
         pgpencmsg = msg.get_payload()[1]

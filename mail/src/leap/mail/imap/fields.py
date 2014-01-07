@@ -43,17 +43,17 @@ class WithMsgFields(object):
 
     # headers
     HEADERS_KEY = "headers"
-    NUM_PARTS_KEY = "numparts"
-    PARTS_MAP_KEY = "partmap"
     DATE_KEY = "date"
     SUBJECT_KEY = "subject"
-
-    # attachment
-    PART_NUMBER_KEY = "part"
-    RAW_KEY = "raw"
+    # XXX DELETE-ME
+    #NUM_PARTS_KEY = "numparts"  # not needed?!
+    PARTS_MAP_KEY = "part_map"
+    BODY_KEY = "body"  # link to phash of body
 
     # content
-    BODY_KEY = "body"
+    LINKED_FROM_KEY = "lkf"
+    RAW_KEY = "raw"
+    CTYPE_KEY = "ctype"
 
     # Mailbox specific keys
     CLOSED_KEY = "closed"
@@ -65,11 +65,13 @@ class WithMsgFields(object):
     # Document Type, for indexing
     TYPE_KEY = "type"
     TYPE_MBOX_VAL = "mbox"
-    TYPE_MESSAGE_VAL = "msg"
     TYPE_FLAGS_VAL = "flags"
     TYPE_HEADERS_VAL = "head"
-    TYPE_ATTACHMENT_VAL = "attach"
-    # should add also a headers val
+    TYPE_CONTENT_VAL = "cnt"
+
+    # XXX DEPRECATE
+    #TYPE_MESSAGE_VAL = "msg"
+    #TYPE_ATTACHMENT_VAL = "attach"
 
     INBOX_VAL = "inbox"
 
@@ -109,7 +111,6 @@ class WithMsgFields(object):
     MBOX_VAL = TYPE_MBOX_VAL
     CHASH_VAL = CONTENT_HASH_KEY
     PHASH_VAL = PAYLOAD_HASH_KEY
-    PART_VAL = PART_NUMBER_KEY
 
     INDEXES = {
         # generic
@@ -122,8 +123,7 @@ class WithMsgFields(object):
 
         # content, headers doc
         TYPE_C_HASH_IDX: [KTYPE, CHASH_VAL],
-        # attachment docs
-        TYPE_C_HASH_PART_IDX: [KTYPE, CHASH_VAL, PART_VAL],
+
         # attachment payload dedup
         TYPE_P_HASH_IDX: [KTYPE, PHASH_VAL],
 

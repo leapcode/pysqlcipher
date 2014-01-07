@@ -27,6 +27,11 @@ from twisted.internet.threads import deferToThread
 logger = logging.getLogger(__name__)
 
 
+# TODO
+# Should write a helper to be able to pass a timeout argument.
+# See this answer: http://stackoverflow.com/a/19019648/1157664
+# And the notes by glyph and jpcalderone
+
 def deferred(f):
     """
     Decorator, for deferring methods to Threads.

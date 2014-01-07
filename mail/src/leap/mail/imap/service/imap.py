@@ -87,6 +87,8 @@ class LeapIMAPServer(imap4.IMAP4Server):
         :param line: the line from the server, without the line delimiter.
         :type line: str
         """
+        print "RECV: STATE (%s)" % self.state
+
         if "login" in line.lower():
             # avoid to log the pass, even though we are using a dummy auth
             # by now.
