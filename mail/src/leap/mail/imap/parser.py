@@ -102,6 +102,11 @@ class MBoxParser(object):
 
     def _parse_mailbox_name(self, name):
         """
+        Return a normalized representation of the mailbox C{name}.
+
+        This method ensures that an eventual initial 'inbox' part of a
+        mailbox name is made uppercase.
+
         :param name: the name of the mailbox
         :type name: unicode
 
