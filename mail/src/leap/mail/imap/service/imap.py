@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 from leap.common import events as leap_events
 from leap.common.check import leap_assert, leap_assert_type, leap_check
 from leap.keymanager import KeyManager
-from leap.mail.imap.server import SoledadBackedAccount
+from leap.mail.imap.account import SoledadBackedAccount
 from leap.mail.imap.fetch import LeapIncomingMail
 from leap.soledad.client import Soledad
 
@@ -87,6 +87,8 @@ class LeapIMAPServer(imap4.IMAP4Server):
         :param line: the line from the server, without the line delimiter.
         :type line: str
         """
+        print "RECV: STATE (%s)" % self.state
+
         if "login" in line.lower():
             # avoid to log the pass, even though we are using a dummy auth
             # by now.
