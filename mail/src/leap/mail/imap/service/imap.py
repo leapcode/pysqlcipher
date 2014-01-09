@@ -71,15 +71,6 @@ class LeapIMAPServer(imap4.IMAP4Server):
         # populate the test account properly (and only once
         # per session)
 
-        # theAccount = SoledadBackedAccount(
-        #     user, soledad=soledad)
-
-        # ---------------------------------
-        # XXX pre-populate acct for tests!!
-        # populate_test_account(theAccount)
-        # ---------------------------------
-        #self.theAccount = theAccount
-
     def lineReceived(self, line):
         """
         Attempt to parse a single line from the server.
@@ -88,6 +79,9 @@ class LeapIMAPServer(imap4.IMAP4Server):
         :type line: str
         """
         print "RECV: STATE (%s)" % self.state
+        if self.theAccount.closed is True and self.state != "unauth":
+            log.msg("Closing the session. State: unauth")
+            self.state = "unauth"
 
         if "login" in line.lower():
             # avoid to log the pass, even though we are using a dummy auth
