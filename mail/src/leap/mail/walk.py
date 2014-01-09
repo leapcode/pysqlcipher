@@ -57,11 +57,13 @@ get_payloads = lambda msg: ((x.get_payload(),
 
 get_body_phash_simple = lambda payloads: first(
     [get_hash(payload) for payload, headers in payloads
-     if "text/plain" in headers.get('content-type')])
+     if payloads
+     and "text/plain" in headers.get('content-type')])
 
 get_body_phash_multi = lambda payloads: (first(
     [get_hash(payload) for payload, headers in payloads
-     if "text/plain" in headers.get('content-type')])
+     if payloads
+     and "text/plain" in headers.get('content-type')])
     or get_body_phash_simple(payloads))
 
 """
