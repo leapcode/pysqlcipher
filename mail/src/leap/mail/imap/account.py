@@ -36,23 +36,6 @@ from leap.soledad.client import Soledad
 #######################################
 
 
-def _unicode_as_str(text):
-    """
-    Return some representation of C{text} as a str.
-
-    This is here mainly because Twisted's exception methods are not able to
-    print unicode text.
-
-    :param text: The text to convert.
-    :type text: unicode
-
-    :return: A representation of C{text} as str.
-    :rtype: str
-    """
-    # XXX is there a better str representation for unicode?
-    return repr(text)
-
-
 class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
     """
     An implementation of IAccount and INamespacePresenteer
@@ -145,8 +128,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         name = self._parse_mailbox_name(name)
 
         if name not in self.mailboxes:
-            raise imap4.MailboxException("No such mailbox: %s" %
-                                         _unicode_as_str(name))
+            raise imap4.MailboxException("No such mailbox: %r" % name)
 
         return SoledadMailbox(name, soledad=self._soledad)
 
@@ -172,7 +154,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         name = self._parse_mailbox_name(name)
 
         if name in self.mailboxes:
-            raise imap4.MailboxCollision, _unicode_as_str(name)
+            raise imap4.MailboxCollision(repr(name))
 
         if not creation_ts:
             # by default, we pass an int value
@@ -258,8 +240,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         name = self._parse_mailbox_name(name)
 
         if not name in self.mailboxes:
-            raise imap4.MailboxException("No such mailbox: %s" %
-                                         _unicode_as_str(name))
+            raise imap4.MailboxException("No such mailbox: %r" % name)
 
         mbox = self.getMailbox(name)
 
@@ -298,14 +279,14 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         newname = self._parse_mailbox_name(newname)
 
         if oldname not in self.mailboxes:
-            raise imap4.NoSuchMailbox, _unicode_as_str(oldname)
+            raise imap4.NoSuchMailbox(repr(oldname))
 
         inferiors = self._inferiorNames(oldname)
         inferiors = [(o, o.replace(oldname, newname, 1)) for o in inferiors]
 
         for (old, new) in inferiors:
             if new in self.mailboxes:
-                raise imap4.MailboxCollision, _unicode_as_str(new)
+                raise imap4.MailboxCollision(repr(new))
 
         for (old, new) in inferiors:
             mbox = self._get_mailbox_by_name(old)
@@ -386,8 +367,8 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         """
         name = self._parse_mailbox_name(name)
         if name not in self.subscriptions:
-            raise imap4.MailboxException, \
-                "Not currently subscribed to %s" % _unicode_as_str(name)
+            raise imap4.MailboxException(
+                "Not currently subscribed to %r" % name)
         self._set_subscription(name, False)
 
     def listMailboxes(self, ref, wildcard):
