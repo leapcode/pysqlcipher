@@ -63,6 +63,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
 
     _soledad = None
     selected = None
+    closed = False
 
     def __init__(self, account_name, soledad=None):
         """
