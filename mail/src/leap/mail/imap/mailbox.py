@@ -479,11 +479,13 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         """
         result = []
 
-        # XXX DEBUG -------------
-        print "getting uid", uid
-        print "in mbox", self.mbox
+        # For the moment our UID is sequential, so we
+        # can treat them all the same.
+        # Change this to the flag that twisted expects when we
+        # switch to content-hash based index + local UID table.
 
-        sequence = True if uid == 0 else False
+        sequence = False
+        #sequence = True if uid == 0 else False
 
         if not messages.last:
             try:
