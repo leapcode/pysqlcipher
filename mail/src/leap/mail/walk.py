@@ -111,8 +111,8 @@ def walk_msg_tree(parts, body_phash=None):
     # parts vector
     pv = list(get_parts_vector(parts))
 
-    if len(parts) == 2:
-        inner_headers = parts[1].get("headers", None)
+    inner_headers = parts[1].get("headers", None) if (
+        len(parts) == 2) else None
 
     if DEBUG:
         print "parts vector: ", pv
@@ -155,7 +155,8 @@ def walk_msg_tree(parts, body_phash=None):
         pdoc["part_map"][1]["multi"] = False
         if not pdoc["part_map"][1].get("phash", None):
             pdoc["part_map"][1]["phash"] = body_phash
-        pdoc["part_map"][1]["headers"] = inner_headers
+        if inner_headers:
+            pdoc["part_map"][1]["headers"] = inner_headers
     else:
         pdoc = outer
     pdoc["body"] = body_phash
