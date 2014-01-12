@@ -178,6 +178,7 @@ def run_service(*args, **kwargs):
     check_period = kwargs.get('check_period', INCOMING_CHECK_PERIOD)
     userid = kwargs.get('userid', None)
     leap_check(userid is not None, "need an user id")
+    offline = kwargs.get('offline', False)
 
     uuid = soledad._get_uuid()
     factory = LeapIMAPFactory(uuid, userid, soledad)
@@ -187,12 +188,15 @@ def run_service(*args, **kwargs):
     try:
         tport = reactor.listenTCP(port, factory,
                                   interface="localhost")
-        fetcher = LeapIncomingMail(
-            keymanager,
-            soledad,
-            factory.theAccount,
-            check_period,
-            userid)
+        if not offline:
+            fetcher = LeapIncomingMail(
+                keymanager,
+                soledad,
+                factory.theAccount,
+                check_period,
+                userid)
+        else:
+            fetcher = None
     except CannotListenError:
         logger.error("IMAP Service failed to start: "
                      "cannot listen in port %s" % (port,))
@@ -200,7 +204,7 @@ def run_service(*args, **kwargs):
         logger.error("Error launching IMAP service: %r" % (exc,))
     else:
         # all good.
-        fetcher.start_loop()
+        # (the caller has still to call fetcher.start_loop)
         logger.debug("IMAP4 Server is RUNNING in port  %s" % (port,))
         leap_events.signal(IMAP_SERVICE_STARTED, str(port))
         return fetcher, tport, factory
