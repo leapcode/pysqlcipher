@@ -1064,10 +1064,27 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
             hd[self.DATE_KEY] = date
         return hd
 
+    def _fdoc_already_exists(self, chash):
+        """
+        Check whether we can find a flags doc for this mailbox with the
+        given content-hash. It enforces that we can only have the same maessage
+        listed once for a a given mailbox.
+
+        :param chash: the content-hash to check about.
+        :type chash: basestring
+        :return: False, if it does not exist, or UID.
+        """
+        exist = self._get_fdoc_from_chash(chash)
+        if exist:
+            return exist.content.get(fields.UID_KEY, "unknown-uid")
+        else:
+            return False
+
     @deferred
     def add_msg(self, raw, subject=None, flags=None, date=None, uid=1):
         """
         Creates a new message document.
+        Here lives the magic of the leap mail. Well, in soledad, really.
 
         :param raw: the raw message
         :type raw: str
@@ -1096,6 +1113,14 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
         # parse
         msg, chash, size, multi = self._do_parse(raw)
+
+        # check for uniqueness.
+        if self._fdoc_already_exists(chash):
+            logger.warning("We already have that message in this mailbox.")
+            # note that this operation will leave holes in the UID sequence,
+            # but we're gonna change that all the same for a local-only table.
+            # so not touch it by the moment.
+            return False
 
         fd = self._populate_flags(flags, uid, chash, size, multi)
         hd = self._populate_headr(msg, chash, subject, date)
@@ -1155,6 +1180,31 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         return d
 
     # getters
+
+    def _get_fdoc_from_chash(self, chash):
+        """
+        Return a flags document for this mailbox with a given chash.
+
+        :return: A SoledadDocument containing the Flags Document, or None if
+                 the query failed.
+        :rtype: SoledadDocument or None.
+        """
+        try:
+            query = self._soledad.get_from_index(
+                fields.TYPE_MBOX_C_HASH_IDX,
+                fields.TYPE_FLAGS_VAL, self.mbox, chash)
+            if query:
+                if len(query) > 1:
+                    logger.warning(
+                        "More than one fdoc found for this chash, "
+                        "we got a duplicate!!")
+                    # XXX we could take action, like trigger a background
+                    # process to kill dupes.
+                return query.pop()
+            else:
+                return None
+        except Exception as exc:
+            logger.exception("Unhandled error %r" % exc)
 
     def get_msg_by_uid(self, uid):
         """

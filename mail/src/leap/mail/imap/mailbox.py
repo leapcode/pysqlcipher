@@ -125,7 +125,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
     def addListener(self, listener):
         """
-        Adds a listener to the listeners queue.
+        Add a listener to the listeners queue.
         The server adds itself as a listener when there is a SELECT,
         so it can send EXIST commands.
 
@@ -137,7 +137,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
     def removeListener(self, listener):
         """
-        Removes a listener from the listeners queue.
+        Remove a listener from the listeners queue.
 
         :param listener: listener to remove
         :type listener: an object that implements IMailboxListener
@@ -146,7 +146,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
     def _get_mbox(self):
         """
-        Returns mailbox document.
+        Return mailbox document.
 
         :return: A SoledadDocument containing this mailbox, or None if
                  the query failed.

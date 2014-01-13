@@ -99,6 +99,7 @@ class WithMsgFields(object):
     TYPE_MBOX_SEEN_IDX = 'by-type-and-mbox-and-seen'
     TYPE_MBOX_RECT_IDX = 'by-type-and-mbox-and-recent'
     TYPE_MBOX_DEL_IDX = 'by-type-and-mbox-and-deleted'
+    TYPE_MBOX_C_HASH_IDX = 'by-type-and-mbox-and-contenthash'
     TYPE_C_HASH_IDX = 'by-type-and-contenthash'
     TYPE_C_HASH_PART_IDX = 'by-type-and-contenthash-and-partnumber'
     TYPE_P_HASH_IDX = 'by-type-and-payloadhash'
@@ -120,6 +121,9 @@ class WithMsgFields(object):
 
         # mailboxes
         TYPE_SUBS_IDX: [KTYPE, 'bool(subscribed)'],
+
+        # fdocs uniqueness
+        TYPE_MBOX_C_HASH_IDX: [KTYPE, MBOX_VAL, CHASH_VAL],
 
         # content, headers doc
         TYPE_C_HASH_IDX: [KTYPE, CHASH_VAL],
