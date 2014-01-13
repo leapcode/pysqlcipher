@@ -19,6 +19,7 @@ LeapMessage and MessageCollection.
 """
 import copy
 import logging
+import re
 import StringIO
 
 from collections import defaultdict, namedtuple
@@ -61,6 +62,10 @@ def lowerdict(_dict):
     """
     return dict((key.lower(), value)
                 for key, value in _dict.items())
+
+
+CHARSET_PATTERN = r"""charset=([\w-]+)"""
+CHARSET_RE = re.compile(CHARSET_PATTERN, re.IGNORECASE)
 
 
 class MessagePart(object):
@@ -140,18 +145,9 @@ class MessagePart(object):
             payload = str("")
 
         if payload:
-            #headers = self.getHeaders(True)
-            #headers = lowerdict(headers)
-            #content_type = headers.get('content-type', "")
             content_type = self._get_ctype_from_document(phash)
-            charset_split = content_type.split('charset=')
-            # XXX fuck all this, use a regex!
-            if len(charset_split) > 1:
-                charset = charset_split[1]
-                if charset:
-                    charset = charset.strip()
-            else:
-                charset = None
+            charset = first(CHARSET_RE.findall(content_type))
+            logger.debug("Got charset from header: %s" % (charset,))
             if not charset:
                 charset = self._get_charset(payload)
             try:
@@ -483,27 +479,26 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :return: file-like object opened for reading
         :rtype: StringIO
         """
+        # TODO refactor with getBodyFile in MessagePart
         fd = StringIO.StringIO()
         bdoc = self._bdoc
         if bdoc:
-            body = str(self._bdoc.content.get(self.RAW_KEY, ""))
+            body = self._bdoc.content.get(self.RAW_KEY, "")
+            content_type = bdoc.content.get('content-type', "")
+            charset = first(CHARSET_RE.findall(content_type))
+            logger.debug("Got charset from header: %s" % (charset,))
+            if not charset:
+                charset = self._get_charset(body)
+            try:
+                body = body.decode(charset).encode(charset)
+            except (UnicodeEncodeError, UnicodeDecodeError) as e:
+                logger.error("Unicode error {0}".format(e))
+                body = body.encode(charset, 'replace')
+
+        # We are still returning funky characters from here.
         else:
             logger.warning("No BDOC found for message.")
             body = str("")
-
-        # XXX not needed, isn't it? ---- ivan?
-        #if bdoc:
-            #content_type = bdoc.content.get('content-type', "")
-            #charset = content_type.split('charset=')[1]
-            #if charset:
-                #charset = charset.strip()
-            #if not charset:
-                #charset = self._get_charset(body)
-            #try:
-                #body = str(body.encode(charset))
-            #except (UnicodeEncodeError, UnicodeDecodeError) as e:
-                #logger.error("Unicode error {0}".format(e))
-                #body = str(body.encode(charset, 'replace'))
 
         fd.write(body)
         fd.seek(0)
