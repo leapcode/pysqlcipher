@@ -45,13 +45,12 @@ class WithMsgFields(object):
     HEADERS_KEY = "headers"
     DATE_KEY = "date"
     SUBJECT_KEY = "subject"
-    # XXX DELETE-ME
-    #NUM_PARTS_KEY = "numparts"  # not needed?!
     PARTS_MAP_KEY = "part_map"
     BODY_KEY = "body"  # link to phash of body
+    MSGID_KEY = "msgid"
 
     # content
-    LINKED_FROM_KEY = "lkf"
+    LINKED_FROM_KEY = "lkf"  # XXX not implemented yet!
     RAW_KEY = "raw"
     CTYPE_KEY = "ctype"
 
@@ -68,10 +67,6 @@ class WithMsgFields(object):
     TYPE_FLAGS_VAL = "flags"
     TYPE_HEADERS_VAL = "head"
     TYPE_CONTENT_VAL = "cnt"
-
-    # XXX DEPRECATE
-    #TYPE_MESSAGE_VAL = "msg"
-    #TYPE_ATTACHMENT_VAL = "attach"
 
     INBOX_VAL = "inbox"
 
@@ -96,6 +91,7 @@ class WithMsgFields(object):
     TYPE_MBOX_IDX = 'by-type-and-mbox'
     TYPE_MBOX_UID_IDX = 'by-type-and-mbox-and-uid'
     TYPE_SUBS_IDX = 'by-type-and-subscribed'
+    TYPE_MSGID_IDX = 'by-type-and-message-id'
     TYPE_MBOX_SEEN_IDX = 'by-type-and-mbox-and-seen'
     TYPE_MBOX_RECT_IDX = 'by-type-and-mbox-and-recent'
     TYPE_MBOX_DEL_IDX = 'by-type-and-mbox-and-deleted'
@@ -124,6 +120,9 @@ class WithMsgFields(object):
 
         # fdocs uniqueness
         TYPE_MBOX_C_HASH_IDX: [KTYPE, MBOX_VAL, CHASH_VAL],
+
+        # headers doc - search by msgid.
+        TYPE_MSGID_IDX: [KTYPE, MSGID_KEY],
 
         # content, headers doc
         TYPE_C_HASH_IDX: [KTYPE, CHASH_VAL],

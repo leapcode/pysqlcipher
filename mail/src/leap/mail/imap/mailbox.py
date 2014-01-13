@@ -39,6 +39,7 @@ from leap.mail.decorators import deferred
 from leap.mail.imap.fields import WithMsgFields, fields
 from leap.mail.imap.messages import MessageCollection
 from leap.mail.imap.parser import MBoxParser
+from leap.mail.utils import first
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         imap4.IMailbox,
         imap4.IMailboxInfo,
         imap4.ICloseableMailbox,
+        imap4.ISearchableMailbox,
         imap4.IMessageCopier)
 
     # XXX should finish the implementation of IMailboxListener
@@ -616,6 +618,49 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
         self._signal_unread_to_ui()
         return result
+
+    # ISearchableMailbox
+
+    def search(self, query, uid):
+        """
+        Search for messages that meet the given query criteria.
+
+        Warning: this is half-baked, and it might give problems since
+        it offers the SearchableInterface.
+        We'll be implementing it asap.
+
+        :param query: The search criteria
+        :type query: list
+
+        :param uid: If true, the IDs specified in the query are UIDs;
+                    otherwise they are message sequence IDs.
+        :type uid: bool
+
+        :return: A list of message sequence numbers or message UIDs which
+                 match the search criteria or a C{Deferred} whose callback
+                 will be invoked with such a list.
+        :rtype: C{list} or C{Deferred}
+        """
+        # TODO see if we can raise w/o interrupting flow
+        #:raise IllegalQueryError: Raised when query is not valid.
+        # example query:
+        #  ['UNDELETED', 'HEADER', 'Message-ID',
+        #   '52D44F11.9060107@dev.bitmask.net']
+
+        # TODO hardcoding for now! -- we'll support generic queries later on
+        # but doing a quickfix for avoiding duplicat saves in the draft folder.
+        # See issue #4209
+
+        if query[1] == 'HEADER' and query[2].lower() == "message-id":
+            msgid = str(query[3]).strip()
+            d = self.messages._get_uid_from_msgid(str(msgid))
+            d1 = defer.gatherResults([d])
+            # we want a list, so return it all the same
+            return d1
+
+        # nothing implemented for any other query
+        logger.warning("Cannot process query: %s" % (query,))
+        return []
 
     # IMessageCopier
 
