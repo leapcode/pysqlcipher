@@ -20,6 +20,8 @@ LeapMessage and MessageCollection.
 import copy
 import logging
 import re
+import threading
+import time
 import StringIO
 
 from collections import defaultdict, namedtuple
@@ -44,6 +46,7 @@ from leap.mail.messageflow import IMessageConsumer, MessageProducer
 
 logger = logging.getLogger(__name__)
 
+read_write_lock = threading.Lock()
 
 # TODO ------------------------------------------------------------
 
@@ -53,6 +56,7 @@ logger = logging.getLogger(__name__)
 # [ ] Send patch to twisted for bug in imap4.py:5717  (content-type can be
 #     none? lower-case?)
 
+
 def lowerdict(_dict):
     """
     Return a dict with the keys in lowercase.
@@ -60,12 +64,17 @@ def lowerdict(_dict):
     :param _dict: the dict to convert
     :rtype: dict
     """
+    # TODO should properly implement a CaseInsensitive dict.
+    # Look into requests code.
     return dict((key.lower(), value)
                 for key, value in _dict.items())
 
 
 CHARSET_PATTERN = r"""charset=([\w-]+)"""
+MSGID_PATTERN = r"""<([\w@.]+)>"""
+
 CHARSET_RE = re.compile(CHARSET_PATTERN, re.IGNORECASE)
+MSGID_RE = re.compile(MSGID_PATTERN)
 
 
 class MessagePart(object):
@@ -897,6 +906,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
     Implements a filter query over the messages contained in a soledad
     database.
     """
+
     # XXX this should be able to produce a MessageSet methinks
     # could validate these kinds of objects turning them
     # into a template for the class.
@@ -1044,9 +1054,14 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
             newline = "\n%s: " % (k,)
             headers[k] = newline.join(v)
 
+        lower_headers = lowerdict(headers)
+        msgid = first(MSGID_RE.findall(
+            lower_headers.get('message-id', '')))
+
         hd = self._get_empty_doc(self.HEADERS_DOC)
         hd[self.CONTENT_HASH_KEY] = chash
         hd[self.HEADERS_KEY] = headers
+        hd[self.MSGID_KEY] = msgid
 
         if not subject and self.SUBJECT_FIELD in headers:
             hd[self.SUBJECT_KEY] = first(headers[self.SUBJECT_FIELD])
@@ -1139,16 +1154,17 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         logger.debug('enqueuing message docs for write')
         ptuple = SoledadWriterPayload
 
-        # first, regular docs: flags and headers
-        for doc in docs:
-            self.soledad_writer.put(ptuple(
-                mode=ptuple.CREATE, payload=doc))
+        with read_write_lock:
+            # first, regular docs: flags and headers
+            for doc in docs:
+                self.soledad_writer.put(ptuple(
+                    mode=ptuple.CREATE, payload=doc))
 
-        # and last, but not least, try to create
-        # content docs if not already there.
-        for cd in cdocs:
-            self.soledad_writer.put(ptuple(
-                mode=ptuple.CONTENT_CREATE, payload=cd))
+            # and last, but not least, try to create
+            # content docs if not already there.
+            for cd in cdocs:
+                self.soledad_writer.put(ptuple(
+                    mode=ptuple.CONTENT_CREATE, payload=cd))
 
     def _remove_cb(self, result):
         return result
@@ -1174,7 +1190,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         d.addCallback(self._remove_cb)
         return d
 
-    # getters
+    # getters: specific queries
 
     def _get_fdoc_from_chash(self, chash):
         """
@@ -1200,6 +1216,63 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                 return None
         except Exception as exc:
             logger.exception("Unhandled error %r" % exc)
+
+    def _get_uid_from_msgidCb(self, msgid):
+        hdoc = None
+        with read_write_lock:
+            try:
+                query = self._soledad.get_from_index(
+                    fields.TYPE_MSGID_IDX,
+                    fields.TYPE_HEADERS_VAL, msgid)
+                if query:
+                    if len(query) > 1:
+                        logger.warning(
+                            "More than one hdoc found for this msgid, "
+                            "we got a duplicate!!")
+                        # XXX we could take action, like trigger a background
+                        # process to kill dupes.
+                    hdoc = query.pop()
+            except Exception as exc:
+                logger.exception("Unhandled error %r" % exc)
+
+        if hdoc is None:
+            logger.warning("Could not find hdoc for msgid %s"
+                           % (msgid,))
+            return None
+        msg_chash = hdoc.content.get(fields.CONTENT_HASH_KEY)
+        fdoc = self._get_fdoc_from_chash(msg_chash)
+        if not fdoc:
+            logger.warning("Could not find fdoc for msgid %s"
+                           % (msgid,))
+            return None
+        return fdoc.content.get(fields.UID_KEY, None)
+
+    @deferred
+    def _get_uid_from_msgid(self, msgid):
+        """
+        Return a UID for a given message-id.
+
+        It first gets the headers-doc for that msg-id, and
+        it found it queries the flags doc for the current mailbox
+        for the matching content-hash.
+
+        :return: A UID, or None
+        """
+        # We need to wait a little bit, cause in some of the cases
+        # the query is received right after we've saved the document,
+        # and we cannot find it otherwise. This seems to be enough.
+
+        # Doing a sleep since we'll be calling this in a secondary thread,
+        # but we'll should be able to collect the results after a
+        # reactor.callLater.
+        # Maybe we can implement something like NOT_DONE_YET in the web
+        # framework, and return from the callback?
+        # See: http://jcalderone.livejournal.com/50226.html
+        # reactor.callLater(0.3, self._get_uid_from_msgidCb, msgid)
+        time.sleep(0.3)
+        return self._get_uid_from_msgidCb(msgid)
+
+    # getters: generic for a mailbox
 
     def get_msg_by_uid(self, uid):
         """
