@@ -46,8 +46,6 @@ from leap.mail.messageflow import IMessageConsumer, MessageProducer
 
 logger = logging.getLogger(__name__)
 
-read_write_lock = threading.Lock()
-
 # TODO ------------------------------------------------------------
 
 # [ ] Add linked-from info.
@@ -1154,17 +1152,16 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         logger.debug('enqueuing message docs for write')
         ptuple = SoledadWriterPayload
 
-        with read_write_lock:
-            # first, regular docs: flags and headers
-            for doc in docs:
-                self.soledad_writer.put(ptuple(
-                    mode=ptuple.CREATE, payload=doc))
+        # first, regular docs: flags and headers
+        for doc in docs:
+            self.soledad_writer.put(ptuple(
+                mode=ptuple.CREATE, payload=doc))
 
-            # and last, but not least, try to create
-            # content docs if not already there.
-            for cd in cdocs:
-                self.soledad_writer.put(ptuple(
-                    mode=ptuple.CONTENT_CREATE, payload=cd))
+        # and last, but not least, try to create
+        # content docs if not already there.
+        for cd in cdocs:
+            self.soledad_writer.put(ptuple(
+                mode=ptuple.CONTENT_CREATE, payload=cd))
 
     def _remove_cb(self, result):
         return result
@@ -1219,21 +1216,20 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
     def _get_uid_from_msgidCb(self, msgid):
         hdoc = None
-        with read_write_lock:
-            try:
-                query = self._soledad.get_from_index(
-                    fields.TYPE_MSGID_IDX,
-                    fields.TYPE_HEADERS_VAL, msgid)
-                if query:
-                    if len(query) > 1:
-                        logger.warning(
-                            "More than one hdoc found for this msgid, "
-                            "we got a duplicate!!")
-                        # XXX we could take action, like trigger a background
-                        # process to kill dupes.
-                    hdoc = query.pop()
-            except Exception as exc:
-                logger.exception("Unhandled error %r" % exc)
+        try:
+            query = self._soledad.get_from_index(
+                fields.TYPE_MSGID_IDX,
+                fields.TYPE_HEADERS_VAL, msgid)
+            if query:
+                if len(query) > 1:
+                    logger.warning(
+                        "More than one hdoc found for this msgid, "
+                        "we got a duplicate!!")
+                    # XXX we could take action, like trigger a background
+                    # process to kill dupes.
+                hdoc = query.pop()
+        except Exception as exc:
+            logger.exception("Unhandled error %r" % exc)
 
         if hdoc is None:
             logger.warning("Could not find hdoc for msgid %s"

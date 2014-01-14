@@ -39,7 +39,6 @@ from leap.mail.decorators import deferred
 from leap.mail.imap.fields import WithMsgFields, fields
 from leap.mail.imap.messages import MessageCollection
 from leap.mail.imap.parser import MBoxParser
-from leap.mail.utils import first
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +59,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         imap4.IMessageCopier)
 
     # XXX should finish the implementation of IMailboxListener
-    # XXX should implement ISearchableMailbox too
+    # XXX should complately implement ISearchableMailbox too
 
     messages = None
     _closed = False
@@ -78,6 +77,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
     CMD_UNSEEN = "UNSEEN"
 
     _listeners = defaultdict(set)
+
     next_uid_lock = threading.Lock()
 
     def __init__(self, mbox, soledad=None, rw=1):
@@ -161,7 +161,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             if query:
                 return query.pop()
         except Exception as exc:
-            logger.error("Unhandled error %r" % exc)
+            logger.exception("Unhandled error %r" % exc)
 
     def getFlags(self):
         """
@@ -226,6 +226,11 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :rtype: bool
         """
         mbox = self._get_mbox()
+        if not mbox:
+            logger.error("We could not get a mbox!")
+            # XXX It looks like it has been corrupted.
+            # We need to be able to survive this.
+            return None
         return mbox.content.get(self.LAST_UID_KEY, 1)
 
     def _set_last_uid(self, uid):
