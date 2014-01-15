@@ -22,6 +22,7 @@ from copy import copy
 import logging
 
 from twisted.internet.protocol import ServerFactory
+from twisted.internet.defer import maybeDeferred
 from twisted.internet.error import CannotListenError
 from twisted.mail import imap4
 from twisted.python import log
@@ -78,7 +79,6 @@ class LeapIMAPServer(imap4.IMAP4Server):
         :param line: the line from the server, without the line delimiter.
         :type line: str
         """
-        print "RECV: STATE (%s)" % self.state
         if self.theAccount.closed is True and self.state != "unauth":
             log.msg("Closing the session. State: unauth")
             self.state = "unauth"
@@ -89,7 +89,7 @@ class LeapIMAPServer(imap4.IMAP4Server):
             msg = line[:7] + " [...]"
         else:
             msg = copy(line)
-        log.msg('rcv: %s' % msg)
+        log.msg('rcv (%s): %s' % (self.state, msg))
         imap4.IMAP4Server.lineReceived(self, line)
 
     def authenticateLogin(self, username, password):
@@ -110,6 +110,39 @@ class LeapIMAPServer(imap4.IMAP4Server):
         # any dummy password is allowed so far. use realm instead!
         leap_events.signal(IMAP_CLIENT_LOGIN, "1")
         return imap4.IAccount, self.theAccount, lambda: None
+
+    def do_FETCH(self, tag, messages, query, uid=0):
+        """
+        Overwritten fetch dispatcher to use the fast fetch_flags
+        method
+        """
+        log.msg("LEAP Overwritten fetch...")
+        if not query:
+            self.sendPositiveResponse(tag, 'FETCH complete')
+            return  # XXX ???
+
+        cbFetch = self._IMAP4Server__cbFetch
+        ebFetch = self._IMAP4Server__ebFetch
+
+        if str(query[0]) == "flags":
+            self._oldTimeout = self.setTimeout(None)
+            # no need to call iter, we get a generator
+            maybeDeferred(
+                self.mbox.fetch_flags, messages, uid=uid
+            ).addCallback(
+                cbFetch, tag, query, uid
+            ).addErrback(ebFetch, tag)
+        else:
+            self._oldTimeout = self.setTimeout(None)
+            # no need to call iter, we get a generator
+            maybeDeferred(
+                self.mbox.fetch, messages, uid=uid
+            ).addCallback(
+                cbFetch, tag, query, uid
+            ).addErrback(ebFetch, tag)
+
+    select_FETCH = (do_FETCH, imap4.IMAP4Server.arg_seqset,
+                    imap4.IMAP4Server.arg_fetchatt)
 
 
 class IMAPAuthRealm(object):

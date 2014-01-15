@@ -662,17 +662,8 @@ class LeapMessage(fields, MailParser, MBoxParser):
             result = first(flag_docs)
         except Exception as exc:
             # ugh! Something's broken down there!
-            logger.warning("FUCKING ERROR ----- getting for UID:", self._uid)
+            logger.warning("ERROR while getting flags for UID: %s" % self._uid)
             logger.exception(exc)
-            try:
-                flag_docs = self._soledad.get_from_index(
-                    fields.TYPE_MBOX_UID_IDX,
-                    fields.TYPE_FLAGS_VAL, self._mbox, str(self._uid))
-                result = first(flag_docs)
-            except Exception as exc:
-                # ugh! Something's broken down there!
-                logger.warning("FUCKING ERROR, 2nd time -----")
-                logger.exception(exc)
         finally:
             return result
 
