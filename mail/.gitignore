@@ -19,3 +19,4 @@ lib/
 local/
 share/
 MANIFEST
+twistd.pid
