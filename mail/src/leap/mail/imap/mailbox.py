@@ -467,6 +467,36 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         d.addCallback(self._expunge_cb)
         return d
 
+    def _bound_seq(self, messages_asked):
+        """
+        Put an upper bound to a messages sequence if this is open.
+
+        :param messages_asked: IDs of the messages.
+        :type messages_asked: MessageSet
+        :rtype: MessageSet
+        """
+        if not messages_asked.last:
+            try:
+                iter(messages_asked)
+            except TypeError:
+                # looks like we cannot iterate
+                messages_asked.last = self.last_uid
+        return messages_asked
+
+    def _filter_msg_seq(self, messages_asked):
+        """
+        Filter a message sequence returning only the ones that do exist in the
+        collection.
+
+        :param messages_asked: IDs of the messages.
+        :type messages_asked: MessageSet
+        :rtype: set
+        """
+        set_asked = set(messages_asked)
+        set_exist = set(self.messages.all_uid_iter())
+        seq_messg = set_asked.intersection(set_exist)
+        return seq_messg
+
     @deferred
     def fetch(self, messages_asked, uid):
         """
