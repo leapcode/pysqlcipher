@@ -124,7 +124,9 @@ class LeapIMAPServer(imap4.IMAP4Server):
         cbFetch = self._IMAP4Server__cbFetch
         ebFetch = self._IMAP4Server__ebFetch
 
-        if str(query[0]) == "flags":
+        print "QUERY: ", query
+
+        if len(query) == 1 and str(query[0]) == "flags":
             self._oldTimeout = self.setTimeout(None)
             # no need to call iter, we get a generator
             maybeDeferred(
