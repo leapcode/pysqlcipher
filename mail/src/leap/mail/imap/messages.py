@@ -1337,6 +1337,18 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
                         fields.TYPE_FLAGS_VAL, self.mbox))
         return (u for u in sorted(all_uids))
 
+    def reset_last_uid(self, param):
+        """
+        Set the last uid to the highest uid found.
+        Used while expunging, passed as a callback.
+        """
+        try:
+            self.last_uid = max(self.all_uid_iter()) + 1
+        except ValueError:
+            # empty sequence
+            pass
+        return param
+
     def all_flags(self):
         """
         Return a dict with all flags documents for this mailbox.

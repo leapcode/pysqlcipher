@@ -463,6 +463,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         if not self.isWriteable():
             raise imap4.ReadOnlyMailbox
         d = self.messages.remove_all_deleted()
+        d.addCallback(self.messages.reset_last_uid)
         d.addCallback(self._expunge_cb)
         return d
 
