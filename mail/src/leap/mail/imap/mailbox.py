@@ -526,17 +526,9 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         sequence = False
         #sequence = True if uid == 0 else False
 
-        if not messages_asked.last:
-            try:
-                iter(messages_asked)
-            except TypeError:
-                # looks like we cannot iterate
-                messages_asked.last = self.last_uid
+        messages_asked = self._bound_seq(messages_asked)
+        seq_messg = self._filter_msg_seq(messages_asked)
 
-        set_asked = set(messages_asked)
-        set_exist = set(self.messages.all_uid_iter())
-        seq_messg = set_asked.intersection(set_exist)
-        getmsg = lambda msgid: self.messages.get_msg_by_uid(msgid)
 
         # for sequence numbers (uid = 0)
         if sequence:
@@ -563,6 +555,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         A fast method to fetch all flags, tricking just the
         needed subset of the MIME interface that's needed to satisfy
         a generic FLAGS query.
+
         Given how LEAP Mail is supposed to work without local cache,
         this query is going to be quite common, and also we expect
         it to be in the form 1:* at the beginning of a session, so
@@ -592,16 +585,9 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             def getFlags(self):
                 return map(str, self.flags)
 
-        if not messages_asked.last:
-            try:
-                iter(messages_asked)
-            except TypeError:
-                # looks like we cannot iterate
-                messages_asked.last = self.last_uid
+        messages_asked = self._bound_seq(messages_asked)
+        seq_messg = self._filter_msg_seq(messages_asked)
 
-        set_asked = set(messages_asked)
-        set_exist = set(self.messages.all_uid_iter())
-        seq_messg = set_asked.intersection(set_exist)
         all_flags = self.messages.all_flags()
         result = ((msgid, flagsPart(
             msgid, all_flags[msgid])) for msgid in seq_messg)
@@ -648,7 +634,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         leap_events.signal(IMAP_UNREAD_MAIL, str(unseen))
 
     @deferred
-    def store(self, messages, flags, mode, uid):
+    def store(self, messages_asked, flags, mode, uid):
         """
         Sets the flags of one or more messages.
 
@@ -677,25 +663,26 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :raise ReadOnlyMailbox: Raised if this mailbox is not open for
                                 read-write.
         """
+        from twisted.internet import reactor
         # XXX implement also sequence (uid = 0)
         # XXX we should prevent cclient from setting Recent flag.
         leap_assert(not isinstance(flags, basestring),
                     "flags cannot be a string")
         flags = tuple(flags)
 
+        messages_asked = self._bound_seq(messages_asked)
+        seq_messg = self._filter_msg_seq(messages_asked)
+
         if not self.isWriteable():
             log.msg('read only mailbox!')
             raise imap4.ReadOnlyMailbox
 
-        if not messages.last:
-            messages.last = self.messages.count()
-
         result = {}
-        for msg_id in messages:
+        for msg_id in seq_messg:
             log.msg("MSG ID = %s" % msg_id)
             msg = self.messages.get_msg_by_uid(msg_id)
             if not msg:
-                return result
+                continue
             if mode == 1:
                 msg.addFlags(flags)
             elif mode == -1:
