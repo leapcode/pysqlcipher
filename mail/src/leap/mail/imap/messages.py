@@ -467,7 +467,8 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :rtype: C{str}
         :return: An RFC822-formatted date string.
         """
-        return str(self._hdoc.content.get(self.DATE_KEY, ''))
+        date = self._hdoc.content.get(self.DATE_KEY, '')
+        return str(date)
 
     #
     # IMessagePart
@@ -1077,12 +1078,12 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
         hd[self.MSGID_KEY] = msgid
 
         if not subject and self.SUBJECT_FIELD in headers:
-            hd[self.SUBJECT_KEY] = first(headers[self.SUBJECT_FIELD])
+            hd[self.SUBJECT_KEY] = headers[self.SUBJECT_FIELD]
         else:
             hd[self.SUBJECT_KEY] = subject
 
         if not date and self.DATE_FIELD in headers:
-            hd[self.DATE_KEY] = first(headers[self.DATE_FIELD])
+            hd[self.DATE_KEY] = headers[self.DATE_FIELD]
         else:
             hd[self.DATE_KEY] = date
         return hd
@@ -1336,6 +1337,18 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
                         fields.TYPE_MBOX_IDX,
                         fields.TYPE_FLAGS_VAL, self.mbox))
         return (u for u in sorted(all_uids))
+
+    def reset_last_uid(self, param):
+        """
+        Set the last uid to the highest uid found.
+        Used while expunging, passed as a callback.
+        """
+        try:
+            self.last_uid = max(self.all_uid_iter()) + 1
+        except ValueError:
+            # empty sequence
+            pass
+        return param
 
     def all_flags(self):
         """

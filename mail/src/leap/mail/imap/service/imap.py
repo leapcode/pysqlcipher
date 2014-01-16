@@ -124,7 +124,9 @@ class LeapIMAPServer(imap4.IMAP4Server):
         cbFetch = self._IMAP4Server__cbFetch
         ebFetch = self._IMAP4Server__ebFetch
 
-        if str(query[0]) == "flags":
+        print "QUERY: ", query
+
+        if len(query) == 1 and str(query[0]) == "flags":
             self._oldTimeout = self.setTimeout(None)
             # no need to call iter, we get a generator
             maybeDeferred(
@@ -143,6 +145,36 @@ class LeapIMAPServer(imap4.IMAP4Server):
 
     select_FETCH = (do_FETCH, imap4.IMAP4Server.arg_seqset,
                     imap4.IMAP4Server.arg_fetchatt)
+
+    def _cbSelectWork(self, mbox, cmdName, tag):
+        """
+        Callback for selectWork, patched to avoid conformance errors due to
+        incomplete UIDVALIDITY line.
+        """
+        if mbox is None:
+            self.sendNegativeResponse(tag, 'No such mailbox')
+            return
+        if '\\noselect' in [s.lower() for s in mbox.getFlags()]:
+            self.sendNegativeResponse(tag, 'Mailbox cannot be selected')
+            return
+
+        flags = mbox.getFlags()
+        self.sendUntaggedResponse(str(mbox.getMessageCount()) + ' EXISTS')
+        self.sendUntaggedResponse(str(mbox.getRecentCount()) + ' RECENT')
+        self.sendUntaggedResponse('FLAGS (%s)' % ' '.join(flags))
+
+        # Patched -------------------------------------------------------
+        # imaptest was complaining about the incomplete line, we're adding
+        # "UIDs valid" here.
+        self.sendPositiveResponse(
+            None, '[UIDVALIDITY %d] UIDs valid' % mbox.getUIDValidity())
+        # ----------------------------------------------------------------
+
+        s = mbox.isWriteable() and 'READ-WRITE' or 'READ-ONLY'
+        mbox.addListener(self)
+        self.sendPositiveResponse(tag, '[%s] %s successful' % (s, cmdName))
+        self.state = 'select'
+        self.mbox = mbox
 
 
 class IMAPAuthRealm(object):
