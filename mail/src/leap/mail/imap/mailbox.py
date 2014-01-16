@@ -529,6 +529,10 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         messages_asked = self._bound_seq(messages_asked)
         seq_messg = self._filter_msg_seq(messages_asked)
 
+        def getmsg(msgid):
+            if self.isWriteable():
+                deferLater(reactor, 2, self._unset_recent_flag, messages_asked)
+            return self.messages.get_msg_by_uid(msgid)
 
         # for sequence numbers (uid = 0)
         if sequence:
@@ -537,12 +541,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
         else:
             result = ((msgid, getmsg(msgid)) for msgid in seq_messg)
-
-        if self.isWriteable():
-            deferLater(reactor, 30, self._unset_recent_flag)
-            # XXX I should rewrite the scheduler so it handles a
-            # set of queues with different priority.
-            self._unset_recent_flag()
 
         # this should really be called as a final callback of
         # the do_FETCH method...
@@ -594,7 +592,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         return result
 
     @deferred
-    def _unset_recent_flag(self):
+    def _unset_recent_flag(self, message_uid):
         """
         Unsets `Recent` flag from a tuple of messages.
         Called from fetch.
@@ -610,19 +608,16 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         If it is not possible to determine whether or not this
         session is the first session to be notified about a message,
         then that message SHOULD be considered recent.
+
+        :param message_uids: the sequence of msg ids to update.
+        :type message_uids: sequence
         """
-        # TODO this fucker, for the sake of correctness, is messing with
-        # the whole collection of flag docs.
+        # XXX deprecate this!
+        # move to a mailbox-level call, and do it in batches!
 
-        # Possible ways of action:
-        # 1. Ignore it, we want fun.
-        # 2. Trigger it with a delay
-        # 3. Route it through a queue with lesser priority than the
-        #    regularar writer.
-
-        log.msg('unsetting recent flags...')
-        for msg in self.messages.get_recent():
-            msg.removeFlags((fields.RECENT_FLAG,))
+        log.msg('unsetting recent flag: %s' % message_uid)
+        msg = self.messages.get_msg_by_uid(message_uid)
+        msg.removeFlags((fields.RECENT_FLAG,))
         self._signal_unread_to_ui()
 
     @deferred
@@ -691,7 +686,9 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
                 msg.setFlags(flags)
             result[msg_id] = msg.getFlags()
 
-        self._signal_unread_to_ui()
+        # this should really be called as a final callback of
+        # the do_FETCH method...
+        deferLater(reactor, 1, self._signal_unread_to_ui)
         return result
 
     # ISearchableMailbox
@@ -758,6 +755,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         new_fdoc[self.MBOX_KEY] = self.mbox
 
         d = self._do_add_doc(new_fdoc)
+        # XXX notify should be done when all the
+        # copies in the batch are finished.
         d.addCallback(self._notify_new)
 
     @deferred
