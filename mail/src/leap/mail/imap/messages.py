@@ -467,7 +467,8 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :rtype: C{str}
         :return: An RFC822-formatted date string.
         """
-        return str(self._hdoc.content.get(self.DATE_KEY, ''))
+        date = self._hdoc.content.get(self.DATE_KEY, '')
+        return str(date)
 
     #
     # IMessagePart
@@ -1077,12 +1078,12 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
         hd[self.MSGID_KEY] = msgid
 
         if not subject and self.SUBJECT_FIELD in headers:
-            hd[self.SUBJECT_KEY] = first(headers[self.SUBJECT_FIELD])
+            hd[self.SUBJECT_KEY] = headers[self.SUBJECT_FIELD]
         else:
             hd[self.SUBJECT_KEY] = subject
 
         if not date and self.DATE_FIELD in headers:
-            hd[self.DATE_KEY] = first(headers[self.DATE_FIELD])
+            hd[self.DATE_KEY] = headers[self.DATE_FIELD]
         else:
             hd[self.DATE_KEY] = date
         return hd
