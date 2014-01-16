@@ -20,13 +20,13 @@ Soledad Mailbox.
 import copy
 import threading
 import logging
-import time
 import StringIO
 import cStringIO
 
 from collections import defaultdict
 
 from twisted.internet import defer
+from twisted.internet.task import deferLater
 from twisted.python import log
 
 from twisted.mail import imap4
@@ -39,7 +39,6 @@ from leap.mail.decorators import deferred
 from leap.mail.imap.fields import WithMsgFields, fields
 from leap.mail.imap.messages import MessageCollection
 from leap.mail.imap.parser import MBoxParser
-from leap.mail.utils import first
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +59,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         imap4.IMessageCopier)
 
     # XXX should finish the implementation of IMailboxListener
-    # XXX should implement ISearchableMailbox too
+    # XXX should completely implement ISearchableMailbox too
 
     messages = None
     _closed = False
@@ -78,6 +77,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
     CMD_UNSEEN = "UNSEEN"
 
     _listeners = defaultdict(set)
+
     next_uid_lock = threading.Lock()
 
     def __init__(self, mbox, soledad=None, rw=1):
@@ -161,7 +161,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             if query:
                 return query.pop()
         except Exception as exc:
-            logger.error("Unhandled error %r" % exc)
+            logger.exception("Unhandled error %r" % exc)
 
     def getFlags(self):
         """
@@ -226,6 +226,11 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :rtype: bool
         """
         mbox = self._get_mbox()
+        if not mbox:
+            logger.error("We could not get a mbox!")
+            # XXX It looks like it has been corrupted.
+            # We need to be able to survive this.
+            return None
         return mbox.content.get(self.LAST_UID_KEY, 1)
 
     def _set_last_uid(self, uid):
@@ -462,15 +467,16 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         return d
 
     @deferred
-    def fetch(self, messages, uid):
+    def fetch(self, messages_asked, uid):
         """
         Retrieve one or more messages in this mailbox.
 
         from rfc 3501: The data items to be fetched can be either a single atom
         or a parenthesized list.
 
-        :param messages: IDs of the messages to retrieve information about
-        :type messages: MessageSet
+        :param messages_asked: IDs of the messages to retrieve information
+                               about
+        :type messages_asked: MessageSet
 
         :param uid: If true, the IDs are UIDs. They are message sequence IDs
                     otherwise.
@@ -479,7 +485,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :rtype: A tuple of two-tuples of message sequence numbers and
                 LeapMessage
         """
-        result = []
+        from twisted.internet import reactor
 
         # For the moment our UID is sequential, so we
         # can treat them all the same.
@@ -489,12 +495,17 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         sequence = False
         #sequence = True if uid == 0 else False
 
-        if not messages.last:
+        if not messages_asked.last:
             try:
-                iter(messages)
+                iter(messages_asked)
             except TypeError:
                 # looks like we cannot iterate
-                messages.last = self.last_uid
+                messages_asked.last = self.last_uid
+
+        set_asked = set(messages_asked)
+        set_exist = set(self.messages.all_uid_iter())
+        seq_messg = set_asked.intersection(set_exist)
+        getmsg = lambda msgid: self.messages.get_msg_by_uid(msgid)
 
         # for sequence numbers (uid = 0)
         if sequence:
@@ -502,20 +513,68 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             raise NotImplementedError
 
         else:
-            for msg_id in messages:
-                msg = self.messages.get_msg_by_uid(msg_id)
-                if msg:
-                    result.append((msg_id, msg))
-                else:
-                    logger.debug("fetch %s, no msg found!!!" % msg_id)
+            result = ((msgid, getmsg(msgid)) for msgid in seq_messg)
 
         if self.isWriteable():
+            deferLater(reactor, 30, self._unset_recent_flag)
+            # XXX I should rewrite the scheduler so it handles a
+            # set of queues with different priority.
             self._unset_recent_flag()
-        self._signal_unread_to_ui()
 
-        # XXX workaround for hangs in thunderbird
-        #return tuple(result[:100])  # --- doesn't show all!!
-        return tuple(result)
+        # this should really be called as a final callback of
+        # the do_FETCH method...
+        deferLater(reactor, 1, self._signal_unread_to_ui)
+        return result
+
+    @deferred
+    def fetch_flags(self, messages_asked, uid):
+        """
+        A fast method to fetch all flags, tricking just the
+        needed subset of the MIME interface that's needed to satisfy
+        a generic FLAGS query.
+        Given how LEAP Mail is supposed to work without local cache,
+        this query is going to be quite common, and also we expect
+        it to be in the form 1:* at the beginning of a session, so
+        it's not bad to fetch all the flags doc at once.
+
+        :param messages_asked: IDs of the messages to retrieve information
+                               about
+        :type messages_asked: MessageSet
+
+        :param uid: If true, the IDs are UIDs. They are message sequence IDs
+                    otherwise.
+        :type uid: bool
+
+        :return: A tuple of two-tuples of message sequence numbers and
+                flagsPart, which is a only a partial implementation of
+                MessagePart.
+        :rtype: tuple
+        """
+        class flagsPart(object):
+            def __init__(self, uid, flags):
+                self.uid = uid
+                self.flags = flags
+
+            def getUID(self):
+                return self.uid
+
+            def getFlags(self):
+                return map(str, self.flags)
+
+        if not messages_asked.last:
+            try:
+                iter(messages_asked)
+            except TypeError:
+                # looks like we cannot iterate
+                messages_asked.last = self.last_uid
+
+        set_asked = set(messages_asked)
+        set_exist = set(self.messages.all_uid_iter())
+        seq_messg = set_asked.intersection(set_exist)
+        all_flags = self.messages.all_flags()
+        result = ((msgid, flagsPart(
+            msgid, all_flags[msgid])) for msgid in seq_messg)
+        return result
 
     @deferred
     def _unset_recent_flag(self):
@@ -544,8 +603,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         # 3. Route it through a queue with lesser priority than the
         #    regularar writer.
 
-        # hmm let's try 2. in a quickndirty way...
-        time.sleep(1)
         log.msg('unsetting recent flags...')
         for msg in self.messages.get_recent():
             msg.removeFlags((fields.RECENT_FLAG,))

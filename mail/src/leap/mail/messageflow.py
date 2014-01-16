@@ -121,8 +121,6 @@ class MessageProducer(object):
         """
         if not self._loop.running:
             self._loop.start(self._period, now=True)
-        else:
-            print "was running..., not starting"
 
     def stop(self):
         """
