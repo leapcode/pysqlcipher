@@ -532,8 +532,8 @@ class LeapMessage(fields, MailParser, MBoxParser):
             if not charset:
                 charset = self._get_charset(body)
             try:
-                body = body.decode(charset).encode(charset)
-            except (UnicodeEncodeError, UnicodeDecodeError) as e:
+                body = body.encode(charset)
+            except UnicodeError as e:
                 logger.error("Unicode error {0}".format(e))
                 body = body.encode(charset, 'replace')
 

@@ -18,9 +18,7 @@
 Incoming mail fetcher.
 """
 import copy
-import json
 import logging
-#import ssl
 import threading
 import time
 import sys
@@ -34,7 +32,6 @@ from StringIO import StringIO
 from twisted.python import log
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
-#from twisted.internet.threads import deferToThread
 from zope.proxy import sameProxiedObjects
 
 from leap.common import events as leap_events
@@ -49,6 +46,7 @@ from leap.common.mail import get_email_charset
 from leap.keymanager import errors as keymanager_errors
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.mail.decorators import deferred
+from leap.mail.utils import json_loads
 from leap.soledad.client import Soledad
 from leap.soledad.common.crypto import ENC_SCHEME_KEY, ENC_JSON_KEY
 
@@ -321,7 +319,8 @@ class LeapIncomingMail(object):
         """
         log.msg('processing decrypted doc')
         doc, data = msgtuple
-        msg = json.loads(data)
+        msg = json_loads(data)
+
         if not isinstance(msg, dict):
             defer.returnValue(False)
         if not msg.get(self.INCOMING_KEY, False):
@@ -338,16 +337,15 @@ class LeapIncomingMail(object):
         Tries to decrypt a gpg message if data looks like one.
 
         :param data: the text to be decrypted.
-        :type data: unicode
+        :type data: str
         :return: data, possibly descrypted.
         :rtype: str
         """
+        leap_assert_type(data, str)
         log.msg('maybe decrypting doc')
-        leap_assert_type(data, unicode)
 
         # parse the original message
         encoding = get_email_charset(data)
-        data = data.encode(encoding)
         msg = self._parser.parsestr(data)
 
         # try to obtain sender public key
@@ -419,13 +417,6 @@ class LeapIncomingMail(object):
                            'Storing message without modifications.' % str(e))
             # Bailing out!
             return (msg, False)
-
-        # decrypted successully, now fix encoding and parse
-        try:
-            decrdata = decrdata.encode(encoding)
-        except (UnicodeEncodeError, UnicodeDecodeError) as e:
-            logger.error("Unicode error {0}".format(e))
-            decrdata = decrdata.encode(encoding, 'replace')
 
         decrmsg = self._parser.parsestr(decrdata)
         # remove original message's multipart/encrypted content-type
