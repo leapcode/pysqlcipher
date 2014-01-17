@@ -564,15 +564,7 @@ class OpenPGPScheme(EncryptionScheme):
                             'Failed to verify signature with key %s: %s' %
                             (verify.key_id, result.stderr))
 
-                # XXX: this is the encoding used by gpg module
-                # https://github.com/isislovecruft/python-gnupg/\
-                #   blob/master/gnupg/_meta.py#L121
-                encoding = locale.getpreferredencoding()
-                if encoding is None:
-                    encoding = sys.stdin.encoding
-                if encoding is None:
-                    encoding = 'utf-8'
-                return result.data.decode(encoding, 'replace')
+                return result.data
             except errors.GPGError as e:
                 logger.error('Failed to decrypt: %s.' % str(e))
                 raise errors.DecryptError(str(e))
