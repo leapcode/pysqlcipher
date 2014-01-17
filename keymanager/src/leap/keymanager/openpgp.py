@@ -17,12 +17,10 @@
 """
 Infrastructure for using OpenPGP keys in Key Manager.
 """
-import locale
 import logging
 import os
 import re
 import shutil
-import sys
 import tempfile
 
 from contextlib import closing
@@ -522,7 +520,7 @@ class OpenPGPScheme(EncryptionScheme):
                 return result.data
             except errors.GPGError as e:
                 logger.error('Failed to decrypt: %s.' % str(e))
-                raise error.EncryptError()
+                raise errors.EncryptError()
 
     def decrypt(self, data, privkey, passphrase=None, verify=None):
         """
