@@ -466,6 +466,10 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         d = self.messages.remove_all_deleted()
         d.addCallback(self._expunge_cb)
         d.addCallback(self.messages.reset_last_uid)
+
+        # XXX DEBUG -------------------
+        # FIXME !!!
+        # XXX should remove the hdocset too!!!
         return d
 
     def _bound_seq(self, messages_asked):
@@ -520,8 +524,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :rtype: A tuple of two-tuples of message sequence numbers and
                 LeapMessage
         """
-        from twisted.internet import reactor
-
         # For the moment our UID is sequential, so we
         # can treat them all the same.
         # Change this to the flag that twisted expects when we
@@ -532,20 +534,14 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
         messages_asked = self._bound_seq(messages_asked)
         seq_messg = self._filter_msg_seq(messages_asked)
-
         getmsg = lambda uid: self.messages.get_msg_by_uid(uid)
 
         # for sequence numbers (uid = 0)
         if sequence:
             logger.debug("Getting msg by index: INEFFICIENT call!")
             raise NotImplementedError
-
         else:
             result = ((msgid, getmsg(msgid)) for msgid in seq_messg)
-
-        # this should really be called as a final callback of
-        # the do_FETCH method...
-
         return result
 
     @deferred
@@ -558,7 +554,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         Given how LEAP Mail is supposed to work without local cache,
         this query is going to be quite common, and also we expect
         it to be in the form 1:* at the beginning of a session, so
-        it's not bad to fetch all the flags doc at once.
+        it's not bad to fetch all the FLAGS docs at once.
 
         :param messages_asked: IDs of the messages to retrieve information
                                about
@@ -590,6 +586,55 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         all_flags = self.messages.all_flags()
         result = ((msgid, flagsPart(
             msgid, all_flags[msgid])) for msgid in seq_messg)
+        return result
+
+    @deferred
+    def fetch_headers(self, messages_asked, uid):
+        """
+        A fast method to fetch all headers, tricking just the
+        needed subset of the MIME interface that's needed to satisfy
+        a generic HEADERS query.
+
+        Given how LEAP Mail is supposed to work without local cache,
+        this query is going to be quite common, and also we expect
+        it to be in the form 1:* at the beginning of a session, so
+        **MAYBE** it's not too bad to fetch all the HEADERS docs at once.
+
+        :param messages_asked: IDs of the messages to retrieve information
+                               about
+        :type messages_asked: MessageSet
+
+        :param uid: If true, the IDs are UIDs. They are message sequence IDs
+                    otherwise.
+        :type uid: bool
+
+        :return: A tuple of two-tuples of message sequence numbers and
+                headersPart, which is a only a partial implementation of
+                MessagePart.
+        :rtype: tuple
+        """
+        class headersPart(object):
+            def __init__(self, uid, headers):
+                self.uid = uid
+                self.headers = headers
+
+            def getUID(self):
+                return self.uid
+
+            def getHeaders(self, _):
+                return dict(
+                    (str(key), str(value))
+                    for key, value in
+                    self.headers.items())
+
+        messages_asked = self._bound_seq(messages_asked)
+        seq_messg = self._filter_msg_seq(messages_asked)
+
+        all_chash = self.messages.all_flags_chash()
+        all_headers = self.messages.all_headers()
+        result = ((msgid, headersPart(
+            msgid, all_headers.get(all_chash.get(msgid, 'nil'), {})))
+            for msgid in seq_messg)
         return result
 
     def signal_unread_to_ui(self):
@@ -629,7 +674,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :raise ReadOnlyMailbox: Raised if this mailbox is not open for
                                 read-write.
         """
-        from twisted.internet import reactor
         # XXX implement also sequence (uid = 0)
         # XXX we should prevent cclient from setting Recent flag.
         leap_assert(not isinstance(flags, basestring),
@@ -657,10 +701,13 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
                 msg.setFlags(flags)
             result[msg_id] = msg.getFlags()
 
+        # After changing flags, we want to signal again to the
+        # UI because the number of unread might have changed.
+        # Hoever, we should probably limit this to INBOX only?
         # this should really be called as a final callback of
         # the do_STORE method...
-        # XXX ---
-        #deferLater(reactor, 1, self._signal_unread_to_ui)
+        from twisted.internet import reactor
+        deferLater(reactor, 1, self._signal_unread_to_ui)
         return result
 
     # ISearchableMailbox
@@ -727,6 +774,11 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         new_fdoc[self.UID_KEY] = uid_next
         new_fdoc[self.MBOX_KEY] = self.mbox
         self._do_add_doc(new_fdoc)
+
+        # XXX should use a public api instead
+        hdoc = msg._hdoc
+        self.messages.add_hdocset_docid(hdoc.doc_id)
+
         deferLater(reactor, 1, self.notify_new)
 
     def _do_add_doc(self, doc):

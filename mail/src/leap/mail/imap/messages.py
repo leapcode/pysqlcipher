@@ -964,9 +964,29 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
     FLAGS_DOC = "FLAGS"
     HEADERS_DOC = "HEADERS"
     CONTENT_DOC = "CONTENT"
+    """
+    RECENT_DOC is a document that stores a list of the UIDs
+    with the recent flag for this mailbox. It deserves a special treatment
+    because:
+    (1) it cannot be set by the user
+    (2) it's a flag that we set inmediately after a fetch, which is quite
+        often.
+    (3) we need to be able to set/unset it in batches without doing a single
+        write for each element in the sequence.
+    """
     RECENT_DOC = "RECENT"
+    """
+    HDOCS_SET_DOC is a document that stores a set of the Document-IDs
+    (the u1db index) for all the headers documents for a given mailbox.
+    We use it to prefetch massively all the headers for a mailbox.
+    This is the second massive query, after fetching all the FLAGS,  that
+    a MUA will do in a case where we do not have local disk cache.
+    """
+    HDOCS_SET_DOC = "HDOCS_SET"
 
     templates = {
+
+        # Message Level
 
         FLAGS_DOC: {
             fields.TYPE_KEY: fields.TYPE_FLAGS_VAL,
@@ -1007,14 +1027,25 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
             fields.MULTIPART_KEY: False,
         },
 
+        # Mailbox Level
+
         RECENT_DOC: {
             fields.TYPE_KEY: fields.TYPE_RECENT_VAL,
             fields.MBOX_KEY: fields.INBOX_VAL,
             fields.RECENTFLAGS_KEY: [],
+        },
+
+        HDOCS_SET_DOC: {
+            fields.TYPE_KEY: fields.TYPE_HDOCS_SET_VAL,
+            fields.MBOX_KEY: fields.INBOX_VAL,
+            fields.HDOCS_SET_KEY: [],
         }
+
+
     }
 
     _rdoc_lock = threading.Lock()
+    _hdocset_lock = threading.Lock()
 
     def __init__(self, mbox=None, soledad=None):
         """
@@ -1045,10 +1076,12 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
         self.mbox = self._parse_mailbox_name(mbox)
         self._soledad = soledad
         self.__rflags = None
+        self.__hdocset = None
         self.initialize_db()
 
-        # ensure that we have a recent-flags doc
+        # ensure that we have a recent-flags and a hdocs-sec doc
         self._get_or_create_rdoc()
+        self._get_or_create_hdocset()
 
     def _get_empty_doc(self, _type=FLAGS_DOC):
         """
@@ -1072,6 +1105,18 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
             if self.mbox != fields.INBOX_VAL:
                 rdoc[fields.MBOX_KEY] = self.mbox
             self._soledad.create_doc(rdoc)
+
+    def _get_or_create_hdocset(self):
+        """
+        Try to retrieve the hdocs-set doc for this MessageCollection,
+        and create one if not found.
+        """
+        hdocset = self._get_hdocset_doc()
+        if not hdocset:
+            hdocset = self._get_empty_doc(self.HDOCS_SET_DOC)
+            if self.mbox != fields.INBOX_VAL:
+                hdocset[fields.MBOX_KEY] = self.mbox
+            self._soledad.create_doc(hdocset)
 
     def _do_parse(self, raw):
         """
@@ -1222,10 +1267,12 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
 
         # first, regular docs: flags and headers
         self._soledad.create_doc(fd)
-
         # XXX should check for content duplication on headers too
         # but with chash. !!!
-        self._soledad.create_doc(hd)
+        hdoc = self._soledad.create_doc(hd)
+        # We add the newly created hdoc to the fast-access set of
+        # headers documents associated with the mailbox.
+        self.add_hdocset_docid(hdoc.doc_id)
 
         # and last, but not least, try to create
         # content docs if not already there.
@@ -1258,7 +1305,11 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
         d.addCallback(self._remove_cb)
         return d
 
+    #
     # getters: specific queries
+    #
+
+    # recent flags
 
     def _get_recent_flags(self):
         """
@@ -1310,14 +1361,85 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
 
     def _get_recent_doc(self):
         """
-        Get recent-flags document for this inbox.
+        Get recent-flags document for this mailbox.
         """
         curried = partial(
             self._soledad.get_from_index,
             fields.TYPE_MBOX_IDX,
             fields.TYPE_RECENT_VAL, self.mbox)
         curried.expected = "rdoc"
-        return try_unique_query(curried)
+        with self._rdoc_lock:
+            return try_unique_query(curried)
+
+    # headers-docs-set
+
+    def _get_hdocset(self):
+        """
+        An accessor for the hdocs-set for this mailbox.
+        """
+        if not self.__hdocset:
+            hdocset_doc = self._get_hdocset_doc()
+            value = set(hdocset_doc.content.get(
+                fields.HDOCS_SET_KEY, []))
+            self.__hdocset = value
+        return self.__hdocset
+
+    def _set_hdocset(self, value):
+        """
+        Setter for the hdocs-set for this mailbox.
+        """
+        hdocset_doc = self._get_hdocset_doc()
+        newv = set(value)
+        self.__hdocset = newv
+
+        with self._hdocset_lock:
+            hdocset_doc.content[fields.HDOCS_SET_KEY] = list(newv)
+            # XXX should deferLater 0 it?
+            self._soledad.put_doc(hdocset_doc)
+
+    _hdocset = property(
+        _get_hdocset, _set_hdocset,
+        doc="Set of Document-IDs for the headers docs associated "
+            "with this mailbox.")
+
+    def _get_hdocset_doc(self):
+        """
+        Get hdocs-set document for this mailbox.
+        """
+        curried = partial(
+            self._soledad.get_from_index,
+            fields.TYPE_MBOX_IDX,
+            fields.TYPE_HDOCS_SET_VAL, self.mbox)
+        curried.expected = "hdocset"
+        with self._hdocset_lock:
+            hdocset_doc = try_unique_query(curried)
+        return hdocset_doc
+
+    def remove_hdocset_docids(self, docids):
+        """
+        Remove the given document IDs from the set of
+        header-documents associated with this mailbox.
+        """
+        self._hdocset = self._hdocset.difference(
+            set(docids))
+
+    def remove_hdocset_docid(self, docid):
+        """
+        Remove the given document ID from the set of
+        header-documents associated with this mailbox.
+        """
+        self._hdocset = self._hdocset.difference(
+            set([docid]))
+
+    def add_hdocset_docid(self, docid):
+        """
+        Add the given document ID to the set of
+        header-documents associated with this mailbox.
+        """
+        hdocset = self._hdocset
+        self._hdocset = hdocset.union(set([docid]))
+
+    # individual doc getters, message layer.
 
     def _get_fdoc_from_chash(self, chash):
         """
@@ -1456,6 +1578,30 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
                 fields.TYPE_FLAGS_VAL, self.mbox)))
         return all_flags
 
+    def all_flags_chash(self):
+        """
+        Return a dict with the content-hash for all flag documents
+        for this mailbox.
+        """
+        all_flags_chash = dict(((
+            doc.content[self.UID_KEY],
+            doc.content[self.CONTENT_HASH_KEY]) for doc in
+            self._soledad.get_from_index(
+                fields.TYPE_MBOX_IDX,
+                fields.TYPE_FLAGS_VAL, self.mbox)))
+        return all_flags_chash
+
+    def all_headers(self):
+        """
+        Return a dict with all the headers documents for this
+        mailbox.
+        """
+        all_headers = dict(((
+            doc.content[self.CONTENT_HASH_KEY],
+            doc.content[self.HEADERS_KEY]) for doc in
+            self._soledad.get_docs(self._hdocset)))
+        return all_headers
+
     def count(self):
         """
         Return the count of messages for this mailbox.
@@ -1509,6 +1655,9 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
     def count_recent(self):
         """
         Count all messages with the `Recent` flag.
+        It just retrieves the length of the recent_flags set,
+        which is stored in a specific type of document for
+        this collection.
 
         :returns: count
         :rtype: int

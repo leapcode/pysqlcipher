@@ -61,6 +61,7 @@ class WithMsgFields(object):
     RW_KEY = "rw"
     LAST_UID_KEY = "lastuid"
     RECENTFLAGS_KEY = "rct"
+    HDOCS_SET_KEY = "hdocset"
 
     # Document Type, for indexing
     TYPE_KEY = "type"
@@ -69,6 +70,7 @@ class WithMsgFields(object):
     TYPE_HEADERS_VAL = "head"
     TYPE_CONTENT_VAL = "cnt"
     TYPE_RECENT_VAL = "rct"
+    TYPE_HDOCS_SET_VAL = "hdocset"
 
     INBOX_VAL = "inbox"
 

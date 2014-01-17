@@ -123,6 +123,9 @@ class LeapIMAPServer(imap4.IMAP4Server):
             self.sendPositiveResponse(tag, 'FETCH complete')
             return  # XXX ???
 
+        print "QUERY ", query
+        print query[0]
+
         cbFetch = self._IMAP4Server__cbFetch
         ebFetch = self._IMAP4Server__ebFetch
 
@@ -131,6 +134,14 @@ class LeapIMAPServer(imap4.IMAP4Server):
             # no need to call iter, we get a generator
             maybeDeferred(
                 self.mbox.fetch_flags, messages, uid=uid
+            ).addCallback(
+                cbFetch, tag, query, uid
+            ).addErrback(ebFetch, tag)
+        elif len(query) == 1 and str(query[0]) == "rfc822.header":
+            self._oldTimeout = self.setTimeout(None)
+            # no need to call iter, we get a generator
+            maybeDeferred(
+                self.mbox.fetch_headers, messages, uid=uid
             ).addCallback(
                 cbFetch, tag, query, uid
             ).addErrback(ebFetch, tag)
@@ -196,7 +207,6 @@ class LeapIMAPServer(imap4.IMAP4Server):
         self.sendPositiveResponse(tag, '[%s] %s successful' % (s, cmdName))
         self.state = 'select'
         self.mbox = mbox
-
 
 
 class IMAPAuthRealm(object):
