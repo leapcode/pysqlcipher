@@ -25,6 +25,7 @@ import threading
 import StringIO
 
 from collections import defaultdict, namedtuple
+from functools import partial
 
 from twisted.mail import imap4
 from twisted.internet import defer
@@ -42,7 +43,7 @@ from leap.mail.decorators import deferred
 from leap.mail.imap.index import IndexedDB
 from leap.mail.imap.fields import fields, WithMsgFields
 from leap.mail.imap.parser import MailParser, MBoxParser
-from leap.mail.messageflow import IMessageConsumer, MessageProducer
+from leap.mail.messageflow import IMessageConsumer
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,31 @@ def lowerdict(_dict):
     return dict((key.lower(), value)
                 for key, value in _dict.items())
 
+
+def try_unique_query(curried):
+    """
+    Try to execute a query that is expected to have a
+    single outcome, and log a warning if more than one document found.
+
+    :param curried: a curried function
+    :type curried: callable
+    """
+    leap_assert(callable(curried), "A callable is expected")
+    try:
+        query = curried()
+        if query:
+            if len(query) > 1:
+                # TODO we could take action, like trigger a background
+                # process to kill dupes.
+                name = getattr(curried, 'expected', 'doc')
+                logger.warning(
+                    "More than one %s found for this mbox, "
+                    "we got a duplicate!!" % (name,))
+            return query.pop()
+        else:
+            return None
+    except Exception as exc:
+        logger.exception("Unhandled error %r" % exc)
 
 CHARSET_PATTERN = r"""charset=([\w-]+)"""
 MSGID_PATTERN = r"""<([\w@.]+)>"""
@@ -1286,23 +1312,12 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
         """
         Get recent-flags document for this inbox.
         """
-        # TODO refactor this try-catch structure into a utility
-        try:
-            query = self._soledad.get_from_index(
-                fields.TYPE_MBOX_IDX,
-                fields.TYPE_RECENT_VAL, self.mbox)
-            if query:
-                if len(query) > 1:
-                    logger.warning(
-                        "More than one rdoc found for this mbox, "
-                        "we got a duplicate!!")
-                    # XXX we could take action, like trigger a background
-                    # process to kill dupes.
-                return query.pop()
-            else:
-                return None
-        except Exception as exc:
-            logger.exception("Unhandled error %r" % exc)
+        curried = partial(
+            self._soledad.get_from_index,
+            fields.TYPE_MBOX_IDX,
+            fields.TYPE_RECENT_VAL, self.mbox)
+        curried.expected = "rdoc"
+        return try_unique_query(curried)
 
     def _get_fdoc_from_chash(self, chash):
         """
@@ -1312,39 +1327,21 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
                  the query failed.
         :rtype: SoledadDocument or None.
         """
-        try:
-            query = self._soledad.get_from_index(
-                fields.TYPE_MBOX_C_HASH_IDX,
-                fields.TYPE_FLAGS_VAL, self.mbox, chash)
-            if query:
-                if len(query) > 1:
-                    logger.warning(
-                        "More than one fdoc found for this chash, "
-                        "we got a duplicate!!")
-                    # XXX we could take action, like trigger a background
-                    # process to kill dupes.
-                return query.pop()
-            else:
-                return None
-        except Exception as exc:
-            logger.exception("Unhandled error %r" % exc)
+        curried = partial(
+            self._soledad.get_from_index,
+            fields.TYPE_MBOX_C_HASH_IDX,
+            fields.TYPE_FLAGS_VAL, self.mbox, chash)
+        curried.expected = "fdoc"
+        return try_unique_query(curried)
 
     def _get_uid_from_msgidCb(self, msgid):
         hdoc = None
-        try:
-            query = self._soledad.get_from_index(
-                fields.TYPE_MSGID_IDX,
-                fields.TYPE_HEADERS_VAL, msgid)
-            if query:
-                if len(query) > 1:
-                    logger.warning(
-                        "More than one hdoc found for this msgid, "
-                        "we got a duplicate!!")
-                    # XXX we could take action, like trigger a background
-                    # process to kill dupes.
-                hdoc = query.pop()
-        except Exception as exc:
-            logger.exception("Unhandled error %r" % exc)
+        curried = partial(
+            self._soledad.get_from_index,
+            fields.TYPE_MSGID_IDX,
+            fields.TYPE_HEADERS_VAL, msgid)
+        curried.expected = "hdoc"
+        hdoc = try_unique_query(curried)
 
         if hdoc is None:
             logger.warning("Could not find hdoc for msgid %s"
@@ -1373,13 +1370,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
         # the query is received right after we've saved the document,
         # and we cannot find it otherwise. This seems to be enough.
 
-        # Doing a sleep since we'll be calling this in a secondary thread,
-        # but we'll should be able to collect the results after a
-        # reactor.callLater.
-        # Maybe we can implement something like NOT_DONE_YET in the web
-        # framework, and return from the callback?
-        # See: http://jcalderone.livejournal.com/50226.html
-        # reactor.callLater(0.3, self._get_uid_from_msgidCb, msgid)
+        # XXX do a deferLater instead ??
         time.sleep(0.3)
         return self._get_uid_from_msgidCb(msgid)
 
@@ -1426,6 +1417,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
         # inneficient, but first let's grok it and then
         # let's worry about efficiency.
         # XXX FIXINDEX -- should implement order by in soledad
+        # FIXME ----------------------------------------------
         return sorted(all_docs, key=lambda item: item.content['uid'])
 
     def all_uid_iter(self):
@@ -1573,4 +1565,4 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
             self.mbox, self.count())
 
     # XXX should implement __eq__ also !!!
-    # --- use the content hash for that, will be used for dedup.
+    # use chash...
