@@ -24,6 +24,7 @@ import logging
 from twisted.internet.protocol import ServerFactory
 from twisted.internet.defer import maybeDeferred
 from twisted.internet.error import CannotListenError
+from twisted.internet.task import deferLater
 from twisted.mail import imap4
 from twisted.python import log
 from twisted import cred
@@ -116,6 +117,7 @@ class LeapIMAPServer(imap4.IMAP4Server):
         Overwritten fetch dispatcher to use the fast fetch_flags
         method
         """
+        from twisted.internet import reactor
         log.msg("LEAP Overwritten fetch...")
         if not query:
             self.sendPositiveResponse(tag, 'FETCH complete')
@@ -123,8 +125,6 @@ class LeapIMAPServer(imap4.IMAP4Server):
 
         cbFetch = self._IMAP4Server__cbFetch
         ebFetch = self._IMAP4Server__ebFetch
-
-        print "QUERY: ", query
 
         if len(query) == 1 and str(query[0]) == "flags":
             self._oldTimeout = self.setTimeout(None)
@@ -141,10 +141,31 @@ class LeapIMAPServer(imap4.IMAP4Server):
                 self.mbox.fetch, messages, uid=uid
             ).addCallback(
                 cbFetch, tag, query, uid
-            ).addErrback(ebFetch, tag)
+            ).addErrback(
+                ebFetch, tag)
+
+        deferLater(reactor,
+                   2, self.mbox.unset_recent_flags, messages)
+        deferLater(reactor, 1, self.mbox.signal_unread_to_ui)
 
     select_FETCH = (do_FETCH, imap4.IMAP4Server.arg_seqset,
                     imap4.IMAP4Server.arg_fetchatt)
+
+    def do_COPY(self, tag, messages, mailbox, uid=0):
+        from twisted.internet import reactor
+        imap4.IMAP4Server.do_COPY(self, tag, messages, mailbox, uid)
+        deferLater(reactor,
+                   2, self.mbox.unset_recent_flags, messages)
+        deferLater(reactor, 1, self.mbox.signal_unread_to_ui)
+
+    select_COPY = (do_COPY, imap4.IMAP4Server.arg_seqset,
+                   imap4.IMAP4Server.arg_astring)
+
+    def notifyNew(self, ignored):
+        """
+        Notify new messages to listeners.
+        """
+        self.mbox.notify_new()
 
     def _cbSelectWork(self, mbox, cmdName, tag):
         """
@@ -175,6 +196,7 @@ class LeapIMAPServer(imap4.IMAP4Server):
         self.sendPositiveResponse(tag, '[%s] %s successful' % (s, cmdName))
         self.state = 'select'
         self.mbox = mbox
+
 
 
 class IMAPAuthRealm(object):

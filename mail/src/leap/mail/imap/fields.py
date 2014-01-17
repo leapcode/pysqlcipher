@@ -60,6 +60,7 @@ class WithMsgFields(object):
     SUBSCRIBED_KEY = "subscribed"
     RW_KEY = "rw"
     LAST_UID_KEY = "lastuid"
+    RECENTFLAGS_KEY = "rct"
 
     # Document Type, for indexing
     TYPE_KEY = "type"
@@ -67,6 +68,7 @@ class WithMsgFields(object):
     TYPE_FLAGS_VAL = "flags"
     TYPE_HEADERS_VAL = "head"
     TYPE_CONTENT_VAL = "cnt"
+    TYPE_RECENT_VAL = "rct"
 
     INBOX_VAL = "inbox"
 

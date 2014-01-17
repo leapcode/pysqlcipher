@@ -398,18 +398,19 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             flags = tuple(str(flag) for flag in flags)
 
         d = self._do_add_message(message, flags=flags, date=date, uid=uid_next)
-        d.addCallback(self._notify_new)
         return d
 
-    @deferred
     def _do_add_message(self, message, flags, date, uid):
         """
         Calls to the messageCollection add_msg method (deferred to thread).
         Invoked from addMessage.
         """
-        self.messages.add_msg(message, flags=flags, date=date, uid=uid)
+        d = self.messages.add_msg(message, flags=flags, date=date, uid=uid)
+        # XXX notify after batch APPEND?
+        d.addCallback(self.notify_new)
+        return d
 
-    def _notify_new(self, *args):
+    def notify_new(self, *args):
         """
         Notify of new messages to all the listeners.
 
@@ -463,8 +464,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         if not self.isWriteable():
             raise imap4.ReadOnlyMailbox
         d = self.messages.remove_all_deleted()
-        d.addCallback(self.messages.reset_last_uid)
         d.addCallback(self._expunge_cb)
+        d.addCallback(self.messages.reset_last_uid)
         return d
 
     def _bound_seq(self, messages_asked):
@@ -480,7 +481,10 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
                 iter(messages_asked)
             except TypeError:
                 # looks like we cannot iterate
-                messages_asked.last = self.last_uid
+                try:
+                    messages_asked.last = self.last_uid
+                except ValueError:
+                    pass
         return messages_asked
 
     def _filter_msg_seq(self, messages_asked):
@@ -529,10 +533,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         messages_asked = self._bound_seq(messages_asked)
         seq_messg = self._filter_msg_seq(messages_asked)
 
-        def getmsg(msgid):
-            if self.isWriteable():
-                deferLater(reactor, 2, self._unset_recent_flag, messages_asked)
-            return self.messages.get_msg_by_uid(msgid)
+        getmsg = lambda uid: self.messages.get_msg_by_uid(uid)
 
         # for sequence numbers (uid = 0)
         if sequence:
@@ -544,7 +545,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
         # this should really be called as a final callback of
         # the do_FETCH method...
-        deferLater(reactor, 1, self._signal_unread_to_ui)
+
         return result
 
     @deferred
@@ -591,37 +592,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             msgid, all_flags[msgid])) for msgid in seq_messg)
         return result
 
-    @deferred
-    def _unset_recent_flag(self, message_uid):
-        """
-        Unsets `Recent` flag from a tuple of messages.
-        Called from fetch.
-
-        From RFC, about `Recent`:
-
-        Message is "recently" arrived in this mailbox.  This session
-        is the first session to have been notified about this
-        message; if the session is read-write, subsequent sessions
-        will not see \Recent set for this message.  This flag can not
-        be altered by the client.
-
-        If it is not possible to determine whether or not this
-        session is the first session to be notified about a message,
-        then that message SHOULD be considered recent.
-
-        :param message_uids: the sequence of msg ids to update.
-        :type message_uids: sequence
-        """
-        # XXX deprecate this!
-        # move to a mailbox-level call, and do it in batches!
-
-        log.msg('unsetting recent flag: %s' % message_uid)
-        msg = self.messages.get_msg_by_uid(message_uid)
-        msg.removeFlags((fields.RECENT_FLAG,))
-        self._signal_unread_to_ui()
-
-    @deferred
-    def _signal_unread_to_ui(self):
+    def signal_unread_to_ui(self):
         """
         Sends unread event to ui.
         """
@@ -687,8 +658,9 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             result[msg_id] = msg.getFlags()
 
         # this should really be called as a final callback of
-        # the do_FETCH method...
-        deferLater(reactor, 1, self._signal_unread_to_ui)
+        # the do_STORE method...
+        # XXX ---
+        #deferLater(reactor, 1, self._signal_unread_to_ui)
         return result
 
     # ISearchableMailbox
@@ -741,6 +713,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         """
         Copy the given message object into this mailbox.
         """
+        from twisted.internet import reactor
         uid_next = self.getUIDNext()
         msg = messageObject
 
@@ -753,17 +726,15 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         new_fdoc = copy.deepcopy(fdoc.content)
         new_fdoc[self.UID_KEY] = uid_next
         new_fdoc[self.MBOX_KEY] = self.mbox
+        self._do_add_doc(new_fdoc)
+        deferLater(reactor, 1, self.notify_new)
 
-        d = self._do_add_doc(new_fdoc)
-        # XXX notify should be done when all the
-        # copies in the batch are finished.
-        d.addCallback(self._notify_new)
-
-    @deferred
     def _do_add_doc(self, doc):
         """
-        Defers the adding of a new doc.
+        Defer the adding of a new doc.
+
         :param doc: document to be created in soledad.
+        :type doc: dict
         """
         self._soledad.create_doc(doc)
 
@@ -771,11 +742,18 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
     def deleteAllDocs(self):
         """
-        Deletes all docs in this mailbox
+        Delete all docs in this mailbox
         """
         docs = self.messages.get_all_docs()
         for doc in docs:
             self.messages._soledad.delete_doc(doc)
+
+    def unset_recent_flags(self, uids):
+        """
+        Unset Recent flag for a sequence of UIDs.
+        """
+        seq_messg = self._bound_seq(uids)
+        self.messages.unset_recent_flags(seq_messg)
 
     def __repr__(self):
         """

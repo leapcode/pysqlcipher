@@ -21,6 +21,7 @@ import copy
 import logging
 import re
 import time
+import threading
 import StringIO
 
 from collections import defaultdict, namedtuple
@@ -308,7 +309,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
 
     implements(imap4.IMessage)
 
-    def __init__(self, soledad, uid, mbox):
+    def __init__(self, soledad, uid, mbox, collection=None):
         """
         Initializes a LeapMessage.
 
@@ -318,11 +319,14 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :type uid: int or basestring
         :param mbox: the mbox this message belongs to
         :type mbox: basestring
+        :param collection: a reference to the parent collection object
+        :type collection: MessageCollection
         """
         MailParser.__init__(self)
         self._soledad = soledad
         self._uid = int(uid)
         self._mbox = self._parse_mailbox_name(mbox)
+        self._collection = collection
 
         self.__chash = None
         self.__bdoc = None
@@ -373,7 +377,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
 
     def getUID(self):
         """
-        Retrieve the unique identifier associated with this message
+        Retrieve the unique identifier associated with this Message.
 
         :return: uid for this message
         :rtype: int
@@ -382,18 +386,26 @@ class LeapMessage(fields, MailParser, MBoxParser):
 
     def getFlags(self):
         """
-        Retrieve the flags associated with this message
+        Retrieve the flags associated with this Message.
 
         :return: The flags, represented as strings
         :rtype: tuple
         """
         if self._uid is None:
             return []
+        uid = self._uid
 
         flags = []
         fdoc = self._fdoc
         if fdoc:
             flags = fdoc.content.get(self.FLAGS_KEY, None)
+
+        msgcol = self._collection
+
+        # We treat the recent flag specially: gotten from
+        # a mailbox-level document.
+        if msgcol and uid in msgcol.recent_flags:
+            flags.append(fields.RECENT_FLAG)
         if flags:
             flags = map(str, flags)
         return tuple(flags)
@@ -414,7 +426,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :rtype: SoledadDocument
         """
         leap_assert(isinstance(flags, tuple), "flags need to be a tuple")
-        log.msg('setting flags: %s' % (self._uid))
+        log.msg('setting flags: %s (%s)' % (self._uid, flags))
 
         doc = self._fdoc
         if not doc:
@@ -424,7 +436,6 @@ class LeapMessage(fields, MailParser, MBoxParser):
             return
         doc.content[self.FLAGS_KEY] = flags
         doc.content[self.SEEN_KEY] = self.SEEN_FLAG in flags
-        doc.content[self.RECENT_KEY] = self.RECENT_FLAG in flags
         doc.content[self.DEL_KEY] = self.DELETED_FLAG in flags
         self._soledad.put_doc(doc)
 
@@ -927,6 +938,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
     FLAGS_DOC = "FLAGS"
     HEADERS_DOC = "HEADERS"
     CONTENT_DOC = "CONTENT"
+    RECENT_DOC = "RECENT"
 
     templates = {
 
@@ -937,7 +949,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
             fields.CONTENT_HASH_KEY: "",
 
             fields.SEEN_KEY: False,
-            fields.RECENT_KEY: True,
             fields.DEL_KEY: False,
             fields.FLAGS_KEY: [],
             fields.MULTIPART_KEY: False,
@@ -970,11 +981,24 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
             fields.MULTIPART_KEY: False,
         },
 
+        RECENT_DOC: {
+            fields.TYPE_KEY: fields.TYPE_RECENT_VAL,
+            fields.MBOX_KEY: fields.INBOX_VAL,
+            fields.RECENTFLAGS_KEY: [],
+        }
     }
+
+    _rdoc_lock = threading.Lock()
 
     def __init__(self, mbox=None, soledad=None):
         """
         Constructor for MessageCollection.
+
+        On initialization, we ensure that we have a document for
+        storing the recent flags. The nature of this flag make us wanting
+        to store the set of the UIDs with this flag at the level of the
+        MessageCollection for each mailbox, instead of treating them
+        as a property of each message.
 
         :param mbox: the name of the mailbox. It is the name
                      with which we filter the query over the
@@ -994,17 +1018,11 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
         # okay, all in order, keep going...
         self.mbox = self._parse_mailbox_name(mbox)
         self._soledad = soledad
+        self.__rflags = None
         self.initialize_db()
 
-        # I think of someone like nietzsche when reading this
-
-        # this will be the producer that will enqueue the content
-        # to be processed serially by the consumer (the writer). We just
-        # need to `put` the new material on its plate.
-
-        self.soledad_writer = MessageProducer(
-            SoledadDocWriter(soledad),
-            period=0.02)
+        # ensure that we have a recent-flags doc
+        self._get_or_create_rdoc()
 
     def _get_empty_doc(self, _type=FLAGS_DOC):
         """
@@ -1016,6 +1034,18 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
         if not _type in self.templates.keys():
             raise TypeError("Improper type passed to _get_empty_doc")
         return copy.deepcopy(self.templates[_type])
+
+    def _get_or_create_rdoc(self):
+        """
+        Try to retrieve the recent-flags doc for this MessageCollection,
+        and create one if not found.
+        """
+        rdoc = self._get_recent_doc()
+        if not rdoc:
+            rdoc = self._get_empty_doc(self.RECENT_DOC)
+            if self.mbox != fields.INBOX_VAL:
+                rdoc[fields.MBOX_KEY] = self.mbox
+            self._soledad.create_doc(rdoc)
 
     def _do_parse(self, raw):
         """
@@ -1161,7 +1191,8 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
             hd[key] = parts_map[key]
         del parts_map
 
-        # Saving
+        # Saving ----------------------------------------
+        self.set_recent_flag(uid)
 
         # first, regular docs: flags and headers
         self._soledad.create_doc(fd)
@@ -1202,6 +1233,76 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
         return d
 
     # getters: specific queries
+
+    def _get_recent_flags(self):
+        """
+        An accessor for the recent-flags set for this mailbox.
+        """
+        if not self.__rflags:
+            rdoc = self._get_recent_doc()
+            self.__rflags = set(rdoc.content.get(
+                fields.RECENTFLAGS_KEY, []))
+        return self.__rflags
+
+    def _set_recent_flags(self, value):
+        """
+        Setter for the recent-flags set for this mailbox.
+        """
+        rdoc = self._get_recent_doc()
+        newv = set(value)
+        self.__rflags = newv
+
+        with self._rdoc_lock:
+            rdoc.content[fields.RECENTFLAGS_KEY] = list(newv)
+            # XXX should deferLater 0 it?
+            self._soledad.put_doc(rdoc)
+
+    recent_flags = property(
+        _get_recent_flags, _set_recent_flags,
+        doc="Set of UIDs with the recent flag for this mailbox.")
+
+    def unset_recent_flags(self, uids):
+        """
+        Unset Recent flag for a sequence of uids.
+        """
+        self.recent_flags = self.recent_flags.difference(
+            set(uids))
+
+    def unset_recent_flag(self, uid):
+        """
+        Unset Recent flag for a given uid.
+        """
+        self.recent_flags = self.recent_flags.difference(
+            set([uid]))
+
+    def set_recent_flag(self, uid):
+        """
+        Set Recent flag for a given uid.
+        """
+        self.recent_flags = self.recent_flags.union(
+            set([uid]))
+
+    def _get_recent_doc(self):
+        """
+        Get recent-flags document for this inbox.
+        """
+        # TODO refactor this try-catch structure into a utility
+        try:
+            query = self._soledad.get_from_index(
+                fields.TYPE_MBOX_IDX,
+                fields.TYPE_RECENT_VAL, self.mbox)
+            if query:
+                if len(query) > 1:
+                    logger.warning(
+                        "More than one rdoc found for this mbox, "
+                        "we got a duplicate!!")
+                    # XXX we could take action, like trigger a background
+                    # process to kill dupes.
+                return query.pop()
+            else:
+                return None
+        except Exception as exc:
+            logger.exception("Unhandled error %r" % exc)
 
     def _get_fdoc_from_chash(self, chash):
         """
@@ -1287,6 +1388,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
     def get_msg_by_uid(self, uid):
         """
         Retrieves a LeapMessage by UID.
+        This is used primarity in the Mailbox fetch and store methods.
 
         :param uid: the message uid to query by
         :type uid: int
@@ -1295,7 +1397,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
                  or None if not found.
         :rtype: LeapMessage
         """
-        msg = LeapMessage(self._soledad, uid, self.mbox)
+        msg = LeapMessage(self._soledad, uid, self.mbox, collection=self)
         if not msg.does_exist():
             return None
         return msg
@@ -1412,28 +1514,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
 
     # recent messages
 
-    def recent_iter(self):
-        """
-        Get an iterator for the message UIDs with `recent` flag.
-
-        :return: iterator through recent message docs
-        :rtype: iterable
-        """
-        return (doc.content[self.UID_KEY] for doc in
-                self._soledad.get_from_index(
-                    fields.TYPE_MBOX_RECT_IDX,
-                    fields.TYPE_FLAGS_VAL, self.mbox, '1'))
-
-    def get_recent(self):
-        """
-        Get all messages with the `Recent` flag.
-
-        :returns: a list of LeapMessages
-        :rtype: list
-        """
-        return [LeapMessage(self._soledad, docid, self.mbox)
-                for docid in self.recent_iter()]
-
     def count_recent(self):
         """
         Count all messages with the `Recent` flag.
@@ -1441,10 +1521,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
         :returns: count
         :rtype: int
         """
-        count = self._soledad.get_count_from_index(
-            fields.TYPE_MBOX_RECT_IDX,
-            fields.TYPE_FLAGS_VAL, self.mbox, '1')
-        return count
+        return len(self.recent_flags)
 
     # deleted messages
 
