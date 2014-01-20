@@ -1044,8 +1044,15 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
 
     }
 
+    # Different locks for wrapping both the u1db document getting/setting
+    # and the property getting/settting in an atomic operation.
+
+    # TODO we would abstract this to a SoledadProperty class
+
     _rdoc_lock = threading.Lock()
+    _rdoc_property_lock = threading.Lock()
     _hdocset_lock = threading.Lock()
+    _hdocset_property_lock = threading.Lock()
 
     def __init__(self, mbox=None, soledad=None):
         """
@@ -1316,20 +1323,20 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
         An accessor for the recent-flags set for this mailbox.
         """
         if not self.__rflags:
-            rdoc = self._get_recent_doc()
-            self.__rflags = set(rdoc.content.get(
-                fields.RECENTFLAGS_KEY, []))
+            with self._rdoc_lock:
+                rdoc = self._get_recent_doc()
+                self.__rflags = set(rdoc.content.get(
+                    fields.RECENTFLAGS_KEY, []))
         return self.__rflags
 
     def _set_recent_flags(self, value):
         """
         Setter for the recent-flags set for this mailbox.
         """
-        rdoc = self._get_recent_doc()
-        newv = set(value)
-        self.__rflags = newv
-
         with self._rdoc_lock:
+            rdoc = self._get_recent_doc()
+            newv = set(value)
+            self.__rflags = newv
             rdoc.content[fields.RECENTFLAGS_KEY] = list(newv)
             # XXX should deferLater 0 it?
             self._soledad.put_doc(rdoc)
@@ -1337,27 +1344,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
     recent_flags = property(
         _get_recent_flags, _set_recent_flags,
         doc="Set of UIDs with the recent flag for this mailbox.")
-
-    def unset_recent_flags(self, uids):
-        """
-        Unset Recent flag for a sequence of uids.
-        """
-        self.recent_flags = self.recent_flags.difference(
-            set(uids))
-
-    def unset_recent_flag(self, uid):
-        """
-        Unset Recent flag for a given uid.
-        """
-        self.recent_flags = self.recent_flags.difference(
-            set([uid]))
-
-    def set_recent_flag(self, uid):
-        """
-        Set Recent flag for a given uid.
-        """
-        self.recent_flags = self.recent_flags.union(
-            set([uid]))
 
     def _get_recent_doc(self):
         """
@@ -1368,8 +1354,35 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
             fields.TYPE_MBOX_IDX,
             fields.TYPE_RECENT_VAL, self.mbox)
         curried.expected = "rdoc"
-        with self._rdoc_lock:
-            return try_unique_query(curried)
+        rdoc = try_unique_query(curried)
+        return rdoc
+
+    # Property-set modification (protected by a different
+    # lock to give atomicity to the read/write operation)
+
+    def unset_recent_flags(self, uids):
+        """
+        Unset Recent flag for a sequence of uids.
+        """
+        with self._rdoc_property_lock:
+            self.recent_flags = self.recent_flags.difference(
+                set(uids))
+
+    def unset_recent_flag(self, uid):
+        """
+        Unset Recent flag for a given uid.
+        """
+        with self._rdoc_property_lock:
+            self.recent_flags = self.recent_flags.difference(
+                set([uid]))
+
+    def set_recent_flag(self, uid):
+        """
+        Set Recent flag for a given uid.
+        """
+        with self._rdoc_property_lock:
+            self.recent_flags = self.recent_flags.union(
+                set([uid]))
 
     # headers-docs-set
 
@@ -1378,21 +1391,21 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
         An accessor for the hdocs-set for this mailbox.
         """
         if not self.__hdocset:
-            hdocset_doc = self._get_hdocset_doc()
-            value = set(hdocset_doc.content.get(
-                fields.HDOCS_SET_KEY, []))
-            self.__hdocset = value
+            with self._hdocset_lock:
+                hdocset_doc = self._get_hdocset_doc()
+                value = set(hdocset_doc.content.get(
+                    fields.HDOCS_SET_KEY, []))
+                self.__hdocset = value
         return self.__hdocset
 
     def _set_hdocset(self, value):
         """
         Setter for the hdocs-set for this mailbox.
         """
-        hdocset_doc = self._get_hdocset_doc()
-        newv = set(value)
-        self.__hdocset = newv
-
         with self._hdocset_lock:
+            hdocset_doc = self._get_hdocset_doc()
+            newv = set(value)
+            self.__hdocset = newv
             hdocset_doc.content[fields.HDOCS_SET_KEY] = list(newv)
             # XXX should deferLater 0 it?
             self._soledad.put_doc(hdocset_doc)
@@ -1411,33 +1424,38 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser,
             fields.TYPE_MBOX_IDX,
             fields.TYPE_HDOCS_SET_VAL, self.mbox)
         curried.expected = "hdocset"
-        with self._hdocset_lock:
-            hdocset_doc = try_unique_query(curried)
+        hdocset_doc = try_unique_query(curried)
         return hdocset_doc
+
+    # Property-set modification (protected by a different
+    # lock to give atomicity to the read/write operation)
 
     def remove_hdocset_docids(self, docids):
         """
         Remove the given document IDs from the set of
         header-documents associated with this mailbox.
         """
-        self._hdocset = self._hdocset.difference(
-            set(docids))
+        with self._hdocset_property_lock:
+            self._hdocset = self._hdocset.difference(
+                set(docids))
 
     def remove_hdocset_docid(self, docid):
         """
         Remove the given document ID from the set of
         header-documents associated with this mailbox.
         """
-        self._hdocset = self._hdocset.difference(
-            set([docid]))
+        with self._hdocset_property_lock:
+            self._hdocset = self._hdocset.difference(
+                set([docid]))
 
     def add_hdocset_docid(self, docid):
         """
         Add the given document ID to the set of
         header-documents associated with this mailbox.
         """
-        hdocset = self._hdocset
-        self._hdocset = hdocset.union(set([docid]))
+        with self._hdocset_property_lock:
+            self._hdocset = self._hdocset.union(
+                set([docid]))
 
     # individual doc getters, message layer.
 
