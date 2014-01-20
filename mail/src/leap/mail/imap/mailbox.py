@@ -707,7 +707,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         # this should really be called as a final callback of
         # the do_STORE method...
         from twisted.internet import reactor
-        deferLater(reactor, 1, self._signal_unread_to_ui)
+        deferLater(reactor, 1, self.signal_unread_to_ui)
         return result
 
     # ISearchableMailbox
