@@ -742,12 +742,13 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         # but doing a quickfix for avoiding duplicat saves in the draft folder.
         # See issue #4209
 
-        if query[1] == 'HEADER' and query[2].lower() == "message-id":
-            msgid = str(query[3]).strip()
-            d = self.messages._get_uid_from_msgid(str(msgid))
-            d1 = defer.gatherResults([d])
-            # we want a list, so return it all the same
-            return d1
+        if len(query) > 2:
+            if query[1] == 'HEADER' and query[2].lower() == "message-id":
+                msgid = str(query[3]).strip()
+                d = self.messages._get_uid_from_msgid(str(msgid))
+                d1 = defer.gatherResults([d])
+                # we want a list, so return it all the same
+                return d1
 
         # nothing implemented for any other query
         logger.warning("Cannot process query: %s" % (query,))
