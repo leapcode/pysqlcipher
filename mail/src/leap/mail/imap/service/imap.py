@@ -49,6 +49,25 @@ from leap.common.events.events_pb2 import IMAP_SERVICE_STARTED
 from leap.common.events.events_pb2 import IMAP_SERVICE_FAILED_TO_START
 from leap.common.events.events_pb2 import IMAP_CLIENT_LOGIN
 
+######################################################
+# Temporary workaround for RecursionLimit when using
+# qt4reactor. Do remove when we move to poll or select
+# reactor, which do not show those problems. See #4974
+import resource
+import sys
+
+try:
+    sys.setrecursionlimit(10**6)
+except Exception:
+    print "Error setting recursion limit"
+try:
+    # Increase max stack size from 8MB to 256MB
+    resource.setrlimit(resource.RLIMIT_STACK, (2**28, -1))
+except Exception:
+    print "Error setting stack size"
+
+######################################################
+
 
 class LeapIMAPServer(imap4.IMAP4Server):
     """
@@ -118,13 +137,9 @@ class LeapIMAPServer(imap4.IMAP4Server):
         method
         """
         from twisted.internet import reactor
-        log.msg("LEAP Overwritten fetch...")
         if not query:
             self.sendPositiveResponse(tag, 'FETCH complete')
             return  # XXX ???
-
-        print "QUERY ", query
-        print query[0]
 
         cbFetch = self._IMAP4Server__cbFetch
         ebFetch = self._IMAP4Server__ebFetch

@@ -765,6 +765,10 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         uid_next = self.getUIDNext()
         msg = messageObject
 
+        # XXX DEBUG ----------------------------------------
+        #print "copying MESSAGE from %s (%s) to %s (%s)" % (
+            #msg._mbox, msg._uid, self.mbox, uid_next)
+
         # XXX should use a public api instead
         fdoc = msg._fdoc
         if not fdoc:

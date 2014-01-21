@@ -528,7 +528,6 @@ class LeapMessage(fields, MailParser, MBoxParser):
             body = self._bdoc.content.get(self.RAW_KEY, "")
             content_type = bdoc.content.get('content-type', "")
             charset = first(CHARSET_RE.findall(content_type))
-            logger.debug("Got charset from header: %s" % (charset,))
             if not charset:
                 charset = self._get_charset(body)
             try:
@@ -665,7 +664,6 @@ class LeapMessage(fields, MailParser, MBoxParser):
         try:
             pmap_dict = self._get_part_from_parts_map(part + 1)
         except KeyError:
-            logger.debug("getSubpart for %s: KeyError" % (part,))
             raise IndexError
         return MessagePart(self._soledad, pmap_dict)
 
