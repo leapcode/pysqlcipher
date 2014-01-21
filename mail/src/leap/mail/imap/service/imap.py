@@ -36,6 +36,7 @@ from leap.common.check import leap_assert, leap_assert_type, leap_check
 from leap.keymanager import KeyManager
 from leap.mail.imap.account import SoledadBackedAccount
 from leap.mail.imap.fetch import LeapIncomingMail
+from leap.mail.imap.memorystore import MemoryStore
 from leap.soledad.client import Soledad
 
 # The default port in which imap service will run
@@ -68,6 +69,8 @@ except Exception:
 
 ######################################################
 
+
+# TODO move this to imap.server
 
 class LeapIMAPServer(imap4.IMAP4Server):
     """
@@ -256,10 +259,14 @@ class LeapIMAPFactory(ServerFactory):
         self._uuid = uuid
         self._userid = userid
         self._soledad = soledad
+        self._memstore = MemoryStore()
 
         theAccount = SoledadBackedAccount(
-            uuid, soledad=soledad)
+            uuid, soledad=soledad,
+            memstore=self._memstore)
         self.theAccount = theAccount
+
+        # XXX how to pass the store along?
 
     def buildProtocol(self, addr):
         "Return a protocol suitable for the job."
@@ -323,3 +330,14 @@ def run_service(*args, **kwargs):
 
     # not ok, signal error.
     leap_events.signal(IMAP_SERVICE_FAILED_TO_START, str(port))
+
+    def checkpoint(self):
+        """
+        Called when the client issues a CHECK command.
+
+        This should perform any checkpoint operations required by the server.
+        It may be a long running operation, but may not block.  If it returns
+        a deferred, the client will only be informed of success (or failure)
+        when the deferred's callback (or errback) is invoked.
+        """
+        return None

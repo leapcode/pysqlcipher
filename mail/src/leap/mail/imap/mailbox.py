@@ -37,6 +37,7 @@ from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
 from leap.common.check import leap_assert, leap_assert_type
 from leap.mail.decorators import deferred
 from leap.mail.imap.fields import WithMsgFields, fields
+from leap.mail.imap.memorystore import MessageDict
 from leap.mail.imap.messages import MessageCollection
 from leap.mail.imap.parser import MBoxParser
 
@@ -80,7 +81,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
     next_uid_lock = threading.Lock()
 
-    def __init__(self, mbox, soledad=None, rw=1):
+    def __init__(self, mbox, soledad, memstore, rw=1):
         """
         SoledadMailbox constructor. Needs to get passed a name, plus a
         Soledad instance.
@@ -91,9 +92,13 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :param soledad: a Soledad instance.
         :type soledad: Soledad
 
-        :param rw: read-and-write flags
+        :param memstore: a MemoryStore instance
+        :type memstore: MemoryStore
+
+        :param rw: read-and-write flag for this mailbox
         :type rw: int
         """
+        print "got memstore: ", memstore
         leap_assert(mbox, "Need a mailbox name to initialize")
         leap_assert(soledad, "Need a soledad instance to initialize")
 
@@ -105,9 +110,10 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         self.rw = rw
 
         self._soledad = soledad
+        self._memstore = memstore
 
         self.messages = MessageCollection(
-            mbox=mbox, soledad=self._soledad)
+            mbox=mbox, soledad=self._soledad, memstore=self._memstore)
 
         if not self.getFlags():
             self.setFlags(self.INIT_FLAGS)
@@ -231,7 +237,10 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             # XXX It looks like it has been corrupted.
             # We need to be able to survive this.
             return None
-        return mbox.content.get(self.LAST_UID_KEY, 1)
+        last = mbox.content.get(self.LAST_UID_KEY, 1)
+        if self._memstore:
+            last = max(last, self._memstore.get_last_uid(mbox))
+        return last
 
     def _set_last_uid(self, uid):
         """
@@ -259,6 +268,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             value = count
 
         mbox.content[key] = value
+        # XXX this should be set in the memorystore instead!!!
         self._soledad.put_doc(mbox)
 
     last_uid = property(
@@ -532,12 +542,17 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         # can treat them all the same.
         # Change this to the flag that twisted expects when we
         # switch to content-hash based index + local UID table.
+        print
+        print "FETCHING..."
 
         sequence = False
         #sequence = True if uid == 0 else False
 
         messages_asked = self._bound_seq(messages_asked)
+        print "asked: ", messages_asked
         seq_messg = self._filter_msg_seq(messages_asked)
+
+        print "seq: ", seq_messg
         getmsg = lambda uid: self.messages.get_msg_by_uid(uid)
 
         # for sequence numbers (uid = 0)
@@ -769,35 +784,40 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         uid_next = self.getUIDNext()
         msg = messageObject
 
-        # XXX DEBUG ----------------------------------------
-        #print "copying MESSAGE from %s (%s) to %s (%s)" % (
-            #msg._mbox, msg._uid, self.mbox, uid_next)
-
         # XXX should use a public api instead
         fdoc = msg._fdoc
+        hdoc = msg._hdoc
         if not fdoc:
             logger.debug("Tried to copy a MSG with no fdoc")
             return
 
+        #old_mbox = fdoc.content[self.MBOX_KEY]
+        #old_uid = fdoc.content[self.UID_KEY]
+        #old_key = old_mbox, old_uid
+        #print "copying from OLD MBOX ", old_mbox
+
+        # XXX bit doubt... to duplicate in memory
+        # or not to...?
+        # I think it should be ok to duplicate as long as we're
+        # careful at the hour of writes...
+        # We could use also proxies, but it will break when
+        # the original mailbox is flushed.
+
+        # XXX DEBUG ----------------------------------------
+        #print "copying MESSAGE from %s (%s) to %s (%s)" % (
+            #msg._mbox, msg._uid, self.mbox, uid_next)
+
         new_fdoc = copy.deepcopy(fdoc.content)
         new_fdoc[self.UID_KEY] = uid_next
         new_fdoc[self.MBOX_KEY] = self.mbox
-        self._do_add_doc(new_fdoc)
+        self._memstore.put(self.mbox, uid_next, MessageDict(
+            new_fdoc, hdoc.content))
 
-        # XXX should use a public api instead
-        hdoc = msg._hdoc
-        self.messages.add_hdocset_docid(hdoc.doc_id)
+        # XXX use memory store
+        if hasattr(hdoc, 'doc_id'):
+            self.messages.add_hdocset_docid(hdoc.doc_id)
 
         deferLater(reactor, 1, self.notify_new)
-
-    def _do_add_doc(self, doc):
-        """
-        Defer the adding of a new doc.
-
-        :param doc: document to be created in soledad.
-        :type doc: dict
-        """
-        self._soledad.create_doc(doc)
 
     # convenience fun
 

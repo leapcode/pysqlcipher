@@ -48,7 +48,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
     selected = None
     closed = False
 
-    def __init__(self, account_name, soledad=None):
+    def __init__(self, account_name, soledad=None, memstore=None):
         """
         Creates a SoledadAccountIndex that keeps track of the mailboxes
         and subscriptions handled by this account.
@@ -57,7 +57,9 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         :type acct_name: str
 
         :param soledad: a Soledad instance.
-        :param soledad: Soledad
+        :type soledad: Soledad
+        :param memstore: a MemoryStore instance.
+        :type memstore: MemoryStore
         """
         leap_assert(soledad, "Need a soledad instance to initialize")
         leap_assert_type(soledad, Soledad)
@@ -67,6 +69,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
 
         self._account_name = self._parse_mailbox_name(account_name)
         self._soledad = soledad
+        self._memstore = memstore
 
         self.initialize_db()
 
@@ -131,7 +134,8 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         if name not in self.mailboxes:
             raise imap4.MailboxException("No such mailbox: %r" % name)
 
-        return SoledadMailbox(name, soledad=self._soledad)
+        return SoledadMailbox(name, soledad=self._soledad,
+                              memstore=self._memstore)
 
     ##
     ## IAccount
@@ -221,8 +225,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         self.selected = name
 
         return SoledadMailbox(
-            name, rw=readwrite,
-            soledad=self._soledad)
+            name, self._soledad, self._memstore, readwrite)
 
     def delete(self, name, force=False):
         """
