@@ -18,7 +18,12 @@
 Mail utilities.
 """
 import json
+import re
 import traceback
+
+
+CHARSET_PATTERN = r"""charset=([\w-]+)"""
+CHARSET_RE = re.compile(CHARSET_PATTERN, re.IGNORECASE)
 
 
 def first(things):
@@ -29,6 +34,26 @@ def first(things):
         return things[0]
     except (IndexError, TypeError):
         return None
+
+
+def find_charset(thing, default=None):
+    """
+    Looks into the object 'thing' for a charset specification.
+    It searchs into the object's `repr`.
+
+    :param thing: the object to look into.
+    :type thing: object
+    :param default: the dafault charset to return if no charset is found.
+    :type default: str
+
+    :returns: the charset or 'default'
+    :rtype: str or None
+    """
+    charset = first(CHARSET_RE.findall(repr(thing)))
+    if charset is None:
+        charset = default
+
+    return charset
 
 
 class CustomJsonScanner(object):

@@ -38,7 +38,7 @@ from leap.common.check import leap_assert, leap_assert_type
 from leap.common.decorators import memoized_method
 from leap.common.mail import get_email_charset
 from leap.mail import walk
-from leap.mail.utils import first
+from leap.mail.utils import first, find_charset
 from leap.mail.decorators import deferred
 from leap.mail.imap.index import IndexedDB
 from leap.mail.imap.fields import fields, WithMsgFields
@@ -92,10 +92,7 @@ def try_unique_query(curried):
     except Exception as exc:
         logger.exception("Unhandled error %r" % exc)
 
-CHARSET_PATTERN = r"""charset=([\w-]+)"""
 MSGID_PATTERN = r"""<([\w@.]+)>"""
-
-CHARSET_RE = re.compile(CHARSET_PATTERN, re.IGNORECASE)
 MSGID_RE = re.compile(MSGID_PATTERN)
 
 
@@ -177,9 +174,9 @@ class MessagePart(object):
 
         if payload:
             content_type = self._get_ctype_from_document(phash)
-            charset = first(CHARSET_RE.findall(content_type))
+            charset = find_charset(content_type)
             logger.debug("Got charset from header: %s" % (charset,))
-            if not charset:
+            if charset is None:
                 charset = self._get_charset(payload)
             try:
                 payload = payload.encode(charset)
@@ -527,8 +524,8 @@ class LeapMessage(fields, MailParser, MBoxParser):
         if bdoc:
             body = self._bdoc.content.get(self.RAW_KEY, "")
             content_type = bdoc.content.get('content-type', "")
-            charset = first(CHARSET_RE.findall(content_type))
-            if not charset:
+            charset = find_charset(content_type)
+            if charset is None:
                 charset = self._get_charset(body)
             try:
                 body = body.encode(charset)
@@ -608,18 +605,26 @@ class LeapMessage(fields, MailParser, MBoxParser):
         if isinstance(headers, list):
             headers = dict(headers)
 
+        # default to most likely standard
+        charset = find_charset(headers, "utf-8")
+
         # twisted imap server expects *some* headers to be lowercase
         # XXX refactor together with MessagePart method
-        headers = dict(
-            (str(key), str(value)) if key.lower() != "content-type"
-            else (str(key.lower()), str(value))
-            for (key, value) in headers.items())
+        headers2 = dict()
+        for key, value in headers.items():
+            if key.lower() == "content-type":
+                key = key.lower()
 
-        # unpack and filter original dict by negate-condition
-        filter_by_cond = [(key, val) for key, val
-                          in headers.items() if cond(key)]
+            if not isinstance(key, str):
+                key = key.encode(charset, 'replace')
+            if not isinstance(value, str):
+                value = value.encode(charset, 'replace')
 
-        return dict(filter_by_cond)
+            # filter original dict by negate-condition
+            if cond(key):
+                headers2[key] = value
+
+        return headers2
 
     def _get_headers(self):
         """
