@@ -600,13 +600,16 @@ class EncryptedMessage(object):
             self._msg = self._origmsg
             return
 
-        # add a nice footer to the outgoing message
         from_address = validate_address(self._fromAddress.addrstr)
         username, domain = from_address.split('@')
-        self.lines.append('--')
-        self.lines.append('%s - https://%s/key/%s' %
-                          (self.FOOTER_STRING, domain, username))
-        self.lines.append('')
+
+        # add a nice footer to the outgoing message
+        if self._origmsg.get_content_type() == 'text/plain':
+            self.lines.append('--')
+            self.lines.append('%s - https://%s/key/%s' %
+                              (self.FOOTER_STRING, domain, username))
+            self.lines.append('')
+
         self._origmsg = self.parseMessage()
 
         # get sender and recipient data

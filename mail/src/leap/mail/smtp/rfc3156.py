@@ -24,6 +24,7 @@ import base64
 from abc import ABCMeta, abstractmethod
 from StringIO import StringIO
 
+from twisted.python import log
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email import errors
@@ -145,14 +146,25 @@ def encode_base64(msg):
     :param msg: The non-multipart message to be encoded.
     :type msg: email.message.Message
     """
-    orig = msg.get_payload()
-    encdata = _bencode(orig)
-    msg.set_payload(encdata)
-    # replace or set the Content-Transfer-Encoding header.
-    try:
-        msg.replace_header('Content-Transfer-Encoding', 'base64')
-    except KeyError:
-        msg['Content-Transfer-Encoding'] = 'base64'
+    encoding = msg.get('Content-Transfer-Encoding', None)
+    # XXX Python's email module can only decode quoted-printable, base64 and
+    # uuencoded data, so we might have to implement other decoding schemes in
+    # order to support RFC 3156 properly and correctly calculate signatures
+    # for multipart attachments (eg. 7bit or 8bit encoded attachments). For
+    # now, if content is already encoded as base64 or if it is encoded with
+    # some unknown encoding, we just pass.
+    if encoding is None or encoding.lower() in ['quoted-printable',
+            'x-uuencode', 'uue', 'x-uue']:
+        orig = msg.get_payload(decode=True)
+        encdata = _bencode(orig)
+        msg.set_payload(encdata)
+        # replace or set the Content-Transfer-Encoding header.
+        try:
+            msg.replace_header('Content-Transfer-Encoding', 'base64')
+        except KeyError:
+            msg['Content-Transfer-Encoding'] = 'base64'
+    elif encoding is not 'base64':
+        log.err('Unknown content-transfer-encoding: %s' % encoding)
 
 
 def encode_base64_rec(msg):
