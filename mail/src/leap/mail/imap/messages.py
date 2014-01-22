@@ -605,18 +605,26 @@ class LeapMessage(fields, MailParser, MBoxParser):
         if isinstance(headers, list):
             headers = dict(headers)
 
+        # default to most likely standard
+        charset = find_charset(headers, "utf-8")
+
         # twisted imap server expects *some* headers to be lowercase
         # XXX refactor together with MessagePart method
-        headers = dict(
-            (str(key), str(value)) if key.lower() != "content-type"
-            else (str(key.lower()), str(value))
-            for (key, value) in headers.items())
+        headers2 = dict()
+        for key, value in headers.items():
+            if key.lower() == "content-type":
+                key = key.lower()
 
-        # unpack and filter original dict by negate-condition
-        filter_by_cond = [(key, val) for key, val
-                          in headers.items() if cond(key)]
+            if not isinstance(key, str):
+                key = key.encode(charset, 'replace')
+            if not isinstance(value, str):
+                value = value.encode(charset, 'replace')
 
-        return dict(filter_by_cond)
+            # filter original dict by negate-condition
+            if cond(key):
+                headers2[key] = value
+
+        return headers2
 
     def _get_headers(self):
         """
