@@ -21,185 +21,18 @@ import contextlib
 import logging
 import weakref
 
-from collections import namedtuple
-
 from twisted.internet.task import LoopingCall
 from zope.interface import implements
 
 from leap.mail import size
 from leap.mail.messageflow import MessageProducer
-from leap.mail.messageparts import MessagePartType
 from leap.mail.imap import interfaces
 from leap.mail.imap.fields import fields
+from leap.mail.imap.messageparts import MessagePartType, MessagePartDoc
+from leap.mail.imap.messageparts import MessageWrapper
+from leap.mail.imap.messageparts import ReferenciableDict
 
 logger = logging.getLogger(__name__)
-
-
-"""
-A MessagePartDoc is a light wrapper around the dictionary-like
-data that we pass along for message parts. It can be used almost everywhere
-that you would expect a SoledadDocument, since it has a dict under the
-`content` attribute.
-
-We also keep some metadata on it, relative in part to the message as a whole,
-and sometimes to a part in particular only.
-
-* `new` indicates that the document has just been created. SoledadStore
-  should just create a new doc for all the related message parts.
-* `store` indicates the type of store a given MessagePartDoc lives in.
-  We currently use this to indicate that  the document comes from memeory,
-  but we should probably get rid of it as soon as we extend the use of the
-  SoledadStore interface along LeapMessage, MessageCollection and Mailbox.
-* `part` is one of the MessagePartType enums.
-
-* `dirty` indicates that, while we already have the document in Soledad,
-  we have modified its state in memory, so we need to put_doc instead while
-  dumping the MemoryStore contents.
-  `dirty` attribute would only apply to flags-docs and linkage-docs.
-
-
-  XXX this is still not implemented!
-
-"""
-
-MessagePartDoc = namedtuple(
-    'MessagePartDoc',
-    ['new', 'dirty', 'part', 'store', 'content'])
-
-
-class ReferenciableDict(dict):
-    """
-    A dict that can be weak-referenced.
-
-    Some builtin objects are not weak-referenciable unless
-    subclassed. So we do.
-
-    Used to return pointers to the items in the MemoryStore.
-    """
-
-
-class MessageWrapper(object):
-    """
-    A simple nested dictionary container around the different message subparts.
-    """
-    implements(interfaces.IMessageContainer)
-
-    FDOC = "fdoc"
-    HDOC = "hdoc"
-    CDOCS = "cdocs"
-
-    # XXX can use this to limit the memory footprint,
-    # or is it too premature to optimize?
-    # Does it work well together with the interfaces.implements?
-
-    #__slots__ = ["_dict", "_new", "_dirty", "memstore"]
-
-    def __init__(self, fdoc=None, hdoc=None, cdocs=None,
-                 from_dict=None, memstore=None,
-                 new=True, dirty=False):
-        self._dict = {}
-
-        self._new = new
-        self._dirty = dirty
-        self.memstore = memstore
-
-        if from_dict is not None:
-            self.from_dict(from_dict)
-        else:
-            if fdoc is not None:
-                self._dict[self.FDOC] = ReferenciableDict(fdoc)
-            if hdoc is not None:
-                self._dict[self.HDOC] = ReferenciableDict(hdoc)
-            if cdocs is not None:
-                self._dict[self.CDOCS] = ReferenciableDict(cdocs)
-
-    # properties
-
-    @property
-    def new(self):
-        return self._new
-
-    def set_new(self, value=True):
-        self._new = value
-
-    @property
-    def dirty(self):
-        return self._dirty
-
-    def set_dirty(self, value=True):
-        self._dirty = value
-
-    # IMessageContainer
-
-    @property
-    def fdoc(self):
-        _fdoc = self._dict.get(self.FDOC, None)
-        if _fdoc:
-            content_ref = weakref.proxy(_fdoc)
-        else:
-            logger.warning("NO FDOC!!!")
-            content_ref = {}
-        return MessagePartDoc(new=self.new, dirty=self.dirty,
-                              store=self._storetype,
-                              part=MessagePartType.fdoc,
-                              content=content_ref)
-
-    @property
-    def hdoc(self):
-        _hdoc = self._dict.get(self.HDOC, None)
-        if _hdoc:
-            content_ref = weakref.proxy(_hdoc)
-        else:
-            logger.warning("NO HDOC!!!!")
-            content_ref = {}
-        return MessagePartDoc(new=self.new, dirty=self.dirty,
-                              store=self._storetype,
-                              part=MessagePartType.hdoc,
-                              content=content_ref)
-
-    @property
-    def cdocs(self):
-        _cdocs = self._dict.get(self.CDOCS, None)
-        if _cdocs:
-            return weakref.proxy(_cdocs)
-        else:
-            return {}
-
-    def walk(self):
-        """
-        Generator that iterates through all the parts, returning
-        MessagePartDoc.
-        """
-        yield self.fdoc
-        yield self.hdoc
-        for cdoc in self.cdocs.values():
-            # XXX this will break ----
-            content_ref = weakref.proxy(cdoc)
-            yield MessagePartDoc(new=self.new, dirty=self.dirty,
-                                 store=self._storetype,
-                                 part=MessagePartType.cdoc,
-                                 content=content_ref)
-
-    # i/o
-
-    def as_dict(self):
-        """
-        Return a dict representation of the parts contained.
-        """
-        return self._dict
-
-    def from_dict(self, msg_dict):
-        """
-        Populate MessageWrapper parts from a dictionary.
-        It expects the same format that we use in a
-        MessageWrapper.
-        """
-        fdoc, hdoc, cdocs = map(
-            lambda part: msg_dict.get(part, None),
-            [self.FDOC, self.HDOC, self.CDOCS])
-        self._dict[self.FDOC] = fdoc
-        self._dict[self.HDOC] = hdoc
-        self._dict[self.CDOCS] = cdocs
 
 
 @contextlib.contextmanager
@@ -232,8 +65,8 @@ class MemoryStore(object):
     writes to the permanent storage is controled by the write_period parameter
     in the constructor.
     """
-    implements(interfaces.IMessageStore)
-    implements(interfaces.IMessageStoreWriter)
+    implements(interfaces.IMessageStore,
+               interfaces.IMessageStoreWriter)
 
     producer = None
 
@@ -332,7 +165,7 @@ class MemoryStore(object):
             print "saving cdoc"
             cdoc = self._msg_store[key]['cdocs'][cdoc_key]
 
-            # XXX this should be done in the MessageWrapper constructor
+            # FIXME this should be done in the MessageWrapper constructor
             # instead...
             # first we make it weak-referenciable
             referenciable_cdoc = ReferenciableDict(cdoc)
@@ -399,10 +232,8 @@ class MemoryStore(object):
         """
         Get the highest UID for a given mbox.
         """
-        # XXX should get from msg_store keys instead!
-        if not self._new:
-            return 0
-        return max(self.get_uids(mbox))
+        uids = self.get_uids(mbox)
+        return uids and max(uids) or 0
 
     def count_new_mbox(self, mbox):
         """

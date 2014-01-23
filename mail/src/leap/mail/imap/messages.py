@@ -41,7 +41,7 @@ from leap.mail.utils import first, find_charset, lowerdict
 from leap.mail.decorators import deferred
 from leap.mail.imap.index import IndexedDB
 from leap.mail.imap.fields import fields, WithMsgFields
-from leap.mail.imap.memorystore import MessageDict
+from leap.mail.imap.memorystore import MessageWrapper
 from leap.mail.imap.parser import MailParser, MBoxParser
 
 logger = logging.getLogger(__name__)
@@ -984,7 +984,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
         # TODO ---- add reference to original doc, to be deleted
         # after writes are done.
-        msg_container = MessageDict(fd, hd, cdocs)
+        msg_container = MessageWrapper(fd, hd, cdocs)
         self._memstore.create_message(self.mbox, uid, msg_container)
 
     def _remove_cb(self, result):
@@ -1215,6 +1215,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         # and we cannot find it otherwise. This seems to be enough.
 
         # XXX do a deferLater instead ??
+        # FIXME this won't be needed after the CHECK command is implemented.
         time.sleep(0.3)
         return self._get_uid_from_msgidCb(msgid)
 
@@ -1233,11 +1234,14 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         :rtype: LeapMessage
         """
         print "getting msg by id!"
-        msg_container = self._memstore.get(self.mbox, uid)
+        msg_container = self._memstore.get_message(self.mbox, uid)
         print "msg container", msg_container
         if msg_container is not None:
             print "getting LeapMessage (from memstore)"
-            msg = LeapMessage(None, uid, self.mbox, collection=self,
+            # We pass a reference to soledad just to be able to retrieve
+            # missing parts that cannot be found in the container, like
+            # the content docs after a copy.
+            msg = LeapMessage(self._soledad, uid, self.mbox, collection=self,
                               container=msg_container)
             print "got msg:", msg
         else:
@@ -1309,7 +1313,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         """
         Return a dict with all flags documents for this mailbox.
         """
-        # XXX get all from memstore and cahce it there
+        # XXX get all from memstore and cache it there
         all_flags = dict(((
             doc.content[self.UID_KEY],
             doc.content[self.FLAGS_KEY]) for doc in
@@ -1319,7 +1323,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         if self._memstore is not None:
             # XXX
             uids = self._memstore.get_uids(self.mbox)
-            fdocs = [(uid, self._memstore.get(self.mbox, uid).fdoc)
+            fdocs = [(uid, self._memstore.get_message(self.mbox, uid).fdoc)
                      for uid in uids]
             for uid, doc in fdocs:
                 all_flags[uid] = doc.content[self.FLAGS_KEY]

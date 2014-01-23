@@ -37,8 +37,8 @@ from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
 from leap.common.check import leap_assert, leap_assert_type
 from leap.mail.decorators import deferred
 from leap.mail.imap.fields import WithMsgFields, fields
-from leap.mail.imap.memorystore import MessageDict
 from leap.mail.imap.messages import MessageCollection
+from leap.mail.imap.messageparts import MessageWrapper
 from leap.mail.imap.parser import MBoxParser
 
 logger = logging.getLogger(__name__)
@@ -549,10 +549,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         #sequence = True if uid == 0 else False
 
         messages_asked = self._bound_seq(messages_asked)
-        print "asked: ", messages_asked
         seq_messg = self._filter_msg_seq(messages_asked)
-
-        print "seq: ", seq_messg
         getmsg = lambda uid: self.messages.get_msg_by_uid(uid)
 
         # for sequence numbers (uid = 0)
@@ -791,29 +788,15 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             logger.debug("Tried to copy a MSG with no fdoc")
             return
 
-        #old_mbox = fdoc.content[self.MBOX_KEY]
-        #old_uid = fdoc.content[self.UID_KEY]
-        #old_key = old_mbox, old_uid
-        #print "copying from OLD MBOX ", old_mbox
-
-        # XXX bit doubt... to duplicate in memory
-        # or not to...?
-        # I think it should be ok to duplicate as long as we're
-        # careful at the hour of writes...
-        # We could use also proxies, but it will break when
-        # the original mailbox is flushed.
-
-        # XXX DEBUG ----------------------------------------
-        #print "copying MESSAGE from %s (%s) to %s (%s)" % (
-            #msg._mbox, msg._uid, self.mbox, uid_next)
-
         new_fdoc = copy.deepcopy(fdoc.content)
         new_fdoc[self.UID_KEY] = uid_next
         new_fdoc[self.MBOX_KEY] = self.mbox
-        self._memstore.put(self.mbox, uid_next, MessageDict(
-            new_fdoc, hdoc.content))
+        self._memstore.create_message(
+            self.mbox, uid_next,
+            MessageWrapper(
+                new_fdoc, hdoc.content))
 
-        # XXX use memory store
+        # XXX use memory store !!!
         if hasattr(hdoc, 'doc_id'):
             self.messages.add_hdocset_docid(hdoc.doc_id)
 

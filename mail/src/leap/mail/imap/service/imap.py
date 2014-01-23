@@ -32,6 +32,7 @@ from leap.mail.imap.account import SoledadBackedAccount
 from leap.mail.imap.fetch import LeapIncomingMail
 from leap.mail.imap.memorystore import MemoryStore
 from leap.mail.imap.server import LeapIMAPServer
+from leap.mail.imap.soledadstore import SoledadStore
 from leap.soledad.client import Soledad
 
 # The default port in which imap service will run
@@ -96,7 +97,8 @@ class LeapIMAPFactory(ServerFactory):
         self._uuid = uuid
         self._userid = userid
         self._soledad = soledad
-        self._memstore = MemoryStore()
+        self._memstore = MemoryStore(
+            permanent_store=SoledadStore(soledad))
 
         theAccount = SoledadBackedAccount(
             uuid, soledad=soledad,
