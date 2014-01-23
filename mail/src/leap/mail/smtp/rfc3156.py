@@ -147,14 +147,15 @@ def encode_base64(msg):
     :type msg: email.message.Message
     """
     encoding = msg.get('Content-Transfer-Encoding', None)
+    if encoding is not None:
+        encoding = encoding.lower()
     # XXX Python's email module can only decode quoted-printable, base64 and
     # uuencoded data, so we might have to implement other decoding schemes in
     # order to support RFC 3156 properly and correctly calculate signatures
     # for multipart attachments (eg. 7bit or 8bit encoded attachments). For
     # now, if content is already encoded as base64 or if it is encoded with
     # some unknown encoding, we just pass.
-    if encoding is None or encoding.lower() in ['quoted-printable',
-            'x-uuencode', 'uue', 'x-uue']:
+    if encoding in [None, 'quoted-printable', 'x-uuencode', 'uue', 'x-uue']:
         orig = msg.get_payload(decode=True)
         encdata = _bencode(orig)
         msg.set_payload(encdata)
