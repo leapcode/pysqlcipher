@@ -524,8 +524,10 @@ class LeapMessage(fields, MailParser, MBoxParser):
         message.
         """
         hdoc_content = self._hdoc.content
+        print "hdoc: ", hdoc_content
         body_phash = hdoc_content.get(
             fields.BODY_KEY, None)
+        print "body phash: ", body_phash
         if not body_phash:
             logger.warning("No body phash for this document!")
             return None
@@ -537,16 +539,19 @@ class LeapMessage(fields, MailParser, MBoxParser):
 
         if self._container is not None:
             bdoc = self._container.memstore.get_by_phash(body_phash)
+            print "bdoc from container -->", bdoc
             if bdoc:
                 return bdoc
             else:
                 print "no doc for that phash found!"
 
+        print "nuthing. soledad?"
         # no memstore or no doc found there
         if self._soledad:
             body_docs = self._soledad.get_from_index(
                 fields.TYPE_P_HASH_IDX,
                 fields.TYPE_CONTENT_VAL, str(body_phash))
+            print "returning body docs,,,", body_docs
             return first(body_docs)
         else:
             logger.error("No phash in container, and no soledad found!")
