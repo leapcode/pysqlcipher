@@ -107,10 +107,16 @@ def walk_msg_tree(parts, body_phash=None):
                        in the outer content doc for convenience.
     :type body_phash: basestring or None
     """
+    PART_MAP = "part_map"
+    MULTI = "multi"
+    HEADERS = "headers"
+    PHASH = "phash"
+    BODY = "body"
+
     # parts vector
     pv = list(get_parts_vector(parts))
 
-    inner_headers = parts[1].get("headers", None) if (
+    inner_headers = parts[1].get(HEADERS, None) if (
         len(parts) == 2) else None
 
     if DEBUG:
@@ -129,10 +135,10 @@ def walk_msg_tree(parts, body_phash=None):
         slic = parts[wind + 1:wind + 1 + nsub]  # slice with subparts
 
         cwra = {
-            "multi": True,
-            "part_map": dict((index + 1, part)  # content wrapper
-                             for index, part in enumerate(slic)),
-            "headers": dict(parts[wind]['headers'])
+            MULTI: True,
+            PART_MAP: dict((index + 1, part)  # content wrapper
+                           for index, part in enumerate(slic)),
+            HEADERS: dict(parts[wind][HEADERS])
         }
 
         # remove subparts and substitue wrapper
@@ -145,27 +151,28 @@ def walk_msg_tree(parts, body_phash=None):
 
     if all(x == 1 for x in pv):
         # special case in the rightmost element
-        main_pmap = parts[0]['part_map']
-        last_part = max(main_pmap.keys())
-        main_pmap[last_part]['part_map'] = {}
-        for partind in range(len(pv) - 1):
-            print partind+1, len(parts)
-            main_pmap[last_part]['part_map'][partind] = parts[partind+1]
+        main_pmap = parts[0].get(PART_MAP, None)
+        if main_pmap is not None:
+            last_part = max(main_pmap.keys())
+            main_pmap[last_part][PART_MAP] = {}
+            for partind in range(len(pv) - 1):
+                print partind+1, len(parts)
+                main_pmap[last_part][PART_MAP][partind] = parts[partind + 1]
 
     outer = parts[0]
-    outer.pop('headers')
-    if not "part_map" in outer:
+    outer.pop(HEADERS)
+    if not PART_MAP in outer:
         # we have a multipart with 1 part only, so kind of fix it
         # although it would be prettier if I take this special case at
         # the beginning of the walk.
-        pdoc = {"multi": True,
-                "part_map": {1: outer}}
-        pdoc["part_map"][1]["multi"] = False
-        if not pdoc["part_map"][1].get("phash", None):
-            pdoc["part_map"][1]["phash"] = body_phash
+        pdoc = {MULTI: True,
+                PART_MAP: {1: outer}}
+        pdoc[PART_MAP][1][MULTI] = False
+        if not pdoc[PART_MAP][1].get(PHASH, None):
+            pdoc[PART_MAP][1][PHASH] = body_phash
         if inner_headers:
-            pdoc["part_map"][1]["headers"] = inner_headers
+            pdoc[PART_MAP][1][HEADERS] = inner_headers
     else:
         pdoc = outer
-    pdoc["body"] = body_phash
+    pdoc[BODY] = body_phash
     return pdoc
