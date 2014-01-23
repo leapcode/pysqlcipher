@@ -36,6 +36,14 @@ def first(things):
         return None
 
 
+def maybe_call(thing):
+    """
+    Return the same thing, or the result of its invocation if it is a
+    callable.
+    """
+    return thing() if callable(thing) else thing
+
+
 def find_charset(thing, default=None):
     """
     Looks into the object 'thing' for a charset specification.
@@ -46,14 +54,26 @@ def find_charset(thing, default=None):
     :param default: the dafault charset to return if no charset is found.
     :type default: str
 
-    :returns: the charset or 'default'
+    :return: the charset or 'default'
     :rtype: str or None
     """
     charset = first(CHARSET_RE.findall(repr(thing)))
     if charset is None:
         charset = default
-
     return charset
+
+
+def lowerdict(_dict):
+    """
+    Return a dict with the keys in lowercase.
+
+    :param _dict: the dict to convert
+    :rtype: dict
+    """
+    # TODO should properly implement a CaseInsensitive dict.
+    # Look into requests code.
+    return dict((key.lower(), value)
+                for key, value in _dict.items())
 
 
 class CustomJsonScanner(object):
