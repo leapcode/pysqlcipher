@@ -151,12 +151,13 @@ def walk_msg_tree(parts, body_phash=None):
 
     if all(x == 1 for x in pv):
         # special case in the rightmost element
-        main_pmap = parts[0]['part_map']
-        last_part = max(main_pmap.keys())
-        main_pmap[last_part]['part_map'] = {}
-        for partind in range(len(pv) - 1):
-            print partind+1, len(parts)
-            main_pmap[last_part]['part_map'][partind] = parts[partind+1]
+        main_pmap = parts[0].get(PART_MAP, None)
+        if main_pmap is not None:
+            last_part = max(main_pmap.keys())
+            main_pmap[last_part][PART_MAP] = {}
+            for partind in range(len(pv) - 1):
+                print partind+1, len(parts)
+                main_pmap[last_part][PART_MAP][partind] = parts[partind + 1]
 
     outer = parts[0]
     outer.pop(HEADERS)
