@@ -42,6 +42,7 @@ from leap.mail.decorators import deferred
 from leap.mail.imap.index import IndexedDB
 from leap.mail.imap.fields import fields, WithMsgFields
 from leap.mail.imap.memorystore import MessageWrapper
+from leap.mail.imap.messageparts import MessagePart
 from leap.mail.imap.parser import MailParser, MBoxParser
 
 logger = logging.getLogger(__name__)
@@ -306,15 +307,25 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :return: file-like object opened for reading
         :rtype: StringIO
         """
+        def write_fd(body):
+            fd.write(body)
+            fd.seek(0)
+            return fd
+
         # TODO refactor with getBodyFile in MessagePart
         fd = StringIO.StringIO()
         if self._bdoc is not None:
             bdoc_content = self._bdoc.content
+            if bdoc_content is None:
+                logger.warning("No BODC content found for message!!!")
+                return write_fd(str(""))
+
             body = bdoc_content.get(self.RAW_KEY, "")
             content_type = bdoc_content.get('content-type', "")
             charset = find_charset(content_type)
             logger.debug('got charset from content-type: %s' % charset)
             if charset is None:
+                # XXX change for find_charset utility
                 charset = self._get_charset(body)
             try:
                 body = body.encode(charset)
@@ -328,15 +339,13 @@ class LeapMessage(fields, MailParser, MBoxParser):
                         body = body.encode('utf-8', 'replace')
                     except:
                         pass
+            finally:
+                return write_fd(body)
 
         # We are still returning funky characters from here.
         else:
             logger.warning("No BDOC found for message.")
-            body = str("")
-
-        fd.write(body)
-        fd.seek(0)
-        return fd
+            return write_fd(str(""))
 
     @memoized_method
     def _get_charset(self, stuff):
@@ -524,7 +533,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
         message.
         """
         hdoc_content = self._hdoc.content
-        print "hdoc: ", hdoc_content
+        #print "hdoc: ", hdoc_content
         body_phash = hdoc_content.get(
             fields.BODY_KEY, None)
         print "body phash: ", body_phash
@@ -540,10 +549,10 @@ class LeapMessage(fields, MailParser, MBoxParser):
         if self._container is not None:
             bdoc = self._container.memstore.get_by_phash(body_phash)
             print "bdoc from container -->", bdoc
-            if bdoc:
+            if bdoc and bdoc.content is not None:
                 return bdoc
             else:
-                print "no doc for that phash found!"
+                print "no doc or not bdoc content for that phash found!"
 
         print "nuthing. soledad?"
         # no memstore or no doc found there
@@ -551,7 +560,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
             body_docs = self._soledad.get_from_index(
                 fields.TYPE_P_HASH_IDX,
                 fields.TYPE_CONTENT_VAL, str(body_phash))
-            print "returning body docs,,,", body_docs
+            print "returning body docs...", body_docs
             return first(body_docs)
         else:
             logger.error("No phash in container, and no soledad found!")

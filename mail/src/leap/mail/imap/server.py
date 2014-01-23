@@ -196,4 +196,9 @@ class LeapIMAPServer(imap4.IMAP4Server):
         """
         # TODO return the output of _memstore.is_writing
         # XXX and that should return a deferred!
+
+        # XXX  fake a delayed operation, to debug problem with messages getting
+        # back to the source mailbox...
+        import time
+        time.sleep(2)
         return None

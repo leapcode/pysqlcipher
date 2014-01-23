@@ -271,11 +271,27 @@ class MemoryStore(object):
         return (self.get_message(*key)
                 for key in sorted(self._msg_store.keys()))
 
+    # new, dirty flags
+
     def _get_new_dirty_state(self, key):
         """
         Return `new` and `dirty` flags for a given message.
         """
         return map(lambda _set: key in _set, (self._new, self._dirty))
+
+    def set_new(self, key):
+        """
+        Add the key value to the `new` set.
+        """
+        self._new.add(key)
+
+    def unset_new(self, key):
+        """
+        Remove the key value from the `new` set.
+        """
+        print "******************"
+        print "UNSETTING NEW FOR: %s" % str(key)
+        self._new.discard(key)
 
     @property
     def is_writing(self):

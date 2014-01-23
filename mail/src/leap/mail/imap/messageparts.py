@@ -125,19 +125,40 @@ class MessageWrapper(object):
 
     # properties
 
-    @property
-    def new(self):
+    def _get_new(self):
+        """
+        Get the value for the `new` flag.
+        """
         return self._new
 
-    def set_new(self, value=True):
+    def _set_new(self, value=True):
+        """
+        Set the value for the `new` flag, and propagate it
+        to the memory store if any.
+        """
         self._new = value
+        if self.memstore:
+            mbox = self.fdoc.content['mbox']
+            uid = self.fdoc.content['uid']
+            key = mbox, uid
+            fun = [self.memstore.unset_new,
+                   self.memstore.set_new][int(value)]
+            fun(key)
+        else:
+            logger.warning("Could not find a memstore referenced from this "
+                           "MessageWrapper. The value for new will not be "
+                           "propagated")
 
-    @property
-    def dirty(self):
+    new = property(_get_new, _set_new,
+                   doc="The `new` flag for this MessageWrapper")
+
+    def _get_dirty(self):
         return self._dirty
 
-    def set_dirty(self, value=True):
+    def _set_dirty(self, value=True):
         self._dirty = value
+
+    dirty = property(_get_dirty, _set_dirty)
 
     # IMessageContainer
 
