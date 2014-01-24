@@ -36,6 +36,15 @@ def first(things):
         return None
 
 
+def empty(thing):
+    """
+    Return True if a thing is None or its length is zero.
+    """
+    if thing is None:
+        return True
+    return len(thing) == 0
+
+
 def maybe_call(thing):
     """
     Return the same thing, or the result of its invocation if it is a

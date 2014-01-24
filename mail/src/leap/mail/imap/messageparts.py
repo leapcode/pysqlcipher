@@ -65,15 +65,13 @@ and sometimes to a part in particular only.
   we have modified its state in memory, so we need to put_doc instead while
   dumping the MemoryStore contents.
   `dirty` attribute would only apply to flags-docs and linkage-docs.
-
-
-  XXX this is still not implemented!
+* `doc_id` is the identifier for the document in the u1db database, if any.
 
 """
 
 MessagePartDoc = namedtuple(
     'MessagePartDoc',
-    ['new', 'dirty', 'part', 'store', 'content'])
+    ['new', 'dirty', 'part', 'store', 'content', 'doc_id'])
 
 
 class ReferenciableDict(dict):
@@ -96,6 +94,7 @@ class MessageWrapper(object):
     FDOC = "fdoc"
     HDOC = "hdoc"
     CDOCS = "cdocs"
+    DOCS_ID = "docs_id"
 
     # XXX can use this to limit the memory footprint,
     # or is it too premature to optimize?
@@ -105,12 +104,17 @@ class MessageWrapper(object):
 
     def __init__(self, fdoc=None, hdoc=None, cdocs=None,
                  from_dict=None, memstore=None,
-                 new=True, dirty=False):
+                 new=True, dirty=False, docs_id={}):
+        """
+        Initialize a MessageWrapper.
+        """
+        # TODO add optional reference to original message in the incoming
         self._dict = {}
         self.memstore = memstore
 
         self._new = new
         self._dirty = dirty
+
         self._storetype = "mem"
 
         if from_dict is not None:
@@ -122,6 +126,7 @@ class MessageWrapper(object):
                 self._dict[self.HDOC] = ReferenciableDict(hdoc)
             if cdocs is not None:
                 self._dict[self.CDOCS] = ReferenciableDict(cdocs)
+        self._dict[self.DOCS_ID] = docs_id
 
     # properties
 
@@ -153,10 +158,28 @@ class MessageWrapper(object):
                    doc="The `new` flag for this MessageWrapper")
 
     def _get_dirty(self):
+        """
+        Get the value for the `dirty` flag.
+        """
         return self._dirty
 
     def _set_dirty(self, value=True):
+        """
+        Set the value for the `dirty` flag, and propagate it
+        to the memory store if any.
+        """
         self._dirty = value
+        if self.memstore:
+            mbox = self.fdoc.content['mbox']
+            uid = self.fdoc.content['uid']
+            key = mbox, uid
+            fun = [self.memstore.unset_dirty,
+                   self.memstore.set_dirty][int(value)]
+            fun(key)
+        else:
+            logger.warning("Could not find a memstore referenced from this "
+                           "MessageWrapper. The value for new will not be "
+                           "propagated")
 
     dirty = property(_get_dirty, _set_dirty)
 
@@ -173,7 +196,9 @@ class MessageWrapper(object):
         return MessagePartDoc(new=self.new, dirty=self.dirty,
                               store=self._storetype,
                               part=MessagePartType.fdoc,
-                              content=content_ref)
+                              content=content_ref,
+                              doc_id=self._dict[self.DOCS_ID].get(
+                                  self.FDOC, None))
 
     @property
     def hdoc(self):
@@ -186,7 +211,9 @@ class MessageWrapper(object):
         return MessagePartDoc(new=self.new, dirty=self.dirty,
                               store=self._storetype,
                               part=MessagePartType.hdoc,
-                              content=content_ref)
+                              content=content_ref,
+                              doc_id=self._dict[self.DOCS_ID].get(
+                                  self.HDOC, None))
 
     @property
     def cdocs(self):
@@ -201,21 +228,18 @@ class MessageWrapper(object):
         Generator that iterates through all the parts, returning
         MessagePartDoc.
         """
-        yield self.fdoc
-        yield self.hdoc
+        if self.fdoc is not None:
+            yield self.fdoc
+        if self.hdoc is not None:
+            yield self.hdoc
         for cdoc in self.cdocs.values():
-            # XXX this will break ----
-            #content_ref = weakref.proxy(cdoc)
-            #yield MessagePartDoc(new=self.new, dirty=self.dirty,
-                                 #store=self._storetype,
-                                 #part=MessagePartType.cdoc,
-                                 #content=content_ref)
-
-            # the put is handling this for us, so
-            # we already have stored a MessagePartDoc
-            # but we should really do it while adding in the
-            # constructor or the from_dict method
-            yield cdoc
+            if cdoc is not None:
+                content_ref = weakref.proxy(cdoc)
+                yield MessagePartDoc(new=self.new, dirty=self.dirty,
+                                     store=self._storetype,
+                                     part=MessagePartType.cdoc,
+                                     content=content_ref,
+                                     doc_id=None)
 
     # i/o
 
@@ -234,9 +258,9 @@ class MessageWrapper(object):
         fdoc, hdoc, cdocs = map(
             lambda part: msg_dict.get(part, None),
             [self.FDOC, self.HDOC, self.CDOCS])
-        self._dict[self.FDOC] = fdoc
-        self._dict[self.HDOC] = hdoc
-        self._dict[self.CDOCS] = cdocs
+        for t, doc in ((self.FDOC, fdoc), (self.HDOC, hdoc),
+                       (self.CDOCS, cdocs)):
+            self._dict[t] = ReferenciableDict(doc) if doc else None
 
 
 class MessagePart(object):

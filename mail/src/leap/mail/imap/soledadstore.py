@@ -81,7 +81,8 @@ class ContentDedup(object):
         if len(header_docs) != 1:
             logger.warning("Found more than one copy of chash %s!"
                            % (chash,))
-        logger.debug("Found header doc with that hash! Skipping save!")
+        # XXX re-enable
+        #logger.debug("Found header doc with that hash! Skipping save!")
         return True
 
     def _content_does_exist(self, doc):
@@ -105,7 +106,8 @@ class ContentDedup(object):
         if len(attach_docs) != 1:
             logger.warning("Found more than one copy of phash %s!"
                            % (phash,))
-        logger.debug("Found attachment doc with that hash! Skipping save!")
+        # XXX re-enable
+        #logger.debug("Found attachment doc with that hash! Skipping save!")
         return True
 
 
@@ -215,6 +217,7 @@ class SoledadStore(ContentDedup):
                 # If everything went well, we can unset the new flag
                 # in the source store (memory store)
                 msg_wrapper.new = False
+                msg_wrapper.dirty = False
             empty = queue.empty()
 
     #
@@ -261,6 +264,9 @@ class SoledadStore(ContentDedup):
             # item is expected to be a MessagePartDoc
             for item in msg_wrapper.walk():
                 if item.part == MessagePartType.fdoc:
+
+                    # FIXME add content duplication for HEADERS too!
+                    # (only 1 chash per mailbox!)
                     yield dict(item.content), call
 
                 elif item.part == MessagePartType.hdoc:
@@ -276,18 +282,31 @@ class SoledadStore(ContentDedup):
 
                         yield dict(item.content), call
 
+        # For now, the only thing that will be dirty is
+        # the flags doc.
+
+        elif msg_wrapper.dirty is True:
+            print "DIRTY DOC! ----------------------"
+            call = self._soledad.put_doc
+
+            # item is expected to be a MessagePartDoc
+            for item in msg_wrapper.walk():
+                doc_id = item.doc_id  # defend!
+                doc = self._soledad.get_doc(doc_id)
+                doc.content = item.content
+
+                if item.part == MessagePartType.fdoc:
+                    print "Will PUT the doc: ", doc
+                    yield dict(doc), call
+
+                # XXX also for linkage-doc
+
         # TODO should write back to the queue
         # with the results of the operation.
         # We can write there:
         # (*) MsgWriteACK  --> Should remove from incoming queue.
         #                      (We should do this here).
-
         # Implement using callbacks for each operation.
 
-        # TODO should check for elements with the dirty state
-        # TODO if new == False and dirty == True, put_doc
-        # XXX for puts, we will have to retrieve
-        # the document, change the content, and
-        # pass the whole document under "content"
         else:
             logger.error("Cannot put/delete documents yet!")

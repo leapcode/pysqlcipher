@@ -126,8 +126,14 @@ class MessageProducer(object):
         again after the addition of new items.
         """
         self._consumer.consume(self._queue)
-        if self._queue.empty():
+        if self.is_queue_empty():
             self.stop()
+
+    def is_queue_empty(self):
+        """
+        Return True if queue is empty, False otherwise.
+        """
+        return self._queue.empty()
 
     # public methods: IMessageProducer
 

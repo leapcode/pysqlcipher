@@ -36,6 +36,7 @@ from leap.common import events as leap_events
 from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
 from leap.common.check import leap_assert, leap_assert_type
 from leap.mail.decorators import deferred
+from leap.mail.utils import empty
 from leap.mail.imap.fields import WithMsgFields, fields
 from leap.mail.imap.messages import MessageCollection
 from leap.mail.imap.messageparts import MessageWrapper
@@ -475,8 +476,17 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         """
         Remove all messages flagged \\Deleted
         """
+        print "EXPUNGE!"
         if not self.isWriteable():
             raise imap4.ReadOnlyMailbox
+        mstore = self._memstore
+        if mstore is not None:
+            deleted = mstore.all_deleted_uid_iter(self.mbox)
+            print "deleted ", list(deleted)
+            for uid in deleted:
+                mstore.remove_message(self.mbox, uid)
+
+        print "now deleting from soledad"
         d = self.messages.remove_all_deleted()
         d.addCallback(self._expunge_cb)
         d.addCallback(self.messages.reset_last_uid)
@@ -709,21 +719,21 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             msg = self.messages.get_msg_by_uid(msg_id)
             if not msg:
                 continue
+            # We duplicate the set operations here
+            # to return the result because it's less costly than
+            # retrieving the flags again.
+            newflags = set(msg.getFlags())
+
             if mode == 1:
                 msg.addFlags(flags)
+                newflags = newflags.union(set(flags))
             elif mode == -1:
                 msg.removeFlags(flags)
+                newflags.difference_update(flags)
             elif mode == 0:
                 msg.setFlags(flags)
-            result[msg_id] = msg.getFlags()
-
-        # After changing flags, we want to signal again to the
-        # UI because the number of unread might have changed.
-        # Hoever, we should probably limit this to INBOX only?
-        # this should really be called as a final callback of
-        # the do_STORE method...
-        from twisted.internet import reactor
-        deferLater(reactor, 1, self.signal_unread_to_ui)
+                newflags = set(flags)
+            result[msg_id] = newflags
         return result
 
     # ISearchableMailbox
@@ -780,6 +790,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         from twisted.internet import reactor
         uid_next = self.getUIDNext()
         msg = messageObject
+        memstore = self._memstore
 
         # XXX should use a public api instead
         fdoc = msg._fdoc
@@ -787,20 +798,35 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         if not fdoc:
             logger.debug("Tried to copy a MSG with no fdoc")
             return
-
         new_fdoc = copy.deepcopy(fdoc.content)
-        new_fdoc[self.UID_KEY] = uid_next
-        new_fdoc[self.MBOX_KEY] = self.mbox
-        self._memstore.create_message(
-            self.mbox, uid_next,
-            MessageWrapper(
-                new_fdoc, hdoc.content))
 
-        # XXX use memory store !!!
-        if hasattr(hdoc, 'doc_id'):
-            self.messages.add_hdocset_docid(hdoc.doc_id)
+        fdoc_chash = new_fdoc[fields.CONTENT_HASH_KEY]
+        dest_fdoc = memstore.get_fdoc_from_chash(
+            fdoc_chash, self.mbox)
+        exist = dest_fdoc and not empty(dest_fdoc.content)
 
-        deferLater(reactor, 1, self.notify_new)
+        if exist:
+            print "Destination message already exists!"
+
+        else:
+            print "DO COPY MESSAGE!"
+            new_fdoc[self.UID_KEY] = uid_next
+            new_fdoc[self.MBOX_KEY] = self.mbox
+
+            # XXX set recent!
+
+            print "****************************"
+            print "copy message..."
+            print "new fdoc ", new_fdoc
+            print "hdoc: ", hdoc
+            print "****************************"
+
+            self._memstore.create_message(
+                self.mbox, uid_next,
+                MessageWrapper(
+                    new_fdoc, hdoc.content))
+
+            deferLater(reactor, 1, self.notify_new)
 
     # convenience fun
 

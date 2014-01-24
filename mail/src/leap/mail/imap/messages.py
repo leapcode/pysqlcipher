@@ -37,7 +37,7 @@ from leap.common.check import leap_assert, leap_assert_type
 from leap.common.decorators import memoized_method
 from leap.common.mail import get_email_charset
 from leap.mail import walk
-from leap.mail.utils import first, find_charset, lowerdict
+from leap.mail.utils import first, find_charset, lowerdict, empty
 from leap.mail.decorators import deferred
 from leap.mail.imap.index import IndexedDB
 from leap.mail.imap.fields import fields, WithMsgFields
@@ -130,6 +130,8 @@ class LeapMessage(fields, MailParser, MBoxParser):
         self.__chash = None
         self.__bdoc = None
 
+    # XXX make these properties public
+
     @property
     def _fdoc(self):
         """
@@ -154,8 +156,9 @@ class LeapMessage(fields, MailParser, MBoxParser):
         """
         if self._container is not None:
             hdoc = self._container.hdoc
-            if hdoc:
+            if hdoc and not empty(hdoc.content):
                 return hdoc
+        # XXX cache this into the memory store !!!
         return self._get_headers_doc()
 
     @property
@@ -248,7 +251,13 @@ class LeapMessage(fields, MailParser, MBoxParser):
         doc.content[self.SEEN_KEY] = self.SEEN_FLAG in flags
         doc.content[self.DEL_KEY] = self.DELETED_FLAG in flags
 
-        if getattr(doc, 'store', None) != "mem":
+        if self._collection.memstore is not None:
+            self._collection.memstore.put_message(
+                self._mbox, self._uid,
+                MessageWrapper(fdoc=doc.content, new=False, dirty=True,
+                               docs_id={'fdoc': doc.doc_id}))
+        else:
+            # fallback for non-memstore initializations.
             self._soledad.put_doc(doc)
 
     def addFlags(self, flags):
@@ -547,20 +556,18 @@ class LeapMessage(fields, MailParser, MBoxParser):
         # phash doc...
 
         if self._container is not None:
-            bdoc = self._container.memstore.get_by_phash(body_phash)
+            bdoc = self._container.memstore.get_cdoc_from_phash(body_phash)
             print "bdoc from container -->", bdoc
             if bdoc and bdoc.content is not None:
                 return bdoc
             else:
                 print "no doc or not bdoc content for that phash found!"
 
-        print "nuthing. soledad?"
         # no memstore or no doc found there
         if self._soledad:
             body_docs = self._soledad.get_from_index(
                 fields.TYPE_P_HASH_IDX,
                 fields.TYPE_CONTENT_VAL, str(body_phash))
-            print "returning body docs...", body_docs
             return first(body_docs)
         else:
             logger.error("No phash in container, and no soledad found!")
@@ -581,32 +588,32 @@ class LeapMessage(fields, MailParser, MBoxParser):
     # setters
 
     # XXX to be used in the messagecopier interface?!
-
-    def set_uid(self, uid):
-        """
-        Set new uid for this message.
-
-        :param uid: the new uid
-        :type uid: basestring
-        """
+#
+    #def set_uid(self, uid):
+        #"""
+        #Set new uid for this message.
+#
+        #:param uid: the new uid
+        #:type uid: basestring
+        #"""
         # XXX dangerous! lock?
-        self._uid = uid
-        d = self._fdoc
-        d.content[self.UID_KEY] = uid
-        self._soledad.put_doc(d)
-
-    def set_mbox(self, mbox):
-        """
-        Set new mbox for this message.
-
-        :param mbox: the new mbox
-        :type mbox: basestring
-        """
+        #self._uid = uid
+        #d = self._fdoc
+        #d.content[self.UID_KEY] = uid
+        #self._soledad.put_doc(d)
+#
+    #def set_mbox(self, mbox):
+        #"""
+        #Set new mbox for this message.
+#
+        #:param mbox: the new mbox
+        #:type mbox: basestring
+        #"""
         # XXX dangerous! lock?
-        self._mbox = mbox
-        d = self._fdoc
-        d.content[self.MBOX_KEY] = mbox
-        self._soledad.put_doc(d)
+        #self._mbox = mbox
+        #d = self._fdoc
+        #d.content[self.MBOX_KEY] = mbox
+        #self._soledad.put_doc(d)
 
     # destructor
 
@@ -614,13 +621,12 @@ class LeapMessage(fields, MailParser, MBoxParser):
     def remove(self):
         """
         Remove all docs associated with this message.
+        Currently it removes only the flags doc.
         """
         # XXX For the moment we are only removing the flags and headers
         # docs. The rest we leave there polluting your hard disk,
         # until we think about a good way of deorphaning.
         # Maybe a crawler of unreferenced docs.
-
-        # XXX remove from memory store!!!
 
         # XXX implement elijah's idea of using a PUT document as a
         # token to ensure consistency in the removal.
@@ -632,13 +638,35 @@ class LeapMessage(fields, MailParser, MBoxParser):
         #bd = self._get_body_doc()
         #docs = [fd, hd, bd]
 
-        docs = [fd]
+        try:
+            memstore = self._collection.memstore
+        except AttributeError:
+            memstore = False
 
-        for d in filter(None, docs):
+        if memstore and hasattr(fd, "store", None) == "mem":
+            key = self._mbox, self._uid
+            if fd.new:
+                # it's a new document, so we can remove it and it will not
+                # be writen. Watch out! We need to be sure it has not been
+                # just queued to write!
+                memstore.remove_message(*key)
+
+            if fd.dirty:
+                doc_id = fd.doc_id
+                doc = self._soledad.get_doc(doc_id)
+                try:
+                    self._soledad.delete_doc(doc)
+                except Exception as exc:
+                    logger.exception(exc)
+
+        else:
+            # we just got a soledad_doc
             try:
-                self._soledad.delete_doc(d)
+                doc_id = fd.doc_id
+                latest_doc = self._soledad.get_doc(doc_id)
+                self._soledad.delete_doc(latest_doc)
             except Exception as exc:
-                logger.error(exc)
+                logger.exception(exc)
         return uid
 
     def does_exist(self):
@@ -786,8 +814,10 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
         # okay, all in order, keep going...
         self.mbox = self._parse_mailbox_name(mbox)
+
+        # XXX get a SoledadStore passed instead
         self._soledad = soledad
-        self._memstore = memstore
+        self.memstore = memstore
 
         self.__rflags = None
         self.__hdocset = None
@@ -913,13 +943,21 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         :type chash: basestring
         :return: False, if it does not exist, or UID.
         """
-        exist = self._get_fdoc_from_chash(chash)
+        exist = False
+        if self.memstore is not None:
+            exist = self.memstore.get_fdoc_from_chash(chash, self.mbox)
+
+        if not exist:
+            exist = self._get_fdoc_from_chash(chash)
+
+        print "FDOC EXIST?", exist
         if exist:
             return exist.content.get(fields.UID_KEY, "unknown-uid")
         else:
             return False
 
-    @deferred
+    # not deferring to thread cause this now uses deferred asa retval
+    #@deferred
     def add_msg(self, raw, subject=None, flags=None, date=None, uid=1):
         """
         Creates a new message document.
@@ -945,6 +983,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
         # TODO add the linked-from info !
         # TODO add reference to the original message
+        print "ADDING MESSAGE..."
 
         logger.debug('adding message')
         if flags is None:
@@ -956,11 +995,14 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
         # check for uniqueness.
         if self._fdoc_already_exists(chash):
+            print ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+            print
+            print
             logger.warning("We already have that message in this mailbox.")
             # note that this operation will leave holes in the UID sequence,
             # but we're gonna change that all the same for a local-only table.
             # so not touch it by the moment.
-            return False
+            return defer.succeed('already_exists')
 
         fd = self._populate_flags(flags, uid, chash, size, multi)
         hd = self._populate_headr(msg, chash, subject, date)
@@ -999,7 +1041,16 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         # TODO ---- add reference to original doc, to be deleted
         # after writes are done.
         msg_container = MessageWrapper(fd, hd, cdocs)
-        self._memstore.create_message(self.mbox, uid, msg_container)
+
+        # XXX Should allow also to dump to disk directly,
+        # for no-memstore cases.
+
+        # we return a deferred that, by default, will be triggered when
+        # saved to disk
+        d = self.memstore.create_message(self.mbox, uid, msg_container)
+        print "defered-add", d
+        print "adding message", d
+        return d
 
     def _remove_cb(self, result):
         return result
@@ -1247,17 +1298,13 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                  or None if not found.
         :rtype: LeapMessage
         """
-        print "getting msg by id!"
-        msg_container = self._memstore.get_message(self.mbox, uid)
-        print "msg container", msg_container
+        msg_container = self.memstore.get_message(self.mbox, uid)
         if msg_container is not None:
-            print "getting LeapMessage (from memstore)"
             # We pass a reference to soledad just to be able to retrieve
             # missing parts that cannot be found in the container, like
             # the content docs after a copy.
             msg = LeapMessage(self._soledad, uid, self.mbox, collection=self,
                               container=msg_container)
-            print "got msg:", msg
         else:
             msg = LeapMessage(self._soledad, uid, self.mbox, collection=self)
         if not msg.does_exist():
@@ -1303,8 +1350,8 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                        self._soledad.get_from_index(
                            fields.TYPE_MBOX_IDX,
                            fields.TYPE_FLAGS_VAL, self.mbox)])
-        if self._memstore is not None:
-            mem_uids = self._memstore.get_uids(self.mbox)
+        if self.memstore is not None:
+            mem_uids = self.memstore.get_uids(self.mbox)
             uids = db_uids.union(set(mem_uids))
         else:
             uids = db_uids
@@ -1328,19 +1375,22 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         Return a dict with all flags documents for this mailbox.
         """
         # XXX get all from memstore and cache it there
+        # FIXME should get all uids, get them fro memstore,
+        # and get only the missing ones from disk.
+
         all_flags = dict(((
             doc.content[self.UID_KEY],
             doc.content[self.FLAGS_KEY]) for doc in
             self._soledad.get_from_index(
                 fields.TYPE_MBOX_IDX,
                 fields.TYPE_FLAGS_VAL, self.mbox)))
-        if self._memstore is not None:
+        if self.memstore is not None:
             # XXX
-            uids = self._memstore.get_uids(self.mbox)
-            fdocs = [(uid, self._memstore.get_message(self.mbox, uid).fdoc)
-                     for uid in uids]
-            for uid, doc in fdocs:
-                all_flags[uid] = doc.content[self.FLAGS_KEY]
+            uids = self.memstore.get_uids(self.mbox)
+            docs = ((uid, self.memstore.get_message(self.mbox, uid))
+                    for uid in uids)
+            for uid, doc in docs:
+                all_flags[uid] = doc.fdoc.content[self.FLAGS_KEY]
 
         return all_flags
 
@@ -1378,8 +1428,8 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         count = self._soledad.get_count_from_index(
             fields.TYPE_MBOX_IDX,
             fields.TYPE_FLAGS_VAL, self.mbox)
-        if self._memstore is not None:
-            count += self._memstore.count_new()
+        if self.memstore is not None:
+            count += self.memstore.count_new()
         return count
 
     # unseen messages
