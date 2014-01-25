@@ -224,32 +224,28 @@ class MemoryStore(object):
 
     def _add_message(self, mbox, uid, message, notify_on_disk=True):
         # XXX have to differentiate between notify_new and notify_dirty
-
         key = mbox, uid
         msg_dict = message.as_dict()
-        print "ADDING MESSAGE..."
-        import pprint; pprint.pprint(msg_dict)
 
-        # XXX use the enum as keys
+        FDOC = MessagePartType.fdoc.key
+        HDOC = MessagePartType.hdoc.key
+        CDOCS = MessagePartType.cdocs.key
+        DOCS_ID = MessagePartType.docs_id.key
 
         try:
             store = self._msg_store[key]
         except KeyError:
-            self._msg_store[key] = {'fdoc': {},
-                                    'hdoc': {},
-                                    'cdocs': {},
-                                    'docs_id': {}}
+            self._msg_store[key] = {FDOC: {},
+                                    HDOC: {},
+                                    CDOCS: {},
+                                    DOCS_ID: {}}
             store = self._msg_store[key]
 
-        print "In store (before):"
-        import pprint; pprint.pprint(store)
-
-        #self._msg_store[key] = msg_dict
-        fdoc = msg_dict.get('fdoc', None)
+        fdoc = msg_dict.get(FDOC, None)
         if fdoc:
-            if not store.get('fdoc', None):
-                store['fdoc'] = ReferenciableDict({})
-            store['fdoc'].update(fdoc)
+            if not store.get(FDOC, None):
+                store[FDOC] = ReferenciableDict({})
+            store[FDOC].update(fdoc)
 
             # content-hash indexing
             chash = fdoc.get(fields.CONTENT_HASH_KEY)
@@ -258,29 +254,29 @@ class MemoryStore(object):
                 chash_fdoc_store[chash] = {}
 
             chash_fdoc_store[chash][mbox] = weakref.proxy(
-                store['fdoc'])
+                store[FDOC])
 
-        hdoc = msg_dict.get('hdoc', None)
+        hdoc = msg_dict.get(HDOC, None)
         if hdoc:
-            if not store.get('hdoc', None):
-                store['hdoc'] = ReferenciableDict({})
-            store['hdoc'].update(hdoc)
+            if not store.get(HDOC, None):
+                store[HDOC] = ReferenciableDict({})
+            store[HDOC].update(hdoc)
 
-        docs_id = msg_dict.get('docs_id', None)
+        docs_id = msg_dict.get(DOCS_ID, None)
         if docs_id:
-            if not store.get('docs_id', None):
-                store['docs_id'] = {}
-            store['docs_id'].update(docs_id)
+            if not store.get(DOCS_ID, None):
+                store[DOCS_ID] = {}
+            store[DOCS_ID].update(docs_id)
 
         cdocs = message.cdocs
         for cdoc_key in cdocs.keys():
-            if not store.get('cdocs', None):
-                store['cdocs'] = {}
+            if not store.get(CDOCS, None):
+                store[CDOCS] = {}
 
             cdoc = cdocs[cdoc_key]
             # first we make it weak-referenciable
             referenciable_cdoc = ReferenciableDict(cdoc)
-            store['cdocs'][cdoc_key] = referenciable_cdoc
+            store[CDOCS][cdoc_key] = referenciable_cdoc
             phash = cdoc.get(fields.PAYLOAD_HASH_KEY, None)
             if not phash:
                 continue
@@ -290,13 +286,7 @@ class MemoryStore(object):
             for key in seq:
                 if key in store and empty(store.get(key)):
                     store.pop(key)
-
-        prune(('fdoc', 'hdoc', 'cdocs', 'docs_id'), store)
-        #import ipdb; ipdb.set_trace()
-
-
-        print "after appending to store: ", key
-        import pprint; pprint.pprint(self._msg_store[key])
+        prune((FDOC, HDOC, CDOCS, DOCS_ID), store)
 
     def get_message(self, mbox, uid):
         """
