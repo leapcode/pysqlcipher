@@ -73,6 +73,14 @@ MessagePartDoc = namedtuple(
     'MessagePartDoc',
     ['new', 'dirty', 'part', 'store', 'content', 'doc_id'])
 
+"""
+A RecentFlagsDoc is used to send the recent-flags document payload to the
+SoledadWriter during dumps.
+"""
+RecentFlagsDoc = namedtuple(
+    'RecentFlagsDoc',
+    ['content', 'doc_id'])
+
 
 class ReferenciableDict(dict):
     """

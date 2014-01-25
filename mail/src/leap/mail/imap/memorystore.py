@@ -21,6 +21,8 @@ import contextlib
 import logging
 import weakref
 
+from collections import defaultdict
+
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 from twisted.python import log
@@ -32,6 +34,7 @@ from leap.mail.messageflow import MessageProducer
 from leap.mail.imap import interfaces
 from leap.mail.imap.fields import fields
 from leap.mail.imap.messageparts import MessagePartType, MessagePartDoc
+from leap.mail.imap.messageparts import RecentFlagsDoc
 from leap.mail.imap.messageparts import MessageWrapper
 from leap.mail.imap.messageparts import ReferenciableDict
 
@@ -109,16 +112,38 @@ class MemoryStore(object):
 
         # Internal Storage: content-hash:fdoc
         """
+        chash-fdoc-store keeps references to
+        the flag-documents indexed by content-hash.
+
         {'chash': {'mbox-a': weakref.proxy(dict),
                    'mbox-b': weakref.proxy(dict)}
         }
         """
         self._chash_fdoc_store = {}
 
-        # TODO ----------------- implement mailbox-level flags store too! ----
-        self._rflags_store = {}
+        # Internal Storage: recent-flags store
+        """
+        recent-flags store keeps one dict per mailbox,
+        with the document-id of the u1db document
+        and the set of the UIDs that have the recent flag.
+
+        {'mbox-a': {'doc_id': 'deadbeef',
+                    'set': {1,2,3,4}
+                    }
+        }
+        """
+        # TODO this will have to transition to content-hash
+        # indexes after we move to local-only UIDs.
+
+        self._rflags_store = defaultdict(
+            lambda: {'doc_id': None, 'set': set([])})
+
+        # TODO ----------------- implement mailbox-level flags store too?
+        # XXX maybe we don't need this anymore...
+        # let's see how good does it prefetch the headers if
+        # we cache them in the store.
         self._hdocset_store = {}
-        # TODO ----------------- implement mailbox-level flags store too! ----
+        # --------------------------------------------------------------
 
         # New and dirty flags, to set MessageWrapper State.
         self._new = set([])
@@ -224,6 +249,8 @@ class MemoryStore(object):
 
     def _add_message(self, mbox, uid, message, notify_on_disk=True):
         # XXX have to differentiate between notify_new and notify_dirty
+        # TODO defaultdict the hell outa here...
+
         key = mbox, uid
         msg_dict = message.as_dict()
 
@@ -331,6 +358,8 @@ class MemoryStore(object):
         with set_bool_flag(self, self.WRITING_FLAG):
             for msg_wrapper in self.all_new_dirty_msg_iter():
                 self.producer.push(msg_wrapper)
+            for rflags_doc_wrapper in self.all_rdocs_iter():
+                self.producer.push(rflags_doc_wrapper)
 
     # MemoryStore specific methods.
 
@@ -486,6 +515,79 @@ class MemoryStore(object):
             d.callback('%s, ok' % str(key))
             deferreds.pop(key)
 
+    # Recent Flags
+
+    # TODO --- nice but unused
+    def set_recent_flag(self, mbox, uid):
+        """
+        Set the `Recent` flag for a given mailbox and UID.
+        """
+        self._rflags_store[mbox]['set'].add(uid)
+
+    # TODO --- nice but unused
+    def unset_recent_flag(self, mbox, uid):
+        """
+        Unset the `Recent` flag for a given mailbox and UID.
+        """
+        self._rflags_store[mbox]['set'].discard(uid)
+
+    def set_recent_flags(self, mbox, value):
+        """
+        Set the value for the set of the recent flags.
+        Used from the property in the MessageCollection.
+        """
+        self._rflags_store[mbox]['set'] = set(value)
+
+    def load_recent_flags(self, mbox, flags_doc):
+        """
+        Load the passed flags document in the recent flags store, for a given
+        mailbox.
+
+        :param flags_doc: A dictionary containing the `doc_id` of the Soledad
+                          flags-document for this mailbox, and the `set`
+                          of uids marked with that flag.
+        """
+        self._rflags_store[mbox] = flags_doc
+
+    def get_recent_flags(self, mbox):
+        """
+        Get the set of UIDs with the `Recent` flag for this mailbox.
+
+        :return: set, or None
+        """
+        rflag_for_mbox = self._rflags_store.get(mbox, None)
+        if not rflag_for_mbox:
+            return None
+        return self._rflags_store[mbox]['set']
+
+    def all_rdocs_iter(self):
+        """
+        Return an iterator through all in-memory recent flag dicts, wrapped
+        under a RecentFlagsDoc namedtuple.
+        Used for saving to disk.
+
+        :rtype: generator
+        """
+        rflags_store = self._rflags_store
+
+        # XXX use enums
+        DOC_ID = "doc_id"
+        SET = "set"
+
+        print "LEN RFLAGS_STORE ------->", len(rflags_store)
+        return (
+            RecentFlagsDoc(
+                doc_id=rflags_store[mbox][DOC_ID],
+                content={
+                    fields.TYPE_KEY: fields.TYPE_RECENT_VAL,
+                    fields.MBOX_KEY: mbox,
+                    fields.RECENTFLAGS_KEY: list(
+                        rflags_store[mbox][SET])
+                })
+            for mbox in rflags_store)
+
+    # Dump-to-disk controls.
+
     @property
     def is_writing(self):
         """
@@ -498,7 +600,9 @@ class MemoryStore(object):
 
         :rtype: bool
         """
-        # XXX this should probably return a deferred !!!
+        # FIXME this should return a deferred !!!
+        # XXX ----- can fire when all new + dirty deferreds
+        # are done (gatherResults)
         return getattr(self, self.WRITING_FLAG)
 
     def put_part(self, part_type, value):

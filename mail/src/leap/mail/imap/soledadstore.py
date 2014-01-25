@@ -25,6 +25,8 @@ from u1db import errors as u1db_errors
 from zope.interface import implements
 
 from leap.mail.imap.messageparts import MessagePartType
+from leap.mail.imap.messageparts import MessageWrapper
+from leap.mail.imap.messageparts import RecentFlagsDoc
 from leap.mail.imap.fields import fields
 from leap.mail.imap.interfaces import IMessageStore
 from leap.mail.messageflow import IMessageConsumer
@@ -193,9 +195,10 @@ class SoledadStore(ContentDedup):
         empty = queue.empty()
         while not empty:
             items = self._process(queue)
+
             # we prime the generator, that should return the
-            # item in the first place.
-            msg_wrapper = items.next()
+            # message or flags wrapper item in the first place.
+            doc_wrapper = items.next()
 
             # From here, we unpack the subpart items and
             # the right soledad call.
@@ -214,10 +217,11 @@ class SoledadStore(ContentDedup):
                 logger.error("Error while processing item.")
                 pass
             else:
-                # If everything went well, we can unset the new flag
-                # in the source store (memory store)
-                msg_wrapper.new = False
-                msg_wrapper.dirty = False
+                if isinstance(doc_wrapper, MessageWrapper):
+                    # If everything went well, we can unset the new flag
+                    # in the source store (memory store)
+                    doc_wrapper.new = False
+                    doc_wrapper.dirty = False
             empty = queue.empty()
 
     #
@@ -233,9 +237,20 @@ class SoledadStore(ContentDedup):
         :param queue: the queue from where we'll pick item.
         :type queue: Queue
         """
-        msg_wrapper = queue.get()
-        return chain((msg_wrapper,),
-                     self._get_calls_for_msg_parts(msg_wrapper))
+        doc_wrapper = queue.get()
+
+        if isinstance(doc_wrapper, MessageWrapper):
+            return chain((doc_wrapper,),
+                         self._get_calls_for_msg_parts(doc_wrapper))
+        elif isinstance(doc_wrapper, RecentFlagsDoc):
+            print "getting calls for rflags"
+            return chain((doc_wrapper,),
+                         self._get_calls_for_rflags_doc(doc_wrapper))
+        else:
+            print "********************"
+            print "CANNOT PROCESS ITEM!"
+            print "item --------------------->", doc_wrapper
+            return (i for i in [])
 
     def _try_call(self, call, item):
         """
@@ -309,4 +324,28 @@ class SoledadStore(ContentDedup):
         # Implement using callbacks for each operation.
 
         else:
-            logger.error("Cannot put/delete documents yet!")
+            logger.error("Cannot delete documents yet!")
+
+    def _get_calls_for_rflags_doc(self, rflags_wrapper):
+        """
+        We always put these documents.
+        """
+        call = self._soledad.put_doc
+        rdoc = self._soledad.get_doc(rflags_wrapper.doc_id)
+
+        payload = rflags_wrapper.content
+        print "rdoc", rdoc
+        print "SAVING RFLAGS TO SOLEDAD..."
+        import pprint; pprint.pprint(payload)
+
+        if payload:
+            rdoc.content = payload
+            print
+            print "YIELDING -----", rdoc
+            print "AND ----------", call
+            yield rdoc, call
+        else:
+            print ">>>>>>>>>>>>>>>>>"
+            print ">>>>>>>>>>>>>>>>>"
+            print ">>>>>>>>>>>>>>>>>"
+            print "No payload"

@@ -813,6 +813,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         leap_assert(soledad, "Need a soledad instance to initialize")
 
         # okay, all in order, keep going...
+
         self.mbox = self._parse_mailbox_name(mbox)
 
         # XXX get a SoledadStore passed instead
@@ -996,8 +997,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         # check for uniqueness.
         if self._fdoc_already_exists(chash):
             print ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
-            print
-            print
             logger.warning("We already have that message in this mailbox.")
             # note that this operation will leave holes in the UID sequence,
             # but we're gonna change that all the same for a local-only table.
@@ -1023,20 +1022,15 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         # XXX review-me
         cdocs = dict((index, doc) for index, doc in
                      enumerate(walk.get_raw_docs(msg, parts)))
-        print "cdocs is", cdocs
+
+        self.set_recent_flag(uid)
 
         # Saving ----------------------------------------
-        # XXX should check for content duplication on headers too
-        # but with chash. !!!
-
         # XXX adapt hdocset to use memstore
         #hdoc = self._soledad.create_doc(hd)
         # We add the newly created hdoc to the fast-access set of
         # headers documents associated with the mailbox.
         #self.add_hdocset_docid(hdoc.doc_id)
-
-        # XXX move to memory store too
-        # self.set_recent_flag(uid)
 
         # TODO ---- add reference to original doc, to be deleted
         # after writes are done.
@@ -1088,24 +1082,48 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         """
         An accessor for the recent-flags set for this mailbox.
         """
-        if not self.__rflags:
+        if self.__rflags is not None:
+            return self.__rflags
+
+        if self.memstore:
+            with self._rdoc_lock:
+                rflags = self.memstore.get_recent_flags(self.mbox)
+                if not rflags:
+                    # not loaded in the memory store yet.
+                    # let's fetch them from soledad...
+                    rdoc = self._get_recent_doc()
+                    rflags = set(rdoc.content.get(
+                        fields.RECENTFLAGS_KEY, []))
+                    # ...and cache them now.
+                    self.memstore.load_recent_flags(
+                        self.mbox,
+                        {'doc_id': rdoc.doc_id, 'set': rflags})
+            return rflags
+
+        else:
+            # fallback for cases without memory store
             with self._rdoc_lock:
                 rdoc = self._get_recent_doc()
                 self.__rflags = set(rdoc.content.get(
                     fields.RECENTFLAGS_KEY, []))
-        return self.__rflags
+            return self.__rflags
 
     def _set_recent_flags(self, value):
         """
         Setter for the recent-flags set for this mailbox.
         """
-        with self._rdoc_lock:
-            rdoc = self._get_recent_doc()
-            newv = set(value)
-            self.__rflags = newv
-            rdoc.content[fields.RECENTFLAGS_KEY] = list(newv)
-            # XXX should deferLater 0 it?
-            self._soledad.put_doc(rdoc)
+        if self.memstore:
+            self.memstore.set_recent_flags(self.mbox, value)
+
+        else:
+            # fallback for cases without memory store
+            with self._rdoc_lock:
+                rdoc = self._get_recent_doc()
+                newv = set(value)
+                self.__rflags = newv
+                rdoc.content[fields.RECENTFLAGS_KEY] = list(newv)
+                # XXX should deferLater 0 it?
+                self._soledad.put_doc(rdoc)
 
     recent_flags = property(
         _get_recent_flags, _set_recent_flags,
@@ -1131,15 +1149,17 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         Unset Recent flag for a sequence of uids.
         """
         with self._rdoc_property_lock:
-            self.recent_flags = self.recent_flags.difference(
+            self.recent_flags.difference_update(
                 set(uids))
+
+    # Individual flags operations
 
     def unset_recent_flag(self, uid):
         """
         Unset Recent flag for a given uid.
         """
         with self._rdoc_property_lock:
-            self.recent_flags = self.recent_flags.difference(
+            self.recent_flags.difference_update(
                 set([uid]))
 
     def set_recent_flag(self, uid):
