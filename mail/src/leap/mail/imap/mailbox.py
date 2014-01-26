@@ -406,8 +406,13 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         Invoked from addMessage.
         """
         d = self.messages.add_msg(message, flags=flags, date=date, uid=uid)
-        # XXX notify after batch APPEND?
-        d.addCallback(self.notify_new)
+        # XXX Removing notify temporarily.
+        # This is interfering with imaptest results. I'm not clear if it's
+        # because we clutter the logging or because the set of listeners is
+        # ever-growing. We should come up with some smart way of dealing with
+        # it, or maybe just disabling it using an environmental variable since
+        # we will only have just a few listeners in the regular desktop case.
+        #d.addCallback(self.notify_new)
         return d
 
     def notify_new(self, *args):
@@ -422,7 +427,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             exists,
             recent))
 
-        logger.debug("listeners: %s", str(self.listeners))
         for l in self.listeners:
             logger.debug('notifying...')
             l.newMessages(exists, recent)
