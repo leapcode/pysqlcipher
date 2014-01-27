@@ -41,8 +41,10 @@
 # Please provide also details about your system, and
 # the type of hard disk setup you are running against.
 #
-#
-# Edit these variables --------------------------
+
+# ------------------------------------------------
+# Edit these variables if you are too lazy to pass
+# the user and mbox as parameters. Like me.
 
 USER="test_f14@dev.bitmask.net"
 MBOX="~/leap/imaptest/data/dovecot-crlf"
@@ -50,15 +52,16 @@ MBOX="~/leap/imaptest/data/dovecot-crlf"
 HOST="localhost"
 PORT="1984"
 
-IMAPTEST="imaptest"
+# in case you have it aliased
 GREP="/bin/grep"
+IMAPTEST="imaptest"
 
 # -----------------------------------------------
 #
 # These should be kept constant across benchmarking
 # runs across different machines, for comparability.
 
-DURATION=100
+DURATION=200
 NUM_MSG=200
 
 
@@ -152,6 +155,21 @@ print "TOT samples", NR;
 }'
 }
 
+
+{ test $1 = "--help" } && {
+ echo "Usage: $0 [user@provider] [/path/to/sample.mbox]"
+ exit 0
+}
+
+# If the first parameter is passed, take it as the user
+{ test $1 } && {
+ USER=$1
+}
+
+# If the second parameter is passed, take it as the mbox
+{ test $2 } && {
+ MBOX=$2
+}
 
 echo "[+] LEAP IMAP TESTS"
 echo "[+] Running imaptest for $DURATION seconds with $NUM_MSG messages"
