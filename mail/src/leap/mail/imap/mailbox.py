@@ -26,7 +26,7 @@ import cStringIO
 from collections import defaultdict
 
 from twisted.internet import defer
-from twisted.internet.task import deferLater
+#from twisted.internet.task import deferLater
 from twisted.python import log
 
 from twisted.mail import imap4
@@ -119,6 +119,9 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         if not self.getFlags():
             self.setFlags(self.INIT_FLAGS)
 
+        if self._memstore:
+            self.prime_last_uid_to_memstore()
+
     @property
     def listeners(self):
         """
@@ -132,6 +135,9 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         """
         return self._listeners[self.mbox]
 
+    # TODO this grows too crazily when many instances are fired, like
+    # during imaptest stress testing. Should have a queue of limited size
+    # instead.
     def addListener(self, listener):
         """
         Add a listener to the listeners queue.
@@ -153,6 +159,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         """
         self.listeners.remove(listener)
 
+    # TODO move completely to soledadstore, under memstore reponsibility.
     def _get_mbox(self):
         """
         Return mailbox document.
@@ -228,52 +235,28 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
     def _get_last_uid(self):
         """
         Return the last uid for this mailbox.
+        If we have a memory store, the last UID will be the highest
+        recorded UID in the message store, or a counter cached from
+        the mailbox document in soledad if this is higher.
 
         :return: the last uid for messages in this mailbox
         :rtype: bool
         """
-        mbox = self._get_mbox()
-        if not mbox:
-            logger.error("We could not get a mbox!")
-            # XXX It looks like it has been corrupted.
-            # We need to be able to survive this.
-            return None
-        last = mbox.content.get(self.LAST_UID_KEY, 1)
-        if self._memstore:
-            last = max(last, self._memstore.get_last_uid(mbox))
+        last = self._memstore.get_last_uid(self.mbox)
+        print "last uid for %s: %s (from memstore)" % (self.mbox, last)
         return last
 
-    def _set_last_uid(self, uid):
-        """
-        Sets the last uid for this mailbox.
-
-        :param uid: the uid to be set
-        :type uid: int
-        """
-        leap_assert(isinstance(uid, int), "uid has to be int")
-        mbox = self._get_mbox()
-        key = self.LAST_UID_KEY
-
-        count = self.getMessageCount()
-
-        # XXX safety-catch. If we do get duplicates,
-        # we want to avoid further duplication.
-
-        if uid >= count:
-            value = uid
-        else:
-            # something is wrong,
-            # just set the last uid
-            # beyond the max msg count.
-            logger.debug("WRONG uid < count. Setting last uid to %s", count)
-            value = count
-
-        mbox.content[key] = value
-        # XXX this should be set in the memorystore instead!!!
-        self._soledad.put_doc(mbox)
-
     last_uid = property(
-        _get_last_uid, _set_last_uid, doc="Last_UID attribute.")
+        _get_last_uid, doc="Last_UID attribute.")
+
+    def prime_last_uid_to_memstore(self):
+        """
+        Prime memstore with last_uid value
+        """
+        set_exist = set(self.messages.all_uid_iter())
+        last = max(set_exist) + 1 if set_exist else 1
+        logger.info("Priming Soledad last_uid to %s" % (last,))
+        self._memstore.set_last_soledad_uid(self.mbox, last)
 
     def getUIDValidity(self):
         """
@@ -315,8 +298,15 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :rtype: int
         """
         with self.next_uid_lock:
-            self.last_uid += 1
-            return self.last_uid
+            if self._memstore:
+                return self.last_uid + 1
+            else:
+                # XXX after lock, it should be safe to
+                # return just the increment here, and
+                # have a different method that actually increments
+                # the counter when really adding.
+                self.last_uid += 1
+                return self.last_uid
 
     def getMessageCount(self):
         """
@@ -397,26 +387,26 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
         :return: a deferred that evals to None
         """
+        # TODO have a look at the cases for internal date in the rfc
         if isinstance(message, (cStringIO.OutputType, StringIO.StringIO)):
             message = message.getvalue()
-        # XXX we should treat the message as an IMessage from here
+
+        # XXX we could treat the message as an IMessage from here
         leap_assert_type(message, basestring)
-        uid_next = self.getUIDNext()
-        logger.debug('Adding msg with UID :%s' % uid_next)
         if flags is None:
             flags = tuple()
         else:
             flags = tuple(str(flag) for flag in flags)
 
-        d = self._do_add_message(message, flags=flags, date=date, uid=uid_next)
+        d = self._do_add_message(message, flags=flags, date=date)
         return d
 
-    def _do_add_message(self, message, flags, date, uid):
+    def _do_add_message(self, message, flags, date):
         """
-        Calls to the messageCollection add_msg method (deferred to thread).
+        Calls to the messageCollection add_msg method.
         Invoked from addMessage.
         """
-        d = self.messages.add_msg(message, flags=flags, date=date, uid=uid)
+        d = self.messages.add_msg(message, flags=flags, date=date)
         # XXX Removing notify temporarily.
         # This is interfering with imaptest results. I'm not clear if it's
         # because we clutter the logging or because the set of listeners is
@@ -456,6 +446,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
         # XXX removing the mailbox in situ for now,
         # we should postpone the removal
+
+        # XXX move to memory store??
         self._soledad.delete_doc(self._get_mbox())
 
     def _close_cb(self, result):
@@ -466,8 +458,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         Expunge and mark as closed
         """
         d = self.expunge()
-        d.addCallback(self._close_cb)
-        return d
+        #d.addCallback(self._close_cb)
+        #return d
 
     def _expunge_cb(self, result):
         return result
@@ -479,22 +471,15 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         print "EXPUNGE!"
         if not self.isWriteable():
             raise imap4.ReadOnlyMailbox
-        mstore = self._memstore
-        if mstore is not None:
-            deleted = mstore.all_deleted_uid_iter(self.mbox)
-            print "deleted ", list(deleted)
-            for uid in deleted:
-                mstore.remove_message(self.mbox, uid)
 
-        print "now deleting from soledad"
-        d = self.messages.remove_all_deleted()
-        d.addCallback(self._expunge_cb)
-        d.addCallback(self.messages.reset_last_uid)
+        return self._memstore.expunge(self.mbox)
 
-        # XXX DEBUG -------------------
-        # FIXME !!!
-        # XXX should remove the hdocset too!!!
-        return d
+        # TODO we can defer this back when it's correct
+        # but we should make sure the memstore has been synced.
+
+        #d = self._memstore.expunge(self.mbox)
+        #d.addCallback(self._expunge_cb)
+        #return d
 
     def _bound_seq(self, messages_asked):
         """
@@ -783,12 +768,12 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
     # IMessageCopier
 
     @deferred
+    #@profile
     def copy(self, messageObject):
         """
         Copy the given message object into this mailbox.
         """
         from twisted.internet import reactor
-        uid_next = self.getUIDNext()
         msg = messageObject
         memstore = self._memstore
 
@@ -796,7 +781,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         fdoc = msg._fdoc
         hdoc = msg._hdoc
         if not fdoc:
-            logger.debug("Tried to copy a MSG with no fdoc")
+            logger.warning("Tried to copy a MSG with no fdoc")
             return
         new_fdoc = copy.deepcopy(fdoc.content)
 
@@ -807,11 +792,12 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
         if exist:
             print "Destination message already exists!"
-
         else:
             print "DO COPY MESSAGE!"
+            mbox = self.mbox
+            uid_next = memstore.increment_last_soledad_uid(mbox)
             new_fdoc[self.UID_KEY] = uid_next
-            new_fdoc[self.MBOX_KEY] = self.mbox
+            new_fdoc[self.MBOX_KEY] = mbox
 
             # XXX set recent!
 
@@ -824,9 +810,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             self._memstore.create_message(
                 self.mbox, uid_next,
                 MessageWrapper(
-                    new_fdoc, hdoc.content))
-
-            deferLater(reactor, 1, self.notify_new)
+                    new_fdoc, hdoc.content),
+                notify_on_disk=False)
 
     # convenience fun
 

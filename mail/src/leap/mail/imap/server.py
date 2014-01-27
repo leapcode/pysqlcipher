@@ -199,6 +199,7 @@ class LeapIMAPServer(imap4.IMAP4Server):
 
         # XXX  fake a delayed operation, to debug problem with messages getting
         # back to the source mailbox...
+        print "faking checkpoint..."
         import time
         time.sleep(2)
         return None

@@ -32,7 +32,7 @@ from leap.common.decorators import memoized_method
 from leap.common.mail import get_email_charset
 from leap.mail.imap import interfaces
 from leap.mail.imap.fields import fields
-from leap.mail.utils import first
+from leap.mail.utils import empty, first
 
 MessagePartType = Enum("hdoc", "fdoc", "cdoc", "cdocs", "docs_id")
 
@@ -134,6 +134,13 @@ class MessageWrapper(object):
                 self._dict[self.HDOC] = ReferenciableDict(hdoc)
             if cdocs is not None:
                 self._dict[self.CDOCS] = ReferenciableDict(cdocs)
+
+        # This will keep references to the doc_ids to be able to put
+        # messages to soledad. It will be populated during the walk() to avoid
+        # the overhead of reading from the db.
+
+        # XXX it really *only* make sense for the FDOC, the other parts
+        # should not be "dirty", just new...!!!
         self._dict[self.DOCS_ID] = docs_id
 
     # properties
@@ -201,6 +208,7 @@ class MessageWrapper(object):
         else:
             logger.warning("NO FDOC!!!")
             content_ref = {}
+
         return MessagePartDoc(new=self.new, dirty=self.dirty,
                               store=self._storetype,
                               part=MessagePartType.fdoc,
@@ -214,7 +222,6 @@ class MessageWrapper(object):
         if _hdoc:
             content_ref = weakref.proxy(_hdoc)
         else:
-            logger.warning("NO HDOC!!!!")
             content_ref = {}
         return MessagePartDoc(new=self.new, dirty=self.dirty,
                               store=self._storetype,
@@ -234,14 +241,21 @@ class MessageWrapper(object):
     def walk(self):
         """
         Generator that iterates through all the parts, returning
-        MessagePartDoc.
+        MessagePartDoc. Used for writing to SoledadStore.
         """
-        if self.fdoc is not None:
+        if self._dirty:
+            mbox = self.fdoc.content[fields.MBOX_KEY]
+            uid = self.fdoc.content[fields.UID_KEY]
+            docid_dict = self._dict[self.DOCS_ID]
+            docid_dict[self.FDOC] = self.memstore.get_docid_for_fdoc(
+                mbox, uid)
+
+        if not empty(self.fdoc.content):
             yield self.fdoc
-        if self.hdoc is not None:
+        if not empty(self.hdoc.content):
             yield self.hdoc
         for cdoc in self.cdocs.values():
-            if cdoc is not None:
+            if not empty(cdoc):
                 content_ref = weakref.proxy(cdoc)
                 yield MessagePartDoc(new=self.new, dirty=self.dirty,
                                      store=self._storetype,

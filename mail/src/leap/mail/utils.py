@@ -42,7 +42,10 @@ def empty(thing):
     """
     if thing is None:
         return True
-    return len(thing) == 0
+    try:
+        return len(thing) == 0
+    except ReferenceError:
+        return True
 
 
 def maybe_call(thing):

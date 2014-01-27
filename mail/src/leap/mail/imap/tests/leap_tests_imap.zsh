@@ -61,7 +61,8 @@ IMAPTEST="imaptest"
 # These should be kept constant across benchmarking
 # runs across different machines, for comparability.
 
-DURATION=200
+#DURATION=200
+DURATION=60
 NUM_MSG=200
 
 
@@ -76,7 +77,7 @@ imaptest_cmd() {
 }
 
 stress_imap() 	{
-  mknod imap_pipe p
+  mkfifo imap_pipe
   cat imap_pipe | tee output &
   imaptest_cmd >> imap_pipe
 }
@@ -99,7 +100,7 @@ print_results() {
 	echo "----------------------"
 	echo "\tavg\tstdev"
 	$GREP "avg" ./output | sed -e 's/^ *//g' -e 's/ *$//g' | \
-	awk '
+	gawk '
 function avg(data, count) {
     sum=0;
     for( x=0; x <= count-1; x++) {
