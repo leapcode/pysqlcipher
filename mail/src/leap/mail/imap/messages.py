@@ -178,10 +178,11 @@ class MessagePart(object):
             logger.debug("Got charset from header: %s" % (charset,))
             if charset is None:
                 charset = self._get_charset(payload)
+                logger.debug("Got charset: %s" % (charset,))
             try:
                 payload = payload.encode(charset)
             except (UnicodeEncodeError, UnicodeDecodeError) as e:
-                logger.error("Unicode error {0}".format(e))
+                logger.error("Unicode error, using 'replace'. {0!r}".format(e))
                 payload = payload.encode(charset, 'replace')
 
         fd.write(payload)
@@ -530,7 +531,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
             try:
                 body = body.encode(charset)
             except UnicodeError as e:
-                logger.error("Unicode error {0}".format(e))
+                logger.error("Unicode error, using 'replace'. {0!r}".format(e))
                 body = body.encode(charset, 'replace')
 
         # We are still returning funky characters from here.
