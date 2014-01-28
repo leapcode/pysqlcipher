@@ -22,7 +22,6 @@ import threading
 
 from itertools import chain
 
-#from twisted.internet import defer
 from u1db import errors as u1db_errors
 from zope.interface import implements
 
@@ -71,7 +70,7 @@ class ContentDedup(object):
         Check whether we already have a header document for this
         content hash in our database.
 
-        :param doc: tentative header document
+        :param doc: tentative header for document
         :type doc: dict
         :returns: True if it exists, False otherwise.
         """
@@ -87,8 +86,7 @@ class ContentDedup(object):
         if len(header_docs) != 1:
             logger.warning("Found more than one copy of chash %s!"
                            % (chash,))
-        # XXX re-enable
-        #logger.debug("Found header doc with that hash! Skipping save!")
+        logger.debug("Found header doc with that hash! Skipping save!")
         return True
 
     def _content_does_exist(self, doc):
@@ -96,7 +94,7 @@ class ContentDedup(object):
         Check whether we already have a content document for a payload
         with this hash in our database.
 
-        :param doc: tentative content document
+        :param doc: tentative content for document
         :type doc: dict
         :returns: True if it exists, False otherwise.
         """
@@ -112,8 +110,7 @@ class ContentDedup(object):
         if len(attach_docs) != 1:
             logger.warning("Found more than one copy of phash %s!"
                            % (phash,))
-        # XXX re-enable
-        #logger.debug("Found attachment doc with that hash! Skipping save!")
+        logger.debug("Found attachment doc with that hash! Skipping save!")
         return True
 
 
@@ -151,38 +148,49 @@ class SoledadStore(ContentDedup):
         Create the passed message into this SoledadStore.
 
         :param mbox: the mbox this message belongs.
+        :type mbox: str or unicode
         :param uid: the UID that identifies this message in this mailbox.
+        :type uid: int
         :param message: a IMessageContainer implementor.
         """
+        raise NotImplementedError()
 
     def put_message(self, mbox, uid, message):
         """
         Put the passed existing message into this SoledadStore.
 
         :param mbox: the mbox this message belongs.
+        :type mbox: str or unicode
         :param uid: the UID that identifies this message in this mailbox.
+        :type uid: int
         :param message: a IMessageContainer implementor.
         """
+        raise NotImplementedError()
 
     def remove_message(self, mbox, uid):
         """
         Remove the given message from this SoledadStore.
 
         :param mbox: the mbox this message belongs.
+        :type mbox: str or unicode
         :param uid: the UID that identifies this message in this mailbox.
+        :type uid: int
         """
+        raise NotImplementedError()
 
     def get_message(self, mbox, uid):
         """
         Get a IMessageContainer for the given mbox and uid combination.
 
         :param mbox: the mbox this message belongs.
+        :type mbox: str or unicode
         :param uid: the UID that identifies this message in this mailbox.
+        :type uid: int
         """
+        raise NotImplementedError()
 
     # IMessageConsumer
 
-    #@profile
     def consume(self, queue):
         """
         Creates a new document in soledad db.
@@ -198,8 +206,7 @@ class SoledadStore(ContentDedup):
         # TODO could generalize this method into a generic consumer
         # and only implement `process` here
 
-        empty = queue.empty()
-        while not empty:
+        while not queue.empty():
             items = self._process(queue)
 
             # we prime the generator, that should return the
@@ -213,23 +220,22 @@ class SoledadStore(ContentDedup):
                 for item, call in items:
                     try:
                         self._try_call(call, item)
-                    except Exception:
-                        failed = True
+                    except Exception as exc:
+                        failed = exc
                         continue
                 if failed:
                     raise MsgWriteError
 
             except MsgWriteError:
                 logger.error("Error while processing item.")
-                pass
+                logger.exception(failed)
             else:
                 if isinstance(doc_wrapper, MessageWrapper):
                     # If everything went well, we can unset the new flag
                     # in the source store (memory store)
-                    print "unsetting new flag!"
+                    logger.info("unsetting new flag!")
                     doc_wrapper.new = False
                     doc_wrapper.dirty = False
-            empty = queue.empty()
 
     #
     # SoledadStore specific methods.
@@ -253,20 +259,24 @@ class SoledadStore(ContentDedup):
             return chain((doc_wrapper,),
                          self._get_calls_for_rflags_doc(doc_wrapper))
         else:
-            print "********************"
-            print "CANNOT PROCESS ITEM!"
+            logger.warning("CANNOT PROCESS ITEM!")
             return (i for i in [])
 
     def _try_call(self, call, item):
         """
         Try to invoke a given call with item as a parameter.
+
+        :param call: the function to call
+        :type call: callable
+        :param item: the payload to pass to the call as argument
+        :type item: object
         """
-        if not call:
+        if call is None:
             return
         try:
             call(item)
         except u1db_errors.RevisionConflict as exc:
-            logger.error("Error: %r" % (exc,))
+            logger.exception("Error: %r" % (exc,))
             raise exc
 
     def _get_calls_for_msg_parts(self, msg_wrapper):
@@ -275,12 +285,14 @@ class SoledadStore(ContentDedup):
 
         :param msg_wrapper: A MessageWrapper
         :type msg_wrapper: IMessageContainer
+        :return: a generator of tuples with recent-flags doc payload
+                 and callable
+        :rtype: generator
         """
         call = None
 
-        if msg_wrapper.new is True:
+        if msg_wrapper.new:
             call = self._soledad.create_doc
-            print "NEW DOC ----------------------"
 
             # item is expected to be a MessagePartDoc
             for item in msg_wrapper.walk():
@@ -296,17 +308,12 @@ class SoledadStore(ContentDedup):
 
                 elif item.part == MessagePartType.cdoc:
                     if not self._content_does_exist(item.content):
-
-                        # XXX DEBUG -------------------
-                        print "about to write content-doc ",
-                        #import pprint; pprint.pprint(item.content)
-
                         yield dict(item.content), call
 
         # For now, the only thing that will be dirty is
         # the flags doc.
 
-        elif msg_wrapper.dirty is True:
+        elif msg_wrapper.dirty:
             call = self._soledad.put_doc
             # item is expected to be a MessagePartDoc
             for item in msg_wrapper.walk():
@@ -327,6 +334,11 @@ class SoledadStore(ContentDedup):
     def _get_calls_for_rflags_doc(self, rflags_wrapper):
         """
         We always put these documents.
+
+        :param rflags_wrapper: A wrapper around recent flags doc.
+        :type rflags_wrapper: RecentFlagsWrapper
+        :return: a tuple with recent-flags doc payload and callable
+        :rtype: tuple
         """
         call = self._soledad.put_doc
         rdoc = self._soledad.get_doc(rflags_wrapper.doc_id)
@@ -342,6 +354,8 @@ class SoledadStore(ContentDedup):
         """
         Return mailbox document.
 
+        :param mbox: the mailbox
+        :type mbox: str or unicode
         :return: A SoledadDocument containing this mailbox, or None if
                  the query failed.
         :rtype: SoledadDocument or None.
@@ -358,6 +372,11 @@ class SoledadStore(ContentDedup):
     def get_flags_doc(self, mbox, uid):
         """
         Return the SoledadDocument for the given mbox and uid.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :param uid: the UID for the message
+        :type uid: int
         """
         try:
             flag_docs = self._soledad.get_from_index(
@@ -378,6 +397,11 @@ class SoledadStore(ContentDedup):
         This is called from the deferred triggered by
         memorystore.increment_last_soledad_uid, which is expected to
         run in a separate thread.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :param value: the value to set
+        :type value: int
         """
         leap_assert_type(value, int)
         key = fields.LAST_UID_KEY
@@ -398,6 +422,8 @@ class SoledadStore(ContentDedup):
         Get an iterator for the SoledadDocuments for messages
         with \\Deleted flag for a given mailbox.
 
+        :param mbox: the mailbox
+        :type mbox: str or unicode
         :return: iterator through deleted message docs
         :rtype: iterable
         """
@@ -410,13 +436,12 @@ class SoledadStore(ContentDedup):
         """
         Remove from Soledad all messages flagged as deleted for a given
         mailbox.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
         """
-        print "DELETING ALL DOCS FOR -------", mbox
         deleted = []
         for doc in self.deleted_iter(mbox):
             deleted.append(doc.content[fields.UID_KEY])
-            print
-            print ">>>>>>>>>>>>>>>>>>>>"
-            print "deleting doc: ", doc.doc_id, doc.content
             self._soledad.delete_doc(doc)
         return deleted

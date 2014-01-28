@@ -21,6 +21,8 @@ import json
 import re
 import traceback
 
+from leap.soledad.common.document import SoledadDocument
+
 
 CHARSET_PATTERN = r"""charset=([\w-]+)"""
 CHARSET_RE = re.compile(CHARSET_PATTERN, re.IGNORECASE)
@@ -42,6 +44,8 @@ def empty(thing):
     """
     if thing is None:
         return True
+    if isinstance(thing, SoledadDocument):
+        thing = thing.content
     try:
         return len(thing) == 0
     except ReferenceError:

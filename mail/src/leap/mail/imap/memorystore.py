@@ -199,12 +199,14 @@ class MemoryStore(object):
         By default we consider that any message is a new message.
 
         :param mbox: the mailbox
-        :type mbox: basestring
+        :type mbox: str or unicode
         :param uid: the UID for the message
         :type uid: int
-        :param message: a to be added
+        :param message: a message to be added
         :type message: MessageWrapper
-        :param notify_on_disk:
+        :param notify_on_disk: whether the deferred that is returned should
+                               wait until the message is written to disk to
+                               be fired.
         :type notify_on_disk: bool
 
         :return: a Deferred. if notify_on_disk is True, will be fired
@@ -212,7 +214,7 @@ class MemoryStore(object):
                  Otherwise will fire inmediately
         :rtype: Deferred
         """
-        print "adding new doc to memstore %s (%s)" % (mbox, uid)
+        log.msg("adding new doc to memstore %r (%r)" % (mbox, uid))
         key = mbox, uid
 
         self._add_message(mbox, uid, message, notify_on_disk)
@@ -239,13 +241,17 @@ class MemoryStore(object):
         """
         Put an existing message.
 
+        This will set the dirty flag on the MemoryStore.
+
         :param mbox: the mailbox
-        :type mbox: basestring
+        :type mbox: str or unicode
         :param uid: the UID for the message
         :type uid: int
-        :param message: a to be added
+        :param message: a message to be added
         :type message: MessageWrapper
-        :param notify_on_disk:
+        :param notify_on_disk: whether the deferred that is returned should
+                               wait until the message is written to disk to
+                               be fired.
         :type notify_on_disk: bool
 
         :return: a Deferred. if notify_on_disk is True, will be fired
@@ -260,11 +266,13 @@ class MemoryStore(object):
         self._dirty.add(key)
         self._dirty_deferreds[key] = d
         self._add_message(mbox, uid, message, notify_on_disk)
-        #print "dirty ", self._dirty
-        #print "new ", self._new
         return d
 
     def _add_message(self, mbox, uid, message, notify_on_disk=True):
+        """
+        Helper method, called by both create_message and put_message.
+        See those for parameter documentation.
+        """
         # XXX have to differentiate between notify_new and notify_dirty
         # TODO defaultdict the hell outa here...
 
@@ -332,15 +340,19 @@ class MemoryStore(object):
                     store.pop(key)
         prune((FDOC, HDOC, CDOCS, DOCS_ID), store)
 
-        #print "after adding: "
-        #import pprint; pprint.pprint(self._msg_store[key])
-
     def get_docid_for_fdoc(self, mbox, uid):
         """
-        Get Soledad document id for the flags-doc for a given mbox and uid.
+        Return Soledad document id for the flags-doc for a given mbox and uid,
+        or None of no flags document could be found.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :param uid: the message UID
+        :type uid: int
+        :rtype: unicode or None
         """
         fdoc = self._permanent_store.get_flags_doc(mbox, uid)
-        if not fdoc:
+        if empty(fdoc):
             return None
         doc_id = fdoc.doc_id
         return doc_id
@@ -349,22 +361,30 @@ class MemoryStore(object):
         """
         Get a MessageWrapper for the given mbox and uid combination.
 
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :param uid: the message UID
+        :type uid: int
+
         :return: MessageWrapper or None
         """
         key = mbox, uid
         msg_dict = self._msg_store.get(key, None)
-        if msg_dict:
-            new, dirty = self._get_new_dirty_state(key)
-            return MessageWrapper(from_dict=msg_dict,
-                                  new=new,
-                                  dirty=dirty,
-                                  memstore=weakref.proxy(self))
-        else:
+        if empty(msg_dict):
             return None
+        new, dirty = self._get_new_dirty_state(key)
+        return MessageWrapper(from_dict=msg_dict,
+                              new=new, dirty=dirty,
+                              memstore=weakref.proxy(self))
 
     def remove_message(self, mbox, uid):
         """
         Remove a Message from this MemoryStore.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :param uid: the message UID
+        :type uid: int
         """
         # XXX For the moment we are only removing the flags and headers
         # docs. The rest we leave there polluting your hard disk,
@@ -386,6 +406,8 @@ class MemoryStore(object):
     def write_messages(self, store):
         """
         Write the message documents in this MemoryStore to a different store.
+
+        :param store: the IMessageStore to write to
         """
         # For now, we pass if the queue is not empty, to avoid duplicate
         # queuing.
@@ -397,7 +419,10 @@ class MemoryStore(object):
         if not self.producer.is_queue_empty():
             return
 
-        print "Writing messages to Soledad..."
+        logger.info("Writing messages to Soledad...")
+
+        # TODO change for lock, and make the property access
+        # is accquired
         with set_bool_flag(self, self.WRITING_FLAG):
             for rflags_doc_wrapper in self.all_rdocs_iter():
                 self.producer.push(rflags_doc_wrapper)
@@ -409,6 +434,9 @@ class MemoryStore(object):
     def get_uids(self, mbox):
         """
         Get all uids for a given mbox.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
         """
         all_keys = self._msg_store.keys()
         return [uid for m, uid in all_keys if m == mbox]
@@ -420,6 +448,9 @@ class MemoryStore(object):
         Get the highest UID for a given mbox.
         It will be the highest between the highest uid in the message store for
         the mailbox, and the soledad integer cache.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
         """
         uids = self.get_uids(mbox)
         last_mem_uid = uids and max(uids) or 0
@@ -429,6 +460,9 @@ class MemoryStore(object):
     def get_last_soledad_uid(self, mbox):
         """
         Get last uid for a given mbox from the soledad integer cache.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
         """
         return self._last_uid.get(mbox, 0)
 
@@ -438,10 +472,16 @@ class MemoryStore(object):
         SoledadMailbox should prime this value during initialization.
         Other methods (during message adding) SHOULD call
         `increment_last_soledad_uid` instead.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :param value: the value to set
+        :type value: int
         """
         leap_assert_type(value, int)
-        print "setting last soledad uid for ", mbox, "to", value
-        # if we already have a vlue here, don't do anything
+        logger.info("setting last soledad uid for %s to %s" %
+                    (mbox, value))
+        # if we already have a value here, don't do anything
         with self._last_uid_lock:
             if not self._last_uid.get(mbox, None):
                 self._last_uid[mbox] = value
@@ -451,6 +491,9 @@ class MemoryStore(object):
         Increment by one the soledad integer cache for the last_uid for
         this mbox, and fire a defer-to-thread to update the soledad value.
         The caller should lock the call tho this method.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
         """
         with self._last_uid_lock:
             self._last_uid[mbox] += 1
@@ -461,7 +504,12 @@ class MemoryStore(object):
     @deferred
     def write_last_uid(self, mbox, value):
         """
-        Increment the soledad cache,
+        Increment the soledad integer cache for the highest uid value.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :param value: the value to set
+        :type value: int
         """
         leap_assert_type(value, int)
         if self._permanent_store:
@@ -472,18 +520,30 @@ class MemoryStore(object):
     def count_new_mbox(self, mbox):
         """
         Count the new messages by inbox.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :return: number of new messages
+        :rtype: int
         """
         return len([(m, uid) for m, uid in self._new if mbox == mbox])
 
+    # XXX used at all?
     def count_new(self):
         """
         Count all the new messages in the MemoryStore.
+
+        :rtype: int
         """
         return len(self._new)
 
     def get_cdoc_from_phash(self, phash):
         """
         Return a content-document by its payload-hash.
+
+        :param phash: the payload hash to check against
+        :type phash: str or unicode
+        :rtype: MessagePartDoc
         """
         doc = self._phash_store.get(phash, None)
 
@@ -504,8 +564,16 @@ class MemoryStore(object):
     def get_fdoc_from_chash(self, chash, mbox):
         """
         Return a flags-document by its content-hash and a given mailbox.
+        Used during content-duplication detection while copying or adding a
+        message.
 
-        :return: MessagePartDoc, or None.
+        :param chash: the content hash to check against
+        :type chash: str or unicode
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+
+        :return: MessagePartDoc. It will return None if the flags document
+                 has empty content or it is flagged as \\Deleted.
         """
         docs_dict = self._chash_fdoc_store.get(chash, None)
         fdoc = docs_dict.get(mbox, None) if docs_dict else None
@@ -522,9 +590,10 @@ class MemoryStore(object):
         if fdoc and fields.DELETED_FLAG in fdoc[fields.FLAGS_KEY]:
             return None
 
-        # XXX get flags
-        new = True
-        dirty = False
+        uid = fdoc.content[fields.UID_KEY]
+        key = mbox, uid
+        new = key in self._new
+        dirty = key in self._dirty
         return MessagePartDoc(
             new=new, dirty=dirty, store="mem",
             part=MessagePartType.fdoc,
@@ -534,13 +603,19 @@ class MemoryStore(object):
     def all_msg_iter(self):
         """
         Return generator that iterates through all messages in the store.
+
+        :return: generator of MessageWrappers
+        :rtype: generator
         """
         return (self.get_message(*key)
                 for key in sorted(self._msg_store.keys()))
 
     def all_new_dirty_msg_iter(self):
         """
-        Return geneator that iterates through all new and dirty messages.
+        Return generator that iterates through all new and dirty messages.
+
+        :return: generator of MessageWrappers
+        :rtype: generator
         """
         return (self.get_message(*key)
                 for key in sorted(self._msg_store.keys())
@@ -549,15 +624,29 @@ class MemoryStore(object):
     def all_msg_dict_for_mbox(self, mbox):
         """
         Return all the message dicts for a given mbox.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :return: list of dictionaries
+        :rtype: list
         """
+        # This *needs* to return a fixed sequence. Otherwise the dictionary len
+        # will change during iteration, when we modify it
         return [self._msg_store[(mb, uid)]
                 for mb, uid in self._msg_store if mb == mbox]
 
     def all_deleted_uid_iter(self, mbox):
         """
-        Return generator that iterates through the UIDs for all messags
+        Return a list with the UIDs for all messags
         with deleted flag in a given mailbox.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :return: list of integers
+        :rtype: list
         """
+        # This *needs* to return a fixed sequence. Otherwise the dictionary len
+        # will change during iteration, when we modify it
         all_deleted = [
             msg['fdoc']['uid'] for msg in self.all_msg_dict_for_mbox(mbox)
             if msg.get('fdoc', None)
@@ -569,6 +658,11 @@ class MemoryStore(object):
     def _get_new_dirty_state(self, key):
         """
         Return `new` and `dirty` flags for a given message.
+
+        :param key: the key for the message, in the form mbox, uid
+        :type key: tuple
+        :return: tuple of bools
+        :rtype: tuple
         """
         # XXX should return *first* the news, and *then* the dirty...
         return map(lambda _set: key in _set, (self._new, self._dirty))
@@ -576,14 +670,19 @@ class MemoryStore(object):
     def set_new(self, key):
         """
         Add the key value to the `new` set.
+
+        :param key: the key for the message, in the form mbox, uid
+        :type key: tuple
         """
         self._new.add(key)
 
     def unset_new(self, key):
         """
         Remove the key value from the `new` set.
+
+        :param key: the key for the message, in the form mbox, uid
+        :type key: tuple
         """
-        #print "Unsetting NEW for: %s" % str(key)
         self._new.discard(key)
         deferreds = self._new_deferreds
         d = deferreds.get(key, None)
@@ -596,14 +695,19 @@ class MemoryStore(object):
     def set_dirty(self, key):
         """
         Add the key value to the `dirty` set.
+
+        :param key: the key for the message, in the form mbox, uid
+        :type key: tuple
         """
         self._dirty.add(key)
 
     def unset_dirty(self, key):
         """
         Remove the key value from the `dirty` set.
+
+        :param key: the key for the message, in the form mbox, uid
+        :type key: tuple
         """
-        #print "Unsetting DIRTY for: %s" % str(key)
         self._dirty.discard(key)
         deferreds = self._dirty_deferreds
         d = deferreds.get(key, None)
@@ -619,6 +723,11 @@ class MemoryStore(object):
     def set_recent_flag(self, mbox, uid):
         """
         Set the `Recent` flag for a given mailbox and UID.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :param uid: the message UID
+        :type uid: int
         """
         self._rflags_dirty.add(mbox)
         self._rflags_store[mbox]['set'].add(uid)
@@ -627,6 +736,11 @@ class MemoryStore(object):
     def unset_recent_flag(self, mbox, uid):
         """
         Unset the `Recent` flag for a given mailbox and UID.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :param uid: the message UID
+        :type uid: int
         """
         self._rflags_store[mbox]['set'].discard(uid)
 
@@ -634,6 +748,11 @@ class MemoryStore(object):
         """
         Set the value for the set of the recent flags.
         Used from the property in the MessageCollection.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :param value: a sequence of flags to set
+        :type value: sequence
         """
         self._rflags_dirty.add(mbox)
         self._rflags_store[mbox]['set'] = set(value)
@@ -643,6 +762,8 @@ class MemoryStore(object):
         Load the passed flags document in the recent flags store, for a given
         mailbox.
 
+        :param mbox: the mailbox
+        :type mbox: str or unicode
         :param flags_doc: A dictionary containing the `doc_id` of the Soledad
                           flags-document for this mailbox, and the `set`
                           of uids marked with that flag.
@@ -651,9 +772,11 @@ class MemoryStore(object):
 
     def get_recent_flags(self, mbox):
         """
-        Get the set of UIDs with the `Recent` flag for this mailbox.
+        Return the set of UIDs with the `Recent` flag for this mailbox.
 
-        :return: set, or None
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :rtype: set, or None
         """
         rflag_for_mbox = self._rflags_store.get(mbox, None)
         if not rflag_for_mbox:
@@ -666,6 +789,7 @@ class MemoryStore(object):
         under a RecentFlagsDoc namedtuple.
         Used for saving to disk.
 
+        :return: a generator of RecentFlagDoc
         :rtype: generator
         """
         # XXX use enums
@@ -696,6 +820,11 @@ class MemoryStore(object):
         """
         Remove all messages flagged \\Deleted from this Memory Store only.
         Called from `expunge`
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :return: a list of UIDs
+        :rtype: list
         """
         mem_deleted = self.all_deleted_uid_iter(mbox)
         for uid in mem_deleted:
@@ -706,6 +835,11 @@ class MemoryStore(object):
         """
         Remove all messages flagged \\Deleted, from the Memory Store
         and from the permanent store also.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :return: a list of UIDs
+        :rtype: list
         """
         # TODO expunge should add itself as a callback to the ongoing
         # writes.
@@ -737,7 +871,7 @@ class MemoryStore(object):
             mem_deleted = self.remove_all_deleted(mbox)
 
             all_deleted = set(mem_deleted).union(set(sol_deleted))
-            print "deleted ", all_deleted
+            logger.debug("deleted %r" % all_deleted)
         except Exception as exc:
             logger.exception(exc)
         finally:
@@ -763,18 +897,13 @@ class MemoryStore(object):
         # are done (gatherResults)
         return getattr(self, self.WRITING_FLAG)
 
-    def put_part(self, part_type, value):
-        """
-        Put the passed part into this IMessageStore.
-        `part` should be one of: fdoc, hdoc, cdoc
-        """
-        # XXX turn that into a enum
-
     # Memory management.
 
     def get_size(self):
         """
         Return the size of the internal storage.
         Use for calculating the limit beyond which we should flush the store.
+
+        :rtype: int
         """
         return size.get_size(self._msg_store)

@@ -48,10 +48,10 @@ def get_size(item):
     some memory, so use with care.
 
     :param item: the item which size wants to be computed
+    :rtype: int
     """
     seen = set()
     size = _get_size(item, seen)
-    #print "len(seen) ", len(seen)
     del seen
     collect()
     return size

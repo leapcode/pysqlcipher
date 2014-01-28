@@ -18,7 +18,6 @@
 MessagePart implementation. Used from LeapMessage.
 """
 import logging
-import re
 import StringIO
 import weakref
 
@@ -100,11 +99,10 @@ class MessageWrapper(object):
     CDOCS = "cdocs"
     DOCS_ID = "docs_id"
 
-    # XXX can use this to limit the memory footprint,
-    # or is it too premature to optimize?
-    # Does it work well together with the interfaces.implements?
+    # Using slots to limit some the memory footprint,
+    # Add your attribute here.
 
-    #__slots__ = ["_dict", "_new", "_dirty", "memstore"]
+    __slots__ = ["_dict", "_new", "_dirty", "_storetype", "memstore"]
 
     def __init__(self, fdoc=None, hdoc=None, cdocs=None,
                  from_dict=None, memstore=None,
@@ -141,9 +139,13 @@ class MessageWrapper(object):
 
     # properties
 
+    # TODO Could refactor new and dirty properties together.
+
     def _get_new(self):
         """
         Get the value for the `new` flag.
+
+        :rtype: bool
         """
         return self._new
 
@@ -151,6 +153,9 @@ class MessageWrapper(object):
         """
         Set the value for the `new` flag, and propagate it
         to the memory store if any.
+
+        :param value: the value to set
+        :type value: bool
         """
         self._new = value
         if self.memstore:
@@ -171,6 +176,8 @@ class MessageWrapper(object):
     def _get_dirty(self):
         """
         Get the value for the `dirty` flag.
+
+        :rtype: bool
         """
         return self._dirty
 
@@ -178,6 +185,9 @@ class MessageWrapper(object):
         """
         Set the value for the `dirty` flag, and propagate it
         to the memory store if any.
+
+        :param value: the value to set
+        :type value: bool
         """
         self._dirty = value
         if self.memstore:
@@ -198,6 +208,12 @@ class MessageWrapper(object):
 
     @property
     def fdoc(self):
+        """
+        Return a MessagePartDoc wrapping around a weak reference to
+        the flags-document in this MemoryStore, if any.
+
+        :rtype: MessagePartDoc
+        """
         _fdoc = self._dict.get(self.FDOC, None)
         if _fdoc:
             content_ref = weakref.proxy(_fdoc)
@@ -214,6 +230,12 @@ class MessageWrapper(object):
 
     @property
     def hdoc(self):
+        """
+        Return a MessagePartDoc wrapping around a weak reference to
+        the headers-document in this MemoryStore, if any.
+
+        :rtype: MessagePartDoc
+        """
         _hdoc = self._dict.get(self.HDOC, None)
         if _hdoc:
             content_ref = weakref.proxy(_hdoc)
@@ -228,6 +250,14 @@ class MessageWrapper(object):
 
     @property
     def cdocs(self):
+        """
+        Return a weak reference to a zero-indexed dict containing
+        the content-documents, or an empty dict if none found.
+        If you want access to the MessagePartDoc for the individual
+        parts, use the generator returned by `walk` instead.
+
+        :rtype: dict
+        """
         _cdocs = self._dict.get(self.CDOCS, None)
         if _cdocs:
             return weakref.proxy(_cdocs)
@@ -238,6 +268,8 @@ class MessageWrapper(object):
         """
         Generator that iterates through all the parts, returning
         MessagePartDoc. Used for writing to SoledadStore.
+
+        :rtype: generator
         """
         if self._dirty:
             mbox = self.fdoc.content[fields.MBOX_KEY]
@@ -264,6 +296,8 @@ class MessageWrapper(object):
     def as_dict(self):
         """
         Return a dict representation of the parts contained.
+
+        :rtype: dict
         """
         return self._dict
 
@@ -272,6 +306,11 @@ class MessageWrapper(object):
         Populate MessageWrapper parts from a dictionary.
         It expects the same format that we use in a
         MessageWrapper.
+
+
+        :param msg_dict: a dictionary containing the parts to populate
+                         the MessageWrapper from
+        :type msg_dict: dict
         """
         fdoc, hdoc, cdocs = map(
             lambda part: msg_dict.get(part, None),
@@ -288,7 +327,7 @@ class MessagePart(object):
     It takes a subpart message and is able to find
     the inner parts.
 
-    Excusatio non petita: see the interface documentation.
+    See the interface documentation.
     """
 
     implements(imap4.IMessagePart)
@@ -297,6 +336,8 @@ class MessagePart(object):
         """
         Initializes the MessagePart.
 
+        :param soledad: Soledad instance.
+        :type soledad: Soledad
         :param part_map: a dictionary containing the parts map for this
                          message
         :type part_map: dict
@@ -313,6 +354,7 @@ class MessagePart(object):
         # to gather the results of the deferred operations
         # to signal the operation is complete.
         #leap_assert(part_map, "part map dict cannot be null")
+
         self._soledad = soledad
         self._pmap = part_map
 
@@ -323,11 +365,12 @@ class MessagePart(object):
         :return: size of the message, in octets
         :rtype: int
         """
-        if not self._pmap:
+        if empty(self._pmap):
             return 0
         size = self._pmap.get('size', None)
-        if not size:
+        if size is None:
             logger.error("Message part cannot find size in the partmap")
+            size = 0
         return size
 
     def getBodyFile(self):
@@ -338,25 +381,25 @@ class MessagePart(object):
         :rtype: StringIO
         """
         fd = StringIO.StringIO()
-        if self._pmap:
+        if not empty(self._pmap):
             multi = self._pmap.get('multi')
             if not multi:
                 phash = self._pmap.get("phash", None)
             else:
                 pmap = self._pmap.get('part_map')
                 first_part = pmap.get('1', None)
-                if first_part:
+                if not empty(first_part):
                     phash = first_part['phash']
 
             if not phash:
                 logger.warning("Could not find phash for this subpart!")
-                payload = str("")
+                payload = ""
             else:
                 payload = self._get_payload_from_document(phash)
 
         else:
             logger.warning("Message with no part_map!")
-            payload = str("")
+            payload = ""
 
         if payload:
             content_type = self._get_ctype_from_document(phash)
@@ -366,7 +409,8 @@ class MessagePart(object):
                 charset = self._get_charset(payload)
                 logger.debug("Got charset: %s" % (charset,))
             try:
-                payload = payload.encode(charset)
+                if isinstance(payload, unicode):
+                    payload = payload.encode(charset)
             except UnicodeError as exc:
                 logger.error(
                     "Unicode error, using 'replace'. {0!r}".format(exc))
@@ -376,13 +420,15 @@ class MessagePart(object):
         fd.seek(0)
         return fd
 
-    # TODO cache the phash retrieval
+    # TODO should memory-bound this memoize!!!
+    @memoized_method
     def _get_payload_from_document(self, phash):
         """
-        Gets the message payload from the content document.
+        Return the message payload from the content document.
 
         :param phash: the payload hash to retrieve by.
-        :type phash: basestring
+        :type phash: str or unicode
+        :rtype: str or unicode
         """
         cdocs = self._soledad.get_from_index(
             fields.TYPE_P_HASH_IDX,
@@ -396,13 +442,15 @@ class MessagePart(object):
         payload = cdoc.content.get(fields.RAW_KEY, "")
         return payload
 
-    # TODO cache the pahash retrieval
+    # TODO should memory-bound this memoize!!!
+    @memoized_method
     def _get_ctype_from_document(self, phash):
         """
-        Gets the content-type from the content document.
+        Reeturn the content-type from the content document.
 
         :param phash: the payload hash to retrieve by.
-        :type phash: basestring
+        :type phash: str or unicode
+        :rtype: str or unicode
         """
         cdocs = self._soledad.get_from_index(
             fields.TYPE_P_HASH_IDX,
@@ -423,13 +471,14 @@ class MessagePart(object):
         Gets (guesses?) the charset of a payload.
 
         :param stuff: the stuff to guess about.
-        :type stuff: basestring
-        :returns: charset
+        :type stuff: str or unicode
+        :return: charset
+        :rtype: unicode
         """
         # XXX existential doubt 2. shouldn't we make the scope
         # of the decorator somewhat more persistent?
         # ah! yes! and put memory bounds.
-        return get_email_charset(unicode(stuff))
+        return get_email_charset(stuff)
 
     def getHeaders(self, negate, *names):
         """
@@ -446,17 +495,11 @@ class MessagePart(object):
         :return: A mapping of header field names to header field values
         :rtype: dict
         """
+        # XXX refactor together with MessagePart method
         if not self._pmap:
             logger.warning("No pmap in Subpart!")
             return {}
         headers = dict(self._pmap.get("headers", []))
-
-        # twisted imap server expects *some* headers to be lowercase
-        # We could use a CaseInsensitiveDict here...
-        headers = dict(
-            (str(key), str(value)) if key.lower() != "content-type"
-            else (str(key.lower()), str(value))
-            for (key, value) in headers.items())
 
         names = map(lambda s: s.upper(), names)
         if negate:
@@ -464,19 +507,30 @@ class MessagePart(object):
         else:
             cond = lambda key: key.upper() in names
 
-        # unpack and filter original dict by negate-condition
-        filter_by_cond = [
-            map(str, (key, val)) for
-            key, val in headers.items()
-            if cond(key)]
-        filtered = dict(filter_by_cond)
-        return filtered
+        # default to most likely standard
+        charset = find_charset(headers, "utf-8")
+        headers2 = dict()
+        for key, value in headers.items():
+            # twisted imap server expects *some* headers to be lowercase
+            # We could use a CaseInsensitiveDict here...
+            if key.lower() == "content-type":
+                key = key.lower()
+
+            if not isinstance(key, str):
+                key = key.encode(charset, 'replace')
+            if not isinstance(value, str):
+                value = value.encode(charset, 'replace')
+
+            # filter original dict by negate-condition
+            if cond(key):
+                headers2[key] = value
+        return headers2
 
     def isMultipart(self):
         """
         Return True if this message is multipart.
         """
-        if not self._pmap:
+        if empty(self._pmap):
             logger.warning("Could not get part map!")
             return False
         multi = self._pmap.get("multi", False)
@@ -495,6 +549,7 @@ class MessagePart(object):
         """
         if not self.isMultipart():
             raise TypeError
+
         sub_pmap = self._pmap.get("part_map", {})
         try:
             part_map = sub_pmap[str(part + 1)]

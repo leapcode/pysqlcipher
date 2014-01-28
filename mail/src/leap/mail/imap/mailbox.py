@@ -26,7 +26,6 @@ import cStringIO
 from collections import defaultdict
 
 from twisted.internet import defer
-#from twisted.internet.task import deferLater
 from twisted.python import log
 
 from twisted.mail import imap4
@@ -99,7 +98,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :param rw: read-and-write flag for this mailbox
         :type rw: int
         """
-        print "got memstore: ", memstore
         leap_assert(mbox, "Need a mailbox name to initialize")
         leap_assert(soledad, "Need a soledad instance to initialize")
 
@@ -240,10 +238,11 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         the mailbox document in soledad if this is higher.
 
         :return: the last uid for messages in this mailbox
-        :rtype: bool
+        :rtype: int
         """
         last = self._memstore.get_last_uid(self.mbox)
-        print "last uid for %s: %s (from memstore)" % (self.mbox, last)
+        logger.debug("last uid for %s: %s (from memstore)" % (
+            repr(self.mbox), last))
         return last
 
     last_uid = property(
@@ -468,7 +467,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         """
         Remove all messages flagged \\Deleted
         """
-        print "EXPUNGE!"
         if not self.isWriteable():
             raise imap4.ReadOnlyMailbox
 
@@ -537,8 +535,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         # can treat them all the same.
         # Change this to the flag that twisted expects when we
         # switch to content-hash based index + local UID table.
-        print
-        print "FETCHING..."
 
         sequence = False
         #sequence = True if uid == 0 else False
@@ -648,9 +644,12 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             for msgid in seq_messg)
         return result
 
-    def signal_unread_to_ui(self):
+    def signal_unread_to_ui(self, *args, **kwargs):
         """
         Sends unread event to ui.
+
+        :param args: ignored
+        :param kwargs: ignored
         """
         unseen = self.getUnseenCount()
         leap_events.signal(IMAP_UNREAD_MAIL, str(unseen))
@@ -767,13 +766,12 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
     # IMessageCopier
 
-    @deferred
+    #@deferred
     #@profile
     def copy(self, messageObject):
         """
         Copy the given message object into this mailbox.
         """
-        from twisted.internet import reactor
         msg = messageObject
         memstore = self._memstore
 
@@ -791,23 +789,16 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         exist = dest_fdoc and not empty(dest_fdoc.content)
 
         if exist:
-            print "Destination message already exists!"
+            logger.warning("Destination message already exists!")
         else:
-            print "DO COPY MESSAGE!"
             mbox = self.mbox
             uid_next = memstore.increment_last_soledad_uid(mbox)
             new_fdoc[self.UID_KEY] = uid_next
             new_fdoc[self.MBOX_KEY] = mbox
 
-            # XXX set recent!
+            # FIXME set recent!
 
-            print "****************************"
-            print "copy message..."
-            print "new fdoc ", new_fdoc
-            print "hdoc: ", hdoc
-            print "****************************"
-
-            self._memstore.create_message(
+            return self._memstore.create_message(
                 self.mbox, uid_next,
                 MessageWrapper(
                     new_fdoc, hdoc.content),

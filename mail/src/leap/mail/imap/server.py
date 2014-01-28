@@ -20,6 +20,7 @@ Leap IMAP4 Server Implementation.
 from copy import copy
 
 from twisted import cred
+from twisted.internet import defer
 from twisted.internet.defer import maybeDeferred
 from twisted.internet.task import deferLater
 from twisted.mail import imap4
@@ -132,6 +133,7 @@ class LeapIMAPServer(imap4.IMAP4Server):
             ).addErrback(
                 ebFetch, tag)
 
+        # XXX should be a callback
         deferLater(reactor,
                    2, self.mbox.unset_recent_flags, messages)
         deferLater(reactor, 1, self.mbox.signal_unread_to_ui)
@@ -139,12 +141,17 @@ class LeapIMAPServer(imap4.IMAP4Server):
     select_FETCH = (do_FETCH, imap4.IMAP4Server.arg_seqset,
                     imap4.IMAP4Server.arg_fetchatt)
 
+    def on_copy_finished(self, defers):
+        d = defer.gatherResults(filter(None, defers))
+        d.addCallback(self.notifyNew)
+        d.addCallback(self.mbox.signal_unread_to_ui)
+
     def do_COPY(self, tag, messages, mailbox, uid=0):
         from twisted.internet import reactor
-        imap4.IMAP4Server.do_COPY(self, tag, messages, mailbox, uid)
-        deferLater(reactor,
-                   2, self.mbox.unset_recent_flags, messages)
-        deferLater(reactor, 1, self.mbox.signal_unread_to_ui)
+        defers = []
+        d = imap4.IMAP4Server.do_COPY(self, tag, messages, mailbox, uid)
+        defers.append(d)
+        deferLater(reactor, 0, self.on_copy_finished, defers)
 
     select_COPY = (do_COPY, imap4.IMAP4Server.arg_seqset,
                    imap4.IMAP4Server.arg_astring)
@@ -201,5 +208,5 @@ class LeapIMAPServer(imap4.IMAP4Server):
         # back to the source mailbox...
         print "faking checkpoint..."
         import time
-        time.sleep(2)
+        time.sleep(5)
         return None

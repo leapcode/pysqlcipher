@@ -58,10 +58,7 @@ logger = logging.getLogger(__name__)
 # [ ] Delete incoming mail only after successful write!
 # [ ] Remove UID from syncable db. Store only those indexes locally.
 
-CHARSET_PATTERN = r"""charset=([\w-]+)"""
 MSGID_PATTERN = r"""<([\w@.]+)>"""
-
-CHARSET_RE = re.compile(CHARSET_PATTERN, re.IGNORECASE)
 MSGID_RE = re.compile(MSGID_PATTERN)
 
 
@@ -202,8 +199,6 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :return: The flags, represented as strings
         :rtype: tuple
         """
-        #if self._uid is None:
-            #return []
         uid = self._uid
 
         flags = set([])
@@ -252,7 +247,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
         doc.content[self.DEL_KEY] = self.DELETED_FLAG in flags
 
         if self._collection.memstore is not None:
-            print "putting message in collection"
+            log.msg("putting message in collection")
             self._collection.memstore.put_message(
                 self._mbox, self._uid,
                 MessageWrapper(fdoc=doc.content, new=False, dirty=True,
@@ -327,8 +322,8 @@ class LeapMessage(fields, MailParser, MBoxParser):
         if self._bdoc is not None:
             bdoc_content = self._bdoc.content
             if bdoc_content is None:
-                logger.warning("No BODC content found for message!!!")
-                return write_fd(str(""))
+                logger.warning("No BDOC content found for message!!!")
+                return write_fd("")
 
             body = bdoc_content.get(self.RAW_KEY, "")
             content_type = bdoc_content.get('content-type', "")
@@ -337,20 +332,13 @@ class LeapMessage(fields, MailParser, MBoxParser):
             if charset is None:
                 charset = self._get_charset(body)
             try:
-                body = body.encode(charset)
+                if isinstance(body, unicode):
+                    body = body.encode(charset)
             except UnicodeError as exc:
                 logger.error(
                     "Unicode error, using 'replace'. {0!r}".format(exc))
                 logger.debug("Attempted to encode with: %s" % charset)
-                try:
-                    body = body.encode(charset, 'replace')
-
-                # XXX desperate attempt. I've seen things you wouldn't believe
-                except UnicodeError:
-                    try:
-                        body = body.encode('utf-8', 'replace')
-                    except:
-                        pass
+                body = body.encode(charset, 'replace')
             finally:
                 return write_fd(body)
 
@@ -409,6 +397,8 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :rtype: dict
         """
         # TODO split in smaller methods
+        # XXX refactor together with MessagePart method
+
         headers = self._get_headers()
         if not headers:
             logger.warning("No headers found")
@@ -425,11 +415,10 @@ class LeapMessage(fields, MailParser, MBoxParser):
 
         # default to most likely standard
         charset = find_charset(headers, "utf-8")
-
-        # twisted imap server expects *some* headers to be lowercase
-        # XXX refactor together with MessagePart method
         headers2 = dict()
         for key, value in headers.items():
+            # twisted imap server expects *some* headers to be lowercase
+            # We could use a CaseInsensitiveDict here...
             if key.lower() == "content-type":
                 key = key.lower()
 
@@ -441,7 +430,6 @@ class LeapMessage(fields, MailParser, MBoxParser):
             # filter original dict by negate-condition
             if cond(key):
                 headers2[key] = value
-
         return headers2
 
     def _get_headers(self):
@@ -547,10 +535,8 @@ class LeapMessage(fields, MailParser, MBoxParser):
         message.
         """
         hdoc_content = self._hdoc.content
-        #print "hdoc: ", hdoc_content
         body_phash = hdoc_content.get(
             fields.BODY_KEY, None)
-        print "body phash: ", body_phash
         if not body_phash:
             logger.warning("No body phash for this document!")
             return None
@@ -562,11 +548,8 @@ class LeapMessage(fields, MailParser, MBoxParser):
 
         if self._container is not None:
             bdoc = self._container.memstore.get_cdoc_from_phash(body_phash)
-            print "bdoc from container -->", bdoc
             if bdoc and bdoc.content is not None:
                 return bdoc
-            else:
-                print "no doc or not bdoc content for that phash found!"
 
         # no memstore or no doc found there
         if self._soledad:
@@ -590,77 +573,12 @@ class LeapMessage(fields, MailParser, MBoxParser):
         """
         return self._fdoc.content.get(key, None)
 
-    # setters
-
-    # XXX to be used in the messagecopier interface?!
-#
-    #def set_uid(self, uid):
-        #"""
-        #Set new uid for this message.
-#
-        #:param uid: the new uid
-        #:type uid: basestring
-        #"""
-        # XXX dangerous! lock?
-        #self._uid = uid
-        #d = self._fdoc
-        #d.content[self.UID_KEY] = uid
-        #self._soledad.put_doc(d)
-#
-    #def set_mbox(self, mbox):
-        #"""
-        #Set new mbox for this message.
-#
-        #:param mbox: the new mbox
-        #:type mbox: basestring
-        #"""
-        # XXX dangerous! lock?
-        #self._mbox = mbox
-        #d = self._fdoc
-        #d.content[self.MBOX_KEY] = mbox
-        #self._soledad.put_doc(d)
-
-    # destructor
-
-    # XXX this logic moved to remove_message in memory store...
-    #@deferred
-    #def remove(self):
-        #"""
-        #Remove all docs associated with this message.
-        #Currently it removes only the flags doc.
-        #"""
-        #fd = self._get_flags_doc()
-#
-        #if fd.new:
-            # it's a new document, so we can remove it and it will not
-            # be writen. Watch out! We need to be sure it has not been
-            # just queued to write!
-            #memstore.remove_message(*key)
-#
-        #if fd.dirty:
-            #doc_id = fd.doc_id
-            #doc = self._soledad.get_doc(doc_id)
-            #try:
-                #self._soledad.delete_doc(doc)
-            #except Exception as exc:
-                #logger.exception(exc)
-#
-        #else:
-            # we just got a soledad_doc
-            #try:
-                #doc_id = fd.doc_id
-                #latest_doc = self._soledad.get_doc(doc_id)
-                #self._soledad.delete_doc(latest_doc)
-            #except Exception as exc:
-                #logger.exception(exc)
-        #return uid
-
     def does_exist(self):
         """
-        Return True if there is actually a flags message for this
+        Return True if there is actually a flags document for this
         UID and mbox.
         """
-        return self._fdoc is not None
+        return not empty(self._fdoc)
 
 
 class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
@@ -938,8 +856,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
         if not exist:
             exist = self._get_fdoc_from_chash(chash)
-
-        print "FDOC EXIST?", exist
         if exist:
             return exist.content.get(fields.UID_KEY, "unknown-uid")
         else:
@@ -974,7 +890,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
         # TODO add the linked-from info !
         # TODO add reference to the original message
-        print "ADDING MESSAGE..."
 
         logger.debug('adding message')
         if flags is None:
@@ -990,15 +905,11 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         # move the complete check to the soledad writer?
         # Watch out! We're reserving a UID right after this!
         if self._fdoc_already_exists(chash):
-            print ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
             logger.warning("We already have that message in this mailbox.")
-            # note that this operation will leave holes in the UID sequence,
-            # but we're gonna change that all the same for a local-only table.
-            # so not touch it by the moment.
             return defer.succeed('already_exists')
 
         uid = self.memstore.increment_last_soledad_uid(self.mbox)
-        print "ADDING MSG WITH UID: %s" % uid
+        logger.info("ADDING MSG WITH UID: %s" % uid)
 
         fd = self._populate_flags(flags, uid, chash, size, multi)
         hd = self._populate_headr(msg, chash, subject, date)
@@ -1017,58 +928,36 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
         # The MessageContainer expects a dict, zero-indexed
         # XXX review-me
-        cdocs = dict((index, doc) for index, doc in
-                     enumerate(walk.get_raw_docs(msg, parts)))
+        cdocs = dict(enumerate(walk.get_raw_docs(msg, parts)))
 
         self.set_recent_flag(uid)
 
         # Saving ----------------------------------------
-        # XXX adapt hdocset to use memstore
-        #hdoc = self._soledad.create_doc(hd)
-        # We add the newly created hdoc to the fast-access set of
-        # headers documents associated with the mailbox.
-        #self.add_hdocset_docid(hdoc.doc_id)
-
         # TODO ---- add reference to original doc, to be deleted
         # after writes are done.
         msg_container = MessageWrapper(fd, hd, cdocs)
-
-        # XXX Should allow also to dump to disk directly,
-        # for no-memstore cases.
 
         # we return a deferred that by default will be triggered
         # inmediately.
         d = self.memstore.create_message(self.mbox, uid, msg_container,
                                          notify_on_disk=notify_on_disk)
-        print "adding message", d
         return d
-
-    #def remove(self, msg):
-        #"""
-        #Remove a given msg.
-        #:param msg: the message to be removed
-        #:type msg: LeapMessage
-        #"""
-        #d = msg.remove()
-        #d.addCallback(self._remove_cb)
-        #return d
 
     #
     # getters: specific queries
     #
 
     # recent flags
-    # XXX FIXME -------------------------------------
-    # This should be rewritten to use memory store.
 
     def _get_recent_flags(self):
         """
         An accessor for the recent-flags set for this mailbox.
         """
+        # XXX check if we should remove this
         if self.__rflags is not None:
             return self.__rflags
 
-        if self.memstore:
+        if self.memstore is not None:
             with self._rdoc_lock:
                 rflags = self.memstore.get_recent_flags(self.mbox)
                 if not rflags:
@@ -1091,11 +980,12 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                     fields.RECENTFLAGS_KEY, []))
             return self.__rflags
 
+    @profile
     def _set_recent_flags(self, value):
         """
         Setter for the recent-flags set for this mailbox.
         """
-        if self.memstore:
+        if self.memstore is not None:
             self.memstore.set_recent_flags(self.mbox, value)
 
         else:
@@ -1112,9 +1002,11 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         _get_recent_flags, _set_recent_flags,
         doc="Set of UIDs with the recent flag for this mailbox.")
 
+    # XXX change naming, indicate soledad query.
     def _get_recent_doc(self):
         """
-        Get recent-flags document for this mailbox.
+        Get recent-flags document from Soledad for this mailbox.
+        :rtype: SoledadDocument or None
         """
         curried = partial(
             self._soledad.get_from_index,
@@ -1152,82 +1044,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         with self._rdoc_property_lock:
             self.recent_flags = self.recent_flags.union(
                 set([uid]))
-
-    # headers-docs-set
-
-    # XXX FIXME -------------------------------------
-    # This should be rewritten to use memory store.
-
-    #def _get_hdocset(self):
-        #"""
-        #An accessor for the hdocs-set for this mailbox.
-        #"""
-        #if not self.__hdocset:
-            #with self._hdocset_lock:
-                #hdocset_doc = self._get_hdocset_doc()
-                #value = set(hdocset_doc.content.get(
-                    #fields.HDOCS_SET_KEY, []))
-                #self.__hdocset = value
-        #return self.__hdocset
-#
-    #def _set_hdocset(self, value):
-        #"""
-        #Setter for the hdocs-set for this mailbox.
-        #"""
-        #with self._hdocset_lock:
-            #hdocset_doc = self._get_hdocset_doc()
-            #newv = set(value)
-            #self.__hdocset = newv
-            #hdocset_doc.content[fields.HDOCS_SET_KEY] = list(newv)
-            # XXX should deferLater 0 it?
-            #self._soledad.put_doc(hdocset_doc)
-#
-    #_hdocset = property(
-        #_get_hdocset, _set_hdocset,
-        #doc="Set of Document-IDs for the headers docs associated "
-            #"with this mailbox.")
-#
-    #def _get_hdocset_doc(self):
-        #"""
-        #Get hdocs-set document for this mailbox.
-        #"""
-        #curried = partial(
-            #self._soledad.get_from_index,
-            #fields.TYPE_MBOX_IDX,
-            #fields.TYPE_HDOCS_SET_VAL, self.mbox)
-        #curried.expected = "hdocset"
-        #hdocset_doc = try_unique_query(curried)
-        #return hdocset_doc
-#
-    # Property-set modification (protected by a different
-    # lock to give atomicity to the read/write operation)
-#
-    #def remove_hdocset_docids(self, docids):
-        #"""
-        #Remove the given document IDs from the set of
-        #header-documents associated with this mailbox.
-        #"""
-        #with self._hdocset_property_lock:
-            #self._hdocset = self._hdocset.difference(
-                #set(docids))
-#
-    #def remove_hdocset_docid(self, docid):
-        #"""
-        #Remove the given document ID from the set of
-        #header-documents associated with this mailbox.
-        #"""
-        #with self._hdocset_property_lock:
-            #self._hdocset = self._hdocset.difference(
-                #set([docid]))
-#
-    #def add_hdocset_docid(self, docid):
-        #"""
-        #Add the given document ID to the set of
-        #header-documents associated with this mailbox.
-        #"""
-        #with self._hdocset_property_lock:
-            #self._hdocset = self._hdocset.union(
-                #set([docid]))
 
     # individual doc getters, message layer.
 
@@ -1361,19 +1177,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
         return (u for u in sorted(uids))
 
-    # XXX Should be moved to memstore
-    #def reset_last_uid(self, param):
-        #"""
-        #Set the last uid to the highest uid found.
-        #Used while expunging, passed as a callback.
-        #"""
-        #try:
-            #self.last_uid = max(self.all_uid_iter()) + 1
-        #except ValueError:
-            # empty sequence
-            #pass
-        #return param
-
     # XXX MOVE to memstore
     def all_flags(self):
         """
@@ -1390,7 +1193,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                 fields.TYPE_MBOX_IDX,
                 fields.TYPE_FLAGS_VAL, self.mbox)))
         if self.memstore is not None:
-            # XXX
             uids = self.memstore.get_uids(self.mbox)
             docs = ((uid, self.memstore.get_message(self.mbox, uid))
                     for uid in uids)

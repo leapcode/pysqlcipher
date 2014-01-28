@@ -75,6 +75,7 @@ class IMessageStore(Interface):
 
         :param mbox: the mbox this message belongs.
         :param uid: the UID that identifies this message in this mailbox.
+        :return: IMessageContainer
         """
 
 

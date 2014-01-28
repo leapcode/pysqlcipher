@@ -48,7 +48,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
     selected = None
     closed = False
 
-    def __init__(self, account_name, soledad=None, memstore=None):
+    def __init__(self, account_name, soledad, memstore=None):
         """
         Creates a SoledadAccountIndex that keeps track of the mailboxes
         and subscriptions handled by this account.
@@ -134,7 +134,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         if name not in self.mailboxes:
             raise imap4.MailboxException("No such mailbox: %r" % name)
 
-        return SoledadMailbox(name, soledad=self._soledad,
+        return SoledadMailbox(name, self._soledad,
                               memstore=self._memstore)
 
     ##

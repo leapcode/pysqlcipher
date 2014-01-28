@@ -61,8 +61,7 @@ IMAPTEST="imaptest"
 # These should be kept constant across benchmarking
 # runs across different machines, for comparability.
 
-#DURATION=200
-DURATION=60
+DURATION=200
 NUM_MSG=200
 
 
