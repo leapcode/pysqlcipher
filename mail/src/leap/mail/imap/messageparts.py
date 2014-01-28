@@ -32,17 +32,13 @@ from leap.common.decorators import memoized_method
 from leap.common.mail import get_email_charset
 from leap.mail.imap import interfaces
 from leap.mail.imap.fields import fields
-from leap.mail.utils import empty, first
+from leap.mail.utils import empty, first, find_charset
 
 MessagePartType = Enum("hdoc", "fdoc", "cdoc", "cdocs", "docs_id")
 
 
 logger = logging.getLogger(__name__)
 
-
-# XXX not needed anymoar ...
-CHARSET_PATTERN = r"""charset=([\w-]+)"""
-CHARSET_RE = re.compile(CHARSET_PATTERN, re.IGNORECASE)
 
 """
 A MessagePartDoc is a light wrapper around the dictionary-like
@@ -363,17 +359,17 @@ class MessagePart(object):
             payload = str("")
 
         if payload:
-            # XXX use find_charset instead --------------------------
-            # bad rebase???
             content_type = self._get_ctype_from_document(phash)
-            charset = first(CHARSET_RE.findall(content_type))
+            charset = find_charset(content_type)
             logger.debug("Got charset from header: %s" % (charset,))
-            if not charset:
+            if charset is None:
                 charset = self._get_charset(payload)
+                logger.debug("Got charset: %s" % (charset,))
             try:
                 payload = payload.encode(charset)
             except UnicodeError as exc:
-                logger.error("Unicode error {0}".format(exc))
+                logger.error(
+                    "Unicode error, using 'replace'. {0!r}".format(exc))
                 payload = payload.encode(charset, 'replace')
 
         fd.write(payload)

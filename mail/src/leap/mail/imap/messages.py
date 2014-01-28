@@ -335,16 +335,18 @@ class LeapMessage(fields, MailParser, MBoxParser):
             charset = find_charset(content_type)
             logger.debug('got charset from content-type: %s' % charset)
             if charset is None:
-                # XXX change for find_charset utility
                 charset = self._get_charset(body)
             try:
                 body = body.encode(charset)
             except UnicodeError as exc:
-                logger.error("Unicode error {0}".format(exc))
+                logger.error(
+                    "Unicode error, using 'replace'. {0!r}".format(exc))
                 logger.debug("Attempted to encode with: %s" % charset)
                 try:
                     body = body.encode(charset, 'replace')
-                except UnicodeError as exc:
+
+                # XXX desperate attempt. I've seen things you wouldn't believe
+                except UnicodeError:
                     try:
                         body = body.encode('utf-8', 'replace')
                     except:
