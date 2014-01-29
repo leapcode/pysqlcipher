@@ -18,11 +18,13 @@
 Tests for the walktree module.
 """
 import os
+import sys
 from email import parser
 
 from leap.mail import walk as W
 
 DEBUG = os.environ.get("BITMASK_MAIL_DEBUG")
+
 
 p = parser.Parser()
 
@@ -31,9 +33,17 @@ p = parser.Parser()
 ##################################################
 # Input from hell
 
-#msg = p.parse(open('rfc822.multi-signed.message'))
-#msg = p.parse(open('rfc822.plain.message'))
-msg = p.parse(open('rfc822.multi-minimal.message'))
+if len(sys.argv) > 1:
+    FILENAME = sys.argv[1]
+else:
+    FILENAME = "rfc822.multi-minimal.message"
+
+"""
+FILENAME = "rfc822.multi-signed.message"
+FILENAME = "rfc822.plain.message"
+"""
+
+msg = p.parse(open(FILENAME))
 DO_CHECK = False
 #################################################
 
