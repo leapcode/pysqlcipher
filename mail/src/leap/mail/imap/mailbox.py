@@ -654,7 +654,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         unseen = self.getUnseenCount()
         leap_events.signal(IMAP_UNREAD_MAIL, str(unseen))
 
-    @deferred
     def store(self, messages_asked, flags, mode, uid):
         """
         Sets the flags of one or more messages.
@@ -697,28 +696,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             log.msg('read only mailbox!')
             raise imap4.ReadOnlyMailbox
 
-        result = {}
-        for msg_id in seq_messg:
-            log.msg("MSG ID = %s" % msg_id)
-            msg = self.messages.get_msg_by_uid(msg_id)
-            if not msg:
-                continue
-            # We duplicate the set operations here
-            # to return the result because it's less costly than
-            # retrieving the flags again.
-            newflags = set(msg.getFlags())
-
-            if mode == 1:
-                msg.addFlags(flags)
-                newflags = newflags.union(set(flags))
-            elif mode == -1:
-                msg.removeFlags(flags)
-                newflags.difference_update(flags)
-            elif mode == 0:
-                msg.setFlags(flags)
-                newflags = set(flags)
-            result[msg_id] = newflags
-        return result
+        return self.messages.set_flags(self.mbox, seq_messg, flags, mode)
 
     # ISearchableMailbox
 

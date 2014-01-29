@@ -20,7 +20,6 @@ LeapMessage and MessageCollection.
 import copy
 import logging
 import re
-import time
 import threading
 import StringIO
 
@@ -97,10 +96,12 @@ class LeapMessage(fields, MailParser, MBoxParser):
     """
 
     # TODO this has to change.
-    # Should index primarily by chash, and keep a local-lonly
+    # Should index primarily by chash, and keep a local-only
     # UID table.
 
     implements(imap4.IMessage)
+
+    flags_lock = threading.Lock()
 
     def __init__(self, soledad, uid, mbox, collection=None, container=None):
         """
@@ -111,7 +112,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :param uid: the UID for the message.
         :type uid: int or basestring
         :param mbox: the mbox this message belongs to
-        :type mbox: basestring
+        :type mbox: str or unicode
         :param collection: a reference to the parent collection object
         :type collection: MessageCollection
         :param container: a IMessageContainer implementor instance
@@ -216,23 +217,17 @@ class LeapMessage(fields, MailParser, MBoxParser):
             flags = map(str, flags)
         return tuple(flags)
 
-    # setFlags, addFlags, removeFlags are not in the interface spec
-    # but we use them with store command.
+    # setFlags not in the interface spec but we use it with store command.
 
-    def setFlags(self, flags):
+    def setFlags(self, flags, mode):
         """
         Sets the flags for this message
 
-        Returns a SoledadDocument that needs to be updated by the caller.
-
         :param flags: the flags to update in the message.
         :type flags: tuple of str
-
-        :return: a SoledadDocument instance
-        :rtype: SoledadDocument
+        :param mode: the mode for setting. 1 is append, -1 is remove, 0 set.
+        :type mode: int
         """
-        # XXX Move logic to memory store ...
-
         leap_assert(isinstance(flags, tuple), "flags need to be a tuple")
         log.msg('setting flags: %s (%s)' % (self._uid, flags))
 
@@ -242,51 +237,36 @@ class LeapMessage(fields, MailParser, MBoxParser):
                 "Could not find FDOC for %s:%s while setting flags!" %
                 (self._mbox, self._uid))
             return
-        doc.content[self.FLAGS_KEY] = flags
-        doc.content[self.SEEN_KEY] = self.SEEN_FLAG in flags
-        doc.content[self.DEL_KEY] = self.DELETED_FLAG in flags
 
-        if self._collection.memstore is not None:
-            log.msg("putting message in collection")
-            self._collection.memstore.put_message(
-                self._mbox, self._uid,
-                MessageWrapper(fdoc=doc.content, new=False, dirty=True,
-                               docs_id={'fdoc': doc.doc_id}))
-        else:
-            # fallback for non-memstore initializations.
-            self._soledad.put_doc(doc)
+        APPEND = 1
+        REMOVE = -1
+        SET = 0
 
-    def addFlags(self, flags):
-        """
-        Adds flags to this message.
+        with self.flags_lock:
+            current = doc.content[self.FLAGS_KEY]
+            if mode == APPEND:
+                newflags = tuple(set(tuple(current) + flags))
+            elif mode == REMOVE:
+                newflags = tuple(set(current).difference(set(flags)))
+            elif mode == SET:
+                newflags = flags
 
-        Returns a SoledadDocument that needs to be updated by the caller.
+            # We could defer this, but I think it's better
+            # to put it under the lock...
+            doc.content[self.FLAGS_KEY] = newflags
+            doc.content[self.SEEN_KEY] = self.SEEN_FLAG in flags
+            doc.content[self.DEL_KEY] = self.DELETED_FLAG in flags
 
-        :param flags: the flags to add to the message.
-        :type flags: tuple of str
-
-        :return: a SoledadDocument instance
-        :rtype: SoledadDocument
-        """
-        leap_assert(isinstance(flags, tuple), "flags need to be a tuple")
-        oldflags = self.getFlags()
-        self.setFlags(tuple(set(flags + oldflags)))
-
-    def removeFlags(self, flags):
-        """
-        Remove flags from this message.
-
-        Returns a SoledadDocument that needs to be updated by the caller.
-
-        :param flags: the flags to be removed from the message.
-        :type flags: tuple of str
-
-        :return: a SoledadDocument instance
-        :rtype: SoledadDocument
-        """
-        leap_assert(isinstance(flags, tuple), "flags need to be a tuple")
-        oldflags = self.getFlags()
-        self.setFlags(tuple(set(oldflags) - set(flags)))
+            if self._collection.memstore is not None:
+                log.msg("putting message in collection")
+                self._collection.memstore.put_message(
+                    self._mbox, self._uid,
+                    MessageWrapper(fdoc=doc.content, new=False, dirty=True,
+                                   docs_id={'fdoc': doc.doc_id}))
+            else:
+                # fallback for non-memstore initializations.
+                self._soledad.put_doc(doc)
+        return map(str, newflags)
 
     def getInternalDate(self):
         """
@@ -1022,6 +1002,9 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
     def unset_recent_flags(self, uids):
         """
         Unset Recent flag for a sequence of uids.
+
+        :param uids: the uids to unset
+        :type uid: sequence
         """
         with self._rdoc_property_lock:
             self.recent_flags.difference_update(
@@ -1032,6 +1015,9 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
     def unset_recent_flag(self, uid):
         """
         Unset Recent flag for a given uid.
+
+        :param uid: the uid to unset
+        :type uid: int
         """
         with self._rdoc_property_lock:
             self.recent_flags.difference_update(
@@ -1040,6 +1026,9 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
     def set_recent_flag(self, uid):
         """
         Set Recent flag for a given uid.
+
+        :param uid: the uid to set
+        :type uid: int
         """
         with self._rdoc_property_lock:
             self.recent_flags = self.recent_flags.union(
@@ -1099,31 +1088,64 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         # and we cannot find it otherwise. This seems to be enough.
 
         # XXX do a deferLater instead ??
-        # FIXME this won't be needed after the CHECK command is implemented.
-        time.sleep(0.3)
+        # XXX is this working?
         return self._get_uid_from_msgidCb(msgid)
+
+    def set_flags(self, mbox, messages, flags, mode):
+        """
+        Set flags for a sequence of messages.
+
+        :param mbox: the mbox this message belongs to
+        :type mbox: str or unicode
+        :param messages: the messages to iterate through
+        :type messages: sequence
+        :flags: the flags to be set
+        :type flags: tuple
+        :param mode: the mode for setting. 1 is append, -1 is remove, 0 set.
+        :type mode: int
+        """
+        result = {}
+        for msg_id in messages:
+            log.msg("MSG ID = %s" % msg_id)
+            msg = self.get_msg_by_uid(msg_id, mem_only=True, flags_only=True)
+            if not msg:
+                continue
+            result[msg_id] = msg.setFlags(flags, mode)
+
+        return result
 
     # getters: generic for a mailbox
 
-    def get_msg_by_uid(self, uid):
+    def get_msg_by_uid(self, uid, mem_only=False, flags_only=False):
         """
         Retrieves a LeapMessage by UID.
         This is used primarity in the Mailbox fetch and store methods.
 
         :param uid: the message uid to query by
         :type uid: int
+        :param mem_only: a flag that indicates whether this Message should
+                         pass a reference to soledad to retrieve missing pieces
+                         or not.
+        :type mem_only: bool
+        :param flags_only: whether the message should carry only a reference
+                           to the flags document.
+        :type flags_only: bool
 
         :return: A LeapMessage instance matching the query,
                  or None if not found.
         :rtype: LeapMessage
         """
-        msg_container = self.memstore.get_message(self.mbox, uid)
+        msg_container = self.memstore.get_message(self.mbox, uid, flags_only)
         if msg_container is not None:
-            # We pass a reference to soledad just to be able to retrieve
-            # missing parts that cannot be found in the container, like
-            # the content docs after a copy.
-            msg = LeapMessage(self._soledad, uid, self.mbox, collection=self,
-                              container=msg_container)
+            if mem_only:
+                msg = LeapMessage(None, uid, self.mbox, collection=self,
+                                  container=msg_container)
+            else:
+                # We pass a reference to soledad just to be able to retrieve
+                # missing parts that cannot be found in the container, like
+                # the content docs after a copy.
+                msg = LeapMessage(self._soledad, uid, self.mbox,
+                                  collection=self, container=msg_container)
         else:
             msg = LeapMessage(self._soledad, uid, self.mbox, collection=self)
         if not msg.does_exist():
@@ -1159,7 +1181,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
     def all_uid_iter(self):
         """
-        Return an iterator trhough the UIDs of all messages, sorted in
+        Return an iterator through the UIDs of all messages, sorted in
         ascending order.
         """
         # XXX we should get this from the uid table, local-only

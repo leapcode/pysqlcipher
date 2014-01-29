@@ -99,10 +99,9 @@ class LeapIMAPServer(imap4.IMAP4Server):
         Overwritten fetch dispatcher to use the fast fetch_flags
         method
         """
-        from twisted.internet import reactor
         if not query:
             self.sendPositiveResponse(tag, 'FETCH complete')
-            return  # XXX ???
+            return
 
         cbFetch = self._IMAP4Server__cbFetch
         ebFetch = self._IMAP4Server__ebFetch
@@ -131,15 +130,18 @@ class LeapIMAPServer(imap4.IMAP4Server):
             ).addCallback(
                 cbFetch, tag, query, uid
             ).addErrback(
-                ebFetch, tag)
-
-        # XXX should be a callback
-        deferLater(reactor,
-                   2, self.mbox.unset_recent_flags, messages)
-        deferLater(reactor, 1, self.mbox.signal_unread_to_ui)
+                ebFetch, tag
+            ).addCallback(
+                self.on_fetch_finished, messages)
 
     select_FETCH = (do_FETCH, imap4.IMAP4Server.arg_seqset,
                     imap4.IMAP4Server.arg_fetchatt)
+
+    def on_fetch_finished(self, _, messages):
+        from twisted.internet import reactor
+        deferLater(reactor, 0, self.notifyNew)
+        deferLater(reactor, 0, self.mbox.unset_recent_flags, messages)
+        deferLater(reactor, 0, self.mbox.signal_unread_to_ui)
 
     def on_copy_finished(self, defers):
         d = defer.gatherResults(filter(None, defers))
@@ -156,7 +158,7 @@ class LeapIMAPServer(imap4.IMAP4Server):
     select_COPY = (do_COPY, imap4.IMAP4Server.arg_seqset,
                    imap4.IMAP4Server.arg_astring)
 
-    def notifyNew(self, ignored):
+    def notifyNew(self, ignored=None):
         """
         Notify new messages to listeners.
         """
@@ -203,10 +205,4 @@ class LeapIMAPServer(imap4.IMAP4Server):
         """
         # TODO return the output of _memstore.is_writing
         # XXX and that should return a deferred!
-
-        # XXX  fake a delayed operation, to debug problem with messages getting
-        # back to the source mailbox...
-        print "faking checkpoint..."
-        import time
-        time.sleep(5)
         return None

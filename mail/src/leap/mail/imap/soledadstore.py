@@ -26,6 +26,7 @@ from u1db import errors as u1db_errors
 from zope.interface import implements
 
 from leap.common.check import leap_assert_type
+from leap.mail.decorators import deferred
 from leap.mail.imap.messageparts import MessagePartType
 from leap.mail.imap.messageparts import MessageWrapper
 from leap.mail.imap.messageparts import RecentFlagsDoc
@@ -191,6 +192,7 @@ class SoledadStore(ContentDedup):
 
     # IMessageConsumer
 
+    @deferred
     def consume(self, queue):
         """
         Creates a new document in soledad db.
@@ -297,9 +299,6 @@ class SoledadStore(ContentDedup):
             # item is expected to be a MessagePartDoc
             for item in msg_wrapper.walk():
                 if item.part == MessagePartType.fdoc:
-
-                    # FIXME add content duplication for HEADERS too!
-                    # (only 1 chash per mailbox!)
                     yield dict(item.content), call
 
                 elif item.part == MessagePartType.hdoc:
