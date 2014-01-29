@@ -366,7 +366,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         if self.CMD_UIDNEXT in names:
             r[self.CMD_UIDNEXT] = self.last_uid + 1
         if self.CMD_UIDVALIDITY in names:
-            r[self.CMD_UIDVALIDITY] = self.getUID()
+            r[self.CMD_UIDVALIDITY] = self.getUIDValidity()
         if self.CMD_UNSEEN in names:
             r[self.CMD_UNSEEN] = self.getUnseenCount()
         return defer.succeed(r)
