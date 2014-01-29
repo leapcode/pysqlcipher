@@ -301,7 +301,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
         fd = StringIO.StringIO()
         if self._bdoc is not None:
             bdoc_content = self._bdoc.content
-            if bdoc_content is None:
+            if empty(bdoc_content):
                 logger.warning("No BDOC content found for message!!!")
                 return write_fd("")
 
@@ -906,9 +906,10 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
             hd[key] = parts_map[key]
         del parts_map
 
-        # The MessageContainer expects a dict, zero-indexed
+        # The MessageContainer expects a dict, one-indexed
         # XXX review-me
-        cdocs = dict(enumerate(walk.get_raw_docs(msg, parts)))
+        cdocs = dict(((key + 1, doc) for key, doc in
+                     enumerate(walk.get_raw_docs(msg, parts))))
 
         self.set_recent_flag(uid)
 
@@ -960,7 +961,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                     fields.RECENTFLAGS_KEY, []))
             return self.__rflags
 
-    @profile
     def _set_recent_flags(self, value):
         """
         Setter for the recent-flags set for this mailbox.
