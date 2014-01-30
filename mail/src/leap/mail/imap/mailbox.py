@@ -22,6 +22,7 @@ import threading
 import logging
 import StringIO
 import cStringIO
+import os
 
 from collections import defaultdict
 
@@ -42,6 +43,12 @@ from leap.mail.imap.messageparts import MessageWrapper
 from leap.mail.imap.parser import MBoxParser
 
 logger = logging.getLogger(__name__)
+
+"""
+If the environment variable `LEAP_SKIPNOTIFY` is set, we avoid
+notifying clients of new messages. Use during stress tests.
+"""
+NOTIFY_NEW = not os.environ.get('LEAP_SKIPNOTIFY', False)
 
 
 class SoledadMailbox(WithMsgFields, MBoxParser):
@@ -77,6 +84,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
     CMD_UIDVALIDITY = "UIDVALIDITY"
     CMD_UNSEEN = "UNSEEN"
 
+    # FIXME we should turn this into a datastructure with limited capacity
     _listeners = defaultdict(set)
 
     next_uid_lock = threading.Lock()
@@ -145,6 +153,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :param listener: listener to add
         :type listener: an object that implements IMailboxListener
         """
+        if not NOTIFY_NEW:
+            return
         logger.debug('adding mailbox listener: %s' % listener)
         self.listeners.add(listener)
 
@@ -421,6 +431,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
         :param args: ignored.
         """
+        if not NOTIFY_NEW:
+            return
         exists = self.getMessageCount()
         recent = self.getRecentCount()
         logger.debug("NOTIFY: there are %s messages, %s recent" % (
