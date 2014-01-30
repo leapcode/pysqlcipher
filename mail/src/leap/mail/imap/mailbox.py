@@ -126,6 +126,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             self.setFlags(self.INIT_FLAGS)
 
         if self._memstore:
+            self.prime_known_uids_to_memstore()
             self.prime_last_uid_to_memstore()
 
     @property
@@ -263,9 +264,18 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         Prime memstore with last_uid value
         """
         set_exist = set(self.messages.all_uid_iter())
-        last = max(set_exist) + 1 if set_exist else 1
+        last = max(set_exist) if set_exist else 0
         logger.info("Priming Soledad last_uid to %s" % (last,))
         self._memstore.set_last_soledad_uid(self.mbox, last)
+
+    def prime_known_uids_to_memstore(self):
+        """
+        Prime memstore with the set of all known uids.
+
+        We do this to be able to filter the requests efficiently.
+        """
+        known_uids = self.messages.all_soledad_uid_iter()
+        self._memstore.set_known_uids(self.mbox, known_uids)
 
     def getUIDValidity(self):
         """
@@ -525,6 +535,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         return seq_messg
 
     @deferred
+    #@profile
     def fetch(self, messages_asked, uid):
         """
         Retrieve one or more messages in this mailbox.

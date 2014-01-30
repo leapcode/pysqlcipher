@@ -192,7 +192,8 @@ class SoledadStore(ContentDedup):
 
     # IMessageConsumer
 
-    @deferred
+    # It's not thread-safe to defer this to a different thread
+
     def consume(self, queue):
         """
         Creates a new document in soledad db.

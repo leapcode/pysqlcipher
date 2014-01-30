@@ -149,6 +149,14 @@ class MemoryStore(object):
         """
         self._last_uid = {}
 
+        """
+        known-uids keeps a count of the uids that soledad knows for a given
+        mailbox
+
+        {'mbox-a': set([1,2,3])}
+        """
+        self._known_uids = defaultdict(set)
+
         # New and dirty flags, to set MessageWrapper State.
         self._new = set([])
         self._new_deferreds = {}
@@ -447,9 +455,19 @@ class MemoryStore(object):
 
         :param mbox: the mailbox
         :type mbox: str or unicode
+        :rtype: list
         """
         all_keys = self._msg_store.keys()
         return [uid for m, uid in all_keys if m == mbox]
+
+    def get_soledad_known_uids(self, mbox):
+        """
+        Get all uids that soledad knows about, from the memory cache.
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :rtype: list
+        """
+        return self._known_uids.get(mbox, [])
 
     # last_uid
 
@@ -495,6 +513,18 @@ class MemoryStore(object):
         with self._last_uid_lock:
             if not self._last_uid.get(mbox, None):
                 self._last_uid[mbox] = value
+
+    def set_known_uids(self, mbox, value):
+        """
+        Set the value fo the known-uids set for this mbox.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :param value: a sequence of integers to be added to the set.
+        :type value: tuple
+        """
+        current = self._known_uids[mbox]
+        self._known_uids[mbox] = current.union(set(value))
 
     def increment_last_soledad_uid(self, mbox):
         """

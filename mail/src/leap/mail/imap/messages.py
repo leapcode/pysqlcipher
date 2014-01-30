@@ -219,6 +219,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
 
     # setFlags not in the interface spec but we use it with store command.
 
+    #@profile
     def setFlags(self, flags, mode):
         """
         Sets the flags for this message
@@ -934,6 +935,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
     # recent flags
 
+    #@profile
     def _get_recent_flags(self):
         """
         An accessor for the recent-flags set for this mailbox.
@@ -957,13 +959,13 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                         {'doc_id': rdoc.doc_id, 'set': rflags})
             return rflags
 
-        else:
+        #else:
             # fallback for cases without memory store
-            with self._rdoc_lock:
-                rdoc = self._get_recent_doc()
-                self.__rflags = set(rdoc.content.get(
-                    fields.RECENTFLAGS_KEY, []))
-            return self.__rflags
+            #with self._rdoc_lock:
+                #rdoc = self._get_recent_doc()
+                #self.__rflags = set(rdoc.content.get(
+                    #fields.RECENTFLAGS_KEY, []))
+            #return self.__rflags
 
     def _set_recent_flags(self, value):
         """
@@ -972,21 +974,22 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         if self.memstore is not None:
             self.memstore.set_recent_flags(self.mbox, value)
 
-        else:
+        #else:
             # fallback for cases without memory store
-            with self._rdoc_lock:
-                rdoc = self._get_recent_doc()
-                newv = set(value)
-                self.__rflags = newv
-                rdoc.content[fields.RECENTFLAGS_KEY] = list(newv)
+            #with self._rdoc_lock:
+                #rdoc = self._get_recent_doc()
+                #newv = set(value)
+                #self.__rflags = newv
+                #rdoc.content[fields.RECENTFLAGS_KEY] = list(newv)
                 # XXX should deferLater 0 it?
-                self._soledad.put_doc(rdoc)
+                #self._soledad.put_doc(rdoc)
 
     recent_flags = property(
         _get_recent_flags, _set_recent_flags,
         doc="Set of UIDs with the recent flag for this mailbox.")
 
     # XXX change naming, indicate soledad query.
+    #@profile
     def _get_recent_doc(self):
         """
         Get recent-flags document from Soledad for this mailbox.
@@ -1027,6 +1030,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
             self.recent_flags.difference_update(
                 set([uid]))
 
+    @deferred
     def set_recent_flag(self, uid):
         """
         Set Recent flag for a given uid.
@@ -1095,6 +1099,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         # XXX is this working?
         return self._get_uid_from_msgidCb(msgid)
 
+    #@profile
     def set_flags(self, mbox, messages, flags, mode):
         """
         Set flags for a sequence of messages.
@@ -1183,25 +1188,29 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         # FIXME ----------------------------------------------
         return sorted(all_docs, key=lambda item: item.content['uid'])
 
-    def all_uid_iter(self):
+    #@profile
+    def all_soledad_uid_iter(self):
         """
         Return an iterator through the UIDs of all messages, sorted in
         ascending order.
         """
-        # XXX we should get this from the uid table, local-only
-        # XXX FIXME -------------
-        # This should be cached in the memstoretoo
         db_uids = set([doc.content[self.UID_KEY] for doc in
                        self._soledad.get_from_index(
                            fields.TYPE_MBOX_IDX,
                            fields.TYPE_FLAGS_VAL, self.mbox)])
+        return db_uids
+
+    #@profile
+    def all_uid_iter(self):
+        """
+        Return an iterator through the UIDs of all messages, from memory.
+        """
         if self.memstore is not None:
             mem_uids = self.memstore.get_uids(self.mbox)
-            uids = db_uids.union(set(mem_uids))
-        else:
-            uids = db_uids
-
-        return (u for u in sorted(uids))
+            soledad_known_uids = self.memstore.get_soledad_known_uids(
+                self.mbox)
+            combined = tuple(set(mem_uids).union(soledad_known_uids))
+            return combined
 
     # XXX MOVE to memstore
     def all_flags(self):
