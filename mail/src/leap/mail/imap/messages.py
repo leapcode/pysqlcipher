@@ -407,6 +407,10 @@ class LeapMessage(fields, MailParser, MBoxParser):
             if not isinstance(value, str):
                 value = value.encode(charset, 'replace')
 
+            if value.endswith(";"):
+                # bastards
+                value = value[:-1]
+
             # filter original dict by negate-condition
             if cond(key):
                 headers2[key] = value
