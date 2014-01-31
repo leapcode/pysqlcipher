@@ -45,7 +45,7 @@ from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
 from leap.common.mail import get_email_charset
 from leap.keymanager import errors as keymanager_errors
 from leap.keymanager.openpgp import OpenPGPKey
-from leap.mail.decorators import deferred
+from leap.mail.decorators import deferred_to_thread
 from leap.mail.utils import json_loads
 from leap.soledad.client import Soledad
 from leap.soledad.common.crypto import ENC_SCHEME_KEY, ENC_JSON_KEY
@@ -199,7 +199,7 @@ class LeapIncomingMail(object):
         logger.exception(failure.value)
         traceback.print_tb(*sys.exc_info())
 
-    @deferred
+    @deferred_to_thread
     def _sync_soledad(self):
         """
         Synchronizes with remote soledad.

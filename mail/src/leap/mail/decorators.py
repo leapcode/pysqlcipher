@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # See this answer: http://stackoverflow.com/a/19019648/1157664
 # And the notes by glyph and jpcalderone
 
-def deferred(f):
+def deferred_to_thread(f):
     """
     Decorator, for deferring methods to Threads.
 

@@ -32,7 +32,7 @@ from zope.interface import implements
 
 from leap.common.check import leap_assert_type
 from leap.mail import size
-from leap.mail.decorators import deferred
+from leap.mail.decorators import deferred_to_thread
 from leap.mail.utils import empty
 from leap.mail.messageflow import MessageProducer
 from leap.mail.imap import interfaces
@@ -200,7 +200,8 @@ class MemoryStore(object):
     # We would have to add a put_flags operation to modify only
     # the flags doc (and set the dirty flag accordingly)
 
-    def create_message(self, mbox, uid, message, notify_on_disk=True):
+    def create_message(self, mbox, uid, message, observer,
+                       notify_on_disk=True):
         """
         Create the passed message into this MemoryStore.
 
@@ -212,38 +213,38 @@ class MemoryStore(object):
         :type uid: int
         :param message: a message to be added
         :type message: MessageWrapper
-        :param notify_on_disk: whether the deferred that is returned should
+        :param observer: the deferred that will fire with the
+                         UID of the message. If notify_on_disk is True,
+                         this will happen when the message is written to
+                         Soledad. Otherwise it will fire as soon as we've
+                         added the message to the memory store.
+        :type observer: Deferred
+        :param notify_on_disk: whether the `observer` deferred should
                                wait until the message is written to disk to
                                be fired.
         :type notify_on_disk: bool
-
-        :return: a Deferred. if notify_on_disk is True, will be fired
-                 when written to the db on disk.
-                 Otherwise will fire inmediately
-        :rtype: Deferred
         """
         log.msg("adding new doc to memstore %r (%r)" % (mbox, uid))
         key = mbox, uid
 
         self._add_message(mbox, uid, message, notify_on_disk)
-
-        d = defer.Deferred()
-        d.addCallback(lambda result: log.msg("message save: %s" % result))
         self._new.add(key)
 
-        # We store this deferred so we can keep track of the pending
-        # operations internally.
-        self._new_deferreds[key] = d
+        def log_add(result):
+            log.msg("message save: %s" % result)
+            return result
+        observer.addCallback(log_add)
 
         if notify_on_disk:
-            # Caller wants to be notified when the message is on disk
-            # so we pass the deferred that will be fired when the message
-            # has been written.
-            return d
-        else:
+            # We store this deferred so we can keep track of the pending
+            # operations internally.
+            # TODO this should fire with the UID !!! -- change that in
+            # the soledad store code.
+            self._new_deferreds[key] = observer
+        if not notify_on_disk:
             # Caller does not care, just fired and forgot, so we pass
             # a defer that will inmediately have its callback triggered.
-            return defer.succeed('fire-and-forget:%s' % str(key))
+            observer.callback(uid)
 
     def put_message(self, mbox, uid, message, notify_on_disk=True):
         """
@@ -541,7 +542,7 @@ class MemoryStore(object):
             self.write_last_uid(mbox, value)
             return value
 
-    @deferred
+    @deferred_to_thread
     def write_last_uid(self, mbox, value):
         """
         Increment the soledad integer cache for the highest uid value.
