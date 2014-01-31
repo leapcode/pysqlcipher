@@ -108,6 +108,14 @@ class WithMsgFields(object):
     # correct since the recent flag is volatile.
     TYPE_MBOX_RECT_SEEN_IDX = 'by-type-and-mbox-and-recent-and-seen'
 
+    # Soledad index for incoming mail, without decrypting errors.
+    JUST_MAIL_IDX = "just-mail"
+    # XXX the backward-compatible index, will be deprecated at 0.7
+    JUST_MAIL_COMPAT_IDX = "just-mail-compat"
+
+    INCOMING_KEY = "incoming"
+    ERROR_DECRYPTING_KEY = "errdecr"
+
     KTYPE = TYPE_KEY
     MBOX_VAL = TYPE_MBOX_VAL
     CHASH_VAL = CONTENT_HASH_KEY
@@ -140,6 +148,13 @@ class WithMsgFields(object):
         TYPE_MBOX_DEL_IDX: [KTYPE, MBOX_VAL, 'bool(deleted)'],
         TYPE_MBOX_RECT_SEEN_IDX: [KTYPE, MBOX_VAL,
                                   'bool(recent)', 'bool(seen)'],
+
+        # incoming queue
+        JUST_MAIL_IDX: [INCOMING_KEY,
+                        "bool(%s)" % (ERROR_DECRYPTING_KEY,)],
+
+        # the backward-compatible index, will be deprecated at 0.7
+        JUST_MAIL_COMPAT_IDX: [INCOMING_KEY],
     }
 
     MBOX_KEY = MBOX_VAL
