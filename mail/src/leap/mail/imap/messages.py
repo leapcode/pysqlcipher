@@ -337,11 +337,10 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :type stuff: basestring
         :returns: charset
         """
-        # TODO get from subpart headers
-        # XXX existential doubt 2. shouldn't we make the scope
+        # XXX shouldn't we make the scope
         # of the decorator somewhat more persistent?
         # ah! yes! and put memory bounds.
-        return get_email_charset(unicode(stuff))
+        return get_email_charset(stuff)
 
     def getSize(self):
         """
