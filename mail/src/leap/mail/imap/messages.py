@@ -299,7 +299,9 @@ class LeapMessage(fields, MailParser, MBoxParser):
             return fd
 
         # TODO refactor with getBodyFile in MessagePart
+
         fd = StringIO.StringIO()
+
         if self._bdoc is not None:
             bdoc_content = self._bdoc.content
             if empty(bdoc_content):
@@ -456,8 +458,8 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :rtype: Any object implementing C{IMessagePart}.
         :return: The specified sub-part.
         """
-        #if not self.isMultipart():
-            #raise TypeError
+        if not self.isMultipart():
+            raise TypeError
         try:
             pmap_dict = self._get_part_from_parts_map(part + 1)
         except KeyError:
