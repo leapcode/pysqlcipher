@@ -18,6 +18,7 @@
 Imap service initialization
 """
 import logging
+import os
 
 from twisted.internet.protocol import ServerFactory
 from twisted.internet.error import CannotListenError
@@ -63,6 +64,8 @@ except Exception:
     print "Error setting stack size"
 
 ######################################################
+
+DO_MANHOLE = os.environ.get("LEAP_MAIL_MANHOLE", None)
 
 
 class IMAPAuthRealm(object):
@@ -118,6 +121,118 @@ class LeapIMAPFactory(ServerFactory):
         return imapProtocol
 
 
+MANHOLE_PORT = 2222
+
+
+def getManholeFactory(namespace, user, secret):
+    """
+    Get an administrative manhole into the application.
+
+    :param namespace: the namespace to show in the manhole
+    :type namespace: dict
+    :param user: the user to authenticate into the administrative shell.
+    :type user: str
+    :param secret: pass for this manhole
+    :type secret: str
+    """
+    import string
+
+    from twisted.cred.portal import Portal
+    from twisted.conch import manhole, manhole_ssh
+    from twisted.conch.insults import insults
+    from twisted.cred.checkers import (
+        InMemoryUsernamePasswordDatabaseDontUse as MemoryDB)
+
+    from rlcompleter import Completer
+
+    class EnhancedColoredManhole(manhole.ColoredManhole):
+        """
+        A Manhole with some primitive autocomplete support.
+        """
+        # TODO use introspection to make life easier
+
+        def find_common(self, l):
+            """
+            find common parts in thelist items
+            ex: 'ab' for ['abcd','abce','abf']
+            requires an ordered list
+            """
+            if len(l) == 1:
+                return l[0]
+
+            init = l[0]
+            for item in l[1:]:
+                for i, (x, y) in enumerate(zip(init, item)):
+                    if x != y:
+                        init = "".join(init[:i])
+                        break
+
+                if not init:
+                    return None
+            return init
+
+        def handle_TAB(self):
+            """
+            Trap the TAB keystroke
+            """
+            necessarypart = "".join(self.lineBuffer).split(' ')[-1]
+            completer = Completer(globals())
+            if completer.complete(necessarypart, 0):
+                matches = list(set(completer.matches))  # has multiples
+
+                if len(matches) == 1:
+                    length = len(necessarypart)
+                    self.lineBuffer = self.lineBuffer[:-length]
+                    self.lineBuffer.extend(matches[0])
+                    self.lineBufferIndex = len(self.lineBuffer)
+                else:
+                    matches.sort()
+                    commons = self.find_common(matches)
+                    if commons:
+                        length = len(necessarypart)
+                        self.lineBuffer = self.lineBuffer[:-length]
+                        self.lineBuffer.extend(commons)
+                        self.lineBufferIndex = len(self.lineBuffer)
+
+                    self.terminal.nextLine()
+                    while matches:
+                        matches, part = matches[4:], matches[:4]
+                        for item in part:
+                            self.terminal.write('%s' % item.ljust(30))
+                            self.terminal.write('\n')
+                            self.terminal.nextLine()
+
+                self.terminal.eraseLine()
+                self.terminal.cursorBackward(self.lineBufferIndex + 5)
+                self.terminal.write("%s %s" % (
+                    self.ps[self.pn], "".join(self.lineBuffer)))
+
+        def keystrokeReceived(self, keyID, modifier):
+            """
+            Act upon any keystroke received.
+            """
+            self.keyHandlers.update({'\b': self.handle_BACKSPACE})
+            m = self.keyHandlers.get(keyID)
+            if m is not None:
+                m()
+            elif keyID in string.printable:
+                self.characterReceived(keyID, False)
+
+    sshRealm = manhole_ssh.TerminalRealm()
+
+    def chainedProtocolFactory():
+        return insults.ServerProtocol(EnhancedColoredManhole, namespace)
+
+    sshRealm = manhole_ssh.TerminalRealm()
+    sshRealm.chainedProtocolFactory = chainedProtocolFactory
+
+    portal = Portal(
+        sshRealm, [MemoryDB(**{user: secret})])
+
+    f = manhole_ssh.ConchFactory(portal)
+    return f
+
+
 def run_service(*args, **kwargs):
     """
     Main entry point to run the service from the client.
@@ -163,6 +278,16 @@ def run_service(*args, **kwargs):
     else:
         # all good.
         # (the caller has still to call fetcher.start_loop)
+
+        if DO_MANHOLE:
+            # TODO get pass from env var.too.
+            manhole_factory = getManholeFactory(
+                {'f': factory,
+                 'a': factory.theAccount,
+                 'gm': factory.theAccount.getMailbox},
+                "boss", "leap")
+            reactor.listenTCP(MANHOLE_PORT, manhole_factory,
+                              interface="127.0.0.1")
         logger.debug("IMAP4 Server is RUNNING in port  %s" % (port,))
         leap_events.signal(IMAP_SERVICE_STARTED, str(port))
         return fetcher, tport, factory
