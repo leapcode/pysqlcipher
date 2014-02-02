@@ -37,6 +37,7 @@ from leap.common.decorators import memoized_method
 from leap.common.mail import get_email_charset
 from leap.mail import walk
 from leap.mail.utils import first, find_charset, lowerdict, empty
+from leap.mail.utils import stringify_parts_map
 from leap.mail.decorators import deferred_to_thread
 from leap.mail.imap.index import IndexedDB
 from leap.mail.imap.fields import fields, WithMsgFields
@@ -219,7 +220,6 @@ class LeapMessage(fields, MailParser, MBoxParser):
 
     # setFlags not in the interface spec but we use it with store command.
 
-    #@profile
     def setFlags(self, flags, mode):
         """
         Sets the flags for this message
@@ -243,30 +243,30 @@ class LeapMessage(fields, MailParser, MBoxParser):
         REMOVE = -1
         SET = 0
 
-        #with self.flags_lock:
-        current = doc.content[self.FLAGS_KEY]
-        if mode == APPEND:
-            newflags = tuple(set(tuple(current) + flags))
-        elif mode == REMOVE:
-            newflags = tuple(set(current).difference(set(flags)))
-        elif mode == SET:
-            newflags = flags
+        with self.flags_lock:
+            current = doc.content[self.FLAGS_KEY]
+            if mode == APPEND:
+                newflags = tuple(set(tuple(current) + flags))
+            elif mode == REMOVE:
+                newflags = tuple(set(current).difference(set(flags)))
+            elif mode == SET:
+                newflags = flags
 
-        # We could defer this, but I think it's better
-        # to put it under the lock...
-        doc.content[self.FLAGS_KEY] = newflags
-        doc.content[self.SEEN_KEY] = self.SEEN_FLAG in flags
-        doc.content[self.DEL_KEY] = self.DELETED_FLAG in flags
+            # We could defer this, but I think it's better
+            # to put it under the lock...
+            doc.content[self.FLAGS_KEY] = newflags
+            doc.content[self.SEEN_KEY] = self.SEEN_FLAG in flags
+            doc.content[self.DEL_KEY] = self.DELETED_FLAG in flags
 
-        if self._collection.memstore is not None:
-            log.msg("putting message in collection")
-            self._collection.memstore.put_message(
-                self._mbox, self._uid,
-                MessageWrapper(fdoc=doc.content, new=False, dirty=True,
-                               docs_id={'fdoc': doc.doc_id}))
-        else:
-            # fallback for non-memstore initializations.
-            self._soledad.put_doc(doc)
+            if self._collection.memstore is not None:
+                log.msg("putting message in collection")
+                self._collection.memstore.put_message(
+                    self._mbox, self._uid,
+                    MessageWrapper(fdoc=doc.content, new=False, dirty=True,
+                                   docs_id={'fdoc': doc.doc_id}))
+            else:
+                # fallback for non-memstore initializations.
+                self._soledad.put_doc(doc)
         return map(str, newflags)
 
     def getInternalDate(self):
@@ -483,6 +483,9 @@ class LeapMessage(fields, MailParser, MBoxParser):
 
         hdoc_content = self._hdoc.content
         pmap = hdoc_content.get(fields.PARTS_MAP_KEY, {})
+
+        # remember, lads, soledad is using strings in its keys,
+        # not integers!
         return pmap[str(part)]
 
     # XXX moved to memory store
@@ -534,10 +537,10 @@ class LeapMessage(fields, MailParser, MBoxParser):
 
         if self._container is not None:
             bdoc = self._container.memstore.get_cdoc_from_phash(body_phash)
-            if bdoc and bdoc.content is not None:
+            if not empty(bdoc) and not empty(bdoc.content):
                 return bdoc
 
-        # no memstore or no doc found there
+        # no memstore, or no body doc found there
         if self._soledad:
             body_docs = self._soledad.get_from_index(
                 fields.TYPE_P_HASH_IDX,
@@ -847,7 +850,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         else:
             return False
 
-    #@profile
     def add_msg(self, raw, subject=None, flags=None, date=None, uid=None,
                 notify_on_disk=False):
         """
@@ -881,7 +883,8 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         self._do_add_msg(raw, flags, subject, date, notify_on_disk, d)
         return d
 
-    @deferred_to_thread
+    # We SHOULD defer this (or the heavy load here) to the thread pool,
+    # but it gives troubles with the QSocketNotifier used by Qt...
     def _do_add_msg(self, raw, flags, subject, date, notify_on_disk, observer):
         """
         Helper that creates a new message document.
@@ -907,9 +910,19 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         # So we probably should just do an in-memory check and
         # move the complete check to the soledad writer?
         # Watch out! We're reserving a UID right after this!
-        if self._fdoc_already_exists(chash):
-            logger.warning("We already have that message in this mailbox.")
-            return defer.succeed('already_exists')
+        existing_uid = self._fdoc_already_exists(chash)
+        if existing_uid:
+            logger.warning("We already have that message in this "
+                           "mailbox, unflagging as deleted")
+            uid = existing_uid
+            msg = self.get_msg_by_uid(uid)
+            msg.setFlags((fields.DELETED_FLAG,), -1)
+
+            # XXX if this is deferred to thread again we should not use
+            # the callback in the deferred thread, but return and
+            # call the callback from the caller fun...
+            observer.callback(uid)
+            return
 
         uid = self.memstore.increment_last_soledad_uid(self.mbox)
         logger.info("ADDING MSG WITH UID: %s" % uid)
@@ -929,17 +942,15 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
             hd[key] = parts_map[key]
         del parts_map
 
+        hd = stringify_parts_map(hd)
+
         # The MessageContainer expects a dict, one-indexed
         # XXX review-me
         cdocs = dict(((key + 1, doc) for key, doc in
                      enumerate(walk.get_raw_docs(msg, parts))))
 
         self.set_recent_flag(uid)
-
-        # TODO ---- add reference to original doc, to be deleted
-        # after writes are done.
         msg_container = MessageWrapper(fd, hd, cdocs)
-
         self.memstore.create_message(self.mbox, uid, msg_container,
                                      observer=observer,
                                      notify_on_disk=notify_on_disk)
@@ -950,7 +961,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
     # recent flags
 
-    #@profile
     def _get_recent_flags(self):
         """
         An accessor for the recent-flags set for this mailbox.
@@ -1004,7 +1014,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         doc="Set of UIDs with the recent flag for this mailbox.")
 
     # XXX change naming, indicate soledad query.
-    #@profile
     def _get_recent_doc(self):
         """
         Get recent-flags document from Soledad for this mailbox.
@@ -1114,7 +1123,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         # XXX is this working?
         return self._get_uid_from_msgidCb(msgid)
 
-    #@profile
     def set_flags(self, mbox, messages, flags, mode, observer):
         """
         Set flags for a sequence of messages.
@@ -1220,7 +1228,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         # FIXME ----------------------------------------------
         return sorted(all_docs, key=lambda item: item.content['uid'])
 
-    #@profile
     def all_soledad_uid_iter(self):
         """
         Return an iterator through the UIDs of all messages, sorted in
@@ -1232,7 +1239,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                            fields.TYPE_FLAGS_VAL, self.mbox)])
         return db_uids
 
-    #@profile
     def all_uid_iter(self):
         """
         Return an iterator through the UIDs of all messages, from memory.

@@ -318,7 +318,7 @@ class MemoryStore(object):
                 store[FDOC])
 
         hdoc = msg_dict.get(HDOC, None)
-        if hdoc:
+        if hdoc is not None:
             if not store.get(HDOC, None):
                 store[HDOC] = ReferenciableDict({})
             store[HDOC].update(hdoc)
@@ -438,7 +438,8 @@ class MemoryStore(object):
         if not self.producer.is_queue_empty():
             return
 
-        logger.info("Writing messages to Soledad...")
+        if any(map(lambda i: not empty(i), (self._new, self._dirty))):
+            logger.info("Writing messages to Soledad...")
 
         # TODO change for lock, and make the property access
         # is accquired
@@ -885,6 +886,7 @@ class MemoryStore(object):
         # TODO expunge should add itself as a callback to the ongoing
         # writes.
         soledad_store = self._permanent_store
+        all_deleted = []
 
         try:
             # 1. Stop the writing call

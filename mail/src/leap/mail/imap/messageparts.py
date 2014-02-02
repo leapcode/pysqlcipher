@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # messageparts.py
 # Copyright (C) 2014 LEAP
 #
@@ -315,6 +314,7 @@ class MessageWrapper(object):
         fdoc, hdoc, cdocs = map(
             lambda part: msg_dict.get(part, None),
             [self.FDOC, self.HDOC, self.CDOCS])
+
         for t, doc in ((self.FDOC, fdoc), (self.HDOC, hdoc),
                        (self.CDOCS, cdocs)):
             self._dict[t] = ReferenciableDict(doc) if doc else None
@@ -390,8 +390,10 @@ class MessagePart(object):
                 first_part = pmap.get('1', None)
                 if not empty(first_part):
                     phash = first_part['phash']
+                else:
+                    phash = None
 
-            if not phash:
+            if phash is None:
                 logger.warning("Could not find phash for this subpart!")
                 payload = ""
             else:
@@ -435,11 +437,13 @@ class MessagePart(object):
             fields.TYPE_CONTENT_VAL, str(phash))
 
         cdoc = first(cdocs)
-        if not cdoc:
+        if cdoc is None:
             logger.warning(
                 "Could not find the content doc "
                 "for phash %s" % (phash,))
-        payload = cdoc.content.get(fields.RAW_KEY, "")
+            payload = ""
+        else:
+            payload = cdoc.content.get(fields.RAW_KEY, "")
         return payload
 
     # TODO should memory-bound this memoize!!!

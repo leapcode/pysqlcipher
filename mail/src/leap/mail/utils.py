@@ -17,6 +17,7 @@
 """
 Mail utilities.
 """
+import copy
 import json
 import re
 import traceback
@@ -90,6 +91,43 @@ def lowerdict(_dict):
     # Look into requests code.
     return dict((key.lower(), value)
                 for key, value in _dict.items())
+
+
+PART_MAP = "part_map"
+
+
+def _str_dict(d, k):
+    """
+    Convert the dictionary key to string if it was a string.
+
+    :param d: the dict
+    :type d: dict
+    :param k: the key
+    :type k: object
+    """
+    if isinstance(k, int):
+        val = d[k]
+        d[str(k)] = val
+        del(d[k])
+
+
+def stringify_parts_map(d):
+    """
+    Modify a dictionary making all the nested dicts under "part_map" keys
+    having strings as keys.
+
+    :param d: the dictionary to modify
+    :type d: dictionary
+    :rtype: dictionary
+    """
+    for k in d:
+        if k == PART_MAP:
+            pmap = d[k]
+            for kk in pmap.keys():
+                _str_dict(d[k], kk)
+            for kk in pmap.keys():
+                stringify_parts_map(d[k][str(kk)])
+    return d
 
 
 class CustomJsonScanner(object):

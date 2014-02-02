@@ -139,14 +139,22 @@ class LeapIMAPServer(imap4.IMAP4Server):
 
     def on_fetch_finished(self, _, messages):
         from twisted.internet import reactor
+
+        print "FETCH FINISHED -- NOTIFY NEW"
         deferLater(reactor, 0, self.notifyNew)
         deferLater(reactor, 0, self.mbox.unset_recent_flags, messages)
         deferLater(reactor, 0, self.mbox.signal_unread_to_ui)
 
     def on_copy_finished(self, defers):
         d = defer.gatherResults(filter(None, defers))
-        d.addCallback(self.notifyNew)
-        d.addCallback(self.mbox.signal_unread_to_ui)
+
+        def when_finished(result):
+            log.msg("COPY FINISHED")
+            self.notifyNew()
+            self.mbox.signal_unread_to_ui()
+        d.addCallback(when_finished)
+        #d.addCallback(self.notifyNew)
+        #d.addCallback(self.mbox.signal_unread_to_ui)
 
     def do_COPY(self, tag, messages, mailbox, uid=0):
         from twisted.internet import reactor
@@ -162,6 +170,7 @@ class LeapIMAPServer(imap4.IMAP4Server):
         """
         Notify new messages to listeners.
         """
+        print "TRYING TO NOTIFY NEW"
         self.mbox.notify_new()
 
     def _cbSelectWork(self, mbox, cmdName, tag):

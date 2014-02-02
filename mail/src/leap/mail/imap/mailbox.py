@@ -162,6 +162,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         """
         if not NOTIFY_NEW:
             return
+
         logger.debug('adding mailbox listener: %s' % listener)
         self.listeners.add(listener)
 
@@ -801,7 +802,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         from twisted.internet import reactor
         print "COPY :", message
         d = defer.Deferred()
-
         # XXX this should not happen ... track it down,
         # probably to FETCH...
         if message is None:
@@ -810,7 +810,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         deferLater(reactor, 0, self._do_copy, message, d)
         return d
 
-    #@profile
     def _do_copy(self, message, observer):
         """
         Call invoked from the deferLater in `copy`. This will
@@ -851,7 +850,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             logger.warning("Destination message already exists!")
 
             # XXX I'm still not clear if we should raise the
-            # callback. This actually rases an ugly warning
+            # errback. This actually rases an ugly warning
             # in some muas like thunderbird. I guess the user does
             # not deserve that.
             #observer.errback(MessageCopyError("Already exists!"))
