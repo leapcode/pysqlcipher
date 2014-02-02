@@ -486,8 +486,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         Expunge and mark as closed
         """
         d = self.expunge()
-        #d.addCallback(self._close_cb)
-        #return d
+        d.addCallback(self._close_cb)
+        return d
 
     def _expunge_cb(self, result):
         return result
@@ -498,15 +498,11 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         """
         if not self.isWriteable():
             raise imap4.ReadOnlyMailbox
-
-        return self._memstore.expunge(self.mbox)
-
-        # TODO we can defer this back when it's correct
-        # but we should make sure the memstore has been synced.
-
-        #d = self._memstore.expunge(self.mbox)
-        #d.addCallback(self._expunge_cb)
-        #return d
+        d = defer.Deferred()
+        return self._memstore.expunge(self.mbox, d)
+        self._memstore.expunge(self.mbox)
+        d.addCallback(self._expunge_cb, d)
+        return d
 
     def _bound_seq(self, messages_asked):
         """
@@ -800,7 +796,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :rtype: Deferred
         """
         from twisted.internet import reactor
-        print "COPY :", message
+
         d = defer.Deferred()
         # XXX this should not happen ... track it down,
         # probably to FETCH...

@@ -873,13 +873,15 @@ class MemoryStore(object):
             self.remove_message(mbox, uid)
         return mem_deleted
 
-    def expunge(self, mbox):
+    def expunge(self, mbox, observer):
         """
         Remove all messages flagged \\Deleted, from the Memory Store
         and from the permanent store also.
 
         :param mbox: the mailbox
         :type mbox: str or unicode
+        :param observer: a deferred that will be fired when expunge is done
+        :type observer: Deferred
         :return: a list of UIDs
         :rtype: list
         """
@@ -910,6 +912,11 @@ class MemoryStore(object):
             else:
                 sol_deleted = []
 
+            try:
+                self._known_uids[mbox].difference_update(set(sol_deleted))
+            except Exception as exc:
+                logger.exception(exc)
+
             # 2. Delete all messages marked as deleted in memory.
             mem_deleted = self.remove_all_deleted(mbox)
 
@@ -919,6 +926,7 @@ class MemoryStore(object):
             logger.exception(exc)
         finally:
             self._start_write_loop()
+        observer.callback(True)
         return all_deleted
 
     # Dump-to-disk controls.
