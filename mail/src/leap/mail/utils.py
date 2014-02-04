@@ -17,9 +17,12 @@
 """
 Mail utilities.
 """
+import copy
 import json
 import re
 import traceback
+
+from leap.soledad.common.document import SoledadDocument
 
 
 CHARSET_PATTERN = r"""charset=([\w-]+)"""
@@ -36,6 +39,28 @@ def first(things):
         return None
 
 
+def empty(thing):
+    """
+    Return True if a thing is None or its length is zero.
+    """
+    if thing is None:
+        return True
+    if isinstance(thing, SoledadDocument):
+        thing = thing.content
+    try:
+        return len(thing) == 0
+    except ReferenceError:
+        return True
+
+
+def maybe_call(thing):
+    """
+    Return the same thing, or the result of its invocation if it is a
+    callable.
+    """
+    return thing() if callable(thing) else thing
+
+
 def find_charset(thing, default=None):
     """
     Looks into the object 'thing' for a charset specification.
@@ -46,14 +71,63 @@ def find_charset(thing, default=None):
     :param default: the dafault charset to return if no charset is found.
     :type default: str
 
-    :returns: the charset or 'default'
+    :return: the charset or 'default'
     :rtype: str or None
     """
     charset = first(CHARSET_RE.findall(repr(thing)))
     if charset is None:
         charset = default
-
     return charset
+
+
+def lowerdict(_dict):
+    """
+    Return a dict with the keys in lowercase.
+
+    :param _dict: the dict to convert
+    :rtype: dict
+    """
+    # TODO should properly implement a CaseInsensitive dict.
+    # Look into requests code.
+    return dict((key.lower(), value)
+                for key, value in _dict.items())
+
+
+PART_MAP = "part_map"
+
+
+def _str_dict(d, k):
+    """
+    Convert the dictionary key to string if it was a string.
+
+    :param d: the dict
+    :type d: dict
+    :param k: the key
+    :type k: object
+    """
+    if isinstance(k, int):
+        val = d[k]
+        d[str(k)] = val
+        del(d[k])
+
+
+def stringify_parts_map(d):
+    """
+    Modify a dictionary making all the nested dicts under "part_map" keys
+    having strings as keys.
+
+    :param d: the dictionary to modify
+    :type d: dictionary
+    :rtype: dictionary
+    """
+    for k in d:
+        if k == PART_MAP:
+            pmap = d[k]
+            for kk in pmap.keys():
+                _str_dict(d[k], kk)
+            for kk in pmap.keys():
+                stringify_parts_map(d[k][str(kk)])
+    return d
 
 
 class CustomJsonScanner(object):
