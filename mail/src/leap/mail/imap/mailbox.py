@@ -52,11 +52,6 @@ notifying clients of new messages. Use during stress tests.
 NOTIFY_NEW = not os.environ.get('LEAP_SKIPNOTIFY', False)
 
 
-class MessageCopyError(Exception):
-    """
-    """
-
-
 class SoledadMailbox(WithMsgFields, MBoxParser):
     """
     A Soledad-backed IMAP mailbox.
@@ -802,7 +797,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         # probably to FETCH...
         if message is None:
             log.msg("BUG: COPY found a None in passed message")
-            d.calback(None)
+            d.callback(None)
         deferLater(reactor, 0, self._do_copy, message, d)
         return d
 
@@ -849,7 +844,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             # errback. This actually rases an ugly warning
             # in some muas like thunderbird. I guess the user does
             # not deserve that.
-            #observer.errback(MessageCopyError("Already exists!"))
             observer.callback(True)
         else:
             mbox = self.mbox

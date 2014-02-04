@@ -253,9 +253,11 @@ class SoledadStore(ContentDedup):
         """
         Consume each document wrapper in a separate thread.
 
-        :param doc_wrapper:
-        :type doc_wrapper:
-        :param deferred:
+        :param doc_wrapper: a MessageWrapper or RecentFlagsDoc instance
+        :type doc_wrapper: MessageWrapper or RecentFlagsDoc
+        :param deferred: a deferred that will be fired when the write operation
+                         has finished, either calling its callback or its
+                         errback depending on whether it succeed.
         :type deferred: Deferred
         """
         items = self._process(doc_wrapper)
@@ -415,6 +417,7 @@ class SoledadStore(ContentDedup):
         :param uid: the UID for the message
         :type uid: int
         """
+        result = None
         try:
             flag_docs = self._soledad.get_from_index(
                 fields.TYPE_MBOX_UID_IDX,
@@ -447,7 +450,7 @@ class SoledadStore(ContentDedup):
             mbox_doc = self._get_mbox_document(mbox)
             old_val = mbox_doc.content[key]
             if value < old_val:
-                logger.error("%s:%s Tried to write a UID lesser than what's "
+                logger.error("%r:%s Tried to write a UID lesser than what's "
                              "stored!" % (mbox, value))
             mbox_doc.content[key] = value
             self._soledad.put_doc(mbox_doc)

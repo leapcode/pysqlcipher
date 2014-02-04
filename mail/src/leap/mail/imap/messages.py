@@ -328,7 +328,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
         # We are still returning funky characters from here.
         else:
             logger.warning("No BDOC found for message.")
-            return write_fd(str(""))
+            return write_fd("")
 
     @memoized_method
     def _get_charset(self, stuff):
@@ -945,9 +945,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         hd = stringify_parts_map(hd)
 
         # The MessageContainer expects a dict, one-indexed
-        # XXX review-me
-        cdocs = dict(((key + 1, doc) for key, doc in
-                     enumerate(walk.get_raw_docs(msg, parts))))
+        cdocs = dict(enumerate(walk.get_raw_docs(msg, parts), 1))
 
         self.set_recent_flag(uid)
         msg_container = MessageWrapper(fd, hd, cdocs)

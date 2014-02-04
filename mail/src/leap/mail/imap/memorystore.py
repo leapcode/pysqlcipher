@@ -475,12 +475,13 @@ class MemoryStore(object):
 
     def get_last_uid(self, mbox):
         """
-        Get the highest UID for a given mbox.
+        Return the highest UID for a given mbox.
         It will be the highest between the highest uid in the message store for
         the mailbox, and the soledad integer cache.
 
         :param mbox: the mailbox
         :type mbox: str or unicode
+        :rtype: int
         """
         uids = self.get_uids(mbox)
         last_mem_uid = uids and max(uids) or 0
