@@ -398,7 +398,7 @@ class MessagePart(object):
                 payload = ""
             else:
                 payload = self._get_payload_from_document_memoized(phash)
-                if payload is None:
+                if empty(payload):
                     payload = self._get_payload_from_document(phash)
 
         else:
