@@ -879,30 +879,43 @@ class MemoryStore(object):
         Remove all messages flagged \\Deleted, from the Memory Store
         and from the permanent store also.
 
+        It first queues up a last write, and wait for the deferreds to be done
+        before continuing.
+
         :param mbox: the mailbox
         :type mbox: str or unicode
         :param observer: a deferred that will be fired when expunge is done
         :type observer: Deferred
-        :return: a list of UIDs
-        :rtype: list
         """
-        # TODO expunge should add itself as a callback to the ongoing
-        # writes.
         soledad_store = self._permanent_store
-        all_deleted = []
-
         try:
             # 1. Stop the writing call
             self._stop_write_loop()
             # 2. Enqueue a last write.
-            #self.write_messages(soledad_store)
-            # 3. Should wait on the writebacks to finish ???
-            # FIXME wait for this, and add all the rest of the method
-            # as a callback!!!
+            self.write_messages(soledad_store)
+            # 3. Wait on the writebacks to finish
+
+            pending_deferreds = (self._new_deferreds.get(mbox, []) +
+                                 self._dirty_deferreds.get(mbox, []))
+            d1 = defer.gatherResults(pending_deferreds, consumeErrors=True)
+            d1.addCallback(
+                self._delete_from_soledad_and_memory, mbox, observer)
         except Exception as exc:
             logger.exception(exc)
 
-        # Now, we...:
+    def _delete_from_soledad_and_memory(self, result, mbox, observer):
+        """
+        Remove all messages marked as deleted from soledad and memory.
+
+        :param result: ignored. the result of the deferredList that triggers
+                       this as a callback from `expunge`.
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :param observer: a deferred that will be fired when expunge is done
+        :type observer: Deferred
+        """
+        all_deleted = []
+        soledad_store = self._permanent_store
 
         try:
             # 1. Delete all messages marked as deleted in soledad.
@@ -927,8 +940,7 @@ class MemoryStore(object):
             logger.exception(exc)
         finally:
             self._start_write_loop()
-        observer.callback(True)
-        return all_deleted
+        observer.callback(all_deleted)
 
     # Dump-to-disk controls.
 

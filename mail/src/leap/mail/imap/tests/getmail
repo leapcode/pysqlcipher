@@ -5,8 +5,6 @@
 
 # Modifications by LEAP Developers 2014 to fit
 # Bitmask configuration settings.
-
-
 """
 Simple IMAP4 client which displays the subjects of all messages in a
 particular mailbox.

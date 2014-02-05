@@ -397,7 +397,9 @@ class MessagePart(object):
                 logger.warning("Could not find phash for this subpart!")
                 payload = ""
             else:
-                payload = self._get_payload_from_document(phash)
+                payload = self._get_payload_from_document_memoized(phash)
+                if payload is None:
+                    payload = self._get_payload_from_document(phash)
 
         else:
             logger.warning("Message with no part_map!")
@@ -424,13 +426,24 @@ class MessagePart(object):
 
     # TODO should memory-bound this memoize!!!
     @memoized_method
+    def _get_payload_from_document_memoized(self, phash):
+        """
+        Memoized method call around the regular method, to be able
+        to call the non-memoized method in case we got a None.
+
+        :param phash: the payload hash to retrieve by.
+        :type phash: str or unicode
+        :rtype: str or unicode or None
+        """
+        return self._get_payload_from_document(phash)
+
     def _get_payload_from_document(self, phash):
         """
         Return the message payload from the content document.
 
         :param phash: the payload hash to retrieve by.
         :type phash: str or unicode
-        :rtype: str or unicode
+        :rtype: str or unicode or None
         """
         cdocs = self._soledad.get_from_index(
             fields.TYPE_P_HASH_IDX,
