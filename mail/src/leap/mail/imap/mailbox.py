@@ -484,9 +484,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         d.addCallback(self._close_cb)
         return d
 
-    def _expunge_cb(self, result):
-        return result
-
     def expunge(self):
         """
         Remove all messages flagged \\Deleted
@@ -494,9 +491,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         if not self.isWriteable():
             raise imap4.ReadOnlyMailbox
         d = defer.Deferred()
-        return self._memstore.expunge(self.mbox, d)
-        self._memstore.expunge(self.mbox)
-        d.addCallback(self._expunge_cb, d)
+        self._memstore.expunge(self.mbox, d)
         return d
 
     def _bound_seq(self, messages_asked):
