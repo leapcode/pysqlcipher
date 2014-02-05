@@ -230,10 +230,11 @@ class MemoryStore(object):
         self._add_message(mbox, uid, message, notify_on_disk)
         self._new.add(key)
 
-        def log_add(result):
-            log.msg("message save: %s" % result)
-            return result
-        observer.addCallback(log_add)
+        # XXX use this while debugging the callback firing,
+        # remove after unittesting this.
+        #def log_add(result):
+            #return result
+        #observer.addCallback(log_add)
 
         if notify_on_disk:
             # We store this deferred so we can keep track of the pending
