@@ -35,7 +35,7 @@ from leap.mail.imap.messageparts import RecentFlagsDoc
 from leap.mail.imap.fields import fields
 from leap.mail.imap.interfaces import IMessageStore
 from leap.mail.messageflow import IMessageConsumer
-from leap.mail.utils import first
+from leap.mail.utils import first, empty
 
 logger = logging.getLogger(__name__)
 
@@ -303,6 +303,8 @@ class SoledadStore(ContentDedup):
         """
         failed = False
         for item, call in items:
+            if empty(item):
+                continue
             try:
                 self._try_call(call, item)
             except Exception as exc:
