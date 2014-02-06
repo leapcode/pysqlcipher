@@ -64,6 +64,11 @@ class IMessageProducer(Interface):
         Stop producing items.
         """
 
+    def flush(self):
+        """
+        Flush queued messages to consumer.
+        """
+
 
 class DummyMsgConsumer(object):
 
@@ -161,6 +166,12 @@ class MessageProducer(object):
         """
         if self._loop.running:
             self._loop.stop()
+
+    def flush(self):
+        """
+        Flush queued messages to consumer.
+        """
+        self._check_for_new()
 
 
 if __name__ == "__main__":

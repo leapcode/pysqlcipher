@@ -875,6 +875,15 @@ class MemoryStore(object):
             self.remove_message(mbox, uid)
         return mem_deleted
 
+    def stop_and_flush(self):
+        """
+        Stop the write loop and trigger a write to the producer.
+        """
+        self._stop_write_loop()
+        if self._permanent_store is not None:
+            self.write_messages(self._permanent_store)
+            self.producer.flush()
+
     def expunge(self, mbox, observer):
         """
         Remove all messages flagged \\Deleted, from the Memory Store
@@ -890,12 +899,9 @@ class MemoryStore(object):
         """
         soledad_store = self._permanent_store
         try:
-            # 1. Stop the writing call
-            self._stop_write_loop()
-            # 2. Enqueue a last write.
-            self.write_messages(soledad_store)
-            # 3. Wait on the writebacks to finish
-
+            # Stop and trigger last write
+            self.stop_and_flush()
+            # Wait on the writebacks to finish
             pending_deferreds = (self._new_deferreds.get(mbox, []) +
                                  self._dirty_deferreds.get(mbox, []))
             d1 = defer.gatherResults(pending_deferreds, consumeErrors=True)
@@ -961,6 +967,10 @@ class MemoryStore(object):
         # XXX ----- can fire when all new + dirty deferreds
         # are done (gatherResults)
         return getattr(self, self.WRITING_FLAG)
+
+    @property
+    def permanent_store(self):
+        return self._permanent_store
 
     # Memory management.
 
