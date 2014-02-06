@@ -1265,6 +1265,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                 #fields.TYPE_FLAGS_VAL, self.mbox)))
         #return all_flags_chash
 
+    # XXX get from memstore
     def all_headers(self):
         """
         Return a dict with all the headers documents for this
@@ -1282,13 +1283,10 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
         :rtype: int
         """
-        # XXX We should cache this in memstore too until next write...
-        count = self._soledad.get_count_from_index(
-            fields.TYPE_MBOX_IDX,
-            fields.TYPE_FLAGS_VAL, self.mbox)
-        if self.memstore is not None:
-            count += self.memstore.count_new()
-        return count
+        # XXX get this from a public method in memstore
+        store = self.memstore._msg_store
+        return len([uid for (mbox, uid) in store.keys()
+                    if mbox == self.mbox])
 
     # unseen messages
 
@@ -1300,10 +1298,10 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         :return: iterator through unseen message doc UIDs
         :rtype: iterable
         """
-        return (doc.content[self.UID_KEY] for doc in
-                self._soledad.get_from_index(
-                    fields.TYPE_MBOX_SEEN_IDX,
-                    fields.TYPE_FLAGS_VAL, self.mbox, '0'))
+        # XXX get this from a public method in memstore
+        store = self.memstore._msg_store
+        return (uid for (mbox, uid), d in store.items()
+                if mbox == self.mbox and "\\Seen" not in d["fdoc"]["flags"])
 
     def count_unseen(self):
         """
@@ -1312,10 +1310,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         :returns: count
         :rtype: int
         """
-        count = self._soledad.get_count_from_index(
-            fields.TYPE_MBOX_SEEN_IDX,
-            fields.TYPE_FLAGS_VAL, self.mbox, '0')
-        return count
+        return len(list(self.unseen_iter()))
 
     def get_unseen(self):
         """

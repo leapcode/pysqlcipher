@@ -86,10 +86,12 @@ class ContentDedup(object):
         if not header_docs:
             return False
 
-        if len(header_docs) != 1:
-            logger.warning("Found more than one copy of chash %s!"
-                           % (chash,))
-        logger.debug("Found header doc with that hash! Skipping save!")
+        # FIXME enable only to debug this problem.
+        #if len(header_docs) != 1:
+            #logger.warning("Found more than one copy of chash %s!"
+                           #% (chash,))
+
+        #logger.debug("Found header doc with that hash! Skipping save!")
         return True
 
     def _content_does_exist(self, doc):
@@ -110,10 +112,11 @@ class ContentDedup(object):
         if not attach_docs:
             return False
 
-        if len(attach_docs) != 1:
-            logger.warning("Found more than one copy of phash %s!"
-                           % (phash,))
-        logger.debug("Found attachment doc with that hash! Skipping save!")
+        # FIXME enable only to debug this problem
+        #if len(attach_docs) != 1:
+            #logger.warning("Found more than one copy of phash %s!"
+                           #% (phash,))
+        #logger.debug("Found attachment doc with that hash! Skipping save!")
         return True
 
 

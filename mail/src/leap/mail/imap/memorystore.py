@@ -827,7 +827,6 @@ class MemoryStore(object):
 
     # Recent Flags
 
-    # TODO --- nice but unused
     def set_recent_flag(self, mbox, uid):
         """
         Set the `Recent` flag for a given mailbox and UID.

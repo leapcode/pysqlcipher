@@ -559,6 +559,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :rtype: A tuple of two-tuples of message sequence numbers and
                 LeapMessage
         """
+        from twisted.internet import reactor
         # For the moment our UID is sequential, so we
         # can treat them all the same.
         # Change this to the flag that twisted expects when we
@@ -577,6 +578,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             raise NotImplementedError
         else:
             result = ((msgid, getmsg(msgid)) for msgid in seq_messg)
+            reactor.callLater(0, self.unset_recent_flags, seq_messg)
         return result
 
     def fetch_flags(self, messages_asked, uid):
@@ -838,6 +840,10 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
                 new_fdoc[self.UID_KEY] = uid_next
                 new_fdoc[self.MBOX_KEY] = mbox
 
+                flags = list(new_fdoc[self.FLAGS_KEY])
+                flags.append(fields.RECENT_FLAG)
+                new_fdoc[self.FLAGS_KEY] = flags
+
                 # FIXME set recent!
 
                 self._memstore.create_message(
@@ -890,12 +896,11 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         for doc in docs:
             self.messages._soledad.delete_doc(doc)
 
-    def unset_recent_flags(self, uids):
+    def unset_recent_flags(self, uid_seq):
         """
         Unset Recent flag for a sequence of UIDs.
         """
-        seq_messg = self._bound_seq(uids)
-        self.messages.unset_recent_flags(seq_messg)
+        self.messages.unset_recent_flags(uid_seq)
 
     def __repr__(self):
         """

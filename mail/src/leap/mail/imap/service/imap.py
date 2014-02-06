@@ -115,7 +115,12 @@ class LeapIMAPFactory(ServerFactory):
         # XXX how to pass the store along?
 
     def buildProtocol(self, addr):
-        "Return a protocol suitable for the job."
+        """
+        Return a protocol suitable for the job.
+
+        :param addr: ???
+        :type addr:  ???
+        """
         imapProtocol = LeapIMAPServer(
             uuid=self._uuid,
             userid=self._userid,
