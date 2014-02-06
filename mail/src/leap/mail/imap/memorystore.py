@@ -230,6 +230,8 @@ class MemoryStore(object):
                                be fired.
         :type notify_on_disk: bool
         """
+        from twisted.internet import reactor
+
         log.msg("adding new doc to memstore %r (%r)" % (mbox, uid))
         key = mbox, uid
 
@@ -251,7 +253,7 @@ class MemoryStore(object):
         if not notify_on_disk:
             # Caller does not care, just fired and forgot, so we pass
             # a defer that will inmediately have its callback triggered.
-            observer.callback(uid)
+            reactor.callLater(0, observer.callback, uid)
 
     def put_message(self, mbox, uid, message, notify_on_disk=True):
         """
