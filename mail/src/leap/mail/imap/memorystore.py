@@ -163,7 +163,7 @@ class MemoryStore(object):
         {'mbox-a': 42,
          'mbox-b': 23}
         """
-        self._last_uid = {}
+        self._last_uid = defaultdict(lambda: 0)
 
         """
         known-uids keeps a count of the uids that soledad knows for a given
