@@ -90,6 +90,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
     next_uid_lock = threading.Lock()
 
+    _fdoc_primed = {}
+
     def __init__(self, mbox, soledad, memstore, rw=1):
         """
         SoledadMailbox constructor. Needs to get passed a name, plus a
@@ -129,6 +131,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         if self._memstore:
             self.prime_known_uids_to_memstore()
             self.prime_last_uid_to_memstore()
+            self.prime_flag_docs_to_memstore()
 
     @property
     def listeners(self):
@@ -278,6 +281,16 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         """
         known_uids = self.messages.all_soledad_uid_iter()
         self._memstore.set_known_uids(self.mbox, known_uids)
+
+    def prime_flag_docs_to_memstore(self):
+        """
+        Prime memstore with all the flags documents.
+        """
+        primed = self._fdoc_primed.get(self.mbox, False)
+        if not primed:
+            all_flag_docs = self.messages.get_all_soledad_flag_docs()
+            self._memstore.load_flag_docs(self.mbox, all_flag_docs)
+            self._fdoc_primed[self.mbox] = True
 
     def getUIDValidity(self):
         """
@@ -606,7 +619,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         messages_asked = self._bound_seq(messages_asked)
         seq_messg = self._filter_msg_seq(messages_asked)
 
-        all_flags = self.messages.all_flags()
+        all_flags = self._memstore.all_flags(self.mbox)
         result = ((msgid, flagsPart(
             msgid, all_flags.get(msgid, tuple()))) for msgid in seq_messg)
         return result
@@ -833,7 +846,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
                 self._memstore.create_message(
                     self.mbox, uid_next,
                     MessageWrapper(
-                        new_fdoc, hdoc.content),
+                        new_fdoc, hdoc),
                     observer=observer,
                     notify_on_disk=False)
 
@@ -860,6 +873,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             logger.warning("Tried to copy a MSG with no fdoc")
             return
         new_fdoc = copy.deepcopy(fdoc.content)
+        copy_hdoc = copy.deepcopy(hdoc.content)
         fdoc_chash = new_fdoc[fields.CONTENT_HASH_KEY]
 
         # XXX is this hitting the db??? --- probably.
@@ -867,7 +881,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         dest_fdoc = memstore.get_fdoc_from_chash(
             fdoc_chash, self.mbox)
         exist = dest_fdoc and not empty(dest_fdoc.content)
-        return exist, new_fdoc, hdoc
+        return exist, new_fdoc, copy_hdoc
 
     # convenience fun
 

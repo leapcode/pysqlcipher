@@ -49,6 +49,11 @@ logger = logging.getLogger(__name__)
 # soledad storage, in seconds.
 SOLEDAD_WRITE_PERIOD = 10
 
+FDOC = MessagePartType.fdoc.key
+HDOC = MessagePartType.hdoc.key
+CDOCS = MessagePartType.cdocs.key
+DOCS_ID = MessagePartType.docs_id.key
+
 
 @contextlib.contextmanager
 def set_bool_flag(obj, att):
@@ -104,6 +109,11 @@ class MemoryStore(object):
         self._write_period = write_period
 
         # Internal Storage: messages
+        # TODO this probably will have better access times if we
+        # use msg_store[mbox][uid] insted of the current key scheme.
+        """
+        key is str(mbox,uid)
+        """
         self._msg_store = {}
 
         # Sizes
@@ -296,11 +306,6 @@ class MemoryStore(object):
 
         key = mbox, uid
         msg_dict = message.as_dict()
-
-        FDOC = MessagePartType.fdoc.key
-        HDOC = MessagePartType.hdoc.key
-        CDOCS = MessagePartType.cdocs.key
-        DOCS_ID = MessagePartType.docs_id.key
 
         try:
             store = self._msg_store[key]
@@ -579,6 +584,44 @@ class MemoryStore(object):
         leap_assert_type(value, int)
         if self._permanent_store:
             self._permanent_store.write_last_uid(mbox, value)
+
+    def load_flag_docs(self, mbox, flag_docs):
+        """
+        Load the flag documents for the given mbox.
+        Used during initial flag docs prefetch.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :param flag_docs: a dict with the content for the flag docs.
+        :type flag_docs: dict
+        """
+        # We can do direct assignments cause we know this will only
+        # be called during initialization of the mailbox.
+        msg_store = self._msg_store
+        for uid in flag_docs:
+            key = mbox, uid
+            msg_store[key] = {}
+            msg_store[key][FDOC] = ReferenciableDict(flag_docs[uid])
+
+    def all_flags(self, mbox):
+        """
+        Return a dictionary with all the flags for a given mbox.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :rtype: dict
+        """
+        flags_dict = {}
+        uids = self.get_uids(mbox)
+        store = self._msg_store
+        for uid in uids:
+            key = mbox, uid
+            try:
+                flags = store[key][FDOC][fields.FLAGS_KEY]
+                flags_dict[uid] = flags
+            except KeyError:
+                continue
+        return flags_dict
 
     # Counting sheeps...
 

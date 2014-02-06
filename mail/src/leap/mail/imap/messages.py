@@ -919,7 +919,10 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         if existing_uid:
             uid = existing_uid
             msg = self.get_msg_by_uid(uid)
-            reactor.callLater(0, msg.setFlags, (fields.DELETED_FLAG,), -1)
+
+            # TODO this cannot be deferred, this has to block.
+            #reactor.callLater(0, msg.setFlags, (fields.DELETED_FLAG,), -1)
+            msg.setFlags((fields.DELETED_FLAG,), -1)
             reactor.callLater(0, observer.callback, uid)
             return
 
@@ -1221,49 +1224,46 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         """
         Return an iterator through the UIDs of all messages, from memory.
         """
-        if self.memstore is not None:
-            mem_uids = self.memstore.get_uids(self.mbox)
-            soledad_known_uids = self.memstore.get_soledad_known_uids(
-                self.mbox)
-            combined = tuple(set(mem_uids).union(soledad_known_uids))
-            return combined
+        mem_uids = self.memstore.get_uids(self.mbox)
+        soledad_known_uids = self.memstore.get_soledad_known_uids(
+            self.mbox)
+        combined = tuple(set(mem_uids).union(soledad_known_uids))
+        return combined
 
-    # XXX MOVE to memstore
-    def all_flags(self):
+    def get_all_soledad_flag_docs(self):
         """
-        Return a dict with all flags documents for this mailbox.
-        """
-        # XXX get all from memstore and cache it there
-        # FIXME should get all uids, get them fro memstore,
-        # and get only the missing ones from disk.
+        Return a dict with the content of all the flag documents
+        in soledad store for the given mbox.
 
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :rtype: dict
+        """
+        # XXX we really could return a reduced version with
+        # just {'uid': (flags-tuple,) since the prefetch is
+        # only oriented to get the flag tuples.
         all_flags = dict(((
             doc.content[self.UID_KEY],
-            doc.content[self.FLAGS_KEY]) for doc in
+            dict(doc.content)) for doc in
             self._soledad.get_from_index(
                 fields.TYPE_MBOX_IDX,
                 fields.TYPE_FLAGS_VAL, self.mbox)))
-        if self.memstore is not None:
-            uids = self.memstore.get_uids(self.mbox)
-            docs = ((uid, self.memstore.get_message(self.mbox, uid))
-                    for uid in uids)
-            for uid, doc in docs:
-                all_flags[uid] = doc.fdoc.content[self.FLAGS_KEY]
-
         return all_flags
 
-    def all_flags_chash(self):
-        """
-        Return a dict with the content-hash for all flag documents
-        for this mailbox.
-        """
-        all_flags_chash = dict(((
-            doc.content[self.UID_KEY],
-            doc.content[self.CONTENT_HASH_KEY]) for doc in
-            self._soledad.get_from_index(
-                fields.TYPE_MBOX_IDX,
-                fields.TYPE_FLAGS_VAL, self.mbox)))
-        return all_flags_chash
+    # XXX Move to memstore too. But we don't need it really, since
+    # we can cache the headers docs too.
+    #def all_flags_chash(self):
+        #"""
+        #Return a dict with the content-hash for all flag documents
+        #for this mailbox.
+        #"""
+        #all_flags_chash = dict(((
+            #doc.content[self.UID_KEY],
+            #doc.content[self.CONTENT_HASH_KEY]) for doc in
+            #self._soledad.get_from_index(
+                #fields.TYPE_MBOX_IDX,
+                #fields.TYPE_FLAGS_VAL, self.mbox)))
+        #return all_flags_chash
 
     def all_headers(self):
         """
