@@ -195,11 +195,17 @@ class MemoryStore(object):
 
             # We can start the write loop right now, why wait?
             self._start_write_loop()
+        else:
+            # We have a memory-only store.
+            self.producer = None
+            self._write_loop = None
 
     def _start_write_loop(self):
         """
         Start loop for writing to disk database.
         """
+        if self._write_loop is None:
+            return
         if not self._write_loop.running:
             self._write_loop.start(self._write_period, now=True)
 
@@ -207,6 +213,8 @@ class MemoryStore(object):
         """
         Stop loop for writing to disk database.
         """
+        if self._write_loop is None:
+            return
         if self._write_loop.running:
             self._write_loop.stop()
 
@@ -961,6 +969,12 @@ class MemoryStore(object):
         :type observer: Deferred
         """
         soledad_store = self._permanent_store
+        if soledad_store is None:
+            # just-in memory store, easy then.
+            self._delete_from_memory(mbox, observer)
+            return
+
+        # We have a soledad storage.
         try:
             # Stop and trigger last write
             self.stop_and_flush()
@@ -972,6 +986,18 @@ class MemoryStore(object):
                 self._delete_from_soledad_and_memory, mbox, observer)
         except Exception as exc:
             logger.exception(exc)
+
+    def _delete_from_memory(self, mbox, observer):
+        """
+        Remove all messages marked as deleted from soledad and memory.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :param observer: a deferred that will be fired when expunge is done
+        :type observer: Deferred
+        """
+        mem_deleted = self.remove_all_deleted(mbox)
+        observer.callback(mem_deleted)
 
     def _delete_from_soledad_and_memory(self, result, mbox, observer):
         """
@@ -989,12 +1015,7 @@ class MemoryStore(object):
 
         try:
             # 1. Delete all messages marked as deleted in soledad.
-
-            # XXX this could be deferred for faster operation.
-            if soledad_store:
-                sol_deleted = soledad_store.remove_all_deleted(mbox)
-            else:
-                sol_deleted = []
+            sol_deleted = soledad_store.remove_all_deleted(mbox)
 
             try:
                 self._known_uids[mbox].difference_update(set(sol_deleted))
