@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 # The default period to do writebacks to the permanent
 # soledad storage, in seconds.
-SOLEDAD_WRITE_PERIOD = 10
+SOLEDAD_WRITE_PERIOD = 30
 
 FDOC = MessagePartType.fdoc.key
 HDOC = MessagePartType.hdoc.key
