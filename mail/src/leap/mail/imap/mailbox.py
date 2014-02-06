@@ -541,7 +541,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         seq_messg = set_asked.intersection(set_exist)
         return seq_messg
 
-    @deferred_to_thread
     def fetch(self, messages_asked, uid):
         """
         Retrieve one or more messages in this mailbox.
@@ -580,7 +579,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             result = ((msgid, getmsg(msgid)) for msgid in seq_messg)
         return result
 
-    @deferred_to_thread
     def fetch_flags(self, messages_asked, uid):
         """
         A fast method to fetch all flags, tricking just the
@@ -624,7 +622,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             msgid, all_flags.get(msgid, tuple()))) for msgid in seq_messg)
         return result
 
-    @deferred_to_thread
     def fetch_headers(self, messages_asked, uid):
         """
         A fast method to fetch all headers, tricking just the
