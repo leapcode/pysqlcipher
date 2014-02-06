@@ -447,7 +447,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             return
         exists = self.getMessageCount()
         recent = self.getRecentCount()
-        logger.debug("NOTIFY: there are %s messages, %s recent" % (
+        logger.debug("NOTIFY (%r): there are %s messages, %s recent" % (
+            self.mbox,
             exists,
             recent))
 
@@ -528,7 +529,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         return seq_messg
 
     @deferred_to_thread
-    #@profile
     def fetch(self, messages_asked, uid):
         """
         Retrieve one or more messages in this mailbox.
@@ -809,6 +809,44 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
                          UID of the message
         :type observer: Deferred
         """
+        memstore = self._memstore
+
+        def createCopy(result):
+            exist, new_fdoc, hdoc = result
+            if exist:
+                # Should we signal error on the callback?
+                logger.warning("Destination message already exists!")
+
+                # XXX I'm still not clear if we should raise the
+                # errback. This actually rases an ugly warning
+                # in some muas like thunderbird. I guess the user does
+                # not deserve that.
+                observer.callback(True)
+            else:
+                mbox = self.mbox
+                uid_next = memstore.increment_last_soledad_uid(mbox)
+                new_fdoc[self.UID_KEY] = uid_next
+                new_fdoc[self.MBOX_KEY] = mbox
+
+                # FIXME set recent!
+
+                self._memstore.create_message(
+                    self.mbox, uid_next,
+                    MessageWrapper(
+                        new_fdoc, hdoc.content),
+                    observer=observer,
+                    notify_on_disk=False)
+
+        d = self._get_msg_copy(message)
+        d.addCallback(createCopy)
+        d.addErrback(lambda f: log.msg(f.getTraceback()))
+
+    @deferred_to_thread
+    def _get_msg_copy(self, message):
+        """
+        Get a copy of the fdoc for this message, and check whether
+        it already exists.
+        """
         # XXX  for clarity, this could be delegated to a
         # MessageCollection mixin that implements copy too, and
         # moved out of here.
@@ -822,7 +860,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             logger.warning("Tried to copy a MSG with no fdoc")
             return
         new_fdoc = copy.deepcopy(fdoc.content)
-
         fdoc_chash = new_fdoc[fields.CONTENT_HASH_KEY]
 
         # XXX is this hitting the db??? --- probably.
@@ -830,30 +867,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         dest_fdoc = memstore.get_fdoc_from_chash(
             fdoc_chash, self.mbox)
         exist = dest_fdoc and not empty(dest_fdoc.content)
-
-        if exist:
-            # Should we signal error on the callback?
-            logger.warning("Destination message already exists!")
-
-            # XXX I'm still not clear if we should raise the
-            # errback. This actually rases an ugly warning
-            # in some muas like thunderbird. I guess the user does
-            # not deserve that.
-            observer.callback(True)
-        else:
-            mbox = self.mbox
-            uid_next = memstore.increment_last_soledad_uid(mbox)
-            new_fdoc[self.UID_KEY] = uid_next
-            new_fdoc[self.MBOX_KEY] = mbox
-
-            # FIXME set recent!
-
-            self._memstore.create_message(
-                self.mbox, uid_next,
-                MessageWrapper(
-                    new_fdoc, hdoc.content),
-                observer=observer,
-                notify_on_disk=False)
+        return exist, new_fdoc, hdoc
 
     # convenience fun
 
