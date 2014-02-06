@@ -41,6 +41,7 @@ class LeapIMAPServer(imap4.IMAP4Server):
         soledad = kwargs.pop('soledad', None)
         uuid = kwargs.pop('uuid', None)
         userid = kwargs.pop('userid', None)
+
         leap_assert(soledad, "need a soledad instance")
         leap_assert_type(soledad, Soledad)
         leap_assert(uuid, "need a user in the initialization")

@@ -273,11 +273,19 @@ class LeapMessage(fields, MailParser, MBoxParser):
         """
         Retrieve the date internally associated with this message
 
-        :rtype: C{str}
+        According to the spec, this is NOT the date and time in the
+        RFC-822 header, but rather a date and time that reflects when the
+        message was received.
+
+        * In SMTP, date and time of final delivery.
+        * In COPY, internal date/time of the source message.
+        * In APPEND, date/time specified.
+
         :return: An RFC822-formatted date string.
+        :rtype: str
         """
-        date = self._hdoc.content.get(self.DATE_KEY, '')
-        return str(date)
+        date = self._hdoc.content.get(fields.DATE_KEY, '')
+        return date
 
     #
     # IMessagePart
@@ -882,7 +890,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         leap_assert_type(flags, tuple)
 
         observer = defer.Deferred()
-
         d = self._do_parse(raw)
         d.addCallback(self._do_add_msg, flags, subject, date,
                       notify_on_disk, observer)

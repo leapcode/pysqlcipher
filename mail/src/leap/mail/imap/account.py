@@ -36,6 +36,10 @@ from leap.soledad.client import Soledad
 #######################################
 
 
+# TODO change name to LeapIMAPAccount, since we're using
+# the memstore.
+# IndexedDB should also not be here anymore.
+
 class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
     """
     An implementation of IAccount and INamespacePresenteer
@@ -67,6 +71,8 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         # XXX SHOULD assert too that the name matches the user/uuid with which
         # soledad has been initialized.
 
+        # XXX ??? why is this parsing mailbox name??? it's account...
+        # userid? homogenize.
         self._account_name = self._parse_mailbox_name(account_name)
         self._soledad = soledad
         self._memstore = memstore
