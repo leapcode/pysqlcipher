@@ -824,12 +824,12 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         memstore = self._memstore
 
         def createCopy(result):
-            exist, new_fdoc, hdoc = result
+            exist, new_fdoc = result
             if exist:
                 # Should we signal error on the callback?
                 logger.warning("Destination message already exists!")
 
-                # XXX I'm still not clear if we should raise the
+                # XXX I'm not sure if we should raise the
                 # errback. This actually rases an ugly warning
                 # in some muas like thunderbird. I guess the user does
                 # not deserve that.
@@ -848,8 +848,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
                 self._memstore.create_message(
                     self.mbox, uid_next,
-                    MessageWrapper(
-                        new_fdoc, hdoc),
+                    MessageWrapper(new_fdoc),
                     observer=observer,
                     notify_on_disk=False)
 
@@ -862,6 +861,9 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         """
         Get a copy of the fdoc for this message, and check whether
         it already exists.
+
+        :return: exist, new_fdoc
+        :rtype: tuple
         """
         # XXX  for clarity, this could be delegated to a
         # MessageCollection mixin that implements copy too, and
@@ -869,22 +871,16 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         msg = message
         memstore = self._memstore
 
-        # XXX should use a public api instead
-        fdoc = msg._fdoc
-        hdoc = msg._hdoc
-        if not fdoc:
+        if empty(msg.fdoc):
             logger.warning("Tried to copy a MSG with no fdoc")
             return
-        new_fdoc = copy.deepcopy(fdoc.content)
-        copy_hdoc = copy.deepcopy(hdoc.content)
+        new_fdoc = copy.deepcopy(msg.fdoc.content)
         fdoc_chash = new_fdoc[fields.CONTENT_HASH_KEY]
 
-        # XXX is this hitting the db??? --- probably.
-        # We should profile after the pre-fetch.
         dest_fdoc = memstore.get_fdoc_from_chash(
             fdoc_chash, self.mbox)
         exist = dest_fdoc and not empty(dest_fdoc.content)
-        return exist, new_fdoc, copy_hdoc
+        return exist, new_fdoc
 
     # convenience fun
 

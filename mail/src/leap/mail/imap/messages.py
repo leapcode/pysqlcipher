@@ -153,12 +153,20 @@ class LeapMessage(fields, MailParser, MBoxParser):
         """
         An accessor to the headers document.
         """
-        if self._container is not None:
+        container = self._container
+        if container is not None:
             hdoc = self._container.hdoc
             if hdoc and not empty(hdoc.content):
                 return hdoc
-        # XXX cache this into the memory store !!!
-        return self._get_headers_doc()
+        hdoc = self._get_headers_doc()
+
+        if container and not empty(hdoc.content):
+            # mem-cache it
+            hdoc_content = hdoc.content
+            chash = hdoc_content.get(fields.CONTENT_HASH_KEY)
+            hdocs = {chash: hdoc_content}
+            container.memstore.load_header_docs(hdocs)
+        return hdoc
 
     @property
     def chash(self):

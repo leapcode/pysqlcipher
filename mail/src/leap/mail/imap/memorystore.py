@@ -592,7 +592,8 @@ class MemoryStore(object):
 
         :param mbox: the mailbox
         :type mbox: str or unicode
-        :param flag_docs: a dict with the content for the flag docs.
+        :param flag_docs: a dict with the content for the flag docs, indexed
+                          by uid.
         :type flag_docs: dict
         """
         # We can do direct assignments cause we know this will only
@@ -600,6 +601,20 @@ class MemoryStore(object):
         fdoc_store = self._fdoc_store[mbox]
         for uid in flag_docs:
             fdoc_store[uid] = ReferenciableDict(flag_docs[uid])
+
+    def load_header_docs(self, header_docs):
+        """
+        Load the flag documents for the given mbox.
+        Used during header docs prefetch, and during cache after
+        a read from soledad if the hdoc property in message did not
+        find its value in here.
+
+        :param flag_docs: a dict with the content for the flag docs.
+        :type flag_docs: dict
+        """
+        hdoc_store = self._hdoc_store
+        for chash in header_docs:
+            hdoc_store[chash] = ReferenciableDict(header_docs[chash])
 
     def all_flags(self, mbox):
         """
