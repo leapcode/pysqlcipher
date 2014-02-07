@@ -109,13 +109,14 @@ class MemoryStore(object):
         self._write_period = write_period
 
         # Internal Storage: messages
-        # TODO this probably will have better access times if we
-        # use msg_store[mbox][uid] insted of the current key scheme.
         """
-        key is str(mbox,uid)
+        Flags document store.
+        _fdoc_store[mbox][uid] = { 'content': 'aaa' }
         """
-        self._msg_store = {}
+        self._fdoc_store = defaultdict(lambda: defaultdict(
+            lambda: ReferenciableDict({})))
 
+<<<<<<< HEAD
         # Sizes
         """
         {'mbox, uid': <int>}
@@ -123,10 +124,24 @@ class MemoryStore(object):
         self._sizes = {}
 
         # Internal Storage: payload-hash
+=======
+        # Internal Storage: content-hash:hdoc
+>>>>>>> change internal storage and keying scheme in memstore
         """
-        {'phash': weakreaf.proxy(dict)}
+        hdoc-store keeps references to
+        the header-documents indexed by content-hash.
+
+        {'chash': { dict-stuff }
+        }
         """
-        self._phash_store = {}
+        self._hdoc_store = defaultdict(lambda: ReferenciableDict({}))
+
+        # Internal Storage: payload-hash:cdoc
+        """
+        content-docs stored by payload-hash
+        {'phash': { dict-stuff } }
+        """
+        self._cdoc_store = defaultdict(lambda: ReferenciableDict({}))
 
         # Internal Storage: content-hash:fdoc
         """
@@ -309,26 +324,12 @@ class MemoryStore(object):
         Helper method, called by both create_message and put_message.
         See those for parameter documentation.
         """
-        # XXX have to differentiate between notify_new and notify_dirty
-        # TODO defaultdict the hell outa here...
-
-        key = mbox, uid
         msg_dict = message.as_dict()
 
-        try:
-            store = self._msg_store[key]
-        except KeyError:
-            self._msg_store[key] = {FDOC: {},
-                                    HDOC: {},
-                                    CDOCS: {},
-                                    DOCS_ID: {}}
-            store = self._msg_store[key]
-
         fdoc = msg_dict.get(FDOC, None)
-        if fdoc:
-            if not store.get(FDOC, None):
-                store[FDOC] = ReferenciableDict({})
-            store[FDOC].update(fdoc)
+        if fdoc is not None:
+            fdoc_store = self._fdoc_store[mbox][uid]
+            fdoc_store.update(fdoc)
 
             # content-hash indexing
             chash = fdoc.get(fields.CONTENT_HASH_KEY)
@@ -337,33 +338,21 @@ class MemoryStore(object):
                 chash_fdoc_store[chash] = {}
 
             chash_fdoc_store[chash][mbox] = weakref.proxy(
-                store[FDOC])
+                fdoc_store)
 
         hdoc = msg_dict.get(HDOC, None)
         if hdoc is not None:
-            if not store.get(HDOC, None):
-                store[HDOC] = ReferenciableDict({})
-            store[HDOC].update(hdoc)
-
-        docs_id = msg_dict.get(DOCS_ID, None)
-        if docs_id:
-            if not store.get(DOCS_ID, None):
-                store[DOCS_ID] = {}
-            store[DOCS_ID].update(docs_id)
+            chash = hdoc.get(fields.CONTENT_HASH_KEY)
+            hdoc_store = self._hdoc_store[chash]
+            hdoc_store.update(hdoc)
 
         cdocs = message.cdocs
-        for cdoc_key in cdocs.keys():
-            if not store.get(CDOCS, None):
-                store[CDOCS] = {}
-
-            cdoc = cdocs[cdoc_key]
-            # first we make it weak-referenciable
-            referenciable_cdoc = ReferenciableDict(cdoc)
-            store[CDOCS][cdoc_key] = referenciable_cdoc
+        for cdoc in cdocs.values():
             phash = cdoc.get(fields.PAYLOAD_HASH_KEY, None)
             if not phash:
                 continue
-            self._phash_store[phash] = weakref.proxy(referenciable_cdoc)
+            cdoc_store = self._cdoc_store[phash]
+            cdoc_store.update(cdoc)
 
         # Update memory store size
         # XXX this should use [mbox][uid]
@@ -371,15 +360,13 @@ class MemoryStore(object):
         self._sizes[key] = size.get_size(self._fdoc_store[key])
         # TODO add hdoc and cdocs sizes too
 
-        def prune(seq, store):
-            for key in seq:
-                if key in store and empty(store.get(key)):
-                    store.pop(key)
+        # XXX what to do with this?
+        #docs_id = msg_dict.get(DOCS_ID, None)
+        #if docs_id is not None:
+            #if not store.get(DOCS_ID, None):
+                #store[DOCS_ID] = {}
+            #store[DOCS_ID].update(docs_id)
 
-        prune((FDOC, HDOC, CDOCS, DOCS_ID), store)
-
-        # Update memory store size
-        self._sizes[key] = size(self._msg_store[key])
 
     def get_docid_for_fdoc(self, mbox, uid):
         """
@@ -413,18 +400,20 @@ class MemoryStore(object):
         :return: MessageWrapper or None
         """
         key = mbox, uid
-        FDOC = MessagePartType.fdoc.key
 
-        msg_dict = self._msg_store.get(key, None)
-        if empty(msg_dict):
+        fdoc = self._fdoc_store[mbox][uid]
+        if empty(fdoc):
             return None
+
         new, dirty = self._get_new_dirty_state(key)
         if flags_only:
-            return MessageWrapper(fdoc=msg_dict[FDOC],
+            return MessageWrapper(fdoc=fdoc,
                                   new=new, dirty=dirty,
                                   memstore=weakref.proxy(self))
         else:
-            return MessageWrapper(from_dict=msg_dict,
+            chash = fdoc.get(fields.CONTENT_HASH_KEY)
+            hdoc = self._hdoc_store[chash]
+            return MessageWrapper(fdoc=fdoc, hdoc=hdoc,
                                   new=new, dirty=dirty,
                                   memstore=weakref.proxy(self))
 
@@ -448,10 +437,14 @@ class MemoryStore(object):
             key = mbox, uid
             self._new.discard(key)
             self._dirty.discard(key)
+<<<<<<< HEAD
             self._msg_store.pop(key, None)
             if key in self._sizes:
                 del self._sizes[key]
 
+=======
+            self._fdoc_store[mbox].pop(uid, None)
+>>>>>>> change internal storage and keying scheme in memstore
         except Exception as exc:
             logger.exception(exc)
 
@@ -494,8 +487,7 @@ class MemoryStore(object):
         :type mbox: str or unicode
         :rtype: list
         """
-        all_keys = self._msg_store.keys()
-        return [uid for m, uid in all_keys if m == mbox]
+        return self._fdoc_store[mbox].keys()
 
     def get_soledad_known_uids(self, mbox):
         """
@@ -605,11 +597,9 @@ class MemoryStore(object):
         """
         # We can do direct assignments cause we know this will only
         # be called during initialization of the mailbox.
-        msg_store = self._msg_store
+        fdoc_store = self._fdoc_store[mbox]
         for uid in flag_docs:
-            key = mbox, uid
-            msg_store[key] = {}
-            msg_store[key][FDOC] = ReferenciableDict(flag_docs[uid])
+            fdoc_store[uid] = ReferenciableDict(flag_docs[uid])
 
     def all_flags(self, mbox):
         """
@@ -621,11 +611,10 @@ class MemoryStore(object):
         """
         flags_dict = {}
         uids = self.get_uids(mbox)
-        store = self._msg_store
+        fdoc_store = self._fdoc_store
         for uid in uids:
-            key = mbox, uid
             try:
-                flags = store[key][FDOC][fields.FLAGS_KEY]
+                flags = fdoc_store[uid][fields.FLAGS_KEY]
                 flags_dict[uid] = flags
             except KeyError:
                 continue
@@ -635,7 +624,7 @@ class MemoryStore(object):
 
     def count_new_mbox(self, mbox):
         """
-        Count the new messages by inbox.
+        Count the new messages by mailbox.
 
         :param mbox: the mailbox
         :type mbox: str or unicode
@@ -653,6 +642,32 @@ class MemoryStore(object):
         """
         return len(self._new)
 
+    def count(self, mbox):
+        """
+        Return the count of messages for a given mbox.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :return: number of messages
+        :rtype: int
+        """
+        return len(self._fdoc_store[mbox])
+
+    def unseen_iter(self, mbox):
+        """
+        Get an iterator for the message UIDs with no `seen` flag
+        for a given mailbox.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :return: iterator through unseen message doc UIDs
+        :rtype: iterable
+        """
+        fdocs = self._fdoc_store[mbox]
+        return [uid for uid, value
+                in fdocs.items()
+                if fields.SEEN_FLAG not in value["flags"]]
+
     def get_cdoc_from_phash(self, phash):
         """
         Return a content-document by its payload-hash.
@@ -661,7 +676,7 @@ class MemoryStore(object):
         :type phash: str or unicode
         :rtype: MessagePartDoc
         """
-        doc = self._phash_store.get(phash, None)
+        doc = self._cdoc_store.get(phash, None)
 
         # XXX return None for consistency?
 
@@ -716,15 +731,15 @@ class MemoryStore(object):
             content=fdoc,
             doc_id=None)
 
-    def all_msg_iter(self):
+    def iter_fdoc_keys(self):
         """
-        Return generator that iterates through all messages in the store.
-
-        :return: generator of MessageWrappers
-        :rtype: generator
+        Return a generator through all the mbox, uid keys in the flags-doc
+        store.
         """
-        return (self.get_message(*key)
-                for key in sorted(self._msg_store.keys()))
+        fdoc_store = self._fdoc_store
+        for mbox in fdoc_store:
+            for uid in fdoc_store[mbox]:
+                yield mbox, uid
 
     def all_new_dirty_msg_iter(self):
         """
@@ -734,22 +749,8 @@ class MemoryStore(object):
         :rtype: generator
         """
         return (self.get_message(*key)
-                for key in sorted(self._msg_store.keys())
+                for key in sorted(self.iter_fdoc_keys())
                 if key in self._new or key in self._dirty)
-
-    def all_msg_dict_for_mbox(self, mbox):
-        """
-        Return all the message dicts for a given mbox.
-
-        :param mbox: the mailbox
-        :type mbox: str or unicode
-        :return: list of dictionaries
-        :rtype: list
-        """
-        # This *needs* to return a fixed sequence. Otherwise the dictionary len
-        # will change during iteration, when we modify it
-        return [self._msg_store[(mb, uid)]
-                for mb, uid in self._msg_store if mb == mbox]
 
     def all_deleted_uid_iter(self, mbox):
         """
@@ -763,11 +764,10 @@ class MemoryStore(object):
         """
         # This *needs* to return a fixed sequence. Otherwise the dictionary len
         # will change during iteration, when we modify it
-        all_deleted = [
-            msg['fdoc']['uid'] for msg in self.all_msg_dict_for_mbox(mbox)
-            if msg.get('fdoc', None)
-            and fields.DELETED_FLAG in msg['fdoc']['flags']]
-        return all_deleted
+        fdocs = self._fdoc_store[mbox]
+        return [uid for uid, value
+                in fdocs.items()
+                if fields.DELETED_FLAG in value["flags"]]
 
     # new, dirty flags
 
@@ -780,6 +780,7 @@ class MemoryStore(object):
         :return: tuple of bools
         :rtype: tuple
         """
+        # TODO change indexing of sets to [mbox][key] too.
         # XXX should return *first* the news, and *then* the dirty...
         return map(lambda _set: key in _set, (self._new, self._dirty))
 

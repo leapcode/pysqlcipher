@@ -1290,10 +1290,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
         :rtype: int
         """
-        # XXX get this from a public method in memstore
-        store = self.memstore._msg_store
-        return len([uid for (mbox, uid) in store.keys()
-                    if mbox == self.mbox])
+        return self.memstore.count(self.mbox)
 
     # unseen messages
 
@@ -1305,10 +1302,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         :return: iterator through unseen message doc UIDs
         :rtype: iterable
         """
-        # XXX get this from a public method in memstore
-        store = self.memstore._msg_store
-        return (uid for (mbox, uid), d in store.items()
-                if mbox == self.mbox and "\\Seen" not in d["fdoc"]["flags"])
+        return self.memstore.unseen_iter(self.mbox)
 
     def count_unseen(self):
         """
