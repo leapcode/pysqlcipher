@@ -264,17 +264,15 @@ class LeapMessage(fields, MailParser, MBoxParser):
             # to put it under the lock...
             doc.content[self.FLAGS_KEY] = newflags
             doc.content[self.SEEN_KEY] = self.SEEN_FLAG in flags
+
+            # XXX check if this is working ok.
             doc.content[self.DEL_KEY] = self.DELETED_FLAG in flags
 
-            if self._collection.memstore is not None:
-                log.msg("putting message in collection")
-                self._collection.memstore.put_message(
-                    self._mbox, self._uid,
-                    MessageWrapper(fdoc=doc.content, new=False, dirty=True,
-                                   docs_id={'fdoc': doc.doc_id}))
-            else:
-                # fallback for non-memstore initializations.
-                self._soledad.put_doc(doc)
+            log.msg("putting message in collection")
+            self._collection.memstore.put_message(
+                self._mbox, self._uid,
+                MessageWrapper(fdoc=doc.content, new=False, dirty=True,
+                               docs_id={'fdoc': doc.doc_id}))
         return map(str, newflags)
 
     def getInternalDate(self):
@@ -524,6 +522,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
         finally:
             return result
 
+    # TODO move to soledadstore instead of accessing soledad directly
     def _get_headers_doc(self):
         """
         Return the document that keeps the headers for this
@@ -534,6 +533,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
             fields.TYPE_HEADERS_VAL, str(self.chash))
         return first(head_docs)
 
+    # TODO move to soledadstore instead of accessing soledad directly
     def _get_body_doc(self):
         """
         Return the document that keeps the body for this
@@ -1165,7 +1165,8 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                  or None if not found.
         :rtype: LeapMessage
         """
-        msg_container = self.memstore.get_message(self.mbox, uid, flags_only)
+        msg_container = self.memstore.get_message(
+            self.mbox, uid, flags_only=flags_only)
         if msg_container is not None:
             if mem_only:
                 msg = LeapMessage(None, uid, self.mbox, collection=self,

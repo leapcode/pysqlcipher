@@ -94,6 +94,7 @@ def lowerdict(_dict):
 
 
 PART_MAP = "part_map"
+PHASH = "phash"
 
 
 def _str_dict(d, k):
@@ -128,6 +129,24 @@ def stringify_parts_map(d):
             for kk in pmap.keys():
                 stringify_parts_map(d[k][str(kk)])
     return d
+
+
+def phash_iter(d):
+    """
+    A recursive generator that extracts all the payload-hashes
+    from an arbitrary nested parts-map dictionary.
+
+    :param d: the dictionary to walk
+    :type d: dictionary
+    :return: a list of all the phashes found
+    :rtype: list
+    """
+    if PHASH in d:
+        yield d[PHASH]
+    if PART_MAP in d:
+        for key in d[PART_MAP]:
+            for phash in phash_iter(d[PART_MAP][key]):
+                yield phash
 
 
 class CustomJsonScanner(object):

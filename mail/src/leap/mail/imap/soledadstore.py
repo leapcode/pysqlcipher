@@ -212,10 +212,8 @@ class SoledadStore(ContentDedup):
                       to be inserted.
         :type queue: Queue
         """
-        # TODO should delete the original message from incoming only after
-        # the writes are done.
         # TODO should handle the delete case
-        # TODO should handle errors
+        # TODO should handle errors better
         # TODO could generalize this method into a generic consumer
         # and only implement `process` here
 
@@ -235,7 +233,7 @@ class SoledadStore(ContentDedup):
             Errorback for write operations.
             """
             log.msg("ERROR: Error while processing item.")
-            log.msg(failure.getTraceBack())
+            log.msg(failure.getTraceback())
 
         while not queue.empty():
             doc_wrapper = queue.get()
@@ -354,6 +352,7 @@ class SoledadStore(ContentDedup):
                 doc = self._GET_DOC_FUN(doc_id)
                 doc.content = dict(item.content)
                 item = doc
+
             try:
                 call(item)
             except u1db_errors.RevisionConflict as exc:
@@ -451,6 +450,7 @@ class SoledadStore(ContentDedup):
         :type mbox: str or unicode
         :param uid: the UID for the message
         :type uid: int
+        :rtype: SoledadDocument or None
         """
         result = None
         try:
@@ -464,6 +464,20 @@ class SoledadStore(ContentDedup):
             logger.exception(exc)
         finally:
             return result
+
+    def get_headers_doc(self, chash):
+        """
+        Return the document that keeps the headers for a message
+        indexed by its content-hash.
+
+        :param chash: the content-hash to retrieve the document from.
+        :type chash: str or unicode
+        :rtype: SoledadDocument or None
+        """
+        head_docs = self._soledad.get_from_index(
+            fields.TYPE_C_HASH_IDX,
+            fields.TYPE_HEADERS_VAL, str(chash))
+        return first(head_docs)
 
     def write_last_uid(self, mbox, value):
         """
