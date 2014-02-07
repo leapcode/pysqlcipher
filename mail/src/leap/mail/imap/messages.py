@@ -132,7 +132,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
     # XXX make these properties public
 
     @property
-    def _fdoc(self):
+    def fdoc(self):
         """
         An accessor to the flags document.
         """
@@ -149,7 +149,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
             return fdoc
 
     @property
-    def _hdoc(self):
+    def hdoc(self):
         """
         An accessor to the headers document.
         """
@@ -161,23 +161,23 @@ class LeapMessage(fields, MailParser, MBoxParser):
         return self._get_headers_doc()
 
     @property
-    def _chash(self):
+    def chash(self):
         """
         An accessor to the content hash for this message.
         """
-        if not self._fdoc:
+        if not self.fdoc:
             return None
-        if not self.__chash and self._fdoc:
-            self.__chash = self._fdoc.content.get(
+        if not self.__chash and self.fdoc:
+            self.__chash = self.fdoc.content.get(
                 fields.CONTENT_HASH_KEY, None)
         return self.__chash
 
     @property
-    def _bdoc(self):
+    def bdoc(self):
         """
         An accessor to the body document.
         """
-        if not self._hdoc:
+        if not self.hdoc:
             return None
         if not self.__bdoc:
             self.__bdoc = self._get_body_doc()
@@ -204,7 +204,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
         uid = self._uid
 
         flags = set([])
-        fdoc = self._fdoc
+        fdoc = self.fdoc
         if fdoc:
             flags = set(fdoc.content.get(self.FLAGS_KEY, None))
 
@@ -232,7 +232,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
         leap_assert(isinstance(flags, tuple), "flags need to be a tuple")
         log.msg('setting flags: %s (%s)' % (self._uid, flags))
 
-        doc = self._fdoc
+        doc = self.fdoc
         if not doc:
             logger.warning(
                 "Could not find FDOC for %s:%s while setting flags!" %
@@ -284,7 +284,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :return: An RFC822-formatted date string.
         :rtype: str
         """
-        date = self._hdoc.content.get(fields.DATE_KEY, '')
+        date = self.hdoc.content.get(fields.DATE_KEY, '')
         return date
 
     #
@@ -310,8 +310,8 @@ class LeapMessage(fields, MailParser, MBoxParser):
 
         fd = StringIO.StringIO()
 
-        if self._bdoc is not None:
-            bdoc_content = self._bdoc.content
+        if self.bdoc is not None:
+            bdoc_content = self.bdoc.content
             if empty(bdoc_content):
                 logger.warning("No BDOC content found for message!!!")
                 return write_fd("")
@@ -360,8 +360,8 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :rtype: int
         """
         size = None
-        if self._fdoc:
-            fdoc_content = self._fdoc.content
+        if self.fdoc is not None:
+            fdoc_content = self.fdoc.content
             size = fdoc_content.get(self.SIZE_KEY, False)
         else:
             logger.warning("No FLAGS doc for %s:%s" % (self._mbox,
@@ -430,8 +430,8 @@ class LeapMessage(fields, MailParser, MBoxParser):
         """
         Return the headers dict for this message.
         """
-        if self._hdoc is not None:
-            hdoc_content = self._hdoc.content
+        if self.hdoc is not None:
+            hdoc_content = self.hdoc.content
             headers = hdoc_content.get(self.HEADERS_KEY, {})
             return headers
 
@@ -445,8 +445,8 @@ class LeapMessage(fields, MailParser, MBoxParser):
         """
         Return True if this message is multipart.
         """
-        if self._fdoc:
-            fdoc_content = self._fdoc.content
+        if self.fdoc:
+            fdoc_content = self.fdoc.content
             is_multipart = fdoc_content.get(self.MULTIPART_KEY, False)
             return is_multipart
         else:
@@ -485,11 +485,11 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :raises: KeyError if key does not exist
         :rtype: dict
         """
-        if not self._hdoc:
+        if not self.hdoc:
             logger.warning("Tried to get part but no HDOC found!")
             return None
 
-        hdoc_content = self._hdoc.content
+        hdoc_content = self.hdoc.content
         pmap = hdoc_content.get(fields.PARTS_MAP_KEY, {})
 
         # remember, lads, soledad is using strings in its keys,
@@ -523,7 +523,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
         """
         head_docs = self._soledad.get_from_index(
             fields.TYPE_C_HASH_IDX,
-            fields.TYPE_HEADERS_VAL, str(self._chash))
+            fields.TYPE_HEADERS_VAL, str(self.chash))
         return first(head_docs)
 
     def _get_body_doc(self):
@@ -531,7 +531,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
         Return the document that keeps the body for this
         message.
         """
-        hdoc_content = self._hdoc.content
+        hdoc_content = self.hdoc.content
         body_phash = hdoc_content.get(
             fields.BODY_KEY, None)
         if not body_phash:
@@ -568,14 +568,14 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :return: The content value indexed by C{key} or None
         :rtype: str
         """
-        return self._fdoc.content.get(key, None)
+        return self.fdoc.content.get(key, None)
 
     def does_exist(self):
         """
         Return True if there is actually a flags document for this
         UID and mbox.
         """
-        return not empty(self._fdoc)
+        return not empty(self.fdoc)
 
 
 class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
@@ -680,8 +680,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
     _rdoc_lock = threading.Lock()
     _rdoc_property_lock = threading.Lock()
-    _hdocset_lock = threading.Lock()
-    _hdocset_property_lock = threading.Lock()
 
     def __init__(self, mbox=None, soledad=None, memstore=None):
         """
@@ -722,7 +720,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         self.memstore = memstore
 
         self.__rflags = None
-        self.__hdocset = None
         self.initialize_db()
 
         # ensure that we have a recent-flags and a hdocs-sec doc
@@ -750,18 +747,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
             if self.mbox != fields.INBOX_VAL:
                 rdoc[fields.MBOX_KEY] = self.mbox
             self._soledad.create_doc(rdoc)
-
-    def _get_or_create_hdocset(self):
-        """
-        Try to retrieve the hdocs-set doc for this MessageCollection,
-        and create one if not found.
-        """
-        hdocset = self._get_hdocset_doc()
-        if not hdocset:
-            hdocset = self._get_empty_doc(self.HDOCS_SET_DOC)
-            if self.mbox != fields.INBOX_VAL:
-                hdocset[fields.MBOX_KEY] = self.mbox
-            self._soledad.create_doc(hdocset)
 
     @deferred_to_thread
     def _do_parse(self, raw):
@@ -1257,32 +1242,12 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                 fields.TYPE_FLAGS_VAL, self.mbox)))
         return all_flags
 
-    # XXX Move to memstore too. But we don't need it really, since
-    # we can cache the headers docs too.
-    #def all_flags_chash(self):
-        #"""
-        #Return a dict with the content-hash for all flag documents
-        #for this mailbox.
-        #"""
-        #all_flags_chash = dict(((
-            #doc.content[self.UID_KEY],
-            #doc.content[self.CONTENT_HASH_KEY]) for doc in
-            #self._soledad.get_from_index(
-                #fields.TYPE_MBOX_IDX,
-                #fields.TYPE_FLAGS_VAL, self.mbox)))
-        #return all_flags_chash
-
-    # XXX get from memstore
+    # TODO get from memstore
     def all_headers(self):
         """
         Return a dict with all the headers documents for this
         mailbox.
         """
-        all_headers = dict(((
-            doc.content[self.CONTENT_HASH_KEY],
-            doc.content[self.HEADERS_KEY]) for doc in
-            self._soledad.get_docs(self._hdocset)))
-        return all_headers
 
     def count(self):
         """
