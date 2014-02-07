@@ -380,7 +380,7 @@ class MemoryStore(object):
 
         if empty(doc_id):
             fdoc = self._permanent_store.get_flags_doc(mbox, uid)
-            if empty(fdoc.content):
+            if empty(fdoc) or empty(fdoc.content):
                 return None
             doc_id = fdoc.doc_id
             self._fdoc_id_store[mbox][uid] = doc_id
@@ -706,9 +706,10 @@ class MemoryStore(object):
         :rtype: iterable
         """
         fdocs = self._fdoc_store[mbox]
+
         return [uid for uid, value
                 in fdocs.items()
-                if fields.SEEN_FLAG not in value["flags"]]
+                if fields.SEEN_FLAG not in value.get(fields.FLAGS_KEY, [])]
 
     def get_cdoc_from_phash(self, phash):
         """
@@ -760,7 +761,7 @@ class MemoryStore(object):
         # We want to create a new one in this case.
         # Hmmm what if the deletion is un-done?? We would end with a
         # duplicate...
-        if fdoc and fields.DELETED_FLAG in fdoc[fields.FLAGS_KEY]:
+        if fdoc and fields.DELETED_FLAG in fdoc.get(fields.FLAGS_KEY, []):
             return None
 
         uid = fdoc[fields.UID_KEY]
@@ -810,7 +811,7 @@ class MemoryStore(object):
         fdocs = self._fdoc_store[mbox]
         return [uid for uid, value
                 in fdocs.items()
-                if fields.DELETED_FLAG in value["flags"]]
+                if fields.DELETED_FLAG in value.get(fields.FLAGS_KEY, [])]
 
     # new, dirty flags
 
