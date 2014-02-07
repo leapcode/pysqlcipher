@@ -19,7 +19,9 @@ Imap service initialization
 """
 import logging
 import os
+import time
 
+from twisted.internet import defer, threads
 from twisted.internet.protocol import ServerFactory
 from twisted.internet.error import CannotListenError
 from twisted.mail import imap4
@@ -121,6 +123,35 @@ class LeapIMAPFactory(ServerFactory):
         imapProtocol.theAccount = self.theAccount
         imapProtocol.factory = self
         return imapProtocol
+
+    def doStop(self, cv):
+        """
+        Stops imap service (fetcher, factory and port).
+
+        :param cv: A condition variable to which we can signal when imap
+                   indeed stops.
+        :type cv: threading.Condition
+        :return: a Deferred that stops and flushes the in memory store data to
+                 disk in another thread.
+        :rtype: Deferred
+        """
+        ServerFactory.doStop(self)
+
+        def _stop_imap_cb():
+            logger.debug('Stopping in memory store.')
+            self._memstore.stop_and_flush()
+            while not self._memstore.producer.is_queue_empty():
+                logger.debug('Waiting for queue to be empty.')
+                # TODO use a gatherResults over the new/dirty deferred list,
+                # as in memorystore's expunge() method.
+                time.sleep(1)
+            # notify that service has stopped
+            logger.debug('Notifying that service has stopped.')
+            cv.acquire()
+            cv.notify()
+            cv.release()
+
+        return threads.deferToThread(_stop_imap_cb)
 
 
 def run_service(*args, **kwargs):

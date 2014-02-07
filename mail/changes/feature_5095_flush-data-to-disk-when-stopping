@@ -1,0 +1,1 @@
+  o Flush IMAP data to disk when stopping. Closes #5095.
