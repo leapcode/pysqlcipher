@@ -50,6 +50,25 @@ If the environment variable `LEAP_SKIPNOTIFY` is set, we avoid
 notifying clients of new messages. Use during stress tests.
 """
 NOTIFY_NEW = not os.environ.get('LEAP_SKIPNOTIFY', False)
+PROFILE_CMD = os.environ.get('LEAP_PROFILE_IMAPCMD', False)
+
+if PROFILE_CMD:
+    import time
+
+    def _debugProfiling(result, cmdname, start):
+        took = (time.time() - start) * 1000
+        log.msg("CMD " + cmdname + " TOOK: " + str(took) + " msec")
+        return result
+
+    def do_profile_cmd(d, name):
+        """
+        Add the profiling debug to the passed callback.
+        :param d: deferred
+        :param name: name of the command
+        :type name: str
+        """
+        d.addCallback(_debugProfiling, name, time.time())
+        d.addErrback(lambda f: log.msg(f.getTraceback()))
 
 
 class SoledadMailbox(WithMsgFields, MBoxParser):
@@ -132,6 +151,9 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             self.prime_known_uids_to_memstore()
             self.prime_last_uid_to_memstore()
             self.prime_flag_docs_to_memstore()
+
+        from twisted.internet import reactor
+        self.reactor = reactor
 
     @property
     def listeners(self):
@@ -711,14 +733,15 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :raise ReadOnlyMailbox: Raised if this mailbox is not open for
                                 read-write.
         """
-        from twisted.internet import reactor
         if not self.isWriteable():
             log.msg('read only mailbox!')
             raise imap4.ReadOnlyMailbox
 
         d = defer.Deferred()
-        deferLater(reactor, 0, self._do_store, messages_asked, flags,
-                   mode, uid, d)
+        self.reactor.callLater(0, self._do_store, messages_asked, flags,
+                               mode, uid, d)
+        if PROFILE_CMD:
+            do_profile_cmd(d, "STORE")
         return d
 
     def _do_store(self, messages_asked, flags, mode, uid, observer):
@@ -797,15 +820,11 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
                  uid when the copy succeed.
         :rtype: Deferred
         """
-        from twisted.internet import reactor
-
         d = defer.Deferred()
-        # XXX this should not happen ... track it down,
-        # probably to FETCH...
-        if message is None:
-            log.msg("BUG: COPY found a None in passed message")
-            d.callback(None)
-        deferLater(reactor, 0, self._do_copy, message, d)
+        if PROFILE_CMD:
+            do_profile_cmd(d, "COPY")
+        d.addCallback(lambda r: self.reactor.callLater(0, self.notify_new))
+        deferLater(self.reactor, 0, self._do_copy, message, d)
         return d
 
     def _do_copy(self, message, observer):
