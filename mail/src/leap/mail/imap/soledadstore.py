@@ -220,12 +220,15 @@ class SoledadStore(ContentDedup):
                       to be inserted.
         :type queue: Queue
         """
-        from twisted.internet import reactor
-
-        while not queue.empty():
-            doc_wrapper = queue.get()
-            reactor.callInThread(self._consume_doc, doc_wrapper,
-                                 self.docs_notify_queue)
+        new, dirty = queue
+        while not new.empty():
+            doc_wrapper = new.get()
+            self.reactor.callInThread(self._consume_doc, doc_wrapper,
+                                      self.docs_notify_queue)
+        while not dirty.empty():
+            doc_wrapper = dirty.get()
+            self.reactor.callInThread(self._consume_doc, doc_wrapper,
+                                      self.docs_notify_queue)
 
         # Queue empty, flush the notifications queue.
         self.docs_notify_queue(None, flush=True)
@@ -239,7 +242,8 @@ class SoledadStore(ContentDedup):
         :type doc_wrapper: MessageWrapper
         """
         if isinstance(doc_wrapper, MessageWrapper):
-            logger.info("unsetting new flag!")
+            # XXX still needed for debug quite often
+            #logger.info("unsetting new flag!")
             doc_wrapper.new = False
             doc_wrapper.dirty = False
 
@@ -284,6 +288,8 @@ class SoledadStore(ContentDedup):
             try:
                 self._try_call(call, item)
             except Exception as exc:
+                logger.debug("ITEM WAS: %s" % str(item))
+                logger.debug("ITEM CONTENT WAS: %s" % str(item.content))
                 logger.exception(exc)
                 failed = True
                 continue

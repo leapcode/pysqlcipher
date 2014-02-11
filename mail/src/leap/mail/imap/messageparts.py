@@ -98,7 +98,7 @@ class MessageWrapper(object):
     CDOCS = "cdocs"
     DOCS_ID = "docs_id"
 
-    # Using slots to limit some the memory footprint,
+    # Using slots to limit some the memory use,
     # Add your attribute here.
 
     __slots__ = ["_dict", "_new", "_dirty", "_storetype", "memstore"]
@@ -148,7 +148,7 @@ class MessageWrapper(object):
         """
         return self._new
 
-    def _set_new(self, value=True):
+    def _set_new(self, value=False):
         """
         Set the value for the `new` flag, and propagate it
         to the memory store if any.
@@ -161,8 +161,8 @@ class MessageWrapper(object):
             mbox = self.fdoc.content['mbox']
             uid = self.fdoc.content['uid']
             key = mbox, uid
-            fun = [self.memstore.unset_new,
-                   self.memstore.set_new][int(value)]
+            fun = [self.memstore.unset_new_queued,
+                   self.memstore.set_new_queued][int(value)]
             fun(key)
         else:
             logger.warning("Could not find a memstore referenced from this "
@@ -193,8 +193,8 @@ class MessageWrapper(object):
             mbox = self.fdoc.content['mbox']
             uid = self.fdoc.content['uid']
             key = mbox, uid
-            fun = [self.memstore.unset_dirty,
-                   self.memstore.set_dirty][int(value)]
+            fun = [self.memstore.unset_dirty_queued,
+                   self.memstore.set_dirty_queued][int(value)]
             fun(key)
         else:
             logger.warning("Could not find a memstore referenced from this "
@@ -271,11 +271,14 @@ class MessageWrapper(object):
         :rtype: generator
         """
         if self._dirty:
-            mbox = self.fdoc.content[fields.MBOX_KEY]
-            uid = self.fdoc.content[fields.UID_KEY]
-            docid_dict = self._dict[self.DOCS_ID]
-            docid_dict[self.FDOC] = self.memstore.get_docid_for_fdoc(
-                mbox, uid)
+            try:
+                mbox = self.fdoc.content[fields.MBOX_KEY]
+                uid = self.fdoc.content[fields.UID_KEY]
+                docid_dict = self._dict[self.DOCS_ID]
+                docid_dict[self.FDOC] = self.memstore.get_docid_for_fdoc(
+                    mbox, uid)
+            except Exception as exc:
+                logger.exception(exc)
 
         if not empty(self.fdoc.content):
             yield self.fdoc
