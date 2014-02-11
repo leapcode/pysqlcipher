@@ -49,7 +49,7 @@ def empty(thing):
         thing = thing.content
     try:
         return len(thing) == 0
-    except ReferenceError:
+    except (ReferenceError, TypeError):
         return True
 
 
@@ -267,6 +267,8 @@ class CustomJsonScanner(object):
         if not monkey_patched:
             return self._orig_scanstring(s, idx, *args, **kwargs)
 
+        # TODO profile to see if a compiled regex can get us some
+        # benefit here.
         found = False
         end = s.find("\"", idx)
         while not found:
