@@ -268,20 +268,12 @@ class LeapMessage(fields, MailParser, MBoxParser):
                 newflags = tuple(set(current).difference(set(flags)))
             elif mode == SET:
                 newflags = flags
+            new_fdoc = {
+                self.FLAGS_KEY: newflags,
+                self.SEEN_KEY: self.SEEN_FLAG in newflags,
+                self.DEL_KEY: self.DELETED_FLAG in newflags}
+            self._collection.memstore.update_flags(mbox, uid, new_fdoc)
 
-            # We could defer this, but I think it's better
-            # to put it under the lock...
-            doc.content[self.FLAGS_KEY] = newflags
-            doc.content[self.SEEN_KEY] = self.SEEN_FLAG in flags
-
-            # XXX check if this is working ok.
-            doc.content[self.DEL_KEY] = self.DELETED_FLAG in flags
-
-            log.msg("putting message in collection")
-            self._collection.memstore.put_message(
-                self._mbox, self._uid,
-                MessageWrapper(fdoc=doc.content, new=False, dirty=True,
-                               docs_id={'fdoc': doc.doc_id}))
         return map(str, newflags)
 
     def getInternalDate(self):
@@ -334,7 +326,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
             body = bdoc_content.get(self.RAW_KEY, "")
             content_type = bdoc_content.get('content-type', "")
             charset = find_charset(content_type)
-            logger.debug('got charset from content-type: %s' % charset)
+            #logger.debug('got charset from content-type: %s' % charset)
             if charset is None:
                 charset = self._get_charset(body)
             try:
@@ -855,8 +847,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         :return: False, if it does not exist, or UID.
         """
         exist = False
-        if self.memstore is not None:
-            exist = self.memstore.get_fdoc_from_chash(chash, self.mbox)
+        exist = self.memstore.get_fdoc_from_chash(chash, self.mbox)
 
         if not exist:
             exist = self._get_fdoc_from_chash(chash)
@@ -1115,6 +1106,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         # XXX is this working?
         return self._get_uid_from_msgidCb(msgid)
 
+    @deferred_to_thread
     def set_flags(self, mbox, messages, flags, mode, observer):
         """
         Set flags for a sequence of messages.
@@ -1132,28 +1124,18 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                          done.
         :type observer: deferred
         """
-        # XXX we could defer *this* to thread pool, and gather results...
-        # XXX use deferredList
+        reactor = self.reactor
+        getmsg = self.get_msg_by_uid
 
-        deferreds = []
-        for msg_id in messages:
-            deferreds.append(
-                self._set_flag_for_uid(msg_id, flags, mode))
+        def set_flags(uid, flags, mode):
+            msg = getmsg(uid, mem_only=True, flags_only=True)
+            if msg is not None:
+                return uid, msg.setFlags(flags, mode)
 
-        def notify(result):
-            observer.callback(dict(result))
-        d1 = defer.gatherResults(deferreds, consumeErrors=True)
-        d1.addCallback(notify)
+        result = dict(
+            set_flags(uid, tuple(flags), mode) for uid in messages)
 
-    @deferred_to_thread
-    def _set_flag_for_uid(self, msg_id, flags, mode):
-        """
-        Run the set_flag operation in the thread pool.
-        """
-        log.msg("MSG ID = %s" % msg_id)
-        msg = self.get_msg_by_uid(msg_id, mem_only=True, flags_only=True)
-        if msg is not None:
-            return msg_id, msg.setFlags(flags, mode)
+        reactor.callFromThread(observer.callback, result)
 
     # getters: generic for a mailbox
 
@@ -1229,7 +1211,8 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         db_uids = set([doc.content[self.UID_KEY] for doc in
                        self._soledad.get_from_index(
                            fields.TYPE_MBOX_IDX,
-                           fields.TYPE_FLAGS_VAL, self.mbox)])
+                           fields.TYPE_FLAGS_VAL, self.mbox)
+                       if not empty(doc)])
         return db_uids
 
     def all_uid_iter(self):
@@ -1254,12 +1237,15 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         # XXX we really could return a reduced version with
         # just {'uid': (flags-tuple,) since the prefetch is
         # only oriented to get the flag tuples.
-        all_flags = dict(((
+        all_docs = [(
             doc.content[self.UID_KEY],
-            dict(doc.content)) for doc in
+            dict(doc.content))
+            for doc in
             self._soledad.get_from_index(
                 fields.TYPE_MBOX_IDX,
-                fields.TYPE_FLAGS_VAL, self.mbox)))
+                fields.TYPE_FLAGS_VAL, self.mbox)
+            if not empty(doc.content)]
+        all_flags = dict(all_docs)
         return all_flags
 
     # TODO get from memstore
