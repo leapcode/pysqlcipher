@@ -28,7 +28,6 @@ from functools import partial
 
 from twisted.mail import imap4
 from twisted.internet import defer
-from twisted.python import log
 from zope.interface import implements
 from zope.proxy import sameProxiedObjects
 
@@ -1248,12 +1247,14 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         all_flags = dict(all_docs)
         return all_flags
 
-    # TODO get from memstore
     def all_headers(self):
         """
-        Return a dict with all the headers documents for this
+        Return a dict with all the header documents for this
         mailbox.
+
+        :rtype: dict
         """
+        return self.memstore.all_headers(self.mbox)
 
     def count(self):
         """

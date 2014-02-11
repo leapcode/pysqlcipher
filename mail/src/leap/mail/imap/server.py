@@ -119,15 +119,14 @@ class LeapIMAPServer(imap4.IMAP4Server):
                 cbFetch, tag, query, uid
             ).addErrback(ebFetch, tag)
 
-        # XXX not implemented yet --- should hit memstore
-        #elif len(query) == 1 and str(query[0]) == "rfc822.header":
-            #self._oldTimeout = self.setTimeout(None)
+        elif len(query) == 1 and str(query[0]) == "rfc822.header":
+            self._oldTimeout = self.setTimeout(None)
             # no need to call iter, we get a generator
-            #maybeDeferred(
-                #self.mbox.fetch_headers, messages, uid=uid
-            #).addCallback(
-                #cbFetch, tag, query, uid
-            #).addErrback(ebFetch, tag)
+            maybeDeferred(
+                self.mbox.fetch_headers, messages, uid=uid
+            ).addCallback(
+                cbFetch, tag, query, uid
+            ).addErrback(ebFetch, tag)
         else:
             self._oldTimeout = self.setTimeout(None)
             # no need to call iter, we get a generator

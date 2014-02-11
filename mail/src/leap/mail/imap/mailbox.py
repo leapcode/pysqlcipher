@@ -211,6 +211,9 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
                 fields.TYPE_MBOX_VAL, self.mbox)
             if query:
                 return query.pop()
+            else:
+                logger.error("Could not find mbox document for %r" %
+                             (self.mbox,))
         except Exception as exc:
             logger.exception("Unhandled error %r" % exc)
 
@@ -576,10 +579,30 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
                     otherwise.
         :type uid: bool
 
+        :rtype: deferred
+        """
+        d = defer.Deferred()
+        self.reactor.callInThread(self._do_fetch, messages_asked, uid, d)
+        if PROFILE_CMD:
+            do_profile_cmd(d, "FETCH")
+        return d
+
+    # called in thread
+    def _do_fetch(self, messages_asked, uid, d):
+        """
+        :param messages_asked: IDs of the messages to retrieve information
+                               about
+        :type messages_asked: MessageSet
+
+        :param uid: If true, the IDs are UIDs. They are message sequence IDs
+                    otherwise.
+        :type uid: bool
+        :param d: deferred whose callback will be called with result.
+        :type d: Deferred
+
         :rtype: A tuple of two-tuples of message sequence numbers and
                 LeapMessage
         """
-        from twisted.internet import reactor
         # For the moment our UID is sequential, so we
         # can treat them all the same.
         # Change this to the flag that twisted expects when we
@@ -597,9 +620,11 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             logger.debug("Getting msg by index: INEFFICIENT call!")
             raise NotImplementedError
         else:
-            result = ((msgid, getmsg(msgid)) for msgid in seq_messg)
-            reactor.callLater(0, self.unset_recent_flags, seq_messg)
-        return result
+            got_msg = [(msgid, getmsg(msgid)) for msgid in seq_messg]
+            result = ((msgid, msg) for msgid, msg in got_msg
+                      if msg is not None)
+            self.reactor.callLater(0, self.unset_recent_flags, seq_messg)
+            self.reactor.callFromThread(d.callback, result)
 
     def fetch_flags(self, messages_asked, uid):
         """
@@ -668,6 +693,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
                 MessagePart.
         :rtype: tuple
         """
+        # TODO how often is thunderbird doing this?
+
         class headersPart(object):
             def __init__(self, uid, headers):
                 self.uid = uid
@@ -685,10 +712,9 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         messages_asked = self._bound_seq(messages_asked)
         seq_messg = self._filter_msg_seq(messages_asked)
 
-        all_chash = self.messages.all_flags_chash()
         all_headers = self.messages.all_headers()
         result = ((msgid, headersPart(
-            msgid, all_headers.get(all_chash.get(msgid, 'nil'), {})))
+            msgid, all_headers.get(msgid, {})))
             for msgid in seq_messg)
         return result
 

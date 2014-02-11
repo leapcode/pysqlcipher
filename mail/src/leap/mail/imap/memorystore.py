@@ -434,6 +434,8 @@ class MemoryStore(object):
             hdoc = self._hdoc_store[chash]
             if empty(hdoc):
                 hdoc = self._permanent_store.get_headers_doc(chash)
+                if empty(hdoc):
+                    return None
                 if not empty(hdoc.content):
                     self._hdoc_store[chash] = hdoc.content
                     hdoc = hdoc.content
@@ -698,6 +700,31 @@ class MemoryStore(object):
             except KeyError:
                 continue
         return flags_dict
+
+    def all_headers(self, mbox):
+        """
+        Return a dictionary with all the header docs for a given mbox.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :rtype: dict
+        """
+        headers_dict = {}
+        uids = self.get_uids(mbox)
+        fdoc_store = self._fdoc_store[mbox]
+        hdoc_store = self._hdoc_store
+
+        for uid in uids:
+            try:
+                chash = fdoc_store[uid][fields.CONTENT_HASH_KEY]
+                hdoc = hdoc_store[chash]
+                if not empty(hdoc):
+                    headers_dict[uid] = hdoc
+            except KeyError:
+                continue
+
+        import pprint; pprint.pprint(headers_dict)
+        return headers_dict
 
     # Counting sheeps...
 
