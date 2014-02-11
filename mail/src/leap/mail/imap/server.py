@@ -56,6 +56,9 @@ class LeapIMAPServer(imap4.IMAP4Server):
         # populate the test account properly (and only once
         # per session)
 
+        from twisted.internet import reactor
+        self.reactor = reactor
+
     def lineReceived(self, line):
         """
         Attempt to parse a single line from the server.
@@ -141,30 +144,23 @@ class LeapIMAPServer(imap4.IMAP4Server):
                     imap4.IMAP4Server.arg_fetchatt)
 
     def on_fetch_finished(self, _, messages):
-        from twisted.internet import reactor
-
-        print "FETCH FINISHED -- NOTIFY NEW"
-        deferLater(reactor, 0, self.notifyNew)
-        deferLater(reactor, 0, self.mbox.unset_recent_flags, messages)
-        deferLater(reactor, 0, self.mbox.signal_unread_to_ui)
+        deferLater(self.reactor, 0, self.notifyNew)
+        deferLater(self.reactor, 0, self.mbox.unset_recent_flags, messages)
+        deferLater(self.reactor, 0, self.mbox.signal_unread_to_ui)
 
     def on_copy_finished(self, defers):
         d = defer.gatherResults(filter(None, defers))
 
         def when_finished(result):
-            log.msg("COPY FINISHED")
             self.notifyNew()
             self.mbox.signal_unread_to_ui()
         d.addCallback(when_finished)
-        #d.addCallback(self.notifyNew)
-        #d.addCallback(self.mbox.signal_unread_to_ui)
 
     def do_COPY(self, tag, messages, mailbox, uid=0):
-        from twisted.internet import reactor
         defers = []
         d = imap4.IMAP4Server.do_COPY(self, tag, messages, mailbox, uid)
         defers.append(d)
-        deferLater(reactor, 0, self.on_copy_finished, defers)
+        deferLater(self.reactor, 0, self.on_copy_finished, defers)
 
     select_COPY = (do_COPY, imap4.IMAP4Server.arg_seqset,
                    imap4.IMAP4Server.arg_astring)
@@ -173,8 +169,7 @@ class LeapIMAPServer(imap4.IMAP4Server):
         """
         Notify new messages to listeners.
         """
-        print "TRYING TO NOTIFY NEW"
-        self.mbox.notify_new()
+        self.reactor.callFromThread(self.mbox.notify_new)
 
     def _cbSelectWork(self, mbox, cmdName, tag):
         """
