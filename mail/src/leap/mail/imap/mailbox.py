@@ -854,12 +854,13 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             else:
                 mbox = self.mbox
                 uid_next = memstore.increment_last_soledad_uid(mbox)
+
                 new_fdoc[self.UID_KEY] = uid_next
                 new_fdoc[self.MBOX_KEY] = mbox
 
                 flags = list(new_fdoc[self.FLAGS_KEY])
                 flags.append(fields.RECENT_FLAG)
-                new_fdoc[self.FLAGS_KEY] = flags
+                new_fdoc[self.FLAGS_KEY] = tuple(set(flags))
 
                 # FIXME set recent!
 
@@ -896,7 +897,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
         dest_fdoc = memstore.get_fdoc_from_chash(
             fdoc_chash, self.mbox)
-        exist = dest_fdoc and not empty(dest_fdoc.content)
+
+        exist = not empty(dest_fdoc)
         return exist, new_fdoc
 
     # convenience fun
