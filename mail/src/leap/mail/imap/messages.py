@@ -88,6 +88,13 @@ def try_unique_query(curried):
         logger.exception("Unhandled error %r" % exc)
 
 
+"""
+A dictionary that keeps one lock per mbox and uid.
+"""
+# XXX too much overhead?
+fdoc_locks = defaultdict(lambda: defaultdict(lambda: threading.Lock()))
+
+
 class LeapMessage(fields, MailParser, MBoxParser):
     """
     The main representation of a message.
@@ -101,8 +108,6 @@ class LeapMessage(fields, MailParser, MBoxParser):
     # UID table.
 
     implements(imap4.IMessage)
-
-    flags_lock = threading.Lock()
 
     def __init__(self, soledad, uid, mbox, collection=None, container=None):
         """
@@ -128,6 +133,9 @@ class LeapMessage(fields, MailParser, MBoxParser):
 
         self.__chash = None
         self.__bdoc = None
+
+        from twisted.internet import reactor
+        self.reactor = reactor
 
     # XXX make these properties public
 
@@ -238,20 +246,21 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :type mode: int
         """
         leap_assert(isinstance(flags, tuple), "flags need to be a tuple")
-        log.msg('setting flags: %s (%s)' % (self._uid, flags))
+        #log.msg('setting flags: %s (%s)' % (self._uid, flags))
 
-        doc = self.fdoc
-        if not doc:
-            logger.warning(
-                "Could not find FDOC for %s:%s while setting flags!" %
-                (self._mbox, self._uid))
-            return
+        mbox, uid = self._mbox, self._uid
 
         APPEND = 1
         REMOVE = -1
         SET = 0
 
-        with self.flags_lock:
+        with fdoc_locks[mbox][uid]:
+            doc = self.fdoc
+            if not doc:
+                logger.warning(
+                    "Could not find FDOC for %r:%s while setting flags!" %
+                    (mbox, uid))
+                return
             current = doc.content[self.FLAGS_KEY]
             if mode == APPEND:
                 newflags = tuple(set(tuple(current) + flags))
@@ -733,6 +742,9 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         # ensure that we have a recent-flags and a hdocs-sec doc
         self._get_or_create_rdoc()
 
+        from twisted.internet import reactor
+        self.reactor = reactor
+
     def _get_empty_doc(self, _type=FLAGS_DOC):
         """
         Returns an empty doc for storing different message parts.
@@ -877,7 +889,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                  uid when the adding succeed.
         :rtype: deferred
         """
-        logger.debug('adding message')
+        logger.debug('Adding message')
         if flags is None:
             flags = tuple()
         leap_assert_type(flags, tuple)
@@ -921,7 +933,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
             msg = self.get_msg_by_uid(uid)
 
             # TODO this cannot be deferred, this has to block.
-            #reactor.callLater(0, msg.setFlags, (fields.DELETED_FLAG,), -1)
             msg.setFlags((fields.DELETED_FLAG,), -1)
             reactor.callLater(0, observer.callback, uid)
             return
