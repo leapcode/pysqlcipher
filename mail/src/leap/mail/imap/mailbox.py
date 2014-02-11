@@ -108,6 +108,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
     _listeners = defaultdict(set)
 
     next_uid_lock = threading.Lock()
+    last_uid_lock = threading.Lock()
 
     _fdoc_primed = {}
 
@@ -196,7 +197,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         self.listeners.remove(listener)
 
     # TODO move completely to soledadstore, under memstore reponsibility.
-    def _get_mbox(self):
+    def _get_mbox_doc(self):
         """
         Return mailbox document.
 
@@ -220,7 +221,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :returns: tuple of flags for this mailbox
         :rtype: tuple of str
         """
-        mbox = self._get_mbox()
+        mbox = self._get_mbox_doc()
         if not mbox:
             return None
         flags = mbox.content.get(self.FLAGS_KEY, [])
@@ -235,7 +236,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         """
         leap_assert(isinstance(flags, tuple),
                     "flags expected to be a tuple")
-        mbox = self._get_mbox()
+        mbox = self._get_mbox_doc()
         if not mbox:
             return None
         mbox.content[self.FLAGS_KEY] = map(str, flags)
@@ -250,7 +251,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :return: True if the mailbox is closed
         :rtype: bool
         """
-        mbox = self._get_mbox()
+        mbox = self._get_mbox_doc()
         return mbox.content.get(self.CLOSED_KEY, False)
 
     def _set_closed(self, closed):
@@ -261,7 +262,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :type closed: bool
         """
         leap_assert(isinstance(closed, bool), "closed needs to be boolean")
-        mbox = self._get_mbox()
+        mbox = self._get_mbox_doc()
         mbox.content[self.CLOSED_KEY] = closed
         self._soledad.put_doc(mbox)
 
@@ -290,8 +291,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         """
         Prime memstore with last_uid value
         """
-        set_exist = set(self.messages.all_uid_iter())
-        last = max(set_exist) if set_exist else 0
+        mbox = self._get_mbox_doc()
+        last = mbox.content.get('lastuid', 0)
         logger.info("Priming Soledad last_uid to %s" % (last,))
         self._memstore.set_last_soledad_uid(self.mbox, last)
 
@@ -321,7 +322,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :return: unique validity identifier
         :rtype: int
         """
-        mbox = self._get_mbox()
+        mbox = self._get_mbox_doc()
         return mbox.content.get(self.CREATED_KEY, 1)
 
     def getUID(self, message):
@@ -483,12 +484,9 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         exists = self.getMessageCount()
         recent = self.getRecentCount()
         logger.debug("NOTIFY (%r): there are %s messages, %s recent" % (
-            self.mbox,
-            exists,
-            recent))
+            self.mbox, exists, recent))
 
         for l in self.listeners:
-            logger.debug('notifying...')
             l.newMessages(exists, recent)
 
     # commands, do not rename methods
@@ -507,7 +505,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         # we should postpone the removal
 
         # XXX move to memory store??
-        self._soledad.delete_doc(self._get_mbox())
+        self._soledad.delete_doc(self._get_mbox_doc())
 
     def _close_cb(self, result):
         self.closed = True
@@ -756,7 +754,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :type observer: deferred
         """
         # XXX implement also sequence (uid = 0)
-        # XXX we should prevent cclient from setting Recent flag?
+        # XXX we should prevent client from setting Recent flag?
         leap_assert(not isinstance(flags, basestring),
                     "flags cannot be a string")
         flags = tuple(flags)
