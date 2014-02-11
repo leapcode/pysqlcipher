@@ -129,7 +129,7 @@ class LeapIMAPFactory(ServerFactory):
         imapProtocol.factory = self
         return imapProtocol
 
-    def doStop(self, cv):
+    def doStop(self, cv=None):
         """
         Stops imap service (fetcher, factory and port).
 
@@ -142,21 +142,23 @@ class LeapIMAPFactory(ServerFactory):
         """
         ServerFactory.doStop(self)
 
-        def _stop_imap_cb():
-            logger.debug('Stopping in memory store.')
-            self._memstore.stop_and_flush()
-            while not self._memstore.producer.is_queue_empty():
-                logger.debug('Waiting for queue to be empty.')
-                # TODO use a gatherResults over the new/dirty deferred list,
-                # as in memorystore's expunge() method.
-                time.sleep(1)
-            # notify that service has stopped
-            logger.debug('Notifying that service has stopped.')
-            cv.acquire()
-            cv.notify()
-            cv.release()
+        if cv is not None:
+            def _stop_imap_cb():
+                logger.debug('Stopping in memory store.')
+                self._memstore.stop_and_flush()
+                while not self._memstore.producer.is_queue_empty():
+                    logger.debug('Waiting for queue to be empty.')
+                    # TODO use a gatherResults over the new/dirty
+                    # deferred list,
+                    # as in memorystore's expunge() method.
+                    time.sleep(1)
+                # notify that service has stopped
+                logger.debug('Notifying that service has stopped.')
+                cv.acquire()
+                cv.notify()
+                cv.release()
 
-        return threads.deferToThread(_stop_imap_cb)
+            return threads.deferToThread(_stop_imap_cb)
 
 
 def run_service(*args, **kwargs):
