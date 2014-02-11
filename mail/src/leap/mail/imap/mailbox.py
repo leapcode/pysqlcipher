@@ -111,6 +111,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
     last_uid_lock = threading.Lock()
 
     _fdoc_primed = {}
+    _last_uid_primed = {}
 
     def __init__(self, mbox, soledad, memstore, rw=1):
         """
@@ -294,10 +295,13 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         """
         Prime memstore with last_uid value
         """
-        mbox = self._get_mbox_doc()
-        last = mbox.content.get('lastuid', 0)
-        logger.info("Priming Soledad last_uid to %s" % (last,))
-        self._memstore.set_last_soledad_uid(self.mbox, last)
+        primed = self._last_uid_primed.get(self.mbox, False)
+        if not primed:
+            mbox = self._get_mbox_doc()
+            last = mbox.content.get('lastuid', 0)
+            logger.info("Priming Soledad last_uid to %s" % (last,))
+            self._memstore.set_last_soledad_uid(self.mbox, last)
+            self._last_uid_primed[self.mbox] = True
 
     def prime_known_uids_to_memstore(self):
         """
@@ -459,6 +463,9 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             flags = tuple(str(flag) for flag in flags)
 
         d = self._do_add_message(message, flags=flags, date=date)
+        if PROFILE_CMD:
+            do_profile_cmd(d, "APPEND")
+        # XXX should notify here probably
         return d
 
     def _do_add_message(self, message, flags, date):
@@ -467,13 +474,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         Invoked from addMessage.
         """
         d = self.messages.add_msg(message, flags=flags, date=date)
-        # XXX Removing notify temporarily.
-        # This is interfering with imaptest results. I'm not clear if it's
-        # because we clutter the logging or because the set of listeners is
-        # ever-growing. We should come up with some smart way of dealing with
-        # it, or maybe just disabling it using an environmental variable since
-        # we will only have just a few listeners in the regular desktop case.
-        #d.addCallback(self.notify_new)
         return d
 
     def notify_new(self, *args):

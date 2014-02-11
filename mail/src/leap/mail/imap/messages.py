@@ -879,19 +879,18 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                  uid when the adding succeed.
         :rtype: deferred
         """
-        logger.debug('Adding message')
         if flags is None:
             flags = tuple()
         leap_assert_type(flags, tuple)
 
         observer = defer.Deferred()
         d = self._do_parse(raw)
-        d.addCallback(self._do_add_msg, flags, subject, date,
-                      notify_on_disk, observer)
+        d.addCallback(lambda result: self.reactor.callInThread(
+            self._do_add_msg, result, flags, subject, date,
+            notify_on_disk, observer))
         return observer
 
-    # We SHOULD defer the heavy load here) to the thread pool,
-    # but it gives troubles with the QSocketNotifier used by Qt...
+    # Called in thread
     def _do_add_msg(self, parse_result, flags, subject,
                     date, notify_on_disk, observer):
         """
@@ -912,7 +911,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         # TODO add the linked-from info !
         # TODO add reference to the original message
 
-        from twisted.internet import reactor
         msg, parts, chash, size, multi = parse_result
 
         # check for uniqueness --------------------------------
@@ -922,13 +920,14 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
             uid = existing_uid
             msg = self.get_msg_by_uid(uid)
 
-            # TODO this cannot be deferred, this has to block.
+            # We can say the observer that we're done
+            self.reactor.callFromThread(observer.callback, uid)
             msg.setFlags((fields.DELETED_FLAG,), -1)
-            reactor.callLater(0, observer.callback, uid)
             return
 
         uid = self.memstore.increment_last_soledad_uid(self.mbox)
-        logger.info("ADDING MSG WITH UID: %s" % uid)
+        # We can say the observer that we're done
+        self.reactor.callFromThread(observer.callback, uid)
 
         fd = self._populate_flags(flags, uid, chash, size, multi)
         hd = self._populate_headr(msg, chash, subject, date)
@@ -953,7 +952,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         msg_container = MessageWrapper(fd, hd, cdocs)
         self.memstore.create_message(
             self.mbox, uid, msg_container,
-            observer=observer, notify_on_disk=notify_on_disk)
+            observer=None, notify_on_disk=notify_on_disk)
 
     #
     # getters: specific queries

@@ -274,30 +274,24 @@ class MemoryStore(object):
                                be fired.
         :type notify_on_disk: bool
         """
-        from twisted.internet import reactor
-
         log.msg("Adding new doc to memstore %r (%r)" % (mbox, uid))
         key = mbox, uid
 
         self._add_message(mbox, uid, message, notify_on_disk)
         self._new.add(key)
 
-        # XXX use this while debugging the callback firing,
-        # remove after unittesting this.
-        #def log_add(result):
-            #return result
-        #observer.addCallback(log_add)
+        if observer is not None:
+            if notify_on_disk:
+                # We store this deferred so we can keep track of the pending
+                # operations internally.
+                # TODO this should fire with the UID !!! -- change that in
+                # the soledad store code.
+                self._new_deferreds[key] = observer
 
-        if notify_on_disk:
-            # We store this deferred so we can keep track of the pending
-            # operations internally.
-            # TODO this should fire with the UID !!! -- change that in
-            # the soledad store code.
-            self._new_deferreds[key] = observer
-        if not notify_on_disk:
-            # Caller does not care, just fired and forgot, so we pass
-            # a defer that will inmediately have its callback triggered.
-            reactor.callLater(0, observer.callback, uid)
+            else:
+                # Caller does not care, just fired and forgot, so we pass
+                # a defer that will inmediately have its callback triggered.
+                self.reactor.callFromThread(observer.callback, uid)
 
     def put_message(self, mbox, uid, message, notify_on_disk=True):
         """
@@ -722,8 +716,6 @@ class MemoryStore(object):
                     headers_dict[uid] = hdoc
             except KeyError:
                 continue
-
-        import pprint; pprint.pprint(headers_dict)
         return headers_dict
 
     # Counting sheeps...
