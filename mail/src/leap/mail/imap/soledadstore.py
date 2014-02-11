@@ -515,11 +515,12 @@ class SoledadStore(ContentDedup):
         with self._last_uid_lock:
             mbox_doc = self._get_mbox_document(mbox)
             old_val = mbox_doc.content[key]
-            if value < old_val:
+            if value > old_val:
+                mbox_doc.content[key] = value
+                self._soledad.put_doc(mbox_doc)
+            else:
                 logger.error("%r:%s Tried to write a UID lesser than what's "
                              "stored!" % (mbox, value))
-            mbox_doc.content[key] = value
-            self._soledad.put_doc(mbox_doc)
 
     # deleted messages
 
