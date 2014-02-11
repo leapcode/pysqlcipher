@@ -158,8 +158,11 @@ class MessageWrapper(object):
         """
         self._new = value
         if self.memstore:
-            mbox = self.fdoc.content['mbox']
-            uid = self.fdoc.content['uid']
+            mbox = self.fdoc.content.get('mbox', None)
+            uid = self.fdoc.content.get('uid', None)
+            if not mbox or not uid:
+                logger.warning("Malformed fdoc")
+                return
             key = mbox, uid
             fun = [self.memstore.unset_new_queued,
                    self.memstore.set_new_queued][int(value)]
@@ -190,8 +193,11 @@ class MessageWrapper(object):
         """
         self._dirty = value
         if self.memstore:
-            mbox = self.fdoc.content['mbox']
-            uid = self.fdoc.content['uid']
+            mbox = self.fdoc.content.get('mbox', None)
+            uid = self.fdoc.content.get('uid', None)
+            if not mbox or not uid:
+                logger.warning("Malformed fdoc")
+                return
             key = mbox, uid
             fun = [self.memstore.unset_dirty_queued,
                    self.memstore.set_dirty_queued][int(value)]
@@ -278,6 +284,7 @@ class MessageWrapper(object):
                 docid_dict[self.FDOC] = self.memstore.get_docid_for_fdoc(
                     mbox, uid)
             except Exception as exc:
+                logger.debug("Error while walking message...")
                 logger.exception(exc)
 
         if not empty(self.fdoc.content):
