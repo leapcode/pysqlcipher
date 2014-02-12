@@ -245,8 +245,6 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :type mode: int
         """
         leap_assert(isinstance(flags, tuple), "flags need to be a tuple")
-        #log.msg('setting flags: %s (%s)' % (self._uid, flags))
-
         mbox, uid = self._mbox, self._uid
 
         APPEND = 1
@@ -325,7 +323,6 @@ class LeapMessage(fields, MailParser, MBoxParser):
             body = bdoc_content.get(self.RAW_KEY, "")
             content_type = bdoc_content.get('content-type', "")
             charset = find_charset(content_type)
-            #logger.debug('got charset from content-type: %s' % charset)
             if charset is None:
                 charset = self._get_charset(body)
             try:

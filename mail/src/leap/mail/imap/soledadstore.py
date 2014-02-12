@@ -41,9 +41,7 @@ logger = logging.getLogger(__name__)
 
 
 # TODO
-# [ ] Delete original message from the incoming queue after all successful
-#     writes.
-# [ ] Implement a retry queue.
+# [ ] Implement a retry queue?
 # [ ] Consider journaling of operations.
 
 
@@ -231,9 +229,9 @@ class SoledadStore(ContentDedup):
         """
         Creates a new document in soledad db.
 
-        :param queue: queue to get item from, with content of the document
-                      to be inserted.
-        :type queue: Queue
+        :param queue: a tuple of queues to get item from, with content of the
+                      document to be inserted.
+        :type queue: tuple of Queues
         """
         new, dirty = queue
         while not new.empty():
@@ -266,9 +264,14 @@ class SoledadStore(ContentDedup):
     def _consume_doc(self, doc_wrapper, notify_queue):
         """
         Consume each document wrapper in a separate thread.
+        We pass an instance of an accumulator that handles the notifications
+        to the memorystore when the write has been done.
 
         :param doc_wrapper: a MessageWrapper or RecentFlagsDoc instance
         :type doc_wrapper: MessageWrapper or RecentFlagsDoc
+        :param notify_queue: a callable that handles the writeback
+                             notifications to the memstore.
+        :type notify_queue: callable
         """
         def queueNotifyBack(failed, doc_wrapper):
             if failed:
@@ -316,8 +319,8 @@ class SoledadStore(ContentDedup):
         followed by the subparts item and the proper call type for every
         item in the queue, if any.
 
-        :param queue: the queue from where we'll pick item.
-        :type queue: Queue
+        :param doc_wrapper: a MessageWrapper or RecentFlagsDoc instance
+        :type doc_wrapper: MessageWrapper or RecentFlagsDoc
         """
         if isinstance(doc_wrapper, MessageWrapper):
             return chain((doc_wrapper,),
