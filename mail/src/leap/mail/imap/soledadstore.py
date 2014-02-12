@@ -143,6 +143,7 @@ class SoledadStore(ContentDedup):
     """
     _last_uid_lock = threading.Lock()
     _soledad_rw_lock = threading.Lock()
+    _remove_lock = threading.Lock()
 
     implements(IMessageConsumer, IMessageStore)
 
@@ -526,7 +527,7 @@ class SoledadStore(ContentDedup):
 
     def deleted_iter(self, mbox):
         """
-        Get an iterator for the SoledadDocuments for messages
+        Get an iterator for the the doc_id for SoledadDocuments for messages
         with \\Deleted flag for a given mailbox.
 
         :param mbox: the mailbox
@@ -534,9 +535,9 @@ class SoledadStore(ContentDedup):
         :return: iterator through deleted message docs
         :rtype: iterable
         """
-        return (doc for doc in self._soledad.get_from_index(
+        return [doc.doc_id for doc in self._soledad.get_from_index(
                 fields.TYPE_MBOX_DEL_IDX,
-                fields.TYPE_FLAGS_VAL, mbox, '1'))
+                fields.TYPE_FLAGS_VAL, mbox, '1')]
 
     def remove_all_deleted(self, mbox):
         """
@@ -547,7 +548,13 @@ class SoledadStore(ContentDedup):
         :type mbox: str or unicode
         """
         deleted = []
-        for doc in self.deleted_iter(mbox):
-            deleted.append(doc.content[fields.UID_KEY])
-            self._soledad.delete_doc(doc)
+        for doc_id in self.deleted_iter(mbox):
+            with self._remove_lock:
+                doc = self._soledad.get_doc(doc_id)
+                self._soledad.delete_doc(doc)
+            try:
+                deleted.append(doc.content[fields.UID_KEY])
+            except TypeError:
+                # empty content
+                pass
         return deleted
