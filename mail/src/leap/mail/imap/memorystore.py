@@ -293,6 +293,7 @@ class MemoryStore(object):
                 # a defer that will inmediately have its callback triggered.
                 self.reactor.callFromThread(observer.callback, uid)
 
+
     def put_message(self, mbox, uid, message, notify_on_disk=True):
         """
         Put an existing message.
@@ -1176,7 +1177,42 @@ class MemoryStore(object):
             logger.exception(exc)
         finally:
             self._start_write_loop()
+
         observer.callback(all_deleted)
+
+    # Mailbox documents and attributes
+
+    # This could be also be cached in memstore, but proxying directly
+    # to soledad since it's not too performance-critical.
+
+    def get_mbox_doc(self, mbox):
+        """
+        Return the soledad document for a given mailbox.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :rtype: SoledadDocument or None.
+        """
+        return self.permanent_store.get_mbox_document(mbox)
+
+    def get_mbox_closed(self, mbox):
+        """
+        Return the closed attribute for a given mailbox.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :rtype: bool
+        """
+        return self.permanent_store.get_mbox_closed(mbox)
+
+    def set_mbox_closed(self, mbox, closed):
+        """
+        Set the closed attribute for a given mailbox.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        """
+        self.permanent_store.set_mbox_closed(mbox, closed)
 
     # Dump-to-disk controls.
 

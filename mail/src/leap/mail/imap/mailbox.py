@@ -200,7 +200,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         """
         self.listeners.remove(listener)
 
-    # TODO move completely to soledadstore, under memstore reponsibility.
     def _get_mbox_doc(self):
         """
         Return mailbox document.
@@ -209,17 +208,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
                  the query failed.
         :rtype: SoledadDocument or None.
         """
-        try:
-            query = self._soledad.get_from_index(
-                fields.TYPE_MBOX_IDX,
-                fields.TYPE_MBOX_VAL, self.mbox)
-            if query:
-                return query.pop()
-            else:
-                logger.error("Could not find mbox document for %r" %
-                             (self.mbox,))
-        except Exception as exc:
-            logger.exception("Unhandled error %r" % exc)
+        return self._memstore.get_mbox_doc(self.mbox)
 
     def getFlags(self):
         """
@@ -234,6 +223,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         flags = mbox.content.get(self.FLAGS_KEY, [])
         return map(str, flags)
 
+    # XXX move to memstore->soledadstore
     def setFlags(self, flags):
         """
         Sets flags for this mailbox.
@@ -258,8 +248,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :return: True if the mailbox is closed
         :rtype: bool
         """
-        mbox = self._get_mbox_doc()
-        return mbox.content.get(self.CLOSED_KEY, False)
+        return self._memstore.get_mbox_closed(self.mbox)
 
     def _set_closed(self, closed):
         """
@@ -268,10 +257,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :param closed: the state to be set
         :type closed: bool
         """
-        leap_assert(isinstance(closed, bool), "closed needs to be boolean")
-        mbox = self._get_mbox_doc()
-        mbox.content[self.CLOSED_KEY] = closed
-        self._soledad.put_doc(mbox)
+        self._memstore.set_mbox_closed(self.mbox, closed)
 
     closed = property(
         _get_closed, _set_closed, doc="Closed attribute.")

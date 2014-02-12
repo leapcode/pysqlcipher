@@ -27,7 +27,7 @@ from u1db import errors as u1db_errors
 from twisted.python import log
 from zope.interface import implements
 
-from leap.common.check import leap_assert_type
+from leap.common.check import leap_assert_type, leap_assert
 from leap.mail.decorators import deferred_to_thread
 from leap.mail.imap.messageparts import MessagePartType
 from leap.mail.imap.messageparts import MessageWrapper
@@ -141,9 +141,9 @@ class SoledadStore(ContentDedup):
     """
     This will create docs in the local Soledad database.
     """
-    _last_uid_lock = threading.Lock()
     _soledad_rw_lock = threading.Lock()
     _remove_lock = threading.Lock()
+    _mbox_doc_locks = defaultdict(lambda: threading.Lock())
 
     implements(IMessageConsumer, IMessageStore)
 
@@ -438,7 +438,9 @@ class SoledadStore(ContentDedup):
             logger.debug("Saving RFLAGS to Soledad...")
             yield payload, call
 
-    def _get_mbox_document(self, mbox):
+    # Mbox documents and attributes
+
+    def get_mbox_document(self, mbox):
         """
         Return mailbox document.
 
@@ -448,14 +450,82 @@ class SoledadStore(ContentDedup):
                  the query failed.
         :rtype: SoledadDocument or None.
         """
+        with self._mbox_doc_locks[mbox]:
+            return self._get_mbox_document(mbox)
+
+    def _get_mbox_document(self, mbox):
+        """
+        Helper for returning the mailbox document.
+        """
         try:
             query = self._soledad.get_from_index(
                 fields.TYPE_MBOX_IDX,
                 fields.TYPE_MBOX_VAL, mbox)
             if query:
                 return query.pop()
+            else:
+                logger.error("Could not find mbox document for %r" %
+                            (self.mbox,))
         except Exception as exc:
             logger.exception("Unhandled error %r" % exc)
+
+    def get_mbox_closed(self, mbox):
+        """
+        Return the closed attribute for a given mailbox.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :rtype: bool
+        """
+        mbox_doc = self.get_mbox_document()
+        return mbox_doc.content.get(fields.CLOSED_KEY, False)
+
+    def set_mbox_closed(self, mbox, closed):
+        """
+        Set the closed attribute for a given mailbox.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :param closed:  the value to be set
+        :type closed: bool
+        """
+        leap_assert(isinstance(closed, bool), "closed needs to be boolean")
+        with self._mbox_doc_locks[mbox]:
+            mbox_doc = self._get_mbox_document(mbox)
+            if mbox_doc is None:
+                logger.error(
+                    "Could not find mbox document for %r" % (mbox,))
+                return
+            mbox_doc.content[fields.CLOSED_KEY] = closed
+            self._soledad.put_doc(mbox_doc)
+
+    def write_last_uid(self, mbox, value):
+        """
+        Write the `last_uid` integer to the proper mailbox document
+        in Soledad.
+        This is called from the deferred triggered by
+        memorystore.increment_last_soledad_uid, which is expected to
+        run in a separate thread.
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :param value: the value to set
+        :type value: int
+        """
+        leap_assert_type(value, int)
+        key = fields.LAST_UID_KEY
+
+        # XXX change for a lock related to the mbox document
+        # itself.
+        with self._mbox_doc_locks[mbox]:
+            mbox_doc = self._get_mbox_document(mbox)
+            old_val = mbox_doc.content[key]
+            if value > old_val:
+                mbox_doc.content[key] = value
+                self._soledad.put_doc(mbox_doc)
+            else:
+                logger.error("%r:%s Tried to write a UID lesser than what's "
+                             "stored!" % (mbox, value))
 
     def get_flags_doc(self, mbox, uid):
         """
@@ -497,32 +567,6 @@ class SoledadStore(ContentDedup):
             fields.TYPE_HEADERS_VAL, str(chash))
         return first(head_docs)
 
-    def write_last_uid(self, mbox, value):
-        """
-        Write the `last_uid` integer to the proper mailbox document
-        in Soledad.
-        This is called from the deferred triggered by
-        memorystore.increment_last_soledad_uid, which is expected to
-        run in a separate thread.
-
-        :param mbox: the mailbox
-        :type mbox: str or unicode
-        :param value: the value to set
-        :type value: int
-        """
-        leap_assert_type(value, int)
-        key = fields.LAST_UID_KEY
-
-        with self._last_uid_lock:
-            mbox_doc = self._get_mbox_document(mbox)
-            old_val = mbox_doc.content[key]
-            if value > old_val:
-                mbox_doc.content[key] = value
-                self._soledad.put_doc(mbox_doc)
-            else:
-                logger.error("%r:%s Tried to write a UID lesser than what's "
-                             "stored!" % (mbox, value))
-
     # deleted messages
 
     def deleted_iter(self, mbox):
@@ -551,10 +595,11 @@ class SoledadStore(ContentDedup):
         for doc_id in self.deleted_iter(mbox):
             with self._remove_lock:
                 doc = self._soledad.get_doc(doc_id)
-                self._soledad.delete_doc(doc)
-            try:
-                deleted.append(doc.content[fields.UID_KEY])
-            except TypeError:
-                # empty content
-                pass
+                if doc is not None:
+                    self._soledad.delete_doc(doc)
+                    try:
+                        deleted.append(doc.content[fields.UID_KEY])
+                    except TypeError:
+                        # empty content
+                        pass
         return deleted
