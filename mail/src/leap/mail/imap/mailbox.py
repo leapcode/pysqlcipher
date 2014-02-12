@@ -609,7 +609,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             logger.debug("Getting msg by index: INEFFICIENT call!")
             raise NotImplementedError
         else:
-            got_msg = [(msgid, getmsg(msgid)) for msgid in seq_messg]
+            got_msg = ((msgid, getmsg(msgid)) for msgid in seq_messg)
             result = ((msgid, msg) for msgid, msg in got_msg
                       if msg is not None)
             self.reactor.callLater(0, self.unset_recent_flags, seq_messg)

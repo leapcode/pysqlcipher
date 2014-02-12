@@ -287,7 +287,7 @@ class MessageWrapper(object):
                 logger.debug("Error while walking message...")
                 logger.exception(exc)
 
-        if not empty(self.fdoc.content):
+        if not empty(self.fdoc.content) and 'uid' in self.fdoc.content:
             yield self.fdoc
         if not empty(self.hdoc.content):
             yield self.hdoc
@@ -418,10 +418,8 @@ class MessagePart(object):
         if payload:
             content_type = self._get_ctype_from_document(phash)
             charset = find_charset(content_type)
-            logger.debug("Got charset from header: %s" % (charset,))
             if charset is None:
                 charset = self._get_charset(payload)
-                logger.debug("Got charset: %s" % (charset,))
             try:
                 if isinstance(payload, unicode):
                     payload = payload.encode(charset)

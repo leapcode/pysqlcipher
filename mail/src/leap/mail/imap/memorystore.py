@@ -486,15 +486,25 @@ class MemoryStore(object):
         # token to ensure consistency in the removal.
 
         try:
+            del self._fdoc_store[mbox][uid]
+        except KeyError:
+            pass
+
+        try:
             key = mbox, uid
             self._new.discard(key)
             self._dirty.discard(key)
             if key in self._sizes:
                 del self._sizes[key]
-            self._fdoc_store[mbox].pop(uid, None)
-            with self._fdoc_docid_lock:
-                self._fdoc_id_store[mbox].pop(uid, None)
+            self._known_uids[mbox].discard(uid)
         except Exception as exc:
+            logger.error("error while removing message!")
+            logger.exception(exc)
+        try:
+            with self._fdoc_docid_lock:
+                del self._fdoc_id_store[mbox][uid]
+        except Exception as exc:
+            logger.error("error while removing message!")
             logger.exception(exc)
 
     # IMessageStoreWriter
@@ -1124,6 +1134,8 @@ class MemoryStore(object):
             # Stop and trigger last write
             self.stop_and_flush()
             # Wait on the writebacks to finish
+
+            # XXX what if pending deferreds is empty?
             pending_deferreds = (self._new_deferreds.get(mbox, []) +
                                  self._dirty_deferreds.get(mbox, []))
             d1 = defer.gatherResults(pending_deferreds, consumeErrors=True)
@@ -1169,6 +1181,7 @@ class MemoryStore(object):
                 logger.exception(exc)
 
             # 2. Delete all messages marked as deleted in memory.
+            logger.debug("DELETING FROM MEM ALL FOR %r" % (mbox,))
             mem_deleted = self.remove_all_deleted(mbox)
 
             all_deleted = set(mem_deleted).union(set(sol_deleted))

@@ -850,7 +850,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
         if not exist:
             exist = self._get_fdoc_from_chash(chash)
-        if exist:
+        if exist and exist.content is not None:
             return exist.content.get(fields.UID_KEY, "unknown-uid")
         else:
             return False
@@ -926,8 +926,13 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
             return
 
         uid = self.memstore.increment_last_soledad_uid(self.mbox)
-        # We can say the observer that we're done
+        # We can say the observer that we're done at this point.
+        # Make sure it has no serious consequences if we're issued
+        # a fetch command right after...
         self.reactor.callFromThread(observer.callback, uid)
+        # if we did the notify, we need to invalidate the deferred
+        # so not to try to fire it twice.
+        observer = None
 
         fd = self._populate_flags(flags, uid, chash, size, multi)
         hd = self._populate_headr(msg, chash, subject, date)
@@ -952,7 +957,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         msg_container = MessageWrapper(fd, hd, cdocs)
         self.memstore.create_message(
             self.mbox, uid, msg_container,
-            observer=None, notify_on_disk=notify_on_disk)
+            observer=observer, notify_on_disk=notify_on_disk)
 
     #
     # getters: specific queries
@@ -1130,8 +1135,8 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
             if msg is not None:
                 return uid, msg.setFlags(flags, mode)
 
-        result = dict(
-            set_flags(uid, tuple(flags), mode) for uid in messages)
+        setted_flags = [set_flags(uid, flags, mode) for uid in messages]
+        result = dict(filter(None, setted_flags))
 
         reactor.callFromThread(observer.callback, result)
 
@@ -1158,6 +1163,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         """
         msg_container = self.memstore.get_message(
             self.mbox, uid, flags_only=flags_only)
+
         if msg_container is not None:
             if mem_only:
                 msg = LeapMessage(None, uid, self.mbox, collection=self,
@@ -1170,6 +1176,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                                   collection=self, container=msg_container)
         else:
             msg = LeapMessage(self._soledad, uid, self.mbox, collection=self)
+
         if not msg.does_exist():
             return None
         return msg
