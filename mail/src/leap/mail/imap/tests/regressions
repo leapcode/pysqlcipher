@@ -101,7 +101,6 @@ def compare_msg_parts(a, b):
         pprint(b[index])
         print
 
-
     return all_match
 
 
@@ -328,7 +327,7 @@ def cbAppendNextMessage(proto):
     return proto.append(
         REGRESSIONS_FOLDER, msg
     ).addCallback(
-        lambda r: proto.examine(REGRESSIONS_FOLDER)
+        lambda r: proto.select(REGRESSIONS_FOLDER)
     ).addCallback(
         cbAppend, proto, raw
     ).addErrback(
@@ -379,6 +378,9 @@ def cbCompareMessage(result, proto, raw):
     if result:
         keys = result.keys()
         keys.sort()
+    else:
+        print "[-] GOT NO RESULT"
+        return proto.logout()
 
     latest = max(keys)
 
