@@ -157,6 +157,9 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         from twisted.internet import reactor
         self.reactor = reactor
 
+        # purge memstore from empty fdocs.
+        self._memstore.purge_fdoc_store(mbox)
+
     @property
     def listeners(self):
         """

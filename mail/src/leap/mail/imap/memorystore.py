@@ -362,6 +362,27 @@ class MemoryStore(object):
         self._sizes[key] = size.get_size(self._fdoc_store[key])
         # TODO add hdoc and cdocs sizes too
 
+    def purge_fdoc_store(self, mbox):
+        """
+        Purge the empty documents from a fdoc store.
+        Called during initialization of the SoledadMailbox
+
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        """
+        # XXX This is really a workaround until I find the conditions
+        # that are making the empty items remain there.
+        # This happens, for instance, after running several times
+        # the regression test, that issues a store deleted + expunge + select
+        # The items are being correclty deleted, but in succesive appends
+        # the empty items with previously deleted uids reappear as empty
+        # documents. I suspect it's a timing condition with a previously
+        # evaluated sequence being used after the items has been removed.
+
+        for uid, value in self._fdoc_store[mbox].items():
+            if empty(value):
+                del self._fdoc_store[mbox][uid]
+
     def get_docid_for_fdoc(self, mbox, uid):
         """
         Return Soledad document id for the flags-doc for a given mbox and uid,
