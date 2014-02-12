@@ -923,13 +923,14 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
             return
 
         uid = self.memstore.increment_last_soledad_uid(self.mbox)
-        # We can say the observer that we're done at this point.
-        # Make sure it has no serious consequences if we're issued
-        # a fetch command right after...
-        self.reactor.callFromThread(observer.callback, uid)
+
+        # We can say the observer that we're done at this point, but
+        # before that we should make sure it has no serious consequences
+        # if we're issued, for instance, a fetch command right after...
+        #self.reactor.callFromThread(observer.callback, uid)
         # if we did the notify, we need to invalidate the deferred
         # so not to try to fire it twice.
-        observer = None
+        #observer = None
 
         fd = self._populate_flags(flags, uid, chash, size, multi)
         hd = self._populate_headr(msg, chash, subject, date)
