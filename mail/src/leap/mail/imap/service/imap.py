@@ -171,6 +171,9 @@ def run_service(*args, **kwargs):
               the protocol.
     """
     from twisted.internet import reactor
+    # it looks like qtreactor does not honor this,
+    # but other reactors should.
+    reactor.suggestThreadPoolSize(20)
 
     leap_assert(len(args) == 2)
     soledad, keymanager = args
