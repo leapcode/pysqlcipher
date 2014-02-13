@@ -106,6 +106,12 @@ class MemoryStore(object):
         # Internal Storage: messages
         self._msg_store = {}
 
+        # Sizes
+        """
+        {'mbox, uid': <int>}
+        """
+        self._sizes = {}
+
         # Internal Storage: payload-hash
         """
         {'phash': weakreaf.proxy(dict)}
@@ -348,7 +354,11 @@ class MemoryStore(object):
             for key in seq:
                 if key in store and empty(store.get(key)):
                     store.pop(key)
+
         prune((FDOC, HDOC, CDOCS, DOCS_ID), store)
+
+        # Update memory store size
+        self._sizes[key] = size(self._msg_store[key])
 
     def get_docid_for_fdoc(self, mbox, uid):
         """
@@ -418,6 +428,9 @@ class MemoryStore(object):
             self._new.discard(key)
             self._dirty.discard(key)
             self._msg_store.pop(key, None)
+            if key in self._sizes:
+                del self._sizes[key]
+
         except Exception as exc:
             logger.exception(exc)
 
@@ -981,4 +994,4 @@ class MemoryStore(object):
 
         :rtype: int
         """
-        return size.get_size(self._msg_store)
+        return reduce(lambda x, y: x + y, self._sizes, 0)
