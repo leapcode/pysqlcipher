@@ -25,6 +25,7 @@ import weakref
 from collections import defaultdict
 from copy import copy
 
+from enum import Enum
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 from twisted.python import log
@@ -67,6 +68,9 @@ def set_bool_flag(obj, att):
         logger.exception(exc)
     finally:
         setattr(obj, att, False)
+
+
+DirtyState = Enum("none", "dirty", "new")
 
 
 class MemoryStore(object):
@@ -293,7 +297,6 @@ class MemoryStore(object):
                 # a defer that will inmediately have its callback triggered.
                 self.reactor.callFromThread(observer.callback, uid)
 
-
     def put_message(self, mbox, uid, message, notify_on_disk=True):
         """
         Put an existing message.
@@ -407,7 +410,8 @@ class MemoryStore(object):
 
         return doc_id
 
-    def get_message(self, mbox, uid, dirtystate="none", flags_only=False):
+    def get_message(self, mbox, uid, dirtystate=DirtyState.none,
+                    flags_only=False):
         """
         Get a MessageWrapper for the given mbox and uid combination.
 
@@ -415,8 +419,9 @@ class MemoryStore(object):
         :type mbox: str or unicode
         :param uid: the message UID
         :type uid: int
-        :param dirtystate: one of `dirty`, `new` or `none` (default)
-        :type dirtystate: str
+        :param dirtystate: DirtyState enum: one of `dirty`, `new`
+                           or `none` (default)
+        :type dirtystate: enum
         :param flags_only: whether the message should carry only a reference
                            to the flags document.
         :type flags_only: bool
@@ -424,7 +429,7 @@ class MemoryStore(object):
 
         :return: MessageWrapper or None
         """
-        if dirtystate == "dirty":
+        if dirtystate == DirtyState.dirty:
             flags_only = True
 
         key = mbox, uid
@@ -434,11 +439,11 @@ class MemoryStore(object):
             return None
 
         new, dirty = False, False
-        if dirtystate == "none":
+        if dirtystate == DirtyState.none:
             new, dirty = self._get_new_dirty_state(key)
-        if dirtystate == "dirty":
+        if dirtystate == DirtyState.dirty:
             new, dirty = False, True
-        if dirtystate == "new":
+        if dirtystate == DirtyState.new:
             new, dirty = True, False
 
         if flags_only:
@@ -514,6 +519,7 @@ class MemoryStore(object):
         Write the message documents in this MemoryStore to a different store.
 
         :param store: the IMessageStore to write to
+        :rtype: False if queue is not empty, None otherwise.
         """
         # For now, we pass if the queue is not empty, to avoid duplicate
         # queuing.
@@ -880,7 +886,7 @@ class MemoryStore(object):
         :rtype: generator
         """
         gm = self.get_message
-        new = [gm(*key) for key in self._new]
+        new = [gm(*key, dirtystate=DirtyState.new) for key in self._new]
         # move content from new set to the queue
         self._new_queue.update(self._new)
         self._new.difference_update(self._new)
@@ -894,7 +900,8 @@ class MemoryStore(object):
         :rtype: generator
         """
         gm = self.get_message
-        dirty = [gm(*key, flags_only=True) for key in self._dirty]
+        dirty = [gm(*key, flags_only=True, dirtystate=DirtyState.dirty)
+                 for key in self._dirty]
         # move content from new and dirty sets to the queue
 
         self._dirty_queue.update(self._dirty)

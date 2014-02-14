@@ -295,9 +295,12 @@ class SoledadStore(ContentDedup):
     def _soledad_write_document_parts(self, items):
         """
         Write the document parts to soledad in a separate thread.
+
         :param items: the iterator through the different document wrappers
                       payloads.
         :type items: iterator
+        :return: whether the write was successful or not
+        :rtype: bool
         """
         failed = False
         for item, call in items:

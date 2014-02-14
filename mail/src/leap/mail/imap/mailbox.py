@@ -895,6 +895,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         Get a copy of the fdoc for this message, and check whether
         it already exists.
 
+        :param message: an IMessage implementor
+        :type message: LeapMessage
         :return: exist, new_fdoc
         :rtype: tuple
         """

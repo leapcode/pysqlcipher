@@ -118,8 +118,8 @@ class LeapIMAPFactory(ServerFactory):
         """
         Return a protocol suitable for the job.
 
-        :param addr: ???
-        :type addr:  ???
+        :param addr: remote ip address
+        :type addr:  str
         """
         imapProtocol = LeapIMAPServer(
             uuid=self._uuid,
