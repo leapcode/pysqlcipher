@@ -25,6 +25,7 @@ from twisted.internet import defer, threads
 from twisted.internet.protocol import ServerFactory
 from twisted.internet.error import CannotListenError
 from twisted.mail import imap4
+from twisted.python import log
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,15 @@ except Exception:
 DO_MANHOLE = os.environ.get("LEAP_MAIL_MANHOLE", None)
 if DO_MANHOLE:
     from leap.mail.imap.service import manhole
+
+DO_PROFILE = os.environ.get("LEAP_PROFILE", None)
+if DO_PROFILE:
+    import cProfile
+    log.msg("Starting PROFILING...")
+
+    PROFILE_DAT = "/tmp/leap_mail_profile.pstats"
+    pr = cProfile.Profile()
+    pr.enable()
 
 
 class IMAPAuthRealm(object):
@@ -140,6 +150,11 @@ class LeapIMAPFactory(ServerFactory):
                  disk in another thread.
         :rtype: Deferred
         """
+        if DO_PROFILE:
+            log.msg("Stopping PROFILING")
+            pr.disable()
+            pr.dump_stats(PROFILE_DAT)
+
         ServerFactory.doStop(self)
 
         if cv is not None:
