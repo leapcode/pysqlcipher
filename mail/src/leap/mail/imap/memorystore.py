@@ -350,6 +350,12 @@ class MemoryStore(object):
                 continue
             self._phash_store[phash] = weakref.proxy(referenciable_cdoc)
 
+        # Update memory store size
+        # XXX this should use [mbox][uid]
+        key = mbox, uid
+        self._sizes[key] = size.get_size(self._fdoc_store[key])
+        # TODO add hdoc and cdocs sizes too
+
         def prune(seq, store):
             for key in seq:
                 if key in store and empty(store.get(key)):
