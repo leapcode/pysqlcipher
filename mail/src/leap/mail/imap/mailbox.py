@@ -132,13 +132,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :param rw: read-and-write flag for this mailbox
         :type rw: int
         """
-        logger.debug("Initializing mailbox %r" % (mbox,))
         leap_assert(mbox, "Need a mailbox name to initialize")
         leap_assert(soledad, "Need a soledad instance to initialize")
-
-        # XXX should move to wrapper
-        #leap_assert(isinstance(soledad._db, SQLCipherDatabase),
-                    #"soledad._db must be an instance of SQLCipherDatabase")
 
         self.mbox = self._parse_mailbox_name(mbox)
         self.rw = rw
@@ -168,7 +163,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
         # purge memstore from empty fdocs.
         self._memstore.purge_fdoc_store(mbox)
-        logger.debug("DONE initializing mailbox %r" % (mbox,))
 
     @property
     def listeners(self):

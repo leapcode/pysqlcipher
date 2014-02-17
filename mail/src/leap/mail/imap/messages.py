@@ -686,6 +686,8 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
     _rdoc_lock = threading.Lock()
     _rdoc_property_lock = threading.Lock()
 
+    _initialized = {}
+
     def __init__(self, mbox=None, soledad=None, memstore=None):
         """
         Constructor for MessageCollection.
@@ -725,10 +727,12 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         self.memstore = memstore
 
         self.__rflags = None
-        self.initialize_db()
 
-        # ensure that we have a recent-flags and a hdocs-sec doc
-        self._get_or_create_rdoc()
+        if not self._initialized.get(mbox, False):
+            self.initialize_db()
+            # ensure that we have a recent-flags and a hdocs-sec doc
+            self._get_or_create_rdoc()
+            self._initialized[mbox] = True
 
         from twisted.internet import reactor
         self.reactor = reactor
