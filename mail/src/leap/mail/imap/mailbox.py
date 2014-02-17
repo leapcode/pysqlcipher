@@ -149,6 +149,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         self.messages = MessageCollection(
             mbox=mbox, soledad=self._soledad, memstore=self._memstore)
 
+        self._uidvalidity = None
+
         # XXX careful with this get/set (it would be
         # hitting db unconditionally, move to memstore too)
         # Now it's returning a fixed amount of flags from mem
@@ -339,8 +341,10 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :return: unique validity identifier
         :rtype: int
         """
-        mbox = self._get_mbox_doc()
-        return mbox.content.get(self.CREATED_KEY, 1)
+        if self._uidvalidity is None:
+            mbox = self._get_mbox_doc()
+            self._uidvalidity = mbox.content.get(self.CREATED_KEY, 1)
+        return self._uidvalidity
 
     def getUID(self, message):
         """
