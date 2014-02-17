@@ -726,17 +726,16 @@ class MemoryStore(object):
         :type mbox: str or unicode
         :rtype: dict
         """
-        flags_dict = {}
+        fdict = {}
         uids = self.get_uids(mbox)
-        fdoc_store = self._fdoc_store[mbox]
+        fstore = self._fdoc_store[mbox]
 
         for uid in uids:
             try:
-                flags = fdoc_store[uid][fields.FLAGS_KEY]
-                flags_dict[uid] = flags
+                fdict[uid] = fstore[uid][fields.FLAGS_KEY]
             except KeyError:
                 continue
-        return flags_dict
+        return fdict
 
     def all_headers(self, mbox):
         """
