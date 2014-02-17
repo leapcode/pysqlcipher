@@ -110,8 +110,10 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
     next_uid_lock = threading.Lock()
     last_uid_lock = threading.Lock()
 
+    # TODO unify all the `primed` dicts
     _fdoc_primed = {}
     _last_uid_primed = {}
+    _known_uids_primed = {}
 
     def __init__(self, mbox, soledad, memstore, rw=1):
         """
@@ -130,6 +132,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :param rw: read-and-write flag for this mailbox
         :type rw: int
         """
+        logger.debug("Initializing mailbox %r" % (mbox,))
         leap_assert(mbox, "Need a mailbox name to initialize")
         leap_assert(soledad, "Need a soledad instance to initialize")
 
@@ -146,6 +149,10 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         self.messages = MessageCollection(
             mbox=mbox, soledad=self._soledad, memstore=self._memstore)
 
+        # XXX careful with this get/set (it would be
+        # hitting db unconditionally, move to memstore too)
+        # Now it's returning a fixed amount of flags from mem
+        # as a workaround.
         if not self.getFlags():
             self.setFlags(self.INIT_FLAGS)
 
@@ -159,6 +166,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
         # purge memstore from empty fdocs.
         self._memstore.purge_fdoc_store(mbox)
+        logger.debug("DONE initializing mailbox %r" % (mbox,))
 
     @property
     def listeners(self):
@@ -217,10 +225,18 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :returns: tuple of flags for this mailbox
         :rtype: tuple of str
         """
-        mbox = self._get_mbox_doc()
-        if not mbox:
-            return None
-        flags = mbox.content.get(self.FLAGS_KEY, [])
+        flags = self.INIT_FLAGS
+
+        # XXX returning fixed flags always
+        # Since I have not found a case where the client
+        # wants to modify this, as a way of speeding up
+        # selects. To do it right, we probably should keep
+        # track of the set of all flags used by msgs
+        # in this mailbox. Does it matter?
+        #mbox = self._get_mbox_doc()
+        #if not mbox:
+            #return None
+        #flags = mbox.content.get(self.FLAGS_KEY, [])
         return map(str, flags)
 
     # XXX move to memstore->soledadstore
@@ -237,6 +253,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         if not mbox:
             return None
         mbox.content[self.FLAGS_KEY] = map(str, flags)
+        logger.debug("Writing mbox document for %r to Soledad"
+                     % (self.mbox,))
         self._soledad.put_doc(mbox)
 
     # XXX SHOULD BETTER IMPLEMENT ADD_FLAG, REMOVE_FLAG.
@@ -298,8 +316,11 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
         We do this to be able to filter the requests efficiently.
         """
-        known_uids = self.messages.all_soledad_uid_iter()
-        self._memstore.set_known_uids(self.mbox, known_uids)
+        primed = self._known_uids_primed.get(self.mbox, False)
+        if not primed:
+            known_uids = self.messages.all_soledad_uid_iter()
+            self._memstore.set_known_uids(self.mbox, known_uids)
+            self._known_uids_primed[self.mbox] = True
 
     def prime_flag_docs_to_memstore(self):
         """
@@ -465,6 +486,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         d = self.messages.add_msg(message, flags=flags, date=date)
         return d
 
+    @deferred_to_thread
     def notify_new(self, *args):
         """
         Notify of new messages to all the listeners.
@@ -836,7 +858,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         d = defer.Deferred()
         if PROFILE_CMD:
             do_profile_cmd(d, "COPY")
-        d.addCallback(lambda r: self.reactor.callLater(0, self.notify_new))
         deferLater(self.reactor, 0, self._do_copy, message, d)
         return d
 
@@ -863,9 +884,9 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
                 # XXX I'm not sure if we should raise the
                 # errback. This actually rases an ugly warning
-                # in some muas like thunderbird. I guess the user does
-                # not deserve that.
-                observer.callback(True)
+                # in some muas like thunderbird.
+                # UID 0 seems a good convention for no uid.
+                observer.callback(0)
             else:
                 mbox = self.mbox
                 uid_next = memstore.increment_last_soledad_uid(mbox)
