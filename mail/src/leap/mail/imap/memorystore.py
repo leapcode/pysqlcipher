@@ -42,6 +42,8 @@ from leap.mail.imap.messageparts import RecentFlagsDoc
 from leap.mail.imap.messageparts import MessageWrapper
 from leap.mail.imap.messageparts import ReferenciableDict
 
+from leap.mail.decorators import deferred_to_thread
+
 logger = logging.getLogger(__name__)
 
 
@@ -514,6 +516,7 @@ class MemoryStore(object):
 
     # IMessageStoreWriter
 
+    @deferred_to_thread
     def write_messages(self, store):
         """
         Write the message documents in this MemoryStore to a different store.
