@@ -77,7 +77,7 @@ class KeyManager(object):
     OPENPGP_KEY = 'openpgp'
     PUBKEY_KEY = "user[public_key]"
 
-    def __init__(self, address, nickserver_uri, soledad, session_id=None,
+    def __init__(self, address, nickserver_uri, soledad, token=None,
                  ca_cert_path=None, api_uri=None, api_version=None, uid=None,
                  gpgbinary=None):
         """
@@ -90,8 +90,8 @@ class KeyManager(object):
         :type url: str
         :param soledad: A Soledad instance for local storage of keys.
         :type soledad: leap.soledad.Soledad
-        :param session_id: The session ID for interacting with the webapp API.
-        :type session_id: str
+        :param token: The token for interacting with the webapp API.
+        :type token: str
         :param ca_cert_path: The path to the CA certificate.
         :type ca_cert_path: str
         :param api_uri: The URI of the webapp API.
@@ -106,7 +106,7 @@ class KeyManager(object):
         self._address = address
         self._nickserver_uri = nickserver_uri
         self._soledad = soledad
-        self._session_id = session_id
+        self._token = token
         self.ca_cert_path = ca_cert_path
         self.api_uri = api_uri
         self.api_version = api_version
@@ -180,11 +180,11 @@ class KeyManager(object):
             self._ca_cert_path is not None,
             'We need the CA certificate path!')
         leap_assert(
-            self._session_id is not None,
-            'We need a session_id to interact with webapp!')
+            self._token is not None,
+            'We need a token to interact with webapp!')
         res = self._fetcher.put(
             uri, data=data, verify=self._ca_cert_path,
-            cookies={'_session_id': self._session_id})
+            headers={'Authorization': 'Token token=%s' % self._token})
         # assert that the response is valid
         res.raise_for_status()
         return res
@@ -353,14 +353,14 @@ class KeyManager(object):
     # Setters/getters
     #
 
-    def _get_session_id(self):
-        return self._session_id
+    def _get_token(self):
+        return self._token
 
-    def _set_session_id(self, session_id):
-        self._session_id = session_id
+    def _set_token(self, token):
+        self._token = token
 
-    session_id = property(
-        _get_session_id, _set_session_id, doc='The session id.')
+    token = property(
+        _get_token, _set_token, doc='The session token.')
 
     def _get_ca_cert_path(self):
         return self._ca_cert_path
