@@ -132,7 +132,7 @@ tempdir = "/tmp/"
 soledad = initialize_soledad(uuid, userid, passwd, secrets, localdb, gnupg_home, tempdir)
 km_args = (userid, "https://localhost", soledad)
 km_kwargs = { 
-	"session_id":  "", 
+	"token":  "",
 	"ca_cert_path":  "", 
 	"api_uri":  "", 
 	"api_version":  "", 
