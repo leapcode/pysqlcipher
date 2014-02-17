@@ -364,9 +364,11 @@ class MemoryStore(object):
 
         # Update memory store size
         # XXX this should use [mbox][uid]
-        key = mbox, uid
-        self._sizes[key] = size.get_size(self._fdoc_store[key])
+        # TODO --- this has to be deferred to thread,
         # TODO add hdoc and cdocs sizes too
+        # it's slowing things down here.
+        #key = mbox, uid
+        #self._sizes[key] = size.get_size(self._fdoc_store[key])
 
     def purge_fdoc_store(self, mbox):
         """
