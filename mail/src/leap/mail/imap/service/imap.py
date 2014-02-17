@@ -25,6 +25,7 @@ from twisted.internet import defer, threads
 from twisted.internet.protocol import ServerFactory
 from twisted.internet.error import CannotListenError
 from twisted.mail import imap4
+from twisted.python import log
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,15 @@ DO_MANHOLE = os.environ.get("LEAP_MAIL_MANHOLE", None)
 if DO_MANHOLE:
     from leap.mail.imap.service import manhole
 
+DO_PROFILE = os.environ.get("LEAP_PROFILE", None)
+if DO_PROFILE:
+    import cProfile
+    log.msg("Starting PROFILING...")
+
+    PROFILE_DAT = "/tmp/leap_mail_profile.pstats"
+    pr = cProfile.Profile()
+    pr.enable()
+
 
 class IMAPAuthRealm(object):
     """
@@ -115,7 +125,12 @@ class LeapIMAPFactory(ServerFactory):
         # XXX how to pass the store along?
 
     def buildProtocol(self, addr):
-        "Return a protocol suitable for the job."
+        """
+        Return a protocol suitable for the job.
+
+        :param addr: remote ip address
+        :type addr:  str
+        """
         imapProtocol = LeapIMAPServer(
             uuid=self._uuid,
             userid=self._userid,
@@ -124,7 +139,7 @@ class LeapIMAPFactory(ServerFactory):
         imapProtocol.factory = self
         return imapProtocol
 
-    def doStop(self, cv):
+    def doStop(self, cv=None):
         """
         Stops imap service (fetcher, factory and port).
 
@@ -135,23 +150,30 @@ class LeapIMAPFactory(ServerFactory):
                  disk in another thread.
         :rtype: Deferred
         """
+        if DO_PROFILE:
+            log.msg("Stopping PROFILING")
+            pr.disable()
+            pr.dump_stats(PROFILE_DAT)
+
         ServerFactory.doStop(self)
 
-        def _stop_imap_cb():
-            logger.debug('Stopping in memory store.')
-            self._memstore.stop_and_flush()
-            while not self._memstore.producer.is_queue_empty():
-                logger.debug('Waiting for queue to be empty.')
-                # TODO use a gatherResults over the new/dirty deferred list,
-                # as in memorystore's expunge() method.
-                time.sleep(1)
-            # notify that service has stopped
-            logger.debug('Notifying that service has stopped.')
-            cv.acquire()
-            cv.notify()
-            cv.release()
+        if cv is not None:
+            def _stop_imap_cb():
+                logger.debug('Stopping in memory store.')
+                self._memstore.stop_and_flush()
+                while not self._memstore.producer.is_queue_empty():
+                    logger.debug('Waiting for queue to be empty.')
+                    # TODO use a gatherResults over the new/dirty
+                    # deferred list,
+                    # as in memorystore's expunge() method.
+                    time.sleep(1)
+                # notify that service has stopped
+                logger.debug('Notifying that service has stopped.')
+                cv.acquire()
+                cv.notify()
+                cv.release()
 
-        return threads.deferToThread(_stop_imap_cb)
+            return threads.deferToThread(_stop_imap_cb)
 
 
 def run_service(*args, **kwargs):
@@ -164,6 +186,9 @@ def run_service(*args, **kwargs):
               the protocol.
     """
     from twisted.internet import reactor
+    # it looks like qtreactor does not honor this,
+    # but other reactors should.
+    reactor.suggestThreadPoolSize(20)
 
     leap_assert(len(args) == 2)
     soledad, keymanager = args

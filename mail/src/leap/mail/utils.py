@@ -17,10 +17,10 @@
 """
 Mail utilities.
 """
-import copy
 import json
 import re
 import traceback
+import Queue
 
 from leap.soledad.common.document import SoledadDocument
 
@@ -49,7 +49,7 @@ def empty(thing):
         thing = thing.content
     try:
         return len(thing) == 0
-    except ReferenceError:
+    except (ReferenceError, TypeError):
         return True
 
 
@@ -94,6 +94,7 @@ def lowerdict(_dict):
 
 
 PART_MAP = "part_map"
+PHASH = "phash"
 
 
 def _str_dict(d, k):
@@ -129,6 +130,103 @@ def stringify_parts_map(d):
                 stringify_parts_map(d[k][str(kk)])
     return d
 
+
+def phash_iter(d):
+    """
+    A recursive generator that extracts all the payload-hashes
+    from an arbitrary nested parts-map dictionary.
+
+    :param d: the dictionary to walk
+    :type d: dictionary
+    :return: a list of all the phashes found
+    :rtype: list
+    """
+    if PHASH in d:
+        yield d[PHASH]
+    if PART_MAP in d:
+        for key in d[PART_MAP]:
+            for phash in phash_iter(d[PART_MAP][key]):
+                yield phash
+
+
+def accumulator(fun, lim):
+    """
+    A simple accumulator that uses a closure and a mutable
+    object to collect items.
+    When the count of items is greater than `lim`, the
+    collection is flushed after invoking a map of the function `fun`
+    over it.
+
+    The returned accumulator can also be flushed at any moment
+    by passing a boolean as a second parameter.
+
+    :param fun: the function to call over the collection
+                when its size is greater than `lim`
+    :type fun: callable
+    :param lim: the turning point for the collection
+    :type lim: int
+    :rtype: function
+
+    >>> from pprint import pprint
+    >>> acc = accumulator(pprint, 2)
+    >>> acc(1)
+    >>> acc(2)
+    [1, 2]
+    >>> acc(3)
+    >>> acc(4)
+    [3, 4]
+    >>> acc = accumulator(pprint, 5)
+    >>> acc(1)
+    >>> acc(2)
+    >>> acc(3)
+    >>> acc(None, flush=True)
+    [1,2,3]
+    """
+    KEY = "items"
+    _o = {KEY: []}
+
+    def _accumulator(item, flush=False):
+        collection = _o[KEY]
+        collection.append(item)
+        if len(collection) >= lim or flush:
+            map(fun, filter(None, collection))
+            _o[KEY] = []
+
+    return _accumulator
+
+
+def accumulator_queue(fun, lim):
+    """
+    A version of the accumulator that uses a queue.
+
+    When the count of items is greater than `lim`, the
+    queue is flushed after invoking the function `fun`
+    over its items.
+
+    The returned accumulator can also be flushed at any moment
+    by passing a boolean as a second parameter.
+
+    :param fun: the function to call over the collection
+                when its size is greater than `lim`
+    :type fun: callable
+    :param lim: the turning point for the collection
+    :type lim: int
+    :rtype: function
+    """
+    _q = Queue.Queue()
+
+    def _accumulator(item, flush=False):
+        _q.put(item)
+        if _q.qsize() >= lim or flush:
+            collection = [_q.get() for i in range(_q.qsize())]
+            map(fun, filter(None, collection))
+
+    return _accumulator
+
+
+#
+# String manipulation
+#
 
 class CustomJsonScanner(object):
     """
@@ -169,6 +267,8 @@ class CustomJsonScanner(object):
         if not monkey_patched:
             return self._orig_scanstring(s, idx, *args, **kwargs)
 
+        # TODO profile to see if a compiled regex can get us some
+        # benefit here.
         found = False
         end = s.find("\"", idx)
         while not found:

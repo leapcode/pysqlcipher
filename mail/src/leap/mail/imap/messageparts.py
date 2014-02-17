@@ -98,7 +98,7 @@ class MessageWrapper(object):
     CDOCS = "cdocs"
     DOCS_ID = "docs_id"
 
-    # Using slots to limit some the memory footprint,
+    # Using slots to limit some the memory use,
     # Add your attribute here.
 
     __slots__ = ["_dict", "_new", "_dirty", "_storetype", "memstore"]
@@ -148,7 +148,7 @@ class MessageWrapper(object):
         """
         return self._new
 
-    def _set_new(self, value=True):
+    def _set_new(self, value=False):
         """
         Set the value for the `new` flag, and propagate it
         to the memory store if any.
@@ -158,11 +158,14 @@ class MessageWrapper(object):
         """
         self._new = value
         if self.memstore:
-            mbox = self.fdoc.content['mbox']
-            uid = self.fdoc.content['uid']
+            mbox = self.fdoc.content.get('mbox', None)
+            uid = self.fdoc.content.get('uid', None)
+            if not mbox or not uid:
+                logger.warning("Malformed fdoc")
+                return
             key = mbox, uid
-            fun = [self.memstore.unset_new,
-                   self.memstore.set_new][int(value)]
+            fun = [self.memstore.unset_new_queued,
+                   self.memstore.set_new_queued][int(value)]
             fun(key)
         else:
             logger.warning("Could not find a memstore referenced from this "
@@ -190,11 +193,14 @@ class MessageWrapper(object):
         """
         self._dirty = value
         if self.memstore:
-            mbox = self.fdoc.content['mbox']
-            uid = self.fdoc.content['uid']
+            mbox = self.fdoc.content.get('mbox', None)
+            uid = self.fdoc.content.get('uid', None)
+            if not mbox or not uid:
+                logger.warning("Malformed fdoc")
+                return
             key = mbox, uid
-            fun = [self.memstore.unset_dirty,
-                   self.memstore.set_dirty][int(value)]
+            fun = [self.memstore.unset_dirty_queued,
+                   self.memstore.set_dirty_queued][int(value)]
             fun(key)
         else:
             logger.warning("Could not find a memstore referenced from this "
@@ -271,13 +277,17 @@ class MessageWrapper(object):
         :rtype: generator
         """
         if self._dirty:
-            mbox = self.fdoc.content[fields.MBOX_KEY]
-            uid = self.fdoc.content[fields.UID_KEY]
-            docid_dict = self._dict[self.DOCS_ID]
-            docid_dict[self.FDOC] = self.memstore.get_docid_for_fdoc(
-                mbox, uid)
+            try:
+                mbox = self.fdoc.content[fields.MBOX_KEY]
+                uid = self.fdoc.content[fields.UID_KEY]
+                docid_dict = self._dict[self.DOCS_ID]
+                docid_dict[self.FDOC] = self.memstore.get_docid_for_fdoc(
+                    mbox, uid)
+            except Exception as exc:
+                logger.debug("Error while walking message...")
+                logger.exception(exc)
 
-        if not empty(self.fdoc.content):
+        if not empty(self.fdoc.content) and 'uid' in self.fdoc.content:
             yield self.fdoc
         if not empty(self.hdoc.content):
             yield self.hdoc
@@ -408,10 +418,8 @@ class MessagePart(object):
         if payload:
             content_type = self._get_ctype_from_document(phash)
             charset = find_charset(content_type)
-            logger.debug("Got charset from header: %s" % (charset,))
             if charset is None:
                 charset = self._get_charset(payload)
-                logger.debug("Got charset: %s" % (charset,))
             try:
                 if isinstance(payload, unicode):
                     payload = payload.encode(charset)

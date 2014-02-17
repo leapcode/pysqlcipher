@@ -20,9 +20,7 @@ Leap IMAP4 Server Implementation.
 from copy import copy
 
 from twisted import cred
-from twisted.internet import defer
 from twisted.internet.defer import maybeDeferred
-from twisted.internet.task import deferLater
 from twisted.mail import imap4
 from twisted.python import log
 
@@ -41,6 +39,7 @@ class LeapIMAPServer(imap4.IMAP4Server):
         soledad = kwargs.pop('soledad', None)
         uuid = kwargs.pop('uuid', None)
         userid = kwargs.pop('userid', None)
+
         leap_assert(soledad, "need a soledad instance")
         leap_assert_type(soledad, Soledad)
         leap_assert(uuid, "need a user in the initialization")
@@ -54,6 +53,9 @@ class LeapIMAPServer(imap4.IMAP4Server):
         # but we move it to the factory so we can
         # populate the test account properly (and only once
         # per session)
+
+        from twisted.internet import reactor
+        self.reactor = reactor
 
     def lineReceived(self, line):
         """
@@ -114,6 +116,7 @@ class LeapIMAPServer(imap4.IMAP4Server):
             ).addCallback(
                 cbFetch, tag, query, uid
             ).addErrback(ebFetch, tag)
+
         elif len(query) == 1 and str(query[0]) == "rfc822.header":
             self._oldTimeout = self.setTimeout(None)
             # no need to call iter, we get a generator
@@ -130,48 +133,16 @@ class LeapIMAPServer(imap4.IMAP4Server):
             ).addCallback(
                 cbFetch, tag, query, uid
             ).addErrback(
-                ebFetch, tag
-            ).addCallback(
-                self.on_fetch_finished, messages)
+                ebFetch, tag)
 
     select_FETCH = (do_FETCH, imap4.IMAP4Server.arg_seqset,
                     imap4.IMAP4Server.arg_fetchatt)
-
-    def on_fetch_finished(self, _, messages):
-        from twisted.internet import reactor
-
-        print "FETCH FINISHED -- NOTIFY NEW"
-        deferLater(reactor, 0, self.notifyNew)
-        deferLater(reactor, 0, self.mbox.unset_recent_flags, messages)
-        deferLater(reactor, 0, self.mbox.signal_unread_to_ui)
-
-    def on_copy_finished(self, defers):
-        d = defer.gatherResults(filter(None, defers))
-
-        def when_finished(result):
-            log.msg("COPY FINISHED")
-            self.notifyNew()
-            self.mbox.signal_unread_to_ui()
-        d.addCallback(when_finished)
-        #d.addCallback(self.notifyNew)
-        #d.addCallback(self.mbox.signal_unread_to_ui)
-
-    def do_COPY(self, tag, messages, mailbox, uid=0):
-        from twisted.internet import reactor
-        defers = []
-        d = imap4.IMAP4Server.do_COPY(self, tag, messages, mailbox, uid)
-        defers.append(d)
-        deferLater(reactor, 0, self.on_copy_finished, defers)
-
-    select_COPY = (do_COPY, imap4.IMAP4Server.arg_seqset,
-                   imap4.IMAP4Server.arg_astring)
 
     def notifyNew(self, ignored=None):
         """
         Notify new messages to listeners.
         """
-        print "TRYING TO NOTIFY NEW"
-        self.mbox.notify_new()
+        self.reactor.callFromThread(self.mbox.notify_new)
 
     def _cbSelectWork(self, mbox, cmdName, tag):
         """

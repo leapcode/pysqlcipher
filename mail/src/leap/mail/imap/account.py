@@ -18,9 +18,12 @@
 Soledad Backed Account.
 """
 import copy
+import logging
+import os
 import time
 
 from twisted.mail import imap4
+from twisted.python import log
 from zope.interface import implements
 
 from leap.common.check import leap_assert, leap_assert_type
@@ -30,11 +33,26 @@ from leap.mail.imap.parser import MBoxParser
 from leap.mail.imap.mailbox import SoledadMailbox
 from leap.soledad.client import Soledad
 
+logger = logging.getLogger(__name__)
+
+PROFILE_CMD = os.environ.get('LEAP_PROFILE_IMAPCMD', False)
+
+if PROFILE_CMD:
+
+    def _debugProfiling(result, cmdname, start):
+        took = (time.time() - start) * 1000
+        log.msg("CMD " + cmdname + " TOOK: " + str(took) + " msec")
+        return result
+
 
 #######################################
 # Soledad Account
 #######################################
 
+
+# TODO change name to LeapIMAPAccount, since we're using
+# the memstore.
+# IndexedDB should also not be here anymore.
 
 class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
     """
@@ -67,14 +85,19 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         # XXX SHOULD assert too that the name matches the user/uuid with which
         # soledad has been initialized.
 
+        # XXX ??? why is this parsing mailbox name??? it's account...
+        # userid? homogenize.
         self._account_name = self._parse_mailbox_name(account_name)
         self._soledad = soledad
         self._memstore = memstore
+
+        self.__mailboxes = set([])
 
         self.initialize_db()
 
         # every user should have the right to an inbox folder
         # at least, so let's make one!
+        self._load_mailboxes()
 
         if not self.mailboxes:
             self.addMailbox(self.INBOX_NAME)
@@ -106,9 +129,13 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         """
         A list of the current mailboxes for this account.
         """
-        return [doc.content[self.MBOX_KEY]
-                for doc in self._soledad.get_from_index(
-                    self.TYPE_IDX, self.MBOX_KEY)]
+        return self.__mailboxes
+
+    def _load_mailboxes(self):
+        self.__mailboxes.update(
+            [doc.content[self.MBOX_KEY]
+             for doc in self._soledad.get_from_index(
+                 self.TYPE_IDX, self.MBOX_KEY)])
 
     @property
     def subscriptions(self):
@@ -173,6 +200,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         mbox[self.CREATED_KEY] = creation_ts
 
         doc = self._soledad.create_doc(mbox)
+        self._load_mailboxes()
         return bool(doc)
 
     def create(self, pathspec):
@@ -203,6 +231,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         except imap4.MailboxCollision:
             if not pathspec.endswith('/'):
                 return False
+        self._load_mailboxes()
         return True
 
     def select(self, name, readwrite=1):
@@ -215,17 +244,22 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         :param readwrite: 1 for readwrite permissions.
         :type readwrite: int
 
-        :rtype: bool
+        :rtype: SoledadMailbox
         """
+        if PROFILE_CMD:
+            start = time.time()
+
         name = self._parse_mailbox_name(name)
-
         if name not in self.mailboxes:
+            logger.warning("No such mailbox!")
             return None
-
         self.selected = name
 
-        return SoledadMailbox(
+        sm = SoledadMailbox(
             name, self._soledad, self._memstore, readwrite)
+        if PROFILE_CMD:
+            _debugProfiling(None, "SELECT", start)
+        return sm
 
     def delete(self, name, force=False):
         """
@@ -260,6 +294,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
                             "Hierarchically inferior mailboxes "
                             "exist and \\Noselect is set")
         mbox.destroy()
+        self._load_mailboxes()
 
         # XXX FIXME --- not honoring the inferior names...
 
@@ -296,6 +331,8 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
             mbox = self._get_mailbox_by_name(old)
             mbox.content[self.MBOX_KEY] = new
             self._soledad.put_doc(mbox)
+
+        self._load_mailboxes()
 
         # XXX ---- FIXME!!!! ------------------------------------
         # until here we just renamed the index...

@@ -28,7 +28,6 @@ from functools import partial
 
 from twisted.mail import imap4
 from twisted.internet import defer
-from twisted.python import log
 from zope.interface import implements
 from zope.proxy import sameProxiedObjects
 
@@ -78,7 +77,7 @@ def try_unique_query(curried):
                 # TODO we could take action, like trigger a background
                 # process to kill dupes.
                 name = getattr(curried, 'expected', 'doc')
-                logger.warning(
+                logger.debug(
                     "More than one %s found for this mbox, "
                     "we got a duplicate!!" % (name,))
             return query.pop()
@@ -86,6 +85,13 @@ def try_unique_query(curried):
             return None
     except Exception as exc:
         logger.exception("Unhandled error %r" % exc)
+
+
+"""
+A dictionary that keeps one lock per mbox and uid.
+"""
+# XXX too much overhead?
+fdoc_locks = defaultdict(lambda: defaultdict(lambda: threading.Lock()))
 
 
 class LeapMessage(fields, MailParser, MBoxParser):
@@ -101,8 +107,6 @@ class LeapMessage(fields, MailParser, MBoxParser):
     # UID table.
 
     implements(imap4.IMessage)
-
-    flags_lock = threading.Lock()
 
     def __init__(self, soledad, uid, mbox, collection=None, container=None):
         """
@@ -129,10 +133,13 @@ class LeapMessage(fields, MailParser, MBoxParser):
         self.__chash = None
         self.__bdoc = None
 
+        from twisted.internet import reactor
+        self.reactor = reactor
+
     # XXX make these properties public
 
     @property
-    def _fdoc(self):
+    def fdoc(self):
         """
         An accessor to the flags document.
         """
@@ -149,35 +156,43 @@ class LeapMessage(fields, MailParser, MBoxParser):
             return fdoc
 
     @property
-    def _hdoc(self):
+    def hdoc(self):
         """
         An accessor to the headers document.
         """
-        if self._container is not None:
+        container = self._container
+        if container is not None:
             hdoc = self._container.hdoc
             if hdoc and not empty(hdoc.content):
                 return hdoc
-        # XXX cache this into the memory store !!!
-        return self._get_headers_doc()
+        hdoc = self._get_headers_doc()
+
+        if container and not empty(hdoc.content):
+            # mem-cache it
+            hdoc_content = hdoc.content
+            chash = hdoc_content.get(fields.CONTENT_HASH_KEY)
+            hdocs = {chash: hdoc_content}
+            container.memstore.load_header_docs(hdocs)
+        return hdoc
 
     @property
-    def _chash(self):
+    def chash(self):
         """
         An accessor to the content hash for this message.
         """
-        if not self._fdoc:
+        if not self.fdoc:
             return None
-        if not self.__chash and self._fdoc:
-            self.__chash = self._fdoc.content.get(
+        if not self.__chash and self.fdoc:
+            self.__chash = self.fdoc.content.get(
                 fields.CONTENT_HASH_KEY, None)
         return self.__chash
 
     @property
-    def _bdoc(self):
+    def bdoc(self):
         """
         An accessor to the body document.
         """
-        if not self._hdoc:
+        if not self.hdoc:
             return None
         if not self.__bdoc:
             self.__bdoc = self._get_body_doc()
@@ -204,7 +219,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
         uid = self._uid
 
         flags = set([])
-        fdoc = self._fdoc
+        fdoc = self.fdoc
         if fdoc:
             flags = set(fdoc.content.get(self.FLAGS_KEY, None))
 
@@ -230,20 +245,19 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :type mode: int
         """
         leap_assert(isinstance(flags, tuple), "flags need to be a tuple")
-        log.msg('setting flags: %s (%s)' % (self._uid, flags))
-
-        doc = self._fdoc
-        if not doc:
-            logger.warning(
-                "Could not find FDOC for %s:%s while setting flags!" %
-                (self._mbox, self._uid))
-            return
+        mbox, uid = self._mbox, self._uid
 
         APPEND = 1
         REMOVE = -1
         SET = 0
 
-        with self.flags_lock:
+        with fdoc_locks[mbox][uid]:
+            doc = self.fdoc
+            if not doc:
+                logger.warning(
+                    "Could not find FDOC for %r:%s while setting flags!" %
+                    (mbox, uid))
+                return
             current = doc.content[self.FLAGS_KEY]
             if mode == APPEND:
                 newflags = tuple(set(tuple(current) + flags))
@@ -251,33 +265,31 @@ class LeapMessage(fields, MailParser, MBoxParser):
                 newflags = tuple(set(current).difference(set(flags)))
             elif mode == SET:
                 newflags = flags
+            new_fdoc = {
+                self.FLAGS_KEY: newflags,
+                self.SEEN_KEY: self.SEEN_FLAG in newflags,
+                self.DEL_KEY: self.DELETED_FLAG in newflags}
+            self._collection.memstore.update_flags(mbox, uid, new_fdoc)
 
-            # We could defer this, but I think it's better
-            # to put it under the lock...
-            doc.content[self.FLAGS_KEY] = newflags
-            doc.content[self.SEEN_KEY] = self.SEEN_FLAG in flags
-            doc.content[self.DEL_KEY] = self.DELETED_FLAG in flags
-
-            if self._collection.memstore is not None:
-                log.msg("putting message in collection")
-                self._collection.memstore.put_message(
-                    self._mbox, self._uid,
-                    MessageWrapper(fdoc=doc.content, new=False, dirty=True,
-                                   docs_id={'fdoc': doc.doc_id}))
-            else:
-                # fallback for non-memstore initializations.
-                self._soledad.put_doc(doc)
         return map(str, newflags)
 
     def getInternalDate(self):
         """
         Retrieve the date internally associated with this message
 
-        :rtype: C{str}
+        According to the spec, this is NOT the date and time in the
+        RFC-822 header, but rather a date and time that reflects when the
+        message was received.
+
+        * In SMTP, date and time of final delivery.
+        * In COPY, internal date/time of the source message.
+        * In APPEND, date/time specified.
+
         :return: An RFC822-formatted date string.
+        :rtype: str
         """
-        date = self._hdoc.content.get(self.DATE_KEY, '')
-        return str(date)
+        date = self.hdoc.content.get(fields.DATE_KEY, '')
+        return date
 
     #
     # IMessagePart
@@ -302,8 +314,8 @@ class LeapMessage(fields, MailParser, MBoxParser):
 
         fd = StringIO.StringIO()
 
-        if self._bdoc is not None:
-            bdoc_content = self._bdoc.content
+        if self.bdoc is not None:
+            bdoc_content = self.bdoc.content
             if empty(bdoc_content):
                 logger.warning("No BDOC content found for message!!!")
                 return write_fd("")
@@ -311,7 +323,6 @@ class LeapMessage(fields, MailParser, MBoxParser):
             body = bdoc_content.get(self.RAW_KEY, "")
             content_type = bdoc_content.get('content-type', "")
             charset = find_charset(content_type)
-            logger.debug('got charset from content-type: %s' % charset)
             if charset is None:
                 charset = self._get_charset(body)
             try:
@@ -352,8 +363,8 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :rtype: int
         """
         size = None
-        if self._fdoc:
-            fdoc_content = self._fdoc.content
+        if self.fdoc is not None:
+            fdoc_content = self.fdoc.content
             size = fdoc_content.get(self.SIZE_KEY, False)
         else:
             logger.warning("No FLAGS doc for %s:%s" % (self._mbox,
@@ -422,8 +433,8 @@ class LeapMessage(fields, MailParser, MBoxParser):
         """
         Return the headers dict for this message.
         """
-        if self._hdoc is not None:
-            hdoc_content = self._hdoc.content
+        if self.hdoc is not None:
+            hdoc_content = self.hdoc.content
             headers = hdoc_content.get(self.HEADERS_KEY, {})
             return headers
 
@@ -437,8 +448,8 @@ class LeapMessage(fields, MailParser, MBoxParser):
         """
         Return True if this message is multipart.
         """
-        if self._fdoc:
-            fdoc_content = self._fdoc.content
+        if self.fdoc:
+            fdoc_content = self.fdoc.content
             is_multipart = fdoc_content.get(self.MULTIPART_KEY, False)
             return is_multipart
         else:
@@ -477,11 +488,11 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :raises: KeyError if key does not exist
         :rtype: dict
         """
-        if not self._hdoc:
+        if not self.hdoc:
             logger.warning("Tried to get part but no HDOC found!")
             return None
 
-        hdoc_content = self._hdoc.content
+        hdoc_content = self.hdoc.content
         pmap = hdoc_content.get(fields.PARTS_MAP_KEY, {})
 
         # remember, lads, soledad is using strings in its keys,
@@ -508,6 +519,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
         finally:
             return result
 
+    # TODO move to soledadstore instead of accessing soledad directly
     def _get_headers_doc(self):
         """
         Return the document that keeps the headers for this
@@ -515,15 +527,16 @@ class LeapMessage(fields, MailParser, MBoxParser):
         """
         head_docs = self._soledad.get_from_index(
             fields.TYPE_C_HASH_IDX,
-            fields.TYPE_HEADERS_VAL, str(self._chash))
+            fields.TYPE_HEADERS_VAL, str(self.chash))
         return first(head_docs)
 
+    # TODO move to soledadstore instead of accessing soledad directly
     def _get_body_doc(self):
         """
         Return the document that keeps the body for this
         message.
         """
-        hdoc_content = self._hdoc.content
+        hdoc_content = self.hdoc.content
         body_phash = hdoc_content.get(
             fields.BODY_KEY, None)
         if not body_phash:
@@ -560,14 +573,14 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :return: The content value indexed by C{key} or None
         :rtype: str
         """
-        return self._fdoc.content.get(key, None)
+        return self.fdoc.content.get(key, None)
 
     def does_exist(self):
         """
         Return True if there is actually a flags document for this
         UID and mbox.
         """
-        return not empty(self._fdoc)
+        return not empty(self.fdoc)
 
 
 class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
@@ -672,8 +685,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
     _rdoc_lock = threading.Lock()
     _rdoc_property_lock = threading.Lock()
-    _hdocset_lock = threading.Lock()
-    _hdocset_property_lock = threading.Lock()
 
     def __init__(self, mbox=None, soledad=None, memstore=None):
         """
@@ -714,14 +725,13 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         self.memstore = memstore
 
         self.__rflags = None
-        self.__hdocset = None
         self.initialize_db()
 
         # ensure that we have a recent-flags and a hdocs-sec doc
         self._get_or_create_rdoc()
 
-        # Not for now...
-        #self._get_or_create_hdocset()
+        from twisted.internet import reactor
+        self.reactor = reactor
 
     def _get_empty_doc(self, _type=FLAGS_DOC):
         """
@@ -746,33 +756,26 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                 rdoc[fields.MBOX_KEY] = self.mbox
             self._soledad.create_doc(rdoc)
 
-    def _get_or_create_hdocset(self):
-        """
-        Try to retrieve the hdocs-set doc for this MessageCollection,
-        and create one if not found.
-        """
-        hdocset = self._get_hdocset_doc()
-        if not hdocset:
-            hdocset = self._get_empty_doc(self.HDOCS_SET_DOC)
-            if self.mbox != fields.INBOX_VAL:
-                hdocset[fields.MBOX_KEY] = self.mbox
-            self._soledad.create_doc(hdocset)
-
+    @deferred_to_thread
     def _do_parse(self, raw):
         """
         Parse raw message and return it along with
         relevant information about its outer level.
 
+        This is done in a separate thread, and the callback is passed
+        to `_do_add_msg` method.
+
         :param raw: the raw message
         :type raw: StringIO or basestring
-        :return: msg, chash, size, multi
+        :return: msg, parts, chash, size, multi
         :rtype: tuple
         """
         msg = self._get_parsed_msg(raw)
         chash = self._get_hash(msg)
         size = len(msg.as_string())
         multi = msg.is_multipart()
-        return msg, chash, size, multi
+        parts = walk.get_parts(msg)
+        return msg, parts, chash, size, multi
 
     def _populate_flags(self, flags, uid, chash, size, multi):
         """
@@ -840,12 +843,11 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         :return: False, if it does not exist, or UID.
         """
         exist = False
-        if self.memstore is not None:
-            exist = self.memstore.get_fdoc_from_chash(chash, self.mbox)
+        exist = self.memstore.get_fdoc_from_chash(chash, self.mbox)
 
         if not exist:
             exist = self._get_fdoc_from_chash(chash)
-        if exist:
+        if exist and exist.content is not None:
             return exist.content.get(fields.UID_KEY, "unknown-uid")
         else:
             return False
@@ -874,24 +876,28 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                  uid when the adding succeed.
         :rtype: deferred
         """
-        logger.debug('adding message')
         if flags is None:
             flags = tuple()
         leap_assert_type(flags, tuple)
 
-        d = defer.Deferred()
-        self._do_add_msg(raw, flags, subject, date, notify_on_disk, d)
-        return d
+        observer = defer.Deferred()
+        d = self._do_parse(raw)
+        d.addCallback(lambda result: self.reactor.callInThread(
+            self._do_add_msg, result, flags, subject, date,
+            notify_on_disk, observer))
+        return observer
 
-    # We SHOULD defer this (or the heavy load here) to the thread pool,
-    # but it gives troubles with the QSocketNotifier used by Qt...
-    def _do_add_msg(self, raw, flags, subject, date, notify_on_disk, observer):
+    # Called in thread
+    def _do_add_msg(self, parse_result, flags, subject,
+                    date, notify_on_disk, observer):
         """
         Helper that creates a new message document.
         Here lives the magic of the leap mail. Well, in soledad, really.
 
         See `add_msg` docstring for parameter info.
 
+        :param parse_result: a tuple with the results of `self._do_parse`
+        :type parse_result: tuple
         :param observer: a deferred that will be fired with the message
                          uid when the adding succeed.
         :type observer: deferred
@@ -902,35 +908,33 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         # TODO add the linked-from info !
         # TODO add reference to the original message
 
-        # parse
-        msg, chash, size, multi = self._do_parse(raw)
+        msg, parts, chash, size, multi = parse_result
 
         # check for uniqueness --------------------------------
-        # XXX profiler says that this test is costly.
-        # So we probably should just do an in-memory check and
-        # move the complete check to the soledad writer?
         # Watch out! We're reserving a UID right after this!
         existing_uid = self._fdoc_already_exists(chash)
         if existing_uid:
-            logger.warning("We already have that message in this "
-                           "mailbox, unflagging as deleted")
             uid = existing_uid
             msg = self.get_msg_by_uid(uid)
-            msg.setFlags((fields.DELETED_FLAG,), -1)
 
-            # XXX if this is deferred to thread again we should not use
-            # the callback in the deferred thread, but return and
-            # call the callback from the caller fun...
-            observer.callback(uid)
+            # We can say the observer that we're done
+            self.reactor.callFromThread(observer.callback, uid)
+            msg.setFlags((fields.DELETED_FLAG,), -1)
             return
 
         uid = self.memstore.increment_last_soledad_uid(self.mbox)
-        logger.info("ADDING MSG WITH UID: %s" % uid)
+
+        # We can say the observer that we're done at this point, but
+        # before that we should make sure it has no serious consequences
+        # if we're issued, for instance, a fetch command right after...
+        #self.reactor.callFromThread(observer.callback, uid)
+        # if we did the notify, we need to invalidate the deferred
+        # so not to try to fire it twice.
+        #observer = None
 
         fd = self._populate_flags(flags, uid, chash, size, multi)
         hd = self._populate_headr(msg, chash, subject, date)
 
-        parts = walk.get_parts(msg)
         body_phash_fun = [walk.get_body_phash_simple,
                           walk.get_body_phash_multi][int(multi)]
         body_phash = body_phash_fun(walk.get_payloads(msg))
@@ -949,9 +953,9 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
         self.set_recent_flag(uid)
         msg_container = MessageWrapper(fd, hd, cdocs)
-        self.memstore.create_message(self.mbox, uid, msg_container,
-                                     observer=observer,
-                                     notify_on_disk=notify_on_disk)
+        self.memstore.create_message(
+            self.mbox, uid, msg_container,
+            observer=observer, notify_on_disk=notify_on_disk)
 
     #
     # getters: specific queries
@@ -982,30 +986,12 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                         {'doc_id': rdoc.doc_id, 'set': rflags})
             return rflags
 
-        #else:
-            # fallback for cases without memory store
-            #with self._rdoc_lock:
-                #rdoc = self._get_recent_doc()
-                #self.__rflags = set(rdoc.content.get(
-                    #fields.RECENTFLAGS_KEY, []))
-            #return self.__rflags
-
     def _set_recent_flags(self, value):
         """
         Setter for the recent-flags set for this mailbox.
         """
         if self.memstore is not None:
             self.memstore.set_recent_flags(self.mbox, value)
-
-        #else:
-            # fallback for cases without memory store
-            #with self._rdoc_lock:
-                #rdoc = self._get_recent_doc()
-                #newv = set(value)
-                #self.__rflags = newv
-                #rdoc.content[fields.RECENTFLAGS_KEY] = list(newv)
-                # XXX should deferLater 0 it?
-                #self._soledad.put_doc(rdoc)
 
     recent_flags = property(
         _get_recent_flags, _set_recent_flags,
@@ -1121,6 +1107,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         # XXX is this working?
         return self._get_uid_from_msgidCb(msgid)
 
+    @deferred_to_thread
     def set_flags(self, mbox, messages, flags, mode, observer):
         """
         Set flags for a sequence of messages.
@@ -1138,28 +1125,18 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                          done.
         :type observer: deferred
         """
-        # XXX we could defer *this* to thread pool, and gather results...
-        # XXX use deferredList
+        reactor = self.reactor
+        getmsg = self.get_msg_by_uid
 
-        deferreds = []
-        for msg_id in messages:
-            deferreds.append(
-                self._set_flag_for_uid(msg_id, flags, mode))
+        def set_flags(uid, flags, mode):
+            msg = getmsg(uid, mem_only=True, flags_only=True)
+            if msg is not None:
+                return uid, msg.setFlags(flags, mode)
 
-        def notify(result):
-            observer.callback(dict(result))
-        d1 = defer.gatherResults(deferreds, consumeErrors=True)
-        d1.addCallback(notify)
+        setted_flags = [set_flags(uid, flags, mode) for uid in messages]
+        result = dict(filter(None, setted_flags))
 
-    @deferred_to_thread
-    def _set_flag_for_uid(self, msg_id, flags, mode):
-        """
-        Run the set_flag operation in the thread pool.
-        """
-        log.msg("MSG ID = %s" % msg_id)
-        msg = self.get_msg_by_uid(msg_id, mem_only=True, flags_only=True)
-        if msg is not None:
-            return msg_id, msg.setFlags(flags, mode)
+        reactor.callFromThread(observer.callback, result)
 
     # getters: generic for a mailbox
 
@@ -1182,7 +1159,9 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                  or None if not found.
         :rtype: LeapMessage
         """
-        msg_container = self.memstore.get_message(self.mbox, uid, flags_only)
+        msg_container = self.memstore.get_message(
+            self.mbox, uid, flags_only=flags_only)
+
         if msg_container is not None:
             if mem_only:
                 msg = LeapMessage(None, uid, self.mbox, collection=self,
@@ -1195,6 +1174,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                                   collection=self, container=msg_container)
         else:
             msg = LeapMessage(self._soledad, uid, self.mbox, collection=self)
+
         if not msg.does_exist():
             return None
         return msg
@@ -1234,67 +1214,51 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         db_uids = set([doc.content[self.UID_KEY] for doc in
                        self._soledad.get_from_index(
                            fields.TYPE_MBOX_IDX,
-                           fields.TYPE_FLAGS_VAL, self.mbox)])
+                           fields.TYPE_FLAGS_VAL, self.mbox)
+                       if not empty(doc)])
         return db_uids
 
     def all_uid_iter(self):
         """
         Return an iterator through the UIDs of all messages, from memory.
         """
-        if self.memstore is not None:
-            mem_uids = self.memstore.get_uids(self.mbox)
-            soledad_known_uids = self.memstore.get_soledad_known_uids(
-                self.mbox)
-            combined = tuple(set(mem_uids).union(soledad_known_uids))
-            return combined
+        mem_uids = self.memstore.get_uids(self.mbox)
+        soledad_known_uids = self.memstore.get_soledad_known_uids(
+            self.mbox)
+        combined = tuple(set(mem_uids).union(soledad_known_uids))
+        return combined
 
-    # XXX MOVE to memstore
-    def all_flags(self):
+    def get_all_soledad_flag_docs(self):
         """
-        Return a dict with all flags documents for this mailbox.
-        """
-        # XXX get all from memstore and cache it there
-        # FIXME should get all uids, get them fro memstore,
-        # and get only the missing ones from disk.
+        Return a dict with the content of all the flag documents
+        in soledad store for the given mbox.
 
-        all_flags = dict(((
+        :param mbox: the mailbox
+        :type mbox: str or unicode
+        :rtype: dict
+        """
+        # XXX we really could return a reduced version with
+        # just {'uid': (flags-tuple,) since the prefetch is
+        # only oriented to get the flag tuples.
+        all_docs = [(
             doc.content[self.UID_KEY],
-            doc.content[self.FLAGS_KEY]) for doc in
+            dict(doc.content))
+            for doc in
             self._soledad.get_from_index(
                 fields.TYPE_MBOX_IDX,
-                fields.TYPE_FLAGS_VAL, self.mbox)))
-        if self.memstore is not None:
-            uids = self.memstore.get_uids(self.mbox)
-            docs = ((uid, self.memstore.get_message(self.mbox, uid))
-                    for uid in uids)
-            for uid, doc in docs:
-                all_flags[uid] = doc.fdoc.content[self.FLAGS_KEY]
-
+                fields.TYPE_FLAGS_VAL, self.mbox)
+            if not empty(doc.content)]
+        all_flags = dict(all_docs)
         return all_flags
-
-    def all_flags_chash(self):
-        """
-        Return a dict with the content-hash for all flag documents
-        for this mailbox.
-        """
-        all_flags_chash = dict(((
-            doc.content[self.UID_KEY],
-            doc.content[self.CONTENT_HASH_KEY]) for doc in
-            self._soledad.get_from_index(
-                fields.TYPE_MBOX_IDX,
-                fields.TYPE_FLAGS_VAL, self.mbox)))
-        return all_flags_chash
 
     def all_headers(self):
         """
-        Return a dict with all the headers documents for this
+        Return a dict with all the header documents for this
         mailbox.
+
+        :rtype: dict
         """
-        all_headers = dict(((
-            doc.content[self.CONTENT_HASH_KEY],
-            doc.content[self.HEADERS_KEY]) for doc in
-            self._soledad.get_docs(self._hdocset)))
-        return all_headers
+        return self.memstore.all_headers(self.mbox)
 
     def count(self):
         """
@@ -1302,13 +1266,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
         :rtype: int
         """
-        # XXX We should cache this in memstore too until next write...
-        count = self._soledad.get_count_from_index(
-            fields.TYPE_MBOX_IDX,
-            fields.TYPE_FLAGS_VAL, self.mbox)
-        if self.memstore is not None:
-            count += self.memstore.count_new()
-        return count
+        return self.memstore.count(self.mbox)
 
     # unseen messages
 
@@ -1320,10 +1278,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         :return: iterator through unseen message doc UIDs
         :rtype: iterable
         """
-        return (doc.content[self.UID_KEY] for doc in
-                self._soledad.get_from_index(
-                    fields.TYPE_MBOX_SEEN_IDX,
-                    fields.TYPE_FLAGS_VAL, self.mbox, '0'))
+        return self.memstore.unseen_iter(self.mbox)
 
     def count_unseen(self):
         """
@@ -1332,10 +1287,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         :returns: count
         :rtype: int
         """
-        count = self._soledad.get_count_from_index(
-            fields.TYPE_MBOX_SEEN_IDX,
-            fields.TYPE_FLAGS_VAL, self.mbox, '0')
-        return count
+        return len(list(self.unseen_iter()))
 
     def get_unseen(self):
         """
