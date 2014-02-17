@@ -529,9 +529,6 @@ class SoledadStore(ContentDedup):
             if value > old_val:
                 mbox_doc.content[key] = value
                 self._soledad.put_doc(mbox_doc)
-            else:
-                logger.error("%r:%s Tried to write a UID lesser than what's "
-                             "stored!" % (mbox, value))
 
     def get_flags_doc(self, mbox, uid):
         """
