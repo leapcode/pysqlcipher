@@ -19,9 +19,11 @@ Soledad Backed Account.
 """
 import copy
 import logging
+import os
 import time
 
 from twisted.mail import imap4
+from twisted.python import log
 from zope.interface import implements
 
 from leap.common.check import leap_assert, leap_assert_type
@@ -32,6 +34,15 @@ from leap.mail.imap.mailbox import SoledadMailbox
 from leap.soledad.client import Soledad
 
 logger = logging.getLogger(__name__)
+
+PROFILE_CMD = os.environ.get('LEAP_PROFILE_IMAPCMD', False)
+
+if PROFILE_CMD:
+
+    def _debugProfiling(result, cmdname, start):
+        took = (time.time() - start) * 1000
+        log.msg("CMD " + cmdname + " TOOK: " + str(took) + " msec")
+        return result
 
 
 #######################################
@@ -235,15 +246,20 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
 
         :rtype: SoledadMailbox
         """
-        name = self._parse_mailbox_name(name)
+        if PROFILE_CMD:
+            start = time.time()
 
+        name = self._parse_mailbox_name(name)
         if name not in self.mailboxes:
             logger.warning("No such mailbox!")
             return None
         self.selected = name
 
-        return SoledadMailbox(
+        sm = SoledadMailbox(
             name, self._soledad, self._memstore, readwrite)
+        if PROFILE_CMD:
+            _debugProfiling(None, "SELECT", start)
+        return sm
 
     def delete(self, name, force=False):
         """
