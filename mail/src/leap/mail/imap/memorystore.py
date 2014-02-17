@@ -889,7 +889,8 @@ class MemoryStore(object):
         :rtype: generator
         """
         gm = self.get_message
-        new = [gm(*key, dirtystate=DirtyState.new) for key in self._new]
+        # need to freeze, set can change during iteration
+        new = [gm(*key, dirtystate=DirtyState.new) for key in tuple(self._new)]
         # move content from new set to the queue
         self._new_queue.update(self._new)
         self._new.difference_update(self._new)
@@ -903,8 +904,9 @@ class MemoryStore(object):
         :rtype: generator
         """
         gm = self.get_message
+        # need to freeze, set can change during iteration
         dirty = [gm(*key, flags_only=True, dirtystate=DirtyState.dirty)
-                 for key in self._dirty]
+                 for key in tuple(self._dirty)]
         # move content from new and dirty sets to the queue
 
         self._dirty_queue.update(self._dirty)
