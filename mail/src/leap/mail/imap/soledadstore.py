@@ -133,15 +133,14 @@ A lock per document.
 # Setting this to twice the number of threads in the threadpool
 # should be safe.
 put_locks = defaultdict(lambda: threading.Lock())
+mbox_doc_locks = defaultdict(lambda: threading.Lock())
 
 
 class SoledadStore(ContentDedup):
     """
     This will create docs in the local Soledad database.
     """
-    _soledad_rw_lock = threading.Lock()
     _remove_lock = threading.Lock()
-    _mbox_doc_locks = defaultdict(lambda: threading.Lock())
 
     implements(IMessageConsumer, IMessageStore)
 
@@ -456,7 +455,7 @@ class SoledadStore(ContentDedup):
                  the query failed.
         :rtype: SoledadDocument or None.
         """
-        with self._mbox_doc_locks[mbox]:
+        with mbox_doc_locks[mbox]:
             return self._get_mbox_document(mbox)
 
     def _get_mbox_document(self, mbox):
@@ -471,7 +470,7 @@ class SoledadStore(ContentDedup):
                 return query.pop()
             else:
                 logger.error("Could not find mbox document for %r" %
-                            (self.mbox,))
+                            (mbox,))
         except Exception as exc:
             logger.exception("Unhandled error %r" % exc)
 
@@ -496,7 +495,7 @@ class SoledadStore(ContentDedup):
         :type closed: bool
         """
         leap_assert(isinstance(closed, bool), "closed needs to be boolean")
-        with self._mbox_doc_locks[mbox]:
+        with mbox_doc_locks[mbox]:
             mbox_doc = self._get_mbox_document(mbox)
             if mbox_doc is None:
                 logger.error(
@@ -521,14 +520,18 @@ class SoledadStore(ContentDedup):
         leap_assert_type(value, int)
         key = fields.LAST_UID_KEY
 
-        # XXX change for a lock related to the mbox document
-        # itself.
-        with self._mbox_doc_locks[mbox]:
+        # XXX use accumulator to reduce number of hits
+        with mbox_doc_locks[mbox]:
             mbox_doc = self._get_mbox_document(mbox)
             old_val = mbox_doc.content[key]
             if value > old_val:
                 mbox_doc.content[key] = value
-                self._soledad.put_doc(mbox_doc)
+                try:
+                    self._soledad.put_doc(mbox_doc)
+                except Exception as exc:
+                    logger.error("Error while setting last_uid for %r"
+                                 % (mbox,))
+                    logger.exception(exc)
 
     def get_flags_doc(self, mbox, uid):
         """
