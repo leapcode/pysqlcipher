@@ -266,7 +266,8 @@ void pysqlite_statement_bind_parameters(pysqlite_Statement* self, PyObject* para
 
             if (rc != SQLITE_OK) {
                 if (!PyErr_Occurred()) {
-                    PyErr_Format(pysqlite_InterfaceError, "Error binding parameter %d - probably unsupported type.", i);
+                    PyErr_Format(pysqlite_InterfaceError, "Error binding parameter %d - probably unsupported type. "
+                                                          "(sqlite error %d)", i, rc);
                 }
                 return;
             }
