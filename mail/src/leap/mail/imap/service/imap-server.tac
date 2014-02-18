@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# imap-server.tac 
+# imap-server.tac
 # Copyright (C) 2013,2014 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
@@ -97,8 +97,10 @@ print "[+] Running LEAP IMAP Service"
 
 bmconf = os.environ.get("LEAP_MAIL_CONF", "")
 if not bmconf:
-	print "[-] Please set LEAP_MAIL_CONF environment variable pointing to your config."
-	sys.exit(1)
+    print ("[-] Please set LEAP_MAIL_CONF environment variable "
+           "pointing to your config.")
+    sys.exit(1)
+
 SECTION = "leap_mail"
 cp = ConfigParser.ConfigParser()
 cp.read(bmconf)
@@ -111,11 +113,11 @@ passwd = unicode(cp.get(SECTION, "passwd"))
 port = 1984
 
 if not userid or not uuid:
-	print "[-] Config file missing userid or uuid field"
-	sys.exit(1)
+    print "[-] Config file missing userid or uuid field"
+    sys.exit(1)
 
 if not passwd:
-	passwd = unicode(getpass.getpass("Soledad passphrase: "))
+    passwd = unicode(getpass.getpass("Soledad passphrase: "))
 
 
 secrets = os.path.expanduser("~/.config/leap/soledad/%s.secret" % (uuid,))
@@ -129,16 +131,17 @@ tempdir = "/tmp/"
 
 # Ad-hoc soledad/keymanager initialization.
 
-soledad = initialize_soledad(uuid, userid, passwd, secrets, localdb, gnupg_home, tempdir)
+soledad = initialize_soledad(uuid, userid, passwd, secrets,
+                             localdb, gnupg_home, tempdir)
 km_args = (userid, "https://localhost", soledad)
-km_kwargs = { 
-	"session_id":  "", 
-	"ca_cert_path":  "", 
-	"api_uri":  "", 
-	"api_version":  "", 
-	"uid": uuid,
-	"gpgbinary": "/usr/bin/gpg"
-}   
+km_kwargs = {
+    "token": "",
+    "ca_cert_path": "",
+    "api_uri":  "",
+    "api_version": "",
+    "uid": uuid,
+    "gpgbinary": "/usr/bin/gpg"
+}
 keymanager = KeyManager(*km_args, **km_kwargs)
 
 ##################################################
