@@ -36,11 +36,11 @@ p = parser.Parser()
 if len(sys.argv) > 1:
     FILENAME = sys.argv[1]
 else:
-    FILENAME = "rfc822.multi-minimal.message"
+    FILENAME = "rfc822.multi-signed.message"
 
 """
-FILENAME = "rfc822.multi-signed.message"
 FILENAME = "rfc822.plain.message"
+FILENAME = "rfc822.multi-minimal.message"
 """
 
 msg = p.parse(open(FILENAME))
