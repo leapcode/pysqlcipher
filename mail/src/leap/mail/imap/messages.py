@@ -43,7 +43,7 @@ from leap.mail.decorators import deferred_to_thread
 from leap.mail.imap.index import IndexedDB
 from leap.mail.imap.fields import fields, WithMsgFields
 from leap.mail.imap.memorystore import MessageWrapper
-from leap.mail.imap.messageparts import MessagePart
+from leap.mail.imap.messageparts import MessagePart, MessagePartDoc
 from leap.mail.imap.parser import MBoxParser
 
 logger = logging.getLogger(__name__)
@@ -126,7 +126,7 @@ class LeapMessage(fields, MBoxParser):
         :type container: IMessageContainer
         """
         self._soledad = soledad
-        self._uid = int(uid)
+        self._uid = int(uid) if uid is not None else None
         self._mbox = self._parse_mailbox_name(mbox)
         self._collection = collection
         self._container = container
@@ -1077,7 +1077,21 @@ class MessageCollection(WithMsgFields, IndexedDB, MBoxParser):
             fields.TYPE_MBOX_C_HASH_IDX,
             fields.TYPE_FLAGS_VAL, self.mbox, chash)
         curried.expected = "fdoc"
-        return try_unique_query(curried)
+        fdoc = try_unique_query(curried)
+        if fdoc is not None:
+            return fdoc
+        else:
+            # probably this should be the other way round,
+            # ie, try fist on memstore...
+            cf = self.memstore._chash_fdoc_store
+            fdoc = cf[chash][self.mbox]
+            # hey, I just needed to wrap fdoc thing into
+            # a "content" attribute, look a better way...
+            if not empty(fdoc):
+                return MessagePartDoc(
+                    new=None, dirty=None, part=None,
+                    store=None, doc_id=None,
+                    content=fdoc)
 
     def _get_uid_from_msgidCb(self, msgid):
         hdoc = None
@@ -1088,11 +1102,26 @@ class MessageCollection(WithMsgFields, IndexedDB, MBoxParser):
         curried.expected = "hdoc"
         hdoc = try_unique_query(curried)
 
-        if hdoc is None:
+        # XXX this is only a quick hack to avoid regression
+        # on the "multiple copies of the draft" issue, but
+        # this is currently broken since  it's not efficient to
+        # look for this. Should lookup better.
+        # FIXME!
+
+        if hdoc is not None:
+            hdoc_dict = hdoc.content
+
+        else:
+            hdocstore = self.memstore._hdoc_store
+            match = [x for _, x in hdocstore.items() if x['msgid'] == msgid]
+            hdoc_dict = first(match)
+
+        if hdoc_dict is None:
             logger.warning("Could not find hdoc for msgid %s"
                            % (msgid,))
             return None
-        msg_chash = hdoc.content.get(fields.CONTENT_HASH_KEY)
+        msg_chash = hdoc_dict.get(fields.CONTENT_HASH_KEY)
+
         fdoc = self._get_fdoc_from_chash(msg_chash)
         if not fdoc:
             logger.warning("Could not find fdoc for msgid %s"
