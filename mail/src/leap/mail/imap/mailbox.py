@@ -132,13 +132,11 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :param rw: read-and-write flag for this mailbox
         :type rw: int
         """
-        logger.debug("Initializing mailbox %r" % (mbox,))
         leap_assert(mbox, "Need a mailbox name to initialize")
         leap_assert(soledad, "Need a soledad instance to initialize")
 
-        # XXX should move to wrapper
-        #leap_assert(isinstance(soledad._db, SQLCipherDatabase),
-                    #"soledad._db must be an instance of SQLCipherDatabase")
+        from twisted.internet import reactor
+        self.reactor = reactor
 
         self.mbox = self._parse_mailbox_name(mbox)
         self.rw = rw
@@ -148,6 +146,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
         self.messages = MessageCollection(
             mbox=mbox, soledad=self._soledad, memstore=self._memstore)
+
+        self._uidvalidity = None
 
         # XXX careful with this get/set (it would be
         # hitting db unconditionally, move to memstore too)
@@ -161,12 +161,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             self.prime_last_uid_to_memstore()
             self.prime_flag_docs_to_memstore()
 
-        from twisted.internet import reactor
-        self.reactor = reactor
-
         # purge memstore from empty fdocs.
         self._memstore.purge_fdoc_store(mbox)
-        logger.debug("DONE initializing mailbox %r" % (mbox,))
 
     @property
     def listeners(self):
@@ -339,8 +335,10 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :return: unique validity identifier
         :rtype: int
         """
-        mbox = self._get_mbox_doc()
-        return mbox.content.get(self.CREATED_KEY, 1)
+        if self._uidvalidity is None:
+            mbox = self._get_mbox_doc()
+            self._uidvalidity = mbox.content.get(self.CREATED_KEY, 1)
+        return self._uidvalidity
 
     def getUID(self, message):
         """
@@ -652,14 +650,36 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
                                about
         :type messages_asked: MessageSet
 
-        :param uid: If true, the IDs are UIDs. They are message sequence IDs
+        :param uid: If 1, the IDs are UIDs. They are message sequence IDs
                     otherwise.
-        :type uid: bool
+        :type uid: int
 
         :return: A tuple of two-tuples of message sequence numbers and
                 flagsPart, which is a only a partial implementation of
                 MessagePart.
         :rtype: tuple
+        """
+        d = defer.Deferred()
+        self.reactor.callInThread(self._do_fetch_flags, messages_asked, uid, d)
+        if PROFILE_CMD:
+            do_profile_cmd(d, "FETCH-ALL-FLAGS")
+        return d
+
+    # called in thread
+    def _do_fetch_flags(self, messages_asked, uid, d):
+        """
+        :param messages_asked: IDs of the messages to retrieve information
+                               about
+        :type messages_asked: MessageSet
+
+        :param uid: If 1, the IDs are UIDs. They are message sequence IDs
+                    otherwise.
+        :type uid: int
+        :param d: deferred whose callback will be called with result.
+        :type d: Deferred
+
+        :rtype: A tuple of two-tuples of message sequence numbers and
+                flagsPart
         """
         class flagsPart(object):
             def __init__(self, uid, flags):
@@ -678,7 +698,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         all_flags = self._memstore.all_flags(self.mbox)
         result = ((msgid, flagsPart(
             msgid, all_flags.get(msgid, tuple()))) for msgid in seq_messg)
-        return result
+        self.reactor.callFromThread(d.callback, result)
 
     def fetch_headers(self, messages_asked, uid):
         """

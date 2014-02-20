@@ -364,9 +364,11 @@ class MemoryStore(object):
 
         # Update memory store size
         # XXX this should use [mbox][uid]
-        key = mbox, uid
-        self._sizes[key] = size.get_size(self._fdoc_store[key])
+        # TODO --- this has to be deferred to thread,
         # TODO add hdoc and cdocs sizes too
+        # it's slowing things down here.
+        #key = mbox, uid
+        #self._sizes[key] = size.get_size(self._fdoc_store[key])
 
     def purge_fdoc_store(self, mbox):
         """
@@ -504,12 +506,16 @@ class MemoryStore(object):
             if key in self._sizes:
                 del self._sizes[key]
             self._known_uids[mbox].discard(uid)
+        except KeyError:
+            pass
         except Exception as exc:
             logger.error("error while removing message!")
             logger.exception(exc)
         try:
             with self._fdoc_docid_lock:
                 del self._fdoc_id_store[mbox][uid]
+        except KeyError:
+            pass
         except Exception as exc:
             logger.error("error while removing message!")
             logger.exception(exc)
@@ -724,17 +730,16 @@ class MemoryStore(object):
         :type mbox: str or unicode
         :rtype: dict
         """
-        flags_dict = {}
+        fdict = {}
         uids = self.get_uids(mbox)
-        fdoc_store = self._fdoc_store[mbox]
+        fstore = self._fdoc_store[mbox]
 
         for uid in uids:
             try:
-                flags = fdoc_store[uid][fields.FLAGS_KEY]
-                flags_dict[uid] = flags
+                fdict[uid] = fstore[uid][fields.FLAGS_KEY]
             except KeyError:
                 continue
-        return flags_dict
+        return fdict
 
     def all_headers(self, mbox):
         """

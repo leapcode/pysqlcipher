@@ -119,6 +119,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
 
         :rtype: SoledadDocument
         """
+        # XXX use soledadstore instead ...;
         doc = self._soledad.get_from_index(
             self.TYPE_MBOX_IDX, self.MBOX_KEY,
             self._parse_mailbox_name(name))
