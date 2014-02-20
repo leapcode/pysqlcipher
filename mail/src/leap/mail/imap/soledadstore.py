@@ -314,8 +314,8 @@ class SoledadStore(ContentDedup):
             except Exception as exc:
                 logger.debug("ITEM WAS: %s" % repr(item))
                 if hasattr(item, 'content'):
-                        logger.debug("ITEM CONTENT WAS: %s" %
-                                     repr(item.content))
+                    logger.debug("ITEM CONTENT WAS: %s" %
+                                 repr(item.content))
                 logger.exception(exc)
                 failed = True
                 continue

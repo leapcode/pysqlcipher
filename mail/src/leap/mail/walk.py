@@ -17,17 +17,18 @@
 """
 Utilities for walking along a message tree.
 """
-import hashlib
 import os
+
+from pycryptopp.hash import sha256
 
 from leap.mail.utils import first
 
 DEBUG = os.environ.get("BITMASK_MAIL_DEBUG")
 
 if DEBUG:
-    get_hash = lambda s: hashlib.sha256(s).hexdigest()[:10]
+    get_hash = lambda s: sha256.SHA256(s).hexdigest()[:10]
 else:
-    get_hash = lambda s: hashlib.sha256(s).hexdigest()
+    get_hash = lambda s: sha256.SHA256(s).hexdigest()
 
 
 """

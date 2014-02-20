@@ -24,8 +24,10 @@ import threading
 import StringIO
 
 from collections import defaultdict
+from email import message_from_string
 from functools import partial
 
+from pycryptopp.hash import sha256
 from twisted.mail import imap4
 from twisted.internet import defer
 from zope.interface import implements
@@ -42,7 +44,7 @@ from leap.mail.imap.index import IndexedDB
 from leap.mail.imap.fields import fields, WithMsgFields
 from leap.mail.imap.memorystore import MessageWrapper
 from leap.mail.imap.messageparts import MessagePart
-from leap.mail.imap.parser import MailParser, MBoxParser
+from leap.mail.imap.parser import MBoxParser
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +96,7 @@ A dictionary that keeps one lock per mbox and uid.
 fdoc_locks = defaultdict(lambda: defaultdict(lambda: threading.Lock()))
 
 
-class LeapMessage(fields, MailParser, MBoxParser):
+class LeapMessage(fields, MBoxParser):
     """
     The main representation of a message.
 
@@ -123,7 +125,6 @@ class LeapMessage(fields, MailParser, MBoxParser):
         :param container: a IMessageContainer implementor instance
         :type container: IMessageContainer
         """
-        MailParser.__init__(self)
         self._soledad = soledad
         self._uid = int(uid)
         self._mbox = self._parse_mailbox_name(mbox)
@@ -583,7 +584,7 @@ class LeapMessage(fields, MailParser, MBoxParser):
         return not empty(self.fdoc)
 
 
-class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
+class MessageCollection(WithMsgFields, IndexedDB, MBoxParser):
     """
     A collection of messages, surprisingly.
 
@@ -713,7 +714,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         :param memstore: a MemoryStore instance
         :type memstore: MemoryStore
         """
-        MailParser.__init__(self)
         leap_assert(mbox, "Need a mailbox name to initialize")
         leap_assert(mbox.strip() != "", "mbox cannot be blank space")
         leap_assert(isinstance(mbox, (str, unicode)),
@@ -782,11 +782,11 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         :return: msg, parts, chash, size, multi
         :rtype: tuple
         """
-        msg = self._get_parsed_msg(raw)
-        chash = self._get_hash(msg)
-        size = len(msg.as_string())
-        multi = msg.is_multipart()
+        msg = message_from_string(raw)
         parts = walk.get_parts(msg)
+        size = len(raw)
+        chash = sha256.SHA256(raw).hexdigest()
+        multi = msg.is_multipart()
         return msg, parts, chash, size, multi
 
     def _populate_flags(self, flags, uid, chash, size, multi):
@@ -803,7 +803,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         fd[self.SIZE_KEY] = size
         fd[self.MULTIPART_KEY] = multi
         if flags:
-            fd[self.FLAGS_KEY] = map(self._stringify, flags)
+            fd[self.FLAGS_KEY] = flags
             fd[self.SEEN_KEY] = self.SEEN_FLAG in flags
             fd[self.DEL_KEY] = self.DELETED_FLAG in flags
             fd[self.RECENT_KEY] = True  # set always by default
@@ -926,11 +926,10 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         # Watch out! We're reserving a UID right after this!
         existing_uid = self._fdoc_already_exists(chash)
         if existing_uid:
-            uid = existing_uid
-            msg = self.get_msg_by_uid(uid)
+            msg = self.get_msg_by_uid(existing_uid)
 
             # We can say the observer that we're done
-            self.reactor.callFromThread(observer.callback, uid)
+            self.reactor.callFromThread(observer.callback, existing_uid)
             msg.setFlags((fields.DELETED_FLAG,), -1)
             return
 
