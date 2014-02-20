@@ -514,6 +514,8 @@ class MemoryStore(object):
         try:
             with self._fdoc_docid_lock:
                 del self._fdoc_id_store[mbox][uid]
+        except KeyError:
+            pass
         except Exception as exc:
             logger.error("error while removing message!")
             logger.exception(exc)
