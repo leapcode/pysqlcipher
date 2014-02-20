@@ -281,9 +281,13 @@ class SoledadStore(ContentDedup):
         def doSoledadCalls(items):
             # we prime the generator, that should return the
             # message or flags wrapper item in the first place.
-            doc_wrapper = items.next()
-            failed = self._soledad_write_document_parts(items)
-            queueNotifyBack(failed, doc_wrapper)
+            try:
+                doc_wrapper = items.next()
+            except StopIteration:
+                pass
+            else:
+                failed = self._soledad_write_document_parts(items)
+                queueNotifyBack(failed, doc_wrapper)
 
         doSoledadCalls(self._iter_wrapper_subparts(doc_wrapper))
 
