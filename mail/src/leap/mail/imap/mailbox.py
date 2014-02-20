@@ -354,7 +354,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :rtype: int
         """
         msg = self.messages.get_msg_by_uid(message)
-        return msg.getUID()
+        if msg is not None:
+            return msg.getUID()
 
     def getUIDNext(self):
         """
@@ -854,6 +855,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         if len(query) > 2:
             if query[1] == 'HEADER' and query[2].lower() == "message-id":
                 msgid = str(query[3]).strip()
+                logger.debug("Searching for %s" % (msgid,))
                 d = self.messages._get_uid_from_msgid(str(msgid))
                 d1 = defer.gatherResults([d])
                 # we want a list, so return it all the same
