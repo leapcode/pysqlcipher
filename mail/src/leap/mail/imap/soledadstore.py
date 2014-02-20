@@ -350,6 +350,9 @@ class SoledadStore(ContentDedup):
 
         if call == self._PUT_DOC_FUN:
             doc_id = item.doc_id
+            if doc_id is None:
+                logger.warning("BUG! Dirty doc but has no doc_id!")
+                return
             with put_locks[doc_id]:
                 doc = self._GET_DOC_FUN(doc_id)
 
@@ -438,12 +441,12 @@ class SoledadStore(ContentDedup):
         :return: a tuple with recent-flags doc payload and callable
         :rtype: tuple
         """
-        call = self._CREATE_DOC_FUN
+        call = self._PUT_DOC_FUN
 
         payload = rflags_wrapper.content
         if payload:
             logger.debug("Saving RFLAGS to Soledad...")
-            yield payload, call
+            yield rflags_wrapper, call
 
     # Mbox documents and attributes
 

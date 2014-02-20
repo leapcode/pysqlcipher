@@ -77,7 +77,7 @@ def try_unique_query(curried):
                 # TODO we could take action, like trigger a background
                 # process to kill dupes.
                 name = getattr(curried, 'expected', 'doc')
-                logger.debug(
+                logger.warning(
                     "More than one %s found for this mbox, "
                     "we got a duplicate!!" % (name,))
             return query.pop()
@@ -683,8 +683,10 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
 
     # TODO we would abstract this to a SoledadProperty class
 
-    _rdoc_lock = threading.Lock()
-    _rdoc_property_lock = threading.Lock()
+    _rdoc_lock = defaultdict(lambda: threading.Lock())
+    _rdoc_write_lock = defaultdict(lambda: threading.Lock())
+    _rdoc_read_lock = defaultdict(lambda: threading.Lock())
+    _rdoc_property_lock = defaultdict(lambda: threading.Lock())
 
     _initialized = {}
 
@@ -729,10 +731,14 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         self.__rflags = None
 
         if not self._initialized.get(mbox, False):
-            self.initialize_db()
-            # ensure that we have a recent-flags and a hdocs-sec doc
-            self._get_or_create_rdoc()
-            self._initialized[mbox] = True
+            try:
+                self.initialize_db()
+                # ensure that we have a recent-flags doc
+                self._get_or_create_rdoc()
+            except Exception:
+                logger.debug("Error initializing %r" % (mbox,))
+            else:
+                self._initialized[mbox] = True
 
         from twisted.internet import reactor
         self.reactor = reactor
@@ -753,12 +759,14 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         Try to retrieve the recent-flags doc for this MessageCollection,
         and create one if not found.
         """
-        rdoc = self._get_recent_doc()
-        if not rdoc:
-            rdoc = self._get_empty_doc(self.RECENT_DOC)
-            if self.mbox != fields.INBOX_VAL:
-                rdoc[fields.MBOX_KEY] = self.mbox
-            self._soledad.create_doc(rdoc)
+        # XXX should move this to memstore too
+        with self._rdoc_write_lock[self.mbox]:
+            rdoc = self._get_recent_doc_from_soledad()
+            if rdoc is None:
+                rdoc = self._get_empty_doc(self.RECENT_DOC)
+                if self.mbox != fields.INBOX_VAL:
+                    rdoc[fields.MBOX_KEY] = self.mbox
+                self._soledad.create_doc(rdoc)
 
     @deferred_to_thread
     def _do_parse(self, raw):
@@ -976,12 +984,12 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
             return self.__rflags
 
         if self.memstore is not None:
-            with self._rdoc_lock:
+            with self._rdoc_lock[self.mbox]:
                 rflags = self.memstore.get_recent_flags(self.mbox)
                 if not rflags:
                     # not loaded in the memory store yet.
                     # let's fetch them from soledad...
-                    rdoc = self._get_recent_doc()
+                    rdoc = self._get_recent_doc_from_soledad()
                     rflags = set(rdoc.content.get(
                         fields.RECENTFLAGS_KEY, []))
                     # ...and cache them now.
@@ -1001,8 +1009,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         _get_recent_flags, _set_recent_flags,
         doc="Set of UIDs with the recent flag for this mailbox.")
 
-    # XXX change naming, indicate soledad query.
-    def _get_recent_doc(self):
+    def _get_recent_doc_from_soledad(self):
         """
         Get recent-flags document from Soledad for this mailbox.
         :rtype: SoledadDocument or None
@@ -1012,8 +1019,8 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
             fields.TYPE_MBOX_IDX,
             fields.TYPE_RECENT_VAL, self.mbox)
         curried.expected = "rdoc"
-        rdoc = try_unique_query(curried)
-        return rdoc
+        with self._rdoc_read_lock[self.mbox]:
+            return try_unique_query(curried)
 
     # Property-set modification (protected by a different
     # lock to give atomicity to the read/write operation)
@@ -1025,7 +1032,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         :param uids: the uids to unset
         :type uid: sequence
         """
-        with self._rdoc_property_lock:
+        with self._rdoc_property_lock[self.mbox]:
             self.recent_flags.difference_update(
                 set(uids))
 
@@ -1038,7 +1045,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         :param uid: the uid to unset
         :type uid: int
         """
-        with self._rdoc_property_lock:
+        with self._rdoc_property_lock[self.mbox]:
             self.recent_flags.difference_update(
                 set([uid]))
 
@@ -1050,7 +1057,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
         :param uid: the uid to set
         :type uid: int
         """
-        with self._rdoc_property_lock:
+        with self._rdoc_property_lock[self.mbox]:
             self.recent_flags = self.recent_flags.union(
                 set([uid]))
 

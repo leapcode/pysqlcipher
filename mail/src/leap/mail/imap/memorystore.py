@@ -506,6 +506,8 @@ class MemoryStore(object):
             if key in self._sizes:
                 del self._sizes[key]
             self._known_uids[mbox].discard(uid)
+        except KeyError:
+            pass
         except Exception as exc:
             logger.error("error while removing message!")
             logger.exception(exc)

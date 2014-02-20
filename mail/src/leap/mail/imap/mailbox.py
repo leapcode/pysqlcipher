@@ -135,6 +135,9 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         leap_assert(mbox, "Need a mailbox name to initialize")
         leap_assert(soledad, "Need a soledad instance to initialize")
 
+        from twisted.internet import reactor
+        self.reactor = reactor
+
         self.mbox = self._parse_mailbox_name(mbox)
         self.rw = rw
 
@@ -157,9 +160,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             self.prime_known_uids_to_memstore()
             self.prime_last_uid_to_memstore()
             self.prime_flag_docs_to_memstore()
-
-        from twisted.internet import reactor
-        self.reactor = reactor
 
         # purge memstore from empty fdocs.
         self._memstore.purge_fdoc_store(mbox)
