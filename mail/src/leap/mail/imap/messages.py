@@ -990,6 +990,8 @@ class MessageCollection(WithMsgFields, IndexedDB, MailParser, MBoxParser):
                     # not loaded in the memory store yet.
                     # let's fetch them from soledad...
                     rdoc = self._get_recent_doc_from_soledad()
+                    if rdoc is None:
+                        return set([])
                     rflags = set(rdoc.content.get(
                         fields.RECENTFLAGS_KEY, []))
                     # ...and cache them now.
