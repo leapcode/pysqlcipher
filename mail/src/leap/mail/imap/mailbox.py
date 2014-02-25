@@ -474,7 +474,11 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         d = self._do_add_message(message, flags=flags, date=date)
         if PROFILE_CMD:
             do_profile_cmd(d, "APPEND")
-        # XXX should notify here probably
+
+        # A better place for this would be  the COPY/APPEND dispatcher
+        # in server.py, but qtreactor hangs when I do that, so this seems
+        # to work fine for now.
+        d.addCallback(lambda r: self.reactor.callLater(0, self.notify_new))
         return d
 
     def _do_add_message(self, message, flags, date):
@@ -485,7 +489,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         d = self.messages.add_msg(message, flags=flags, date=date)
         return d
 
-    @deferred_to_thread
     def notify_new(self, *args):
         """
         Notify of new messages to all the listeners.
@@ -494,13 +497,28 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         """
         if not NOTIFY_NEW:
             return
+
+        def cbNotifyNew(result):
+            exists, recent = result
+            for l in self.listeners:
+                l.newMessages(exists, recent)
+        d = self._get_notify_count()
+        d.addCallback(cbNotifyNew)
+
+    @deferred_to_thread
+    def _get_notify_count(self):
+        """
+        Get message count and recent count for this mailbox
+        Executed in a separate thread. Called from notify_new.
+
+        :return: number of messages and number of recent messages.
+        :rtype: tuple
+        """
         exists = self.getMessageCount()
         recent = self.getRecentCount()
         logger.debug("NOTIFY (%r): there are %s messages, %s recent" % (
             self.mbox, exists, recent))
-
-        for l in self.listeners:
-            l.newMessages(exists, recent)
+        return exists, recent
 
     # commands, do not rename methods
 
@@ -880,6 +898,11 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         d = defer.Deferred()
         if PROFILE_CMD:
             do_profile_cmd(d, "COPY")
+
+        # A better place for this would be  the COPY/APPEND dispatcher
+        # in server.py, but qtreactor hangs when I do that, so this seems
+        # to work fine for now.
+        d.addCallback(lambda r: self.reactor.callLater(0, self.notify_new))
         deferLater(self.reactor, 0, self._do_copy, message, d)
         return d
 
