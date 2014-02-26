@@ -371,15 +371,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :rtype: int
         """
         with self.next_uid_lock:
-            if self._memstore:
-                return self.last_uid + 1
-            else:
-                # XXX after lock, it should be safe to
-                # return just the increment here, and
-                # have a different method that actually increments
-                # the counter when really adding.
-                self.last_uid += 1
-                return self.last_uid
+            return self.last_uid + 1
 
     def getMessageCount(self):
         """
@@ -474,11 +466,12 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         d = self._do_add_message(message, flags=flags, date=date)
         if PROFILE_CMD:
             do_profile_cmd(d, "APPEND")
-
         # A better place for this would be  the COPY/APPEND dispatcher
         # in server.py, but qtreactor hangs when I do that, so this seems
         # to work fine for now.
         d.addCallback(lambda r: self.reactor.callLater(0, self.notify_new))
+        d.addCallback(self.cb_signal_unread_to_ui)
+        d.addErrback(lambda f: log.msg(f.getTraceback()))
         return d
 
     def _do_add_message(self, message, flags, date):
@@ -613,6 +606,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         self.reactor.callInThread(self._do_fetch, messages_asked, uid, d)
         if PROFILE_CMD:
             do_profile_cmd(d, "FETCH")
+        d.addCallback(self.cb_signal_unread_to_ui)
         return d
 
     # called in thread
@@ -768,14 +762,27 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             for msgid in seq_messg)
         return result
 
-    def signal_unread_to_ui(self, *args, **kwargs):
+    def cb_signal_unread_to_ui(self, result):
         """
         Sends unread event to ui.
+        Used as a callback in several commands.
 
-        :param args: ignored
-        :param kwargs: ignored
+        :param result: ignored
         """
-        unseen = self.getUnseenCount()
+        d = self._get_unseen_deferred()
+        d.addCallback(self.__cb_signal_unread_to_ui)
+        return result
+
+    @deferred_to_thread
+    def _get_unseen_deferred(self):
+        return self.getUnseenCount()
+
+    def __cb_signal_unread_to_ui(self, unseen):
+        """
+        Send the unread signal to UI.
+        :param unseen: number of unseen messages.
+        :type unseen: int
+        """
         leap_events.signal(IMAP_UNREAD_MAIL, str(unseen))
 
     def store(self, messages_asked, flags, mode, uid):
@@ -816,6 +823,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
                                mode, uid, d)
         if PROFILE_CMD:
             do_profile_cmd(d, "STORE")
+        d.addCallback(self.cb_signal_unread_to_ui)
+        d.addErrback(lambda f: log.msg(f.getTraceback()))
         return d
 
     def _do_store(self, messages_asked, flags, mode, uid, observer):
