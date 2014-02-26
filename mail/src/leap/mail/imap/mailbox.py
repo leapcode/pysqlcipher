@@ -337,6 +337,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         """
         if self._uidvalidity is None:
             mbox = self._get_mbox_doc()
+            if mbox is None:
+                return 0
             self._uidvalidity = mbox.content.get(self.CREATED_KEY, 1)
         return self._uidvalidity
 
