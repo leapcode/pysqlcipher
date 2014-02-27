@@ -329,19 +329,12 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
                 raise imap4.MailboxCollision(repr(new))
 
         for (old, new) in inferiors:
+            self._memstore.rename_fdocs_mailbox(old, new)
             mbox = self._get_mailbox_by_name(old)
             mbox.content[self.MBOX_KEY] = new
             self._soledad.put_doc(mbox)
 
         self._load_mailboxes()
-
-        # XXX ---- FIXME!!!! ------------------------------------
-        # until here we just renamed the index...
-        # We have to rename also the occurrence of this
-        # mailbox on ALL the messages that are contained in it!!!
-        # ... we maybe could use a reference to the doc_id
-        # in each msg, instead of the "mbox" field in msgs
-        # -------------------------------------------------------
 
     def _inferiorNames(self, name):
         """

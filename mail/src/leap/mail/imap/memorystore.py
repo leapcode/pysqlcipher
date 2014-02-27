@@ -1244,6 +1244,27 @@ class MemoryStore(object):
         """
         self.permanent_store.set_mbox_closed(mbox, closed)
 
+    # Rename flag-documents
+
+    def rename_fdocs_mailbox(self, old_mbox, new_mbox):
+        """
+        Change the mailbox name for all flag documents in a given mailbox.
+        Used from account.rename
+
+        :param old_mbox: name for the old mbox
+        :type old_mbox: str or unicode
+        :param new_mbox: name for the new mbox
+        :type new_mbox: str or unicode
+        """
+        fs = self._fdoc_store
+        keys = fs[old_mbox].keys()
+        for k in keys:
+            fdoc = fs[old_mbox][k]
+            fdoc['mbox'] = new_mbox
+            fs[new_mbox][k] = fdoc
+            fs[old_mbox].pop(k)
+            self._dirty.add((new_mbox, k))
+
     # Dump-to-disk controls.
 
     @property
