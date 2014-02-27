@@ -29,6 +29,11 @@ from leap.common.check import leap_assert, leap_assert_type
 from leap.common.events.events_pb2 import IMAP_CLIENT_LOGIN
 from leap.soledad.client import Soledad
 
+# imports for LITERAL+ patch
+from twisted.internet import defer, interfaces
+from twisted.mail.imap4 import IllegalClientResponse
+from twisted.mail.imap4 import LiteralString, LiteralFile
+
 
 class LeapIMAPServer(imap4.IMAP4Server):
     """
@@ -186,3 +191,185 @@ class LeapIMAPServer(imap4.IMAP4Server):
         # TODO return the output of _memstore.is_writing
         # XXX and that should return a deferred!
         return None
+
+    #############################################################
+    #
+    # Twisted imap4 patch to support LITERAL+ extension
+    # TODO send this patch upstream asap!
+    #
+    #############################################################
+
+    def capabilities(self):
+        cap = {'AUTH': self.challengers.keys()}
+        if self.ctx and self.canStartTLS:
+            t = self.transport
+            ti = interfaces.ISSLTransport
+            if not self.startedTLS and ti(t, None) is None:
+                cap['LOGINDISABLED'] = None
+                cap['STARTTLS'] = None
+        cap['NAMESPACE'] = None
+        cap['IDLE'] = None
+        # patched ############
+        cap['LITERAL+'] = None
+        ######################
+        return cap
+
+    def _stringLiteral(self, size, literal_plus=False):
+        if size > self._literalStringLimit:
+            raise IllegalClientResponse(
+                "Literal too long! I accept at most %d octets" %
+                (self._literalStringLimit,))
+        d = defer.Deferred()
+        self.parseState = 'pending'
+        self._pendingLiteral = LiteralString(size, d)
+        # Patched ###########################################################
+        if not literal_plus:
+            self.sendContinuationRequest('Ready for %d octets of text' % size)
+        #####################################################################
+        self.setRawMode()
+        return d
+
+    def _fileLiteral(self, size, literal_plus=False):
+        d = defer.Deferred()
+        self.parseState = 'pending'
+        self._pendingLiteral = LiteralFile(size, d)
+        if not literal_plus:
+            self.sendContinuationRequest('Ready for %d octets of data' % size)
+        self.setRawMode()
+        return d
+
+    def arg_astring(self, line):
+        """
+        Parse an astring from the line, return (arg, rest), possibly
+        via a deferred (to handle literals)
+        """
+        line = line.strip()
+        if not line:
+            raise IllegalClientResponse("Missing argument")
+        d = None
+        arg, rest = None, None
+        if line[0] == '"':
+            try:
+                spam, arg, rest = line.split('"', 2)
+                rest = rest[1:]  # Strip space
+            except ValueError:
+                raise IllegalClientResponse("Unmatched quotes")
+        elif line[0] == '{':
+            # literal
+            if line[-1] != '}':
+                raise IllegalClientResponse("Malformed literal")
+
+            # Patched ################
+            if line[-2] == "+":
+                literalPlus = True
+                size_end = -2
+            else:
+                literalPlus = False
+                size_end = -1
+
+            try:
+                size = int(line[1:size_end])
+            except ValueError:
+                raise IllegalClientResponse(
+                    "Bad literal size: " + line[1:size_end])
+            d = self._stringLiteral(size, literalPlus)
+            ##########################
+        else:
+            arg = line.split(' ', 1)
+            if len(arg) == 1:
+                arg.append('')
+            arg, rest = arg
+        return d or (arg, rest)
+
+    def arg_literal(self, line):
+        """
+        Parse a literal from the line
+        """
+        if not line:
+            raise IllegalClientResponse("Missing argument")
+
+        if line[0] != '{':
+            raise IllegalClientResponse("Missing literal")
+
+        if line[-1] != '}':
+            raise IllegalClientResponse("Malformed literal")
+
+        # Patched ##################
+        if line[-2] == "+":
+            literalPlus = True
+            size_end = -2
+        else:
+            literalPlus = False
+            size_end = -1
+
+        try:
+            size = int(line[1:size_end])
+        except ValueError:
+            raise IllegalClientResponse(
+                "Bad literal size: " + line[1:size_end])
+
+        return self._fileLiteral(size, literalPlus)
+        #############################
+
+    # Need to override the command table after patching
+    # arg_astring and arg_literal
+
+    do_LOGIN = imap4.IMAP4Server.do_LOGIN
+    do_CREATE = imap4.IMAP4Server.do_CREATE
+    do_DELETE = imap4.IMAP4Server.do_DELETE
+    do_RENAME = imap4.IMAP4Server.do_RENAME
+    do_SUBSCRIBE = imap4.IMAP4Server.do_SUBSCRIBE
+    do_UNSUBSCRIBE = imap4.IMAP4Server.do_UNSUBSCRIBE
+    do_STATUS = imap4.IMAP4Server.do_STATUS
+    do_APPEND = imap4.IMAP4Server.do_APPEND
+    do_COPY = imap4.IMAP4Server.do_COPY
+
+    _selectWork = imap4.IMAP4Server._selectWork
+    _listWork = imap4.IMAP4Server._listWork
+    arg_plist = imap4.IMAP4Server.arg_plist
+    arg_seqset = imap4.IMAP4Server.arg_seqset
+    opt_plist = imap4.IMAP4Server.opt_plist
+    opt_datetime = imap4.IMAP4Server.opt_datetime
+
+    unauth_LOGIN = (do_LOGIN, arg_astring, arg_astring)
+
+    auth_SELECT = (_selectWork, arg_astring, 1, 'SELECT')
+    select_SELECT = auth_SELECT
+
+    auth_CREATE = (do_CREATE, arg_astring)
+    select_CREATE = auth_CREATE
+
+    auth_EXAMINE = (_selectWork, arg_astring, 0, 'EXAMINE')
+    select_EXAMINE = auth_EXAMINE
+
+    auth_DELETE = (do_DELETE, arg_astring)
+    select_DELETE = auth_DELETE
+
+    auth_RENAME = (do_RENAME, arg_astring, arg_astring)
+    select_RENAME = auth_RENAME
+
+    auth_SUBSCRIBE = (do_SUBSCRIBE, arg_astring)
+    select_SUBSCRIBE = auth_SUBSCRIBE
+
+    auth_UNSUBSCRIBE = (do_UNSUBSCRIBE, arg_astring)
+    select_UNSUBSCRIBE = auth_UNSUBSCRIBE
+
+    auth_LIST = (_listWork, arg_astring, arg_astring, 0, 'LIST')
+    select_LIST = auth_LIST
+
+    auth_LSUB = (_listWork, arg_astring, arg_astring, 1, 'LSUB')
+    select_LSUB = auth_LSUB
+
+    auth_STATUS = (do_STATUS, arg_astring, arg_plist)
+    select_STATUS = auth_STATUS
+
+    auth_APPEND = (do_APPEND, arg_astring, opt_plist, opt_datetime,
+                   arg_literal)
+    select_APPEND = auth_APPEND
+
+    select_COPY = (do_COPY, arg_seqset, arg_astring)
+
+
+    #############################################################
+    # END of Twisted imap4 patch to support LITERAL+ extension
+    #############################################################
