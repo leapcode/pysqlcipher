@@ -57,7 +57,7 @@ import resource
 import sys
 
 try:
-    sys.setrecursionlimit(10**6)
+    sys.setrecursionlimit(10**7)
 except Exception:
     print "Error setting recursion limit"
 try:
