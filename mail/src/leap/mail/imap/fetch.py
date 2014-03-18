@@ -45,6 +45,7 @@ from leap.common.events.events_pb2 import IMAP_MSG_DECRYPTED
 from leap.common.events.events_pb2 import IMAP_MSG_SAVED_LOCALLY
 from leap.common.events.events_pb2 import IMAP_MSG_DELETED_INCOMING
 from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
+from leap.common.events.events_pb2 import SOLEDAD_INVALID_AUTH_TOKEN
 from leap.common.mail import get_email_charset
 from leap.keymanager import errors as keymanager_errors
 from leap.keymanager.openpgp import OpenPGPKey
@@ -53,6 +54,7 @@ from leap.mail.imap.fields import fields
 from leap.mail.utils import json_loads, empty, first
 from leap.soledad.client import Soledad
 from leap.soledad.common.crypto import ENC_SCHEME_KEY, ENC_JSON_KEY
+from leap.soledad.common.errors import InvalidAuthTokenError
 
 
 logger = logging.getLogger(__name__)
@@ -218,9 +220,14 @@ class LeapIncomingMail(object):
         :rtype: iterable or None
         """
         with self.fetching_lock:
-            log.msg('FETCH: syncing soledad...')
-            self._soledad.sync()
-            log.msg('FETCH soledad SYNCED.')
+            try:
+                log.msg('FETCH: syncing soledad...')
+                self._soledad.sync()
+                log.msg('FETCH soledad SYNCED.')
+            except InvalidAuthTokenError:
+                # if the token is invalid, send an event so the GUI can
+                # disable mail and show an error message.
+                leap_events.signal(SOLEDAD_INVALID_AUTH_TOKEN)
 
     def _signal_fetch_to_ui(self, doclist):
         """
