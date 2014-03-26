@@ -395,8 +395,11 @@ class LeapIncomingMail(object):
     def _delete_incoming_message(self, doc):
         """
         Delete document.
+
+        :param doc: the SoledadDocument to delete
+        :type doc: SoledadDocument
         """
-        log.msg("Deleting SoledadDoc %s" % (doc.doc_id))
+        log.msg("Deleting Incoming message: %s" % (doc.doc_id,))
         self._soledad.delete_doc(doc)
 
     def _maybe_decrypt_msg(self, data):
@@ -598,12 +601,11 @@ class LeapIncomingMail(object):
         def msgSavedCallback(result):
             if not empty(result):
                 leap_events.signal(IMAP_MSG_SAVED_LOCALLY)
-                deferLater(reactor, 0, self._delete_incoming_message, result)
+                deferLater(reactor, 0, self._delete_incoming_message, doc)
                 leap_events.signal(IMAP_MSG_DELETED_INCOMING)
-                deferLater(reactor, 1, self._signal_unread_to_ui)
 
-        # XXX should pass a notify_on_disk=True along...
-        d = self._inbox.addMessage(data, flags=(self.RECENT_FLAG,))
+        d = self._inbox.addMessage(data, flags=(self.RECENT_FLAG,),
+                                   notify_on_disk=True)
         d.addCallbacks(msgSavedCallback, self._errback)
 
     #
