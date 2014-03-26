@@ -439,7 +439,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             r[self.CMD_UNSEEN] = self.getUnseenCount()
         return defer.succeed(r)
 
-    def addMessage(self, message, flags, date=None):
+    def addMessage(self, message, flags, date=None, notify_on_disk=False):
         """
         Adds a message to this mailbox.
 
@@ -465,23 +465,29 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         else:
             flags = tuple(str(flag) for flag in flags)
 
-        d = self._do_add_message(message, flags=flags, date=date)
+        d = self._do_add_message(message, flags=flags, date=date,
+                                 notify_on_disk=notify_on_disk)
         if PROFILE_CMD:
             do_profile_cmd(d, "APPEND")
         # A better place for this would be  the COPY/APPEND dispatcher
         # in server.py, but qtreactor hangs when I do that, so this seems
         # to work fine for now.
-        d.addCallback(lambda r: self.reactor.callLater(0, self.notify_new))
-        d.addCallback(self.cb_signal_unread_to_ui)
+
+        def notifyCallback(x):
+            self.reactor.callLater(0, self.notify_new)
+            return x
+
+        d.addCallback(notifyCallback)
         d.addErrback(lambda f: log.msg(f.getTraceback()))
         return d
 
-    def _do_add_message(self, message, flags, date):
+    def _do_add_message(self, message, flags, date, notify_on_disk=False):
         """
         Calls to the messageCollection add_msg method.
         Invoked from addMessage.
         """
-        d = self.messages.add_msg(message, flags=flags, date=date)
+        d = self.messages.add_msg(message, flags=flags, date=date,
+                                  notify_on_disk=notify_on_disk)
         return d
 
     def notify_new(self, *args):
@@ -499,6 +505,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
                 l.newMessages(exists, recent)
         d = self._get_notify_count()
         d.addCallback(cbNotifyNew)
+        d.addCallback(self.cb_signal_unread_to_ui)
 
     @deferred_to_thread
     def _get_notify_count(self):
