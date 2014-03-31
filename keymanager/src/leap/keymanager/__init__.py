@@ -197,21 +197,25 @@ class KeyManager(object):
         :param address: The address bound to the keys.
         :type address: str
 
-        @raise KeyNotFound: If the key was not found on nickserver.
+        :raise KeyNotFound: If the key was not found on nickserver.
         """
         # request keys from the nickserver
         res = None
         try:
             res = self._get(self._nickserver_uri, {'address': address})
+            res.raise_for_status()
             server_keys = res.json()
             # insert keys in local database
             if self.OPENPGP_KEY in server_keys:
                 self._wrapper_map[OpenPGPKey].put_ascii_key(
                     server_keys['openpgp'])
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                raise KeyNotFound(address)
+            logger.warning("HTTP error retrieving key: %r" % (e,))
+            logger.warning("%s" % (res.content,))
         except Exception as e:
-            logger.warning("Error retrieving the keys: %r" % (e,))
-            if res:
-                logger.warning("%s" % (res.content,))
+            logger.warning("Error retrieving key: %r" % (e,))
 
     #
     # key management
@@ -233,7 +237,7 @@ class KeyManager(object):
         :param ktype: The type of the key.
         :type ktype: KeyType
 
-        @raise KeyNotFound: If the key was not found in local database.
+        :raise KeyNotFound: If the key was not found in local database.
         """
         leap_assert(
             ktype is OpenPGPKey,
@@ -297,7 +301,7 @@ class KeyManager(object):
                 raise
 
             signal(proto.KEYMANAGER_LOOKING_FOR_KEY, address)
-            self._fetch_keys_from_server(address)
+            self._fetch_keys_from_server(address)  # might raise KeyNotFound
             key = self._wrapper_map[ktype].get_key(address, private=False)
             signal(proto.KEYMANAGER_KEY_FOUND, address)
 
@@ -443,7 +447,7 @@ class KeyManager(object):
         :return: The decrypted data.
         :rtype: str
 
-        @raise InvalidSignature: Raised if unable to verify the signature with
+        :raise InvalidSignature: Raised if unable to verify the signature with
             C{verify} key.
         """
         leap_assert_type(privkey, EncryptionKey)
