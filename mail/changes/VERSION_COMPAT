@@ -8,6 +8,3 @@
 #
 # BEGIN DEPENDENCY LIST -------------------------
 # leap.foo.bar>=x.y.z
-leap.soledad.client 0.5.0 # get_count_by_index
-leap.common 0.3.7 # get_email_charset
-leap.keymanager 0.3.8 # openpgp.decrypt

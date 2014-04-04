@@ -1,7 +1,7 @@
 zope.interface
-leap.soledad.client>=0.3.0
-leap.common>=0.3.5
-leap.keymanager>=0.3.7
+leap.soledad.client>=0.4.5
+leap.common>=0.3.7
+leap.keymanager>=0.3.8
 twisted  # >= 12.0.3 ??
 zope.proxy
 enum
