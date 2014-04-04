@@ -1,1 +1,0 @@
-  o Convert unicode to str when raising exceptions in IMAP server (#4830).

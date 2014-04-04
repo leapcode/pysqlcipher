@@ -1,2 +1,0 @@
-  o Fix bug in which destination folder sometimes was not showing messages after copy/append.
-    Closes: #5167

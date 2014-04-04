@@ -1,3 +1,57 @@
+0.3.9 Apr 4:
+  o Footer url shouldn't end in period. Closes #4791.
+  o Handle non-ascii headers. Closes #5021.
+  o Soledad writer consumes messages eagerly. Fixes failing
+    tests. Closes #4715.
+  o Convert unicode to str when raising exceptions in IMAP server.
+    Fixes #4830.
+  o Remove conversion of IMAP folder names to string. This makes the
+    IMAP server use twisted's transparent 7bit conversion. Fixes
+    #4830.
+  o Add a flag to be able to reset the session. Closes #4925.
+  o Check for none in payload detection. Closes #4933.
+  o Check for flags doc uniqueness before adding a message. Avoids
+    duplicates of a single message in the same mailbox while copying
+    or moving. Closes #4949.
+  o Correctly process attachments when signing. Fixes #5014.
+  o Fix bug in which destination folder sometimes was not showing
+    messages after copy/append. Closes #5167.
+  o Fix unread notifications to client UI. Only INBOX is
+    notified. Closes #5177.
+  o Fix bug in which deleted folder wouldn't show its messages
+    inside. Closes #5179.
+  o Keep processing after a decryption error. Closes #5307.
+  o Enqueue unsetting of recent flag. this was holding the new mails
+    from being displayed soonish.
+  o Properly parse emails crafted by Mail.app. Fixes #5013.
+  o Restrict adding outgoing footer to text/plain messages.
+  o Sanity check on last_uid setter. Avoids incomplete fetches.
+  o Stop providing hostname for helo in smtp gateway. Fixes #4335.
+  o Only try to fetch keys for multipart signed or encrypted emails.
+    Fixes #4671.
+  o Add a flag for offline mode in imap. Related to #4943.
+  o Flush IMAP data to disk when stopping. Closes #5095.
+  o Signal the client when auth token is invalid for syncing Soledad.
+    Fixes #5191.
+  o Ability to support SEARCH Commands, limited to HEADER Message-ID.
+    This is a quick workaround for avoiding duplicate saves in Drafts
+    Folder. Closes #4209.
+  o Use a memory store as write-buffer and read-cache.
+  o Implement IMAP4 non-synchronizing literals (rfc2088), so APPENDs
+    can be made in a single round-trip. Closes #5190.
+  o Defer costly operations to a pool of threads.
+  o Split the internal representation of messages into three distinct
+    documents: 1) Flags 2) Headers 3) Content.
+  o Make use of the Twisted MIME interface.
+  o Add deduplication ability to the save operation, for body and
+    attachments.
+  o Add IMessageCopier interface to mailbox implementation, so bulk
+    moves are costless. Closes #4654.
+  o Makes efficient use of indexes and count method. Closes #4616.
+  o Handle correctly unicode characters in emails. Closes #4838.
+
+-- 2014 --
+
 0.3.8 Dec 6:
   o Fail gracefully when failing to decrypt incoming messages. Closes
     #4589.

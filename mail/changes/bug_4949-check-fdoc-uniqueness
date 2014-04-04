@@ -1,2 +1,0 @@
-  o Check for flags doc uniqueness before adding a message. Avoids duplicates of
-    a single message in the same mailbox while copying or moving. Closes: #4949

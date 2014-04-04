@@ -1,3 +1,0 @@
-  o Ability to support SEARCH Commands, limited to HEADER Message-ID.
-    This is a quick workaround for avoiding duplicate saves in Drafts Folder.
-    Closes: #4209

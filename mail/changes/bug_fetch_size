@@ -1,4 +1,0 @@
-  o Limit the size of the messages returned to the IMAP client to 100,
-    since Thunderbird hangs with numbers bigger than those. This is a
-    quick fix until we figure out how does Thunderbird want to receive
-    more than 100 mails at a time.

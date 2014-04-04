@@ -1,1 +1,0 @@
-  o Soledad writer consumes messages eagerly. Fixes failing tests. Closes: #4715

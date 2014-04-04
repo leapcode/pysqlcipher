@@ -1,7 +1,0 @@
-  o Defer costly operations to a pool of threads.
-  o Split the internal representation of messages into three distinct documents:
-    1) Flags 2) Headers 3) Content.
-  o Make use of the Twisted MIME interface.
-  o Add deduplication ability to the save operation, for body and attachments.
-  o Add IMessageCopier interface to mailbox implementation, so bulk moves
-    are costless. Closes: #4654

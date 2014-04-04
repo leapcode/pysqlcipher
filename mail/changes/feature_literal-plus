@@ -1,2 +1,0 @@
-  o Implement IMAP4 non-synchronizing literals (rfc2088), so APPENDs can be made
-    in a single round-trip. Closes: #5190

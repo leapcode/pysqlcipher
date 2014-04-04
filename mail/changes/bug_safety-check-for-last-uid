@@ -1,1 +1,0 @@
-  o Sanity check on last_uid setter. Avoids incomplete fetches.

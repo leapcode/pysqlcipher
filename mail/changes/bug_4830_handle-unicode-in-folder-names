@@ -1,2 +1,0 @@
-  o Remove conversion of IMAP folder names to string. This makes the IMAP
-    server use twisted's transparent 7bit conversion (#4830).
