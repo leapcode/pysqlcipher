@@ -14,19 +14,13 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
-
-
 """
 Infrastructure for using OpenPGP keys in Key Manager.
 """
-
-
-import locale
 import logging
 import os
 import re
 import shutil
-import sys
 import tempfile
 
 from contextlib import closing
@@ -298,7 +292,7 @@ class OpenPGPScheme(EncryptionScheme):
         @raise KeyNotFound: If the key was not found on local storage.
         """
         # Remove the identity suffix after the '+' until the '@'
-        # e.g.: test_user+something@provider.com becomes test_user@probider.com
+        # e.g.: test_user+something@provider.com becomes test_user@provider.com
         # since the key belongs to the identity without the '+' suffix.
         address = re.sub(r'\+.*\@', '@', address)
 
@@ -526,7 +520,7 @@ class OpenPGPScheme(EncryptionScheme):
                 return result.data
             except errors.GPGError as e:
                 logger.error('Failed to decrypt: %s.' % str(e))
-                raise error.EncryptError()
+                raise errors.EncryptError()
 
     def decrypt(self, data, privkey, passphrase=None, verify=None):
         """
@@ -568,19 +562,10 @@ class OpenPGPScheme(EncryptionScheme):
                             'Failed to verify signature with key %s: %s' %
                             (verify.key_id, result.stderr))
 
-                # XXX: this is the encoding used by gpg module
-                # https://github.com/isislovecruft/python-gnupg/\
-                #   blob/master/gnupg/_meta.py#L121
-                encoding = locale.getpreferredencoding()
-                if encoding is None:
-                    encoding = sys.stdin.encoding
-                if encoding is None:
-                    encoding = 'utf-8'
-                return result.data.decode(encoding, 'replace')
+                return result.data
             except errors.GPGError as e:
                 logger.error('Failed to decrypt: %s.' % str(e))
                 raise errors.DecryptError(str(e))
-
 
     def is_encrypted(self, data):
         """

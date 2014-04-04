@@ -23,9 +23,9 @@ import sys
 try:
     from gnupg.gnupg import GPGUtilities
     assert(GPGUtilities)  # pyflakes happy
-    from gnupg import __version__
-    from distutils.version import LooseVersion as V
-    assert(V(__version__) >= V('1.2.3'))
+    from gnupg import __version__ as _gnupg_version
+    from pkg_resources import parse_version
+    assert(parse_version(_gnupg_version) >= parse_version('1.2.3'))
 
 except (ImportError, AssertionError):
     print "*******"
@@ -46,6 +46,7 @@ import requests
 from leap.common.check import leap_assert, leap_assert_type
 from leap.common.events import signal
 from leap.common.events import events_pb2 as proto
+from leap.common.decorators import memoized_method
 
 from leap.keymanager.errors import KeyNotFound
 
@@ -76,7 +77,7 @@ class KeyManager(object):
     OPENPGP_KEY = 'openpgp'
     PUBKEY_KEY = "user[public_key]"
 
-    def __init__(self, address, nickserver_uri, soledad, session_id=None,
+    def __init__(self, address, nickserver_uri, soledad, token=None,
                  ca_cert_path=None, api_uri=None, api_version=None, uid=None,
                  gpgbinary=None):
         """
@@ -89,8 +90,8 @@ class KeyManager(object):
         :type url: str
         :param soledad: A Soledad instance for local storage of keys.
         :type soledad: leap.soledad.Soledad
-        :param session_id: The session ID for interacting with the webapp API.
-        :type session_id: str
+        :param token: The token for interacting with the webapp API.
+        :type token: str
         :param ca_cert_path: The path to the CA certificate.
         :type ca_cert_path: str
         :param api_uri: The URI of the webapp API.
@@ -105,7 +106,7 @@ class KeyManager(object):
         self._address = address
         self._nickserver_uri = nickserver_uri
         self._soledad = soledad
-        self._session_id = session_id
+        self._token = token
         self.ca_cert_path = ca_cert_path
         self.api_uri = api_uri
         self.api_version = api_version
@@ -179,11 +180,11 @@ class KeyManager(object):
             self._ca_cert_path is not None,
             'We need the CA certificate path!')
         leap_assert(
-            self._session_id is not None,
-            'We need a session_id to interact with webapp!')
+            self._token is not None,
+            'We need a token to interact with webapp!')
         res = self._fetcher.put(
             uri, data=data, verify=self._ca_cert_path,
-            cookies={'_session_id': self._session_id})
+            headers={'Authorization': 'Token token=%s' % self._token})
         # assert that the response is valid
         res.raise_for_status()
         return res
@@ -196,21 +197,25 @@ class KeyManager(object):
         :param address: The address bound to the keys.
         :type address: str
 
-        @raise KeyNotFound: If the key was not found on nickserver.
+        :raise KeyNotFound: If the key was not found on nickserver.
         """
         # request keys from the nickserver
         res = None
         try:
             res = self._get(self._nickserver_uri, {'address': address})
+            res.raise_for_status()
             server_keys = res.json()
             # insert keys in local database
             if self.OPENPGP_KEY in server_keys:
                 self._wrapper_map[OpenPGPKey].put_ascii_key(
                     server_keys['openpgp'])
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                raise KeyNotFound(address)
+            logger.warning("HTTP error retrieving key: %r" % (e,))
+            logger.warning("%s" % (res.content,))
         except Exception as e:
-            logger.warning("Error retrieving the keys: %r" % (e,))
-            if res:
-                logger.warning("%s" % (res.content,))
+            logger.warning("Error retrieving key: %r" % (e,))
 
     #
     # key management
@@ -232,7 +237,7 @@ class KeyManager(object):
         :param ktype: The type of the key.
         :type ktype: KeyType
 
-        @raise KeyNotFound: If the key was not found in local database.
+        :raise KeyNotFound: If the key was not found in local database.
         """
         leap_assert(
             ktype is OpenPGPKey,
@@ -250,6 +255,13 @@ class KeyManager(object):
         self._put(uri, data)
         signal(proto.KEYMANAGER_DONE_UPLOADING_KEYS, self._address)
 
+    @memoized_method
+    def get_key_from_cache(self, *args, **kwargs):
+        """
+        Public interface to `get_key`, that is memoized.
+        """
+        return self.get_key(*args, **kwargs)
+
     def get_key(self, address, ktype, private=False, fetch_remote=True):
         """
         Return a key of type C{ktype} bound to C{address}.
@@ -266,9 +278,10 @@ class KeyManager(object):
 
         :return: A key of type C{ktype} bound to C{address}.
         :rtype: EncryptionKey
-        @raise KeyNotFound: If the key was not found both locally and in
-            keyserver.
+        :raise KeyNotFound: If the key was not found both locally and in
+                            keyserver.
         """
+        logger.debug("getting key for %s" % (address,))
         leap_assert(
             ktype in self._wrapper_map,
             'Unkown key type: %s.' % str(ktype))
@@ -288,7 +301,7 @@ class KeyManager(object):
                 raise
 
             signal(proto.KEYMANAGER_LOOKING_FOR_KEY, address)
-            self._fetch_keys_from_server(address)
+            self._fetch_keys_from_server(address)  # might raise KeyNotFound
             key = self._wrapper_map[ktype].get_key(address, private=False)
             signal(proto.KEYMANAGER_KEY_FOUND, address)
 
@@ -344,14 +357,14 @@ class KeyManager(object):
     # Setters/getters
     #
 
-    def _get_session_id(self):
-        return self._session_id
+    def _get_token(self):
+        return self._token
 
-    def _set_session_id(self, session_id):
-        self._session_id = session_id
+    def _set_token(self, token):
+        self._token = token
 
-    session_id = property(
-        _get_session_id, _set_session_id, doc='The session id.')
+    token = property(
+        _get_token, _set_token, doc='The session token.')
 
     def _get_ca_cert_path(self):
         return self._ca_cert_path
@@ -434,7 +447,7 @@ class KeyManager(object):
         :return: The decrypted data.
         :rtype: str
 
-        @raise InvalidSignature: Raised if unable to verify the signature with
+        :raise InvalidSignature: Raised if unable to verify the signature with
             C{verify} key.
         """
         leap_assert_type(privkey, EncryptionKey)

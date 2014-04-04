@@ -1,3 +1,13 @@
+0.3.8 Apr 4:
+  o Properly raise KeyNotFound exception when looking for keys on
+    nickserver. Fixes #5415.
+  o Do not decode decrypted data, return as str.
+  o Use a better version handler for the gnupg version check.
+  o Memoize call to get_key. Closes #4784.
+  o Update auth to interact with webapp v2. Fixes #5120.
+
+-- 2014 --
+
 0.3.7 Dec 6:
   o Fix error return values on openpgp backend.
   o Remove address check when sending email and rely in the email

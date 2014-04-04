@@ -118,9 +118,21 @@ class KeyManagerWithSoledadTestCase(BaseLeapTest):
         Soledad._get_secrets_from_shared_db = Mock(return_value=None)
         Soledad._put_secrets_in_shared_db = Mock(return_value=None)
 
+        class MockSharedDB(object):
+
+            get_doc = Mock(return_value=None)
+            put_doc = Mock()
+            lock = Mock(return_value=('atoken', 300))
+            unlock = Mock(return_value=True)
+
+            def __call__(self):
+                return self
+
+        Soledad._shared_db = MockSharedDB()
+
         self._soledad = Soledad(
-            "leap@leap.se",
-            "123456",
+            u"leap@leap.se",
+            u"123456",
             secrets_path=self.tempdir + "/secret.gpg",
             local_db_path=self.tempdir + "/soledad.u1db",
             server_url='',
