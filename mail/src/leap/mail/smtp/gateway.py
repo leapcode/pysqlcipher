@@ -52,6 +52,7 @@ from leap.common.events import proto, signal
 from leap.keymanager import KeyManager
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.keymanager.errors import KeyNotFound
+from leap.mail import __version__
 from leap.mail.smtp.rfc3156 import (
     MultipartSigned,
     MultipartEncrypted,
@@ -492,7 +493,7 @@ class EncryptedMessage(object):
             heloFallback=True,
             requireAuthentication=False,
             requireTransportSecurity=True)
-        factory.domain = LOCAL_FQDN
+        factory.domain = __version__
         signal(proto.SMTP_SEND_MESSAGE_START, self._user.dest.addrstr)
         reactor.connectSSL(
             self._host, self._port, factory,
@@ -599,13 +600,16 @@ class EncryptedMessage(object):
             self._msg = self._origmsg
             return
 
-        # add a nice footer to the outgoing message
         from_address = validate_address(self._fromAddress.addrstr)
         username, domain = from_address.split('@')
-        self.lines.append('--')
-        self.lines.append('%s - https://%s/key/%s.' %
-                          (self.FOOTER_STRING, domain, username))
-        self.lines.append('')
+
+        # add a nice footer to the outgoing message
+        if self._origmsg.get_content_type() == 'text/plain':
+            self.lines.append('--')
+            self.lines.append('%s - https://%s/key/%s' %
+                              (self.FOOTER_STRING, domain, username))
+            self.lines.append('')
+
         self._origmsg = self.parseMessage()
 
         # get sender and recipient data

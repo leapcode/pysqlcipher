@@ -30,7 +30,7 @@ from leap.mail.smtp.gateway import SMTPFactory
 
 
 def setup_smtp_gateway(port, userid, keymanager, smtp_host, smtp_port,
-                     smtp_cert, smtp_key, encrypted_only):
+                       smtp_cert, smtp_key, encrypted_only):
     """
     Setup SMTP gateway to run with Twisted.
 
@@ -52,8 +52,8 @@ def setup_smtp_gateway(port, userid, keymanager, smtp_host, smtp_port,
     :type smtp_cert: str
     :param smtp_key: The client key for authentication.
     :type smtp_key: str
-    :param encrypted_only: Whether the SMTP gateway should send unencrypted mail
-                           or not.
+    :param encrypted_only: Whether the SMTP gateway should send unencrypted
+                           mail or not.
     :type encrypted_only: bool
 
     :returns: tuple of SMTPFactory, twisted.internet.tcp.Port

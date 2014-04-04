@@ -1,69 +1,160 @@
+# -*- coding: utf-8 -*-
+# imap-server.tac
+# Copyright (C) 2013,2014 LEAP
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+TAC file for initialization of the imap service using twistd.
+
+Use this for debugging and testing the imap server using a native reactor.
+
+For now, and for debugging/testing purposes, you need
+to pass a config file with the following structure:
+
+[leap_mail]
+userid = "user@provider"
+uuid = "deadbeefdeadabad"
+passwd = "supersecret" # optional, will get prompted if not found.
+"""
 import ConfigParser
+import getpass
 import os
+import sys
 
-from leap.soledad.client import Soledad
+from leap.keymanager import KeyManager
 from leap.mail.imap.service import imap
-from leap.common.config import get_path_prefix
+from leap.soledad.client import Soledad
+
+from twisted.application import service, internet
 
 
-config = ConfigParser.ConfigParser()
-config.read([os.path.expanduser('~/.config/leap/mail/mail.conf')])
+# TODO should get this initializers from some authoritative mocked source
+# We might want to put them the soledad itself.
 
-userID = config.get('mail', 'address')
-privkey = open(os.path.expanduser('~/.config/leap/mail/privkey')).read()
-nickserver_url = ""
-
-d = {}
-
-for key in ('uid', 'passphrase', 'server', 'pemfile', 'token'):
-    d[key] = config.get('mail', key)
-
-
-def initialize_soledad_mailbox(user_uuid, soledad_pass, server_url,
-                               server_pemfile, token):
+def initialize_soledad(uuid, email, passwd,
+                       secrets, localdb,
+                       gnupg_home, tempdir):
     """
     Initializes soledad by hand
 
-    :param user_uuid:
-    :param soledad_pass:
-    :param server_url:
-    :param server_pemfile:
-    :param token:
-
+    :param email: ID for the user
+    :param gnupg_home: path to home used by gnupg
+    :param tempdir: path to temporal dir
     :rtype: Soledad instance
     """
+    # XXX TODO unify with an authoritative source of mocks
+    # for soledad (or partial initializations).
+    # This is copied from the imap tests.
 
-    base_config = get_path_prefix()
+    server_url = "http://provider"
+    cert_file = ""
 
-    secret_path = os.path.join(
-        base_config, "leap", "soledad", "%s.secret" % user_uuid)
-    soledad_path = os.path.join(
-        base_config, "leap", "soledad", "%s-mailbox.db" % user_uuid)
+    class Mock(object):
+        def __init__(self, return_value=None):
+            self._return = return_value
 
-    _soledad = Soledad(
-        user_uuid,
-        soledad_pass,
-        secret_path,
-        soledad_path,
+        def __call__(self, *args, **kwargs):
+            return self._return
+
+    class MockSharedDB(object):
+
+        get_doc = Mock()
+        put_doc = Mock()
+        lock = Mock(return_value=('atoken', 300))
+        unlock = Mock(return_value=True)
+
+        def __call__(self):
+            return self
+
+    Soledad._shared_db = MockSharedDB()
+    soledad = Soledad(
+        uuid,
+        passwd,
+        secrets,
+        localdb,
         server_url,
-        server_pemfile,
-        token)
+        cert_file)
 
-    return _soledad
+    return soledad
 
-soledad = initialize_soledad_mailbox(
-    d['uid'],
-    d['passphrase'],
-    d['server'],
-    d['pemfile'],
-    d['token'])
+######################################################################
+# Remember to set your config files, see module documentation above!
+######################################################################
 
-# import the private key ---- should sync it from remote!
-from leap.common.keymanager.openpgp import OpenPGPScheme
-opgp = OpenPGPScheme(soledad)
-opgp.put_ascii_key(privkey)
+print "[+] Running LEAP IMAP Service"
 
-from leap.common.keymanager import KeyManager
-keymanager = KeyManager(userID, nickserver_url, soledad, d['token'])
 
-imap.run_service(soledad, keymanager)
+bmconf = os.environ.get("LEAP_MAIL_CONF", "")
+if not bmconf:
+    print ("[-] Please set LEAP_MAIL_CONF environment variable "
+           "pointing to your config.")
+    sys.exit(1)
+
+SECTION = "leap_mail"
+cp = ConfigParser.ConfigParser()
+cp.read(bmconf)
+
+userid = cp.get(SECTION, "userid")
+uuid = cp.get(SECTION, "uuid")
+passwd = unicode(cp.get(SECTION, "passwd"))
+
+# XXX get this right from the environment variable !!!
+port = 1984
+
+if not userid or not uuid:
+    print "[-] Config file missing userid or uuid field"
+    sys.exit(1)
+
+if not passwd:
+    passwd = unicode(getpass.getpass("Soledad passphrase: "))
+
+
+secrets = os.path.expanduser("~/.config/leap/soledad/%s.secret" % (uuid,))
+localdb = os.path.expanduser("~/.config/leap/soledad/%s.db" % (uuid,))
+
+# XXX Is this really used? Should point it to user var dirs defined in xdg?
+gnupg_home = "/tmp/"
+tempdir = "/tmp/"
+
+###################################################
+
+# Ad-hoc soledad/keymanager initialization.
+
+soledad = initialize_soledad(uuid, userid, passwd, secrets,
+                             localdb, gnupg_home, tempdir)
+km_args = (userid, "https://localhost", soledad)
+km_kwargs = {
+    "token": "",
+    "ca_cert_path": "",
+    "api_uri":  "",
+    "api_version": "",
+    "uid": uuid,
+    "gpgbinary": "/usr/bin/gpg"
+}
+keymanager = KeyManager(*km_args, **km_kwargs)
+
+##################################################
+
+# Ok, let's expose the application object for the twistd application
+# framework to pick up from here...
+
+
+def getIMAPService():
+    factory = imap.LeapIMAPFactory(uuid, userid, soledad)
+    return internet.TCPServer(port, factory, interface="localhost")
+
+
+application = service.Application("LEAP IMAP Application")
+service = getIMAPService()
+service.setServiceParent(application)
