@@ -1,2 +1,0 @@
-  o Properly raise KeyNotFound exception when looking for keys on nickserver
-    (#5415).
