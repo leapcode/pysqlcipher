@@ -1,4 +1,4 @@
-0.3.9 Apr 4:
+0.3.9 Apr 4, 2014:
   o Footer url shouldn't end in period. Closes #4791.
   o Handle non-ascii headers. Closes #5021.
   o Soledad writer consumes messages eagerly. Fixes failing
@@ -50,9 +50,7 @@
   o Makes efficient use of indexes and count method. Closes #4616.
   o Handle correctly unicode characters in emails. Closes #4838.
 
--- 2014 --
-
-0.3.8 Dec 6:
+0.3.8 Dec 6, 2013:
   o Fail gracefully when failing to decrypt incoming messages. Closes
     #4589.
   o Fix a bug when adding a message with empty flags. Closes #4496
@@ -68,7 +66,7 @@
     threads. Closes #4606
   o Set remote mail polling time to 60 seconds. Closes #4499
 
-0.3.7 Nov 15:
+0.3.7 Nov 15, 2013:
   o Uses deferToThread for sendMail. Closes #3937
   o Update pkey to allow multiple accounts. Solves: #4394
   o Change SMTP service name from "relay" to "gateway". Closes #4416.
@@ -88,7 +86,7 @@
   o Correctly handle email headers when gatewaying messages. Also add
     OpenPGP header. Closes #4322 and #4447.
 
-0.3.6 Nov 1:
+0.3.6 Nov 1, 2013:
   o Add support for non-ascii characters in emails. Closes #4000.
   o Default to UTF-8 when there is no charset parsed from the mail
     contents.
@@ -98,20 +96,20 @@
   o Notify MUA of new mail, using IDLE as advertised. Closes: #3671
   o Use TLS wrapper mode instead of STARTTLS. Closes #3637.
 
-0.3.5 Oct 18:
+0.3.5 Oct 18, 2013:
   o Do not log mail doc contents.
   o Comply with RFC 3156. Closes #4029.
 
-0.3.4 Oct 4:
+0.3.4 Oct 4, 2013:
   o Improve charset handling when exposing mails to the mail
     client. Related to #3660.
   o Return Twisted's smtp Port object to be able to stop listening to
     it whenever we want. Related to #3873.
 
-0.3.3 Sep 20:
+0.3.3 Sep 20, 2013:
   o Remove cleartext mail from logs. Closes: #3877.
 
-0.3.2 Sep 6:
+0.3.2 Sep 6, 2013:
   o Make mail services bind to 127.0.0.1. Closes: #3627.
   o Signal unread message to UI when message is saved locally. Closes:
     #3654.
@@ -119,7 +117,7 @@
   o Use dirspec instead of plain xdg. Closes #3574.
   o SMTP service invocation returns factory instance.
 
-0.3.1 Aug 23:
+0.3.1 Aug 23, 2013:
   o Avoid logging dummy password on imap server. Closes: #3416
   o Do not fail while processing an empty mail, just skip it. Fixes
     #3457.
@@ -138,7 +136,7 @@
   o Improve packaging: add versioneer, parse_requirements,
     classifiers.
 
-0.3.0 Aug 9:
+0.3.0 Aug 9, 2013:
   o Add dependency for leap.keymanager.
   o User 1984 default port for imap.
   o Add client certificate authentication. Closes #3376.
