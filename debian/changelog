@@ -1,3 +1,10 @@
+pysqlcipher (2.6.3.2) unstable; urgency=medium
+
+  * Change build-dependency version for libsqlcipher-dev to pick up
+    backported versions more easily
+
+ -- Micah Anderson <micah@debian.org>  Tue, 01 Jul 2014 12:25:04 -0400
+
 pysqlcipher (2.6.3.1) unstable; urgency=low
 
   * Use libsqlcipher0 2.2.1-2, that uses SQLITE_TEMP_STORE=2. See #726464
