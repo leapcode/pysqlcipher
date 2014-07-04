@@ -1,3 +1,9 @@
+pysqlcipher (2.6.3.3) unstable; urgency=medium
+
+  * Need to also change the Depends for libsqlcipher0
+
+ -- Micah Anderson <micah@debian.org>  Fri, 04 Jul 2014 15:14:46 -0400
+
 pysqlcipher (2.6.3.2) unstable; urgency=medium
 
   * Change build-dependency version for libsqlcipher-dev to pick up
