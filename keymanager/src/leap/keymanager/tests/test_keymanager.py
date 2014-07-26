@@ -147,8 +147,8 @@ class KeyManagerWithSoledadTestCase(BaseLeapTest):
         for key in km.get_all_keys_in_local_db(private=True):
             km._wrapper_map[key.__class__].delete_key(key)
 
-    def _key_manager(self, user=ADDRESS, url=''):
-        return KeyManager(user, url, self._soledad,
+    def _key_manager(self, user=ADDRESS, url='', token=None):
+        return KeyManager(user, url, self._soledad, token=token,
                           gpgbinary=GPG_BINARY_PATH)
 
 
@@ -387,7 +387,8 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         """
         Test that request is well formed when sending keys to server.
         """
-        km = self._key_manager()
+        token = "mytoken"
+        km = self._key_manager(token=token)
         km._wrapper_map[OpenPGPKey].put_ascii_key(PUBLIC_KEY)
         km._fetcher.put = Mock()
         # the following data will be used on the send
@@ -404,7 +405,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         url = '%s/%s/users/%s.json' % ('apiuri', 'apiver', 'myuid')
         km._fetcher.put.assert_called_once_with(
             url, data=data, verify='capath',
-            cookies={'_session_id': 'sessionid'},
+            headers={'Authorization': 'Token token=%s' % token},
         )
 
     def test__fetch_keys_from_server(self):
