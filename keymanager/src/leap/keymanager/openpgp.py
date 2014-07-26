@@ -649,13 +649,17 @@ class OpenPGPScheme(EncryptionScheme):
                 result = gpg.verify(data)
             else:
                 # to verify using a detached sig we have to use
-                # gpg.verify_file(), which receives the data as a binary
-                # stream and the name of a file containing the signature.
+                # gpg.verify_file(), which receives the name of
+                # files containing the date and the signature.
                 sf, sfname = tempfile.mkstemp()
                 with os.fdopen(sf, 'w') as sfd:
                     sfd.write(detached_sig)
-                with closing(_make_binary_stream(data, gpg._encoding)) as df:
-                    result = gpg.verify_file(df, sig_file=sfname)
+                df, dfname = tempfile.mkstemp()
+                with os.fdopen(df, 'w') as sdd:
+                    sdd.write(data)
+                result = gpg.verify_file(dfname, sig_file=sfname)
+                os.unlink(sfname)
+                os.unlink(dfname)
             gpgpubkey = gpg.list_keys().pop()
             valid = result.valid
             rfprint = result.fingerprint
