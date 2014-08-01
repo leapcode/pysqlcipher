@@ -48,7 +48,7 @@ from leap.common.events import signal
 from leap.common.events import events_pb2 as proto
 from leap.common.decorators import memoized_method
 
-from leap.keymanager.errors import KeyNotFound
+from leap.keymanager.errors import KeyNotFound, KeyAttributesDiffer
 
 from leap.keymanager.keys import (
     EncryptionKey,
@@ -525,6 +525,35 @@ class KeyManager(object):
                 self._wrapper_map[type(key)].put_key(key)
         except IndexError as e:
             leap_assert(False, "Unsupported key type. Error {0!r}".format(e))
+
+    def fetch_key(self, address, uri, ktype):
+        """
+        Fetch a public key for C{address} from the network and put it in
+        local storage.
+
+        Raises C{openpgp.errors.KeyNotFound} if not valid key on C{uri}.
+        Raises C{openpgp.errors.KeyAttributesDiffer} if address don't match
+        any uid on the key.
+
+        :param address: The email address of the key.
+        :type address: str
+        :param uri: The URI of the key.
+        :type uri: str
+        :param ktype: The type of the key.
+        :type ktype: KeyType
+        """
+        res = self._get(uri)
+        if not res.ok:
+            raise KeyNotFound(uri)
+
+        # XXX parse binary keys
+        pubkey, _ = self._wrapper_map[ktype].parse_ascii_key(res.content)
+        if pubkey is None:
+            raise KeyNotFound(uri)
+        if pubkey.address != address:
+            raise KeyAttributesDiffer("UID %s found, but expected %s"
+                                      % (pubkey.address, address))
+        self.put_key(pubkey)
 
 from ._version import get_versions
 __version__ = get_versions()['version']
