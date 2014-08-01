@@ -11,5 +11,7 @@ More info: https://leap.se
 running tests
 -------------
 
-* nosetests --with-progressive leap.mail.imap.test_imap
+You'll need to have installed nose_progressive
+
+* nosetests --with-progressive leap.mail.imap.tests.test_imap
 * trial leap.mail.smtp
