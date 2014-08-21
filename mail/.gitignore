@@ -20,3 +20,4 @@ local/
 share/
 MANIFEST
 twistd.pid
+_trial_temp
