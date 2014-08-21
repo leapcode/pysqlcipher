@@ -238,7 +238,7 @@ class IMAP4HelperMixin(BaseLeapTest):
         os.environ["PATH"] = cls.old_path
         os.environ["HOME"] = cls.old_home
         # safety check
-        assert cls.tempdir.startswith('/tmp/leap_tests-')
+        assert 'leap_tests-' in cls.tempdir
         shutil.rmtree(cls.tempdir)
 
     def setUp(self):

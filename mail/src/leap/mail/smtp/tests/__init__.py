@@ -148,7 +148,7 @@ class TestCaseWithKeyManager(BaseLeapTest):
         os.environ["PATH"] = self.old_path
         os.environ["HOME"] = self.old_home
         # safety check
-        assert self.tempdir.startswith('/tmp/leap_tests-')
+        assert 'leap_tests-' in self.tempdir
         shutil.rmtree(self.tempdir)
 
 
