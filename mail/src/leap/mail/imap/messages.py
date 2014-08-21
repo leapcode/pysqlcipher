@@ -1337,7 +1337,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MBoxParser):
         :returns: a list of LeapMessages
         :rtype: list
         """
-        return [LeapMessage(self._soledad, docid, self.mbox)
+        return [LeapMessage(self._soledad, docid, self.mbox, collection=self)
                 for docid in self.unseen_iter()]
 
     # recent messages
@@ -1370,7 +1370,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MBoxParser):
         :returns: iterator of dicts with content for all messages.
         :rtype: iterable
         """
-        return (LeapMessage(self._soledad, docuid, self.mbox)
+        return (LeapMessage(self._soledad, docuid, self.mbox, collection=self)
                 for docuid in self.all_uid_iter())
 
     def __repr__(self):
