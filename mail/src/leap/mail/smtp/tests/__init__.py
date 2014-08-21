@@ -42,8 +42,8 @@ from leap.common.testing.basetest import BaseLeapTest
 
 def _find_gpg():
     gpg_path = distutils.spawn.find_executable('gpg')
-    return os.path.realpath(gpg_path)
-
+    return os.path.realpath(gpg_path) if gpg_path is not None else "/usr/bin/gpg"
+    
 
 class TestCaseWithKeyManager(BaseLeapTest):
 
