@@ -750,7 +750,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MBoxParser):
         :return: a dict with the template
         :rtype: dict
         """
-        if not _type in self.templates.keys():
+        if _type not in self.templates.keys():
             raise TypeError("Improper type passed to _get_empty_doc")
         return copy.deepcopy(self.templates[_type])
 
@@ -938,10 +938,10 @@ class MessageCollection(WithMsgFields, IndexedDB, MBoxParser):
         # We can say the observer that we're done at this point, but
         # before that we should make sure it has no serious consequences
         # if we're issued, for instance, a fetch command right after...
-        #self.reactor.callFromThread(observer.callback, uid)
+        # self.reactor.callFromThread(observer.callback, uid)
         # if we did the notify, we need to invalidate the deferred
         # so not to try to fire it twice.
-        #observer = None
+        # observer = None
 
         fd = self._populate_flags(flags, uid, chash, size, multi)
         hd = self._populate_headr(msg, chash, subject, date)
@@ -1337,7 +1337,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MBoxParser):
         :returns: a list of LeapMessages
         :rtype: list
         """
-        return [LeapMessage(self._soledad, docid, self.mbox)
+        return [LeapMessage(self._soledad, docid, self.mbox, collection=self)
                 for docid in self.unseen_iter()]
 
     # recent messages
@@ -1370,7 +1370,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MBoxParser):
         :returns: iterator of dicts with content for all messages.
         :rtype: iterable
         """
-        return (LeapMessage(self._soledad, docuid, self.mbox)
+        return (LeapMessage(self._soledad, docuid, self.mbox, collection=self)
                 for docuid in self.all_uid_iter())
 
     def __repr__(self):
