@@ -11,7 +11,17 @@ More info: https://leap.se
 running tests
 -------------
 
-You'll need to have installed nose_progressive
+Use trial to run the test suite.
 
-* nosetests --with-progressive leap.mail.imap.tests.test_imap
-* trial leap.mail.smtp
+```
+trial leap.mail
+```
+
+... and all its goodies. To run all imap tests in a loop until some of them
+fails:
+
+```
+trial -u leap.mail.imap
+```
+
+Read the *trial* manpage for more options .

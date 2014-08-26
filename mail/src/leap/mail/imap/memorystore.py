@@ -27,6 +27,7 @@ from copy import copy
 
 from enum import Enum
 from twisted.internet import defer
+from twisted.internet import reactor
 from twisted.internet.task import LoopingCall
 from twisted.python import log
 from zope.interface import implements
@@ -111,11 +112,13 @@ class MemoryStore(object):
         :param write_period: the interval to dump messages to disk, in seconds.
         :type write_period: int
         """
-        from twisted.internet import reactor
         self.reactor = reactor
 
         self._permanent_store = permanent_store
         self._write_period = write_period
+
+        if permanent_store is None:
+            self._mbox_closed = defaultdict(lambda: False)
 
         # Internal Storage: messages
         """
@@ -200,6 +203,12 @@ class MemoryStore(object):
         {'mbox-a': set([1,2,3])}
         """
         self._known_uids = defaultdict(set)
+
+        """
+        mbox-flags is a dict containing flags for each mailbox. this is
+        modified from mailbox.getFlags / mailbox.setFlags
+        """
+        self._mbox_flags = defaultdict(set)
 
         # New and dirty flags, to set MessageWrapper State.
         self._new = set([])
@@ -367,8 +376,8 @@ class MemoryStore(object):
         # TODO --- this has to be deferred to thread,
         # TODO add hdoc and cdocs sizes too
         # it's slowing things down here.
-        #key = mbox, uid
-        #self._sizes[key] = size.get_size(self._fdoc_store[key])
+        # key = mbox, uid
+        # self._sizes[key] = size.get_size(self._fdoc_store[key])
 
     def purge_fdoc_store(self, mbox):
         """
@@ -616,7 +625,7 @@ class MemoryStore(object):
         :type value: int
         """
         # can be long???
-        #leap_assert_type(value, int)
+        # leap_assert_type(value, int)
         logger.info("setting last soledad uid for %s to %s" %
                     (mbox, value))
         # if we already have a value here, don't do anything
@@ -1223,7 +1232,10 @@ class MemoryStore(object):
         :type mbox: str or unicode
         :rtype: SoledadDocument or None.
         """
-        return self.permanent_store.get_mbox_document(mbox)
+        if self.permanent_store is not None:
+            return self.permanent_store.get_mbox_document(mbox)
+        else:
+            return None
 
     def get_mbox_closed(self, mbox):
         """
@@ -1233,7 +1245,10 @@ class MemoryStore(object):
         :type mbox: str or unicode
         :rtype: bool
         """
-        return self.permanent_store.get_mbox_closed(mbox)
+        if self.permanent_store is not None:
+            return self.permanent_store.get_mbox_closed(mbox)
+        else:
+            return self._mbox_closed[mbox]
 
     def set_mbox_closed(self, mbox, closed):
         """
@@ -1242,7 +1257,25 @@ class MemoryStore(object):
         :param mbox: the mailbox
         :type mbox: str or unicode
         """
-        self.permanent_store.set_mbox_closed(mbox, closed)
+        if self.permanent_store is not None:
+            self.permanent_store.set_mbox_closed(mbox, closed)
+        else:
+            self._mbox_closed[mbox] = closed
+
+    def get_mbox_flags(self, mbox):
+        """
+        Get the flags for a given mbox.
+        :rtype: list
+        """
+        return sorted(self._mbox_flags[mbox])
+
+    def set_mbox_flags(self, mbox, flags):
+        """
+        Set the mbox flags
+        """
+        self._mbox_flags[mbox] = set(flags)
+        # TODO
+        # This should write to the permanent store!!!
 
     # Rename flag-documents
 
