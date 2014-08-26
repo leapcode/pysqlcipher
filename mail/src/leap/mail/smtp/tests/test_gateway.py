@@ -23,13 +23,9 @@ SMTP gateway tests.
 
 import re
 from datetime import datetime
-from gnupg._util import _make_binary_stream
 from twisted.test import proto_helpers
-from twisted.mail.smtp import (
-    User,
-    Address,
-    SMTPBadRcpt,
-)
+from twisted.mail.smtp import User, Address
+
 from mock import Mock
 
 from leap.mail.smtp.gateway import (
@@ -137,7 +133,7 @@ class TestSmtpGateway(TestCaseWithKeyManager):
             self._config['port'], self._config['cert'], self._config['key'])
         for line in self.EMAIL_DATA[4:12]:
             m.lineReceived(line)
-        #m.eomReceived()  # this includes a defer, so we avoid calling it here
+        # m.eomReceived()  # this includes a defer, so we avoid calling it here
         m.lines.append('')  # add a trailing newline
         # we need to call the following explicitelly because it was deferred
         # inside the previous method
@@ -181,7 +177,7 @@ class TestSmtpGateway(TestCaseWithKeyManager):
         for line in self.EMAIL_DATA[4:12]:
             m.lineReceived(line)
         # trigger encryption and signing
-        #m.eomReceived()  # this includes a defer, so we avoid calling it here
+        # m.eomReceived()  # this includes a defer, so we avoid calling it here
         m.lines.append('')  # add a trailing newline
         # we need to call the following explicitelly because it was deferred
         # inside the previous method
@@ -229,7 +225,7 @@ class TestSmtpGateway(TestCaseWithKeyManager):
         for line in self.EMAIL_DATA[4:12]:
             m.lineReceived(line)
         # trigger signing
-        #m.eomReceived()  # this includes a defer, so we avoid calling it here
+        # m.eomReceived()  # this includes a defer, so we avoid calling it here
         m.lines.append('')  # add a trailing newline
         # we need to call the following explicitelly because it was deferred
         # inside the previous method
