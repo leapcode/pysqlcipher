@@ -22,12 +22,11 @@ import os
 import re
 import shutil
 import tempfile
+import io
 
-from contextlib import closing
 
 from gnupg import GPG
 from gnupg.gnupg import GPGUtilities
-from gnupg._util import _make_binary_stream
 
 from leap.common.check import leap_assert, leap_assert_type, leap_check
 from leap.keymanager import errors
@@ -649,17 +648,13 @@ class OpenPGPScheme(EncryptionScheme):
                 result = gpg.verify(data)
             else:
                 # to verify using a detached sig we have to use
-                # gpg.verify_file(), which receives the name of
-                # files containing the date and the signature.
+                # gpg.verify_file(), which receives the data as a binary
+                # stream and the name of a file containing the signature.
                 sf, sfname = tempfile.mkstemp()
                 with os.fdopen(sf, 'w') as sfd:
                     sfd.write(detached_sig)
-                df, dfname = tempfile.mkstemp()
-                with os.fdopen(df, 'w') as sdd:
-                    sdd.write(data)
-                result = gpg.verify_file(dfname, sig_file=sfname)
+                result = gpg.verify_file(io.BytesIO(data), sig_file=sfname)
                 os.unlink(sfname)
-                os.unlink(dfname)
             gpgpubkey = gpg.list_keys().pop()
             valid = result.valid
             rfprint = result.fingerprint
