@@ -1442,7 +1442,7 @@ pysqlite_connection_iterdump(pysqlite_Connection* self, PyObject* args)
         goto finally;
     }
 
-    module = PyImport_ImportModule("pysqlite2.dump");
+    module = PyImport_ImportModule("pysqlcipher.dump");
     if (!module) {
         goto finally;
     }
