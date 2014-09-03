@@ -864,7 +864,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MBoxParser):
         else:
             return False
 
-    def add_msg(self, raw, subject=None, flags=None, date=None, uid=None,
+    def add_msg(self, raw, subject=None, flags=None, date=None,
                 notify_on_disk=False):
         """
         Creates a new message document.
@@ -880,9 +880,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MBoxParser):
 
         :param date: the received date for the message
         :type date: str
-
-        :param uid: the message uid for this mailbox
-        :type uid: int
 
         :return: a deferred that will be fired with the message
                  uid when the adding succeed.
@@ -933,6 +930,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MBoxParser):
             msg.setFlags((fields.DELETED_FLAG,), -1)
             return
 
+        # XXX get FUCKING UID from autoincremental table
         uid = self.memstore.increment_last_soledad_uid(self.mbox)
 
         # We can say the observer that we're done at this point, but
