@@ -129,8 +129,9 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
     def mailboxes(self):
         """
         A list of the current mailboxes for this account.
+        :rtype: set
         """
-        return self.__mailboxes
+        return sorted(self.__mailboxes)
 
     def _load_mailboxes(self):
         self.__mailboxes.update(
@@ -149,7 +150,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
 
     def getMailbox(self, name):
         """
-        Returns a Mailbox with that name, without selecting it.
+        Return a Mailbox with that name, without selecting it.
 
         :param name: name of the mailbox
         :type name: str
@@ -165,9 +166,9 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         return SoledadMailbox(name, self._soledad,
                               memstore=self._memstore)
 
-    ##
-    ## IAccount
-    ##
+    #
+    # IAccount
+    #
 
     def addMailbox(self, name, creation_ts=None):
         """
@@ -189,7 +190,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         if name in self.mailboxes:
             raise imap4.MailboxCollision(repr(name))
 
-        if not creation_ts:
+        if creation_ts is None:
             # by default, we pass an int value
             # taken from the current time
             # we make sure to take enough decimals to get a unique
@@ -278,15 +279,15 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         """
         name = self._parse_mailbox_name(name)
 
-        if not name in self.mailboxes:
+        if name not in self.mailboxes:
             raise imap4.MailboxException("No such mailbox: %r" % name)
-
         mbox = self.getMailbox(name)
 
         if force is False:
             # See if this box is flagged \Noselect
             # XXX use mbox.flags instead?
-            if self.NOSELECT_FLAG in mbox.getFlags():
+            mbox_flags = mbox.getFlags()
+            if self.NOSELECT_FLAG in mbox_flags:
                 # Check for hierarchically inferior mailboxes with this one
                 # as part of their root.
                 for others in self.mailboxes:
@@ -294,16 +295,16 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
                         raise imap4.MailboxException, (
                             "Hierarchically inferior mailboxes "
                             "exist and \\Noselect is set")
+        self.__mailboxes.discard(name)
         mbox.destroy()
-        self._load_mailboxes()
 
         # XXX FIXME --- not honoring the inferior names...
 
         # if there are no hierarchically inferior names, we will
         # delete it from our ken.
-        #if self._inferiorNames(name) > 1:
-            # ??! -- can this be rite?
-            #self._index.removeMailbox(name)
+        # if self._inferiorNames(name) > 1:
+        #  ??! -- can this be rite?
+        # self._index.removeMailbox(name)
 
     def rename(self, oldname, newname):
         """
@@ -332,6 +333,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
             self._memstore.rename_fdocs_mailbox(old, new)
             mbox = self._get_mailbox_by_name(old)
             mbox.content[self.MBOX_KEY] = new
+            self.__mailboxes.discard(old)
             self._soledad.put_doc(mbox)
 
         self._load_mailboxes()
@@ -374,7 +376,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         """
         # maybe we should store subscriptions in another
         # document...
-        if not name in self.mailboxes:
+        if name not in self.mailboxes:
             self.addMailbox(name)
         mbox = self._get_mailbox_by_name(name)
 
@@ -428,9 +430,9 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         wildcard = imap4.wildcardToRegexp(wildcard, '/')
         return [(i, self.getMailbox(i)) for i in ref if wildcard.match(i)]
 
-    ##
-    ## INamespacePresenter
-    ##
+    #
+    # INamespacePresenter
+    #
 
     def getPersonalNamespaces(self):
         return [["", "/"]]

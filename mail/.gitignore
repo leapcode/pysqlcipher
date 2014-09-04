@@ -21,3 +21,4 @@ share/
 MANIFEST
 twistd.pid
 _trial_temp
+_trial_temp.lock
