@@ -187,6 +187,8 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         """
         name = self._parse_mailbox_name(name)
 
+        leap_assert(name, "Need a mailbox name to create a mailbox")
+
         if name in self.mailboxes:
             raise imap4.MailboxCollision(repr(name))
 

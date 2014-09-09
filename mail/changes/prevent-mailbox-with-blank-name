@@ -1,0 +1,3 @@
+  o account#addMailbox can't allow empty mailbox names since it makes it
+impossible to create it later (mailbox#__init__ will throw an error), which makes
+it impossible to getMailbox or even delete it
