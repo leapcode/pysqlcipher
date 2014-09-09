@@ -30,7 +30,6 @@ import zipfile
 from types import ListType, TupleType
 
 from distutils.core import setup, Extension, Command
-#from setuptools import setup, Extension, Command
 from distutils.command.build import build
 from distutils.command.build_ext import build_ext
 from distutils.dep_util import newer_group
@@ -48,12 +47,22 @@ PYSQLITE_EXPERIMENTAL = False
 DEV_VERSION = None
 #DEV_VERSION = "02"
 
+PATCH_VERSION = "1"
+
 sources = ["src/module.c", "src/connection.c", "src/cursor.c", "src/cache.c",
            "src/microprotocols.c", "src/prepare_protocol.c", "src/statement.c",
            "src/util.c", "src/row.c"]
 
 if PYSQLITE_EXPERIMENTAL:
     sources.append("src/backup.c")
+
+
+if sys.platform == "darwin":
+    #from sysconfig import get_config_var
+    #cf = get_config_var('CFLAGS')
+    # Work around clang raising hard error for unused arguments
+    os.environ['CFLAGS'] = "-Qunused-arguments"
+    print "CFLAGS", os.environ['CFLAGS']
 
 include_dirs = []
 library_dirs = []
@@ -297,17 +306,19 @@ def get_setup_args():
             break
     f.close()
 
-    if DEV_VERSION:
-        PYSQLITE_VERSION += ".dev%s" % DEV_VERSION
-
     if not PYSQLITE_VERSION:
         print "Fatal error: PYSQLITE_VERSION could not be detected!"
         sys.exit(1)
 
+    if DEV_VERSION:
+        PYSQLITE_VERSION += ".dev%s" % DEV_VERSION
+
+    if PATCH_VERSION:
+        PYSQLITE_VERSION += "-%s" % PATCH_VERSION
+
     setup_args = dict(
         name="pysqlcipher",
         version=PYSQLITE_VERSION,
-        #version="0.0.1",
         description="DB-API 2.0 interface for SQLCIPHER 3.x",
         long_description=long_description,
         author="Kali Kaneko",
