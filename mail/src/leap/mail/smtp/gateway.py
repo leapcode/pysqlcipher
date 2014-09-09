@@ -463,13 +463,13 @@ class EncryptedMessage(object):
         """
         Sends the message.
 
-        :return: A deferred with callbacks for error and success of this
-                 #message send.
+        :return: A deferred with callback and errback for
+                 this #message send.
         :rtype: twisted.internet.defer.Deferred
         """
         d = deferToThread(self._route_msg)
         d.addCallbacks(self.sendQueued, self.sendError)
-        return
+        return d
 
     def _route_msg(self):
         """
