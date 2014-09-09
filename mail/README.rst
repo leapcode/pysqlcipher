@@ -6,7 +6,8 @@ Mail services for the LEAP Client.
         :target: https://crate.io/packages/leap.mail
 
 .. image:: https://readthedocs.org/projects/leapmail/badge/?version=latest
-        :target: https://readthedocs.org/projects/leapmail/?badge=latest
+         :target: http://leapmail.readthedocs.org/en/latest/
+         :alt: Documentation Status
 
 More info: https://leap.se
 
