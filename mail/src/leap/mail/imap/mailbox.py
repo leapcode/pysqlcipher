@@ -459,6 +459,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
                                  notify_on_disk=notify_on_disk)
         if PROFILE_CMD:
             do_profile_cmd(d, "APPEND")
+
+        # XXX should review now that we're not using qtreactor.
         # A better place for this would be  the COPY/APPEND dispatcher
         # in server.py, but qtreactor hangs when I do that, so this seems
         # to work fine for now.
