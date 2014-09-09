@@ -5,6 +5,8 @@ Mail services for the LEAP Client.
 .. image:: https://pypip.in/v/leap.mail/badge.png
         :target: https://crate.io/packages/leap.mail
 
+.. image:: https://readthedocs.org/projects/leapmail/badge/?version=latest
+        :target: https://readthedocs.org/projects/leapmail/?badge=latest
 
 More info: https://leap.se
 
