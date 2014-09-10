@@ -1106,8 +1106,21 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         self.assertItemsEqual(self.results, [1, 3])
 
 
-class IMAP4ServerSearchTestCase(IMAP4HelperMixin, unittest.TestCase):
+class AccountTestCase(IMAP4HelperMixin, unittest.TestCase):
+    """
+    Test the Account.
+    """
+    def _create_empty_mailbox(self):
+        LeapIMAPServer.theAccount.addMailbox('')
 
+    def _create_one_mailbox(self):
+        LeapIMAPServer.theAccount.addMailbox('one')
+
+    def test_illegalMailboxCreate(self):
+        self.assertRaises(AssertionError, self._create_empty_mailbox)
+
+
+class IMAP4ServerSearchTestCase(IMAP4HelperMixin, unittest.TestCase):
     """
     Tests for the behavior of the search_* functions in L{imap5.IMAP4Server}.
     """
