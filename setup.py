@@ -29,12 +29,14 @@ import zipfile
 
 from types import ListType, TupleType
 
-from distutils.core import setup, Extension, Command
 from distutils.command.build import build
 from distutils.command.build_ext import build_ext
 from distutils.dep_util import newer_group
 from distutils.errors import DistutilsSetupError
 from distutils import log
+
+import setuptools
+from setuptools import Extension, Command
 
 import cross_bdist_wininst
 
@@ -45,7 +47,6 @@ sqlite = "sqlite"
 PYSQLITE_EXPERIMENTAL = False
 
 DEV_VERSION = None
-#DEV_VERSION = "02"
 
 PATCH_VERSION = "1"
 
@@ -58,8 +59,6 @@ if PYSQLITE_EXPERIMENTAL:
 
 
 if sys.platform == "darwin":
-    #from sysconfig import get_config_var
-    #cf = get_config_var('CFLAGS')
     # Work around clang raising hard error for unused arguments
     os.environ['CFLAGS'] = "-Qunused-arguments"
     print "CFLAGS", os.environ['CFLAGS']
@@ -231,8 +230,6 @@ class MyBuildExt(build_ext):
         for undef in ext.undef_macros:
             macros.append((undef,))
 
-        # XXX debug
-        #objects = []
         objects = self.compiler.compile(sources,
                                         output_dir=self.build_temp,
                                         macros=macros,
@@ -367,7 +364,7 @@ def get_setup_args():
 
 
 def main():
-    setup(**get_setup_args())
+    setuptools.setup(**get_setup_args())
 
 if __name__ == "__main__":
     main()
