@@ -7,7 +7,6 @@ and is statically linked against sqlcipher.
 Original code (c) 2004-2007 Gerhard Häring
 Packaging for SQLCipher (c) 2013 Kali Kaneko
 
-It uses a sqlcipher amalgamation, see https://www.sqlite.org/amalgamation.html
 
 Usage
 -----
@@ -29,3 +28,18 @@ You can quickly verify that your database file in indeed encrypted::
   bb 9d 9c 3d 9e ce 69 57  b6 2f 36 c4 fd 13 bd 61  |...=..iW./6....a|
   77 bf e3 1d 65 b5 ea f7  d2 fc 98 31 23 66 a0 1e  |w...e......1#f..|
   a4 4f fa 66 49 36 84 a1  3e 0c 21 98 84 07 eb 07  |.O.fI6..>.!.....|
+
+Build against libsqlcipher
+--------------------------
+
+For convenience, this package uses a sqlcipher amalgamation during the regular
+install. See https://www.sqlite.org/amalgamation.html
+
+For production use, you should build against ``libsqlcipher`` installed in your
+system, you can do it like this::
+
+  python setup.py build_sqlcipher
+
+And then::
+
+  python setup.py install
