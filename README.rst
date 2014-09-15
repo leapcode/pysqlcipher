@@ -10,7 +10,7 @@ Packaging for SQLCipher (c) 2013 Kali Kaneko
 
 Usage
 -----
-You have to pass the ``PRAGMA=key`` before doing any operations::
+You have to pass the ``PRAGMA key`` before doing any operations::
 
   from pysqlcipher import dbapi2 as sqlite
   conn = sqlite.connect('test.db')
