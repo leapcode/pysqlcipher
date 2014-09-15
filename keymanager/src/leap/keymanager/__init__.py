@@ -82,12 +82,12 @@ class KeyManager(object):
                  gpgbinary=None):
         """
         Initialize a Key Manager for user's C{address} with provider's
-        nickserver reachable in C{url}.
+        nickserver reachable in C{nickserver_uri}.
 
-        :param address: The address of the user of this Key Manager.
+        :param address: The email address of the user of this Key Manager.
         :type address: str
-        :param url: The URL of the nickserver.
-        :type url: str
+        :param nickserver_uri: The URI of the nickserver.
+        :type nickserver_uri: str
         :param soledad: A Soledad instance for local storage of keys.
         :type soledad: leap.soledad.Soledad
         :param token: The token for interacting with the webapp API.
@@ -98,7 +98,7 @@ class KeyManager(object):
         :type api_uri: str
         :param api_version: The version of the webapp API.
         :type api_version: str
-        :param uid: The users' UID.
+        :param uid: The user's UID.
         :type uid: str
         :param gpgbinary: Name for GnuPG binary executable.
         :type gpgbinary: C{str}
@@ -228,12 +228,6 @@ class KeyManager(object):
         Public key bound to user's is sent to provider, which will sign it and
         replace any prior keys for the same address in its database.
 
-        If C{send_private} is True, then the private key is encrypted with
-        C{password} and sent to server in the same request, together with a
-        hash string of user's address and password. The encrypted private key
-        will be saved in the server in a way it is publicly retrievable
-        through the hash string.
-
         :param ktype: The type of the key.
         :type ktype: KeyType
 
@@ -275,6 +269,9 @@ class KeyManager(object):
         :type ktype: KeyType
         :param private: Look for a private key instead of a public one?
         :type private: bool
+        :param fetch_remote: If key not found in local storage try to fetch
+                             from nickserver
+        :type fetch_remote: bool
 
         :return: A key of type C{ktype} bound to C{address}.
         :rtype: EncryptionKey
@@ -310,6 +307,9 @@ class KeyManager(object):
     def get_all_keys_in_local_db(self, private=False):
         """
         Return all keys stored in local database.
+
+        :param private: Include private keys
+        :type private: bool
 
         :return: A list with all keys in local db.
         :rtype: list
@@ -416,6 +416,9 @@ class KeyManager(object):
         :type data: str
         :param pubkey: The key used to encrypt.
         :type pubkey: EncryptionKey
+        :param passphrase: The passphrase for the secret key used for the
+                           signature.
+        :type passphrase: str
         :param sign: The key used for signing.
         :type sign: EncryptionKey
         :param cipher_algo: The cipher algorithm to use.
@@ -448,7 +451,7 @@ class KeyManager(object):
         :rtype: str
 
         :raise InvalidSignature: Raised if unable to verify the signature with
-            C{verify} key.
+                                 C{verify} key.
         """
         leap_assert_type(privkey, EncryptionKey)
         leap_assert(
