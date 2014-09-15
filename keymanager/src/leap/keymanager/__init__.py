@@ -418,7 +418,7 @@ class KeyManager(object):
         leap_assert(pubkey.__class__ in self._wrapper_map, 'Unknown key type.')
         leap_assert(pubkey.private is False, 'Key is not public.')
         return self._wrapper_map[pubkey.__class__].encrypt(
-            data, pubkey, passphrase, sign)
+            data, pubkey, passphrase, sign, cipher_algo=cipher_algo)
 
     def decrypt(self, data, privkey, passphrase=None, verify=None):
         """
