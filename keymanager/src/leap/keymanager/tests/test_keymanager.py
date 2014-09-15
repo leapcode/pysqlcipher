@@ -437,23 +437,6 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
             verify='cacertpath',
         )
 
-    def test_refresh_keys_does_not_refresh_own_key(self):
-        """
-        Test that refreshing keys will not attempt to refresh our own key.
-        """
-        km = self._key_manager()
-        # we add 2 keys but we expect it to only refresh the second one.
-        km._wrapper_map[OpenPGPKey].put_ascii_key(PUBLIC_KEY)
-        km._wrapper_map[OpenPGPKey].put_ascii_key(PUBLIC_KEY_2)
-        # mock the key fetching
-        km._fetch_keys_from_server = Mock(return_value=[])
-        km.ca_cert_path = ''  # some bogus path so the km does not complain.
-        # do the refreshing
-        km.refresh_keys()
-        km._fetch_keys_from_server.assert_called_once_with(
-            ADDRESS_2
-        )
-
     def test_get_key_fetches_from_server(self):
         """
         Test that getting a key successfuly fetches from server.

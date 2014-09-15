@@ -324,19 +324,6 @@ class KeyManager(object):
                 KEYMANAGER_KEY_TAG,
                 '1' if private else '0'))
 
-    def refresh_keys(self):
-        """
-        Fetch keys from nickserver and update them locally.
-        """
-        addresses = set(map(
-            lambda doc: doc.address,
-            self.get_all_keys_in_local_db(private=False)))
-        for address in addresses:
-            # do not attempt to refresh our own key
-            if address == self._address:
-                continue
-            self._fetch_keys_from_server(address)
-
     def gen_key(self, ktype):
         """
         Generate a key of type C{ktype} bound to the user's address.
