@@ -1,11 +1,13 @@
 pysqlcipher
 ===========
 
-this library is an experimental fork of pysqlite,
-and is statically linked against sqlcipher.
+This library is a fork of pysqlite.
+It is still in beta state (although it's strongly used in development in some
+linux environments). It links against against libsqlcipher.
 
 Original code (c) 2004-2007 Gerhard Häring
-Packaging for SQLCipher (c) 2013 Kali Kaneko
+
+Packaging for SQLCipher (c) 2013-2014 Kali Kaneko
 
 
 Usage
