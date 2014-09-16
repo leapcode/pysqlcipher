@@ -495,20 +495,6 @@ class KeyManager(object):
         return self._wrapper_map[pubkey.__class__].verify(
             data, pubkey, detached_sig=detached_sig)
 
-    def parse_openpgp_ascii_key(self, key_data):
-        """
-        Parses an ascii armored key (or key pair) data and returns
-        the OpenPGPKey keys.
-
-        :param key_data: the key data to be parsed.
-        :type key_data: str or unicode
-
-        :returns: the public key and private key (if applies) for that data.
-        :rtype: (public, private) -> tuple(OpenPGPKey, OpenPGPKey)
-                the tuple may have one or both components None
-        """
-        return self._wrapper_map[OpenPGPKey].parse_ascii_key(key_data)
-
     def delete_key(self, key):
         """
         Remove C{key} from storage.
