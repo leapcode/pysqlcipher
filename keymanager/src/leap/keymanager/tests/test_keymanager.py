@@ -142,9 +142,9 @@ class KeyManagerWithSoledadTestCase(BaseLeapTest):
 
     def tearDown(self):
         km = self._key_manager()
-        for key in km.get_all_keys_in_local_db():
+        for key in km.get_all_keys():
             km._wrapper_map[key.__class__].delete_key(key)
-        for key in km.get_all_keys_in_local_db(private=True):
+        for key in km.get_all_keys(private=True):
             km._wrapper_map[key.__class__].delete_key(key)
 
     def _key_manager(self, user=ADDRESS, url='', token=None):
@@ -343,12 +343,12 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         km = self._key_manager()
         km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY)
         # get public keys
-        keys = km.get_all_keys_in_local_db(False)
+        keys = km.get_all_keys(False)
         self.assertEqual(len(keys), 1, 'Wrong number of keys')
         self.assertEqual(ADDRESS, keys[0].address)
         self.assertFalse(keys[0].private)
         # get private keys
-        keys = km.get_all_keys_in_local_db(True)
+        keys = km.get_all_keys(True)
         self.assertEqual(len(keys), 1, 'Wrong number of keys')
         self.assertEqual(ADDRESS, keys[0].address)
         self.assertTrue(keys[0].private)

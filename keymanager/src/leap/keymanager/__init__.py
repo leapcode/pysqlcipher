@@ -298,7 +298,7 @@ class KeyManager(object):
 
             return key
 
-    def get_all_keys_in_local_db(self, private=False):
+    def get_all_keys(self, private=False):
         """
         Return all keys stored in local database.
 
