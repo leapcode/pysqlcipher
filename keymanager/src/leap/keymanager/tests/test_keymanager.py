@@ -448,7 +448,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
             headers = {'content-type': 'application/json'}
 
             def json(self):
-                return {'address': ADDRESS_2, 'openpgp': PUBLIC_KEY_2}
+                return {'address': ADDRESS, 'openpgp': PUBLIC_KEY}
 
             def raise_for_status(self):
                 pass
@@ -458,13 +458,13 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         km.ca_cert_path = 'cacertpath'
         # try to key get without fetching from server
         self.assertRaises(
-            KeyNotFound, km.get_key, ADDRESS_2, OpenPGPKey,
+            KeyNotFound, km.get_key, ADDRESS, OpenPGPKey,
             fetch_remote=False
         )
         # try to get key fetching from server.
-        key = km.get_key(ADDRESS_2, OpenPGPKey)
+        key = km.get_key(ADDRESS, OpenPGPKey)
         self.assertIsInstance(key, OpenPGPKey)
-        self.assertEqual(ADDRESS_2, key.address)
+        self.assertEqual(ADDRESS, key.address)
 
 
 class KeyManagerCryptoTestCase(KeyManagerWithSoledadTestCase):

@@ -189,6 +189,7 @@ class KeyManager(object):
         res.raise_for_status()
         return res
 
+    @memoized_method(invalidation=300)
     def _fetch_keys_from_server(self, address):
         """
         Fetch keys bound to C{address} from nickserver and insert them in
@@ -248,13 +249,6 @@ class KeyManager(object):
             self._uid)
         self._put(uri, data)
         signal(proto.KEYMANAGER_DONE_UPLOADING_KEYS, self._address)
-
-    @memoized_method
-    def get_key_from_cache(self, *args, **kwargs):
-        """
-        Public interface to `get_key`, that is memoized.
-        """
-        return self.get_key(*args, **kwargs)
 
     def get_key(self, address, ktype, private=False, fetch_remote=True):
         """
