@@ -750,7 +750,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MBoxParser):
         :return: a dict with the template
         :rtype: dict
         """
-        if not _type in self.templates.keys():
+        if _type not in self.templates.keys():
             raise TypeError("Improper type passed to _get_empty_doc")
         return copy.deepcopy(self.templates[_type])
 
@@ -864,7 +864,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MBoxParser):
         else:
             return False
 
-    def add_msg(self, raw, subject=None, flags=None, date=None, uid=None,
+    def add_msg(self, raw, subject=None, flags=None, date=None,
                 notify_on_disk=False):
         """
         Creates a new message document.
@@ -880,9 +880,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MBoxParser):
 
         :param date: the received date for the message
         :type date: str
-
-        :param uid: the message uid for this mailbox
-        :type uid: int
 
         :return: a deferred that will be fired with the message
                  uid when the adding succeed.
@@ -933,15 +930,16 @@ class MessageCollection(WithMsgFields, IndexedDB, MBoxParser):
             msg.setFlags((fields.DELETED_FLAG,), -1)
             return
 
+        # XXX get FUCKING UID from autoincremental table
         uid = self.memstore.increment_last_soledad_uid(self.mbox)
 
         # We can say the observer that we're done at this point, but
         # before that we should make sure it has no serious consequences
         # if we're issued, for instance, a fetch command right after...
-        #self.reactor.callFromThread(observer.callback, uid)
+        # self.reactor.callFromThread(observer.callback, uid)
         # if we did the notify, we need to invalidate the deferred
         # so not to try to fire it twice.
-        #observer = None
+        # observer = None
 
         fd = self._populate_flags(flags, uid, chash, size, multi)
         hd = self._populate_headr(msg, chash, subject, date)
@@ -1337,7 +1335,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MBoxParser):
         :returns: a list of LeapMessages
         :rtype: list
         """
-        return [LeapMessage(self._soledad, docid, self.mbox)
+        return [LeapMessage(self._soledad, docid, self.mbox, collection=self)
                 for docid in self.unseen_iter()]
 
     # recent messages
@@ -1370,7 +1368,7 @@ class MessageCollection(WithMsgFields, IndexedDB, MBoxParser):
         :returns: iterator of dicts with content for all messages.
         :rtype: iterable
         """
-        return (LeapMessage(self._soledad, docuid, self.mbox)
+        return (LeapMessage(self._soledad, docuid, self.mbox, collection=self)
                 for docuid in self.all_uid_iter())
 
     def __repr__(self):

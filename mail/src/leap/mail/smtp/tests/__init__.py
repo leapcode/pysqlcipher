@@ -21,6 +21,7 @@ Base classes and keys for SMTP gateway tests.
 """
 
 import os
+import distutils.spawn
 import shutil
 import tempfile
 from mock import Mock
@@ -39,9 +40,14 @@ from leap.keymanager import (
 from leap.common.testing.basetest import BaseLeapTest
 
 
+def _find_gpg():
+    gpg_path = distutils.spawn.find_executable('gpg')
+    return os.path.realpath(gpg_path) if gpg_path is not None else "/usr/bin/gpg"
+    
+
 class TestCaseWithKeyManager(BaseLeapTest):
 
-    GPG_BINARY_PATH = '/usr/bin/gpg'
+    GPG_BINARY_PATH = _find_gpg()
 
     def setUp(self):
         # mimic BaseLeapTest.setUpClass behaviour, because this is deprecated
@@ -148,7 +154,7 @@ class TestCaseWithKeyManager(BaseLeapTest):
         os.environ["PATH"] = self.old_path
         os.environ["HOME"] = self.old_home
         # safety check
-        assert self.tempdir.startswith('/tmp/leap_tests-')
+        assert 'leap_tests-' in self.tempdir
         shutil.rmtree(self.tempdir)
 
 

@@ -214,6 +214,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         """
         return self._memstore.get_mbox_doc(self.mbox)
 
+    # XXX the memstore->soledadstore method in memstore is not complete
     def getFlags(self):
         """
         Returns the flags defined for this mailbox.
@@ -221,21 +222,12 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :returns: tuple of flags for this mailbox
         :rtype: tuple of str
         """
-        flags = self.INIT_FLAGS
-
-        # XXX returning fixed flags always
-        # Since I have not found a case where the client
-        # wants to modify this, as a way of speeding up
-        # selects. To do it right, we probably should keep
-        # track of the set of all flags used by msgs
-        # in this mailbox. Does it matter?
-        #mbox = self._get_mbox_doc()
-        #if not mbox:
-            #return None
-        #flags = mbox.content.get(self.FLAGS_KEY, [])
+        flags = self._memstore.get_mbox_flags(self.mbox)
+        if not flags:
+            flags = self.INIT_FLAGS
         return map(str, flags)
 
-    # XXX move to memstore->soledadstore
+    # XXX the memstore->soledadstore method in memstore is not complete
     def setFlags(self, flags):
         """
         Sets flags for this mailbox.
@@ -243,15 +235,10 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :param flags: a tuple with the flags
         :type flags: tuple of str
         """
+        # XXX this is setting (overriding) old flags.
         leap_assert(isinstance(flags, tuple),
                     "flags expected to be a tuple")
-        mbox = self._get_mbox_doc()
-        if not mbox:
-            return None
-        mbox.content[self.FLAGS_KEY] = map(str, flags)
-        logger.debug("Writing mbox document for %r to Soledad"
-                     % (self.mbox,))
-        self._soledad.put_doc(mbox)
+        self._memstore.set_mbox_flags(self.mbox, flags)
 
     # XXX SHOULD BETTER IMPLEMENT ADD_FLAG, REMOVE_FLAG.
 
@@ -301,6 +288,9 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         primed = self._last_uid_primed.get(self.mbox, False)
         if not primed:
             mbox = self._get_mbox_doc()
+            if mbox is None:
+                # memory-only store
+                return
             last = mbox.content.get('lastuid', 0)
             logger.info("Priming Soledad last_uid to %s" % (last,))
             self._memstore.set_last_soledad_uid(self.mbox, last)
@@ -469,6 +459,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
                                  notify_on_disk=notify_on_disk)
         if PROFILE_CMD:
             do_profile_cmd(d, "APPEND")
+
+        # XXX should review now that we're not using qtreactor.
         # A better place for this would be  the COPY/APPEND dispatcher
         # in server.py, but qtreactor hangs when I do that, so this seems
         # to work fine for now.
@@ -531,6 +523,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         Should cleanup resources, and set the \\Noselect flag
         on the mailbox.
         """
+        # XXX this will overwrite all the existing flags!
+        # should better simply addFlag
         self.setFlags((self.NOSELECT_FLAG,))
         self.deleteAllDocs()
 
@@ -538,6 +532,10 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         # we should postpone the removal
 
         # XXX move to memory store??
+        mbox_doc = self._get_mbox_doc()
+        if mbox_doc is None:
+            # memory-only store!
+            return
         self._soledad.delete_doc(self._get_mbox_doc())
 
     def _close_cb(self, result):
@@ -640,7 +638,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         # switch to content-hash based index + local UID table.
 
         sequence = False
-        #sequence = True if uid == 0 else False
+        # sequence = True if uid == 0 else False
 
         messages_asked = self._bound_seq(messages_asked)
         seq_messg = self._filter_msg_seq(messages_asked)
