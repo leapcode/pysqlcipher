@@ -1,2 +1,0 @@
-  o MessageCollection iterator now creates the LeapMessage with the collection
-  reference, so setFlags will work properly
