@@ -142,9 +142,9 @@ class KeyManagerWithSoledadTestCase(BaseLeapTest):
 
     def tearDown(self):
         km = self._key_manager()
-        for key in km.get_all_keys_in_local_db():
+        for key in km.get_all_keys():
             km._wrapper_map[key.__class__].delete_key(key)
-        for key in km.get_all_keys_in_local_db(private=True):
+        for key in km.get_all_keys(private=True):
             km._wrapper_map[key.__class__].delete_key(key)
 
     def _key_manager(self, user=ADDRESS, url='', token=None):
@@ -343,12 +343,12 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         km = self._key_manager()
         km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY)
         # get public keys
-        keys = km.get_all_keys_in_local_db(False)
+        keys = km.get_all_keys(False)
         self.assertEqual(len(keys), 1, 'Wrong number of keys')
         self.assertEqual(ADDRESS, keys[0].address)
         self.assertFalse(keys[0].private)
         # get private keys
-        keys = km.get_all_keys_in_local_db(True)
+        keys = km.get_all_keys(True)
         self.assertEqual(len(keys), 1, 'Wrong number of keys')
         self.assertEqual(ADDRESS, keys[0].address)
         self.assertTrue(keys[0].private)
@@ -437,23 +437,6 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
             verify='cacertpath',
         )
 
-    def test_refresh_keys_does_not_refresh_own_key(self):
-        """
-        Test that refreshing keys will not attempt to refresh our own key.
-        """
-        km = self._key_manager()
-        # we add 2 keys but we expect it to only refresh the second one.
-        km._wrapper_map[OpenPGPKey].put_ascii_key(PUBLIC_KEY)
-        km._wrapper_map[OpenPGPKey].put_ascii_key(PUBLIC_KEY_2)
-        # mock the key fetching
-        km._fetch_keys_from_server = Mock(return_value=[])
-        km.ca_cert_path = ''  # some bogus path so the km does not complain.
-        # do the refreshing
-        km.refresh_keys()
-        km._fetch_keys_from_server.assert_called_once_with(
-            ADDRESS_2
-        )
-
     def test_get_key_fetches_from_server(self):
         """
         Test that getting a key successfuly fetches from server.
@@ -465,7 +448,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
             headers = {'content-type': 'application/json'}
 
             def json(self):
-                return {'address': ADDRESS_2, 'openpgp': PUBLIC_KEY_2}
+                return {'address': ADDRESS, 'openpgp': PUBLIC_KEY}
 
             def raise_for_status(self):
                 pass
@@ -475,13 +458,13 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         km.ca_cert_path = 'cacertpath'
         # try to key get without fetching from server
         self.assertRaises(
-            KeyNotFound, km.get_key, ADDRESS_2, OpenPGPKey,
+            KeyNotFound, km.get_key, ADDRESS, OpenPGPKey,
             fetch_remote=False
         )
         # try to get key fetching from server.
-        key = km.get_key(ADDRESS_2, OpenPGPKey)
+        key = km.get_key(ADDRESS, OpenPGPKey)
         self.assertIsInstance(key, OpenPGPKey)
-        self.assertEqual(ADDRESS_2, key.address)
+        self.assertEqual(ADDRESS, key.address)
 
 
 class KeyManagerCryptoTestCase(KeyManagerWithSoledadTestCase):
