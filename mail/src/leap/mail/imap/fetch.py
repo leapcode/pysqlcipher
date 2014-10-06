@@ -433,7 +433,7 @@ class LeapIncomingMail(object):
                  or msg.get_content_type() == MULTIPART_SIGNED)):
             _, senderAddress = parseaddr(fromHeader)
             try:
-                senderPubkey = self._keymanager.get_key_from_cache(
+                senderPubkey = self._keymanager.get_key(
                     senderAddress, OpenPGPKey)
             except keymanager_errors.KeyNotFound:
                 pass
