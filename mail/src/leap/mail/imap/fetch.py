@@ -31,7 +31,7 @@ from email.utils import parseaddr
 from StringIO import StringIO
 
 from twisted.python import log
-from twisted.internet import defer
+from twisted.internet import defer, reactor
 from twisted.internet.task import LoopingCall
 from twisted.internet.task import deferLater
 from u1db import errors as u1db_errors
@@ -343,13 +343,11 @@ class LeapIncomingMail(object):
                          and data, the json-encoded, decrypted content of the
                          incoming message
         :type msgtuple: (SoledadDocument, str)
-        :return: a SoledadDocument and the processed data.
-        :rtype: (doc, data)
+        :return: the processed data.
+        :rtype: str
         """
         log.msg('processing decrypted doc')
         doc, data = msgtuple
-
-        from twisted.internet import reactor
 
         # XXX turn this into an errBack for each one of
         # the deferreds that would process an individual document
@@ -382,7 +380,7 @@ class LeapIncomingMail(object):
         # ok, this is an incoming message
         rawmsg = msg.get(self.CONTENT_KEY, None)
         if not rawmsg:
-            return False
+            return ""
         return self._maybe_decrypt_msg(rawmsg)
 
     @deferred_to_thread
@@ -415,7 +413,7 @@ class LeapIncomingMail(object):
 
         :param data: the text to be decrypted.
         :type data: str
-        :return: data, possibly descrypted.
+        :return: data, possibly decrypted.
         :rtype: str
         """
         leap_assert_type(data, str)
@@ -474,8 +472,9 @@ class LeapIncomingMail(object):
         :param senderPubkey: The key of the sender of the message.
         :type senderPubkey: OpenPGPKey
 
-        :return: A unitary tuple containing a decrypted message.
-        :rtype: (Message)
+        :return: A tuple containing a decrypted message and
+                 a bool indicating whether the signature is valid.
+        :rtype: (Message, bool)
         """
         log.msg('decrypting multipart encrypted msg')
         msg = copy.deepcopy(msg)
@@ -594,7 +593,6 @@ class LeapIncomingMail(object):
                          incoming message
         :type msgtuple: (SoledadDocument, str)
         """
-        from twisted.internet import reactor
         msgtuple = first(result)
 
         doc, data = msgtuple
