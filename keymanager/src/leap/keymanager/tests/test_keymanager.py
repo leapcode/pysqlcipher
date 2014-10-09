@@ -28,6 +28,7 @@ from leap.keymanager import (
     KeyManager,
     openpgp,
     KeyNotFound,
+    KeyAttributesDiffer,
     errors,
 )
 from leap.keymanager.openpgp import OpenPGPKey
@@ -476,6 +477,55 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         key = km.get_key(ADDRESS, OpenPGPKey)
         self.assertIsInstance(key, OpenPGPKey)
         self.assertEqual(ADDRESS, key.address)
+
+    def test_fetch_uri_ascii_key(self):
+        """
+        Test that fetch key downloads the ascii key and gets included in
+        the local storage
+        """
+        km = self._key_manager()
+
+        class Response(object):
+            ok = True
+            content = PUBLIC_KEY
+
+        km._fetcher.get = Mock(return_value=Response())
+        km.ca_cert_path = 'cacertpath'
+
+        km.fetch_key(ADDRESS, "http://site.domain/key", OpenPGPKey)
+        key = km.get_key(ADDRESS, OpenPGPKey)
+        self.assertEqual(KEY_FINGERPRINT, key.fingerprint)
+
+    def test_fetch_uri_empty_key(self):
+        """
+        Test that fetch key raises KeyNotFound if no key in the url
+        """
+        km = self._key_manager()
+
+        class Response(object):
+            ok = True
+            content = ""
+
+        km._fetcher.get = Mock(return_value=Response())
+        km.ca_cert_path = 'cacertpath'
+        self.assertRaises(KeyNotFound, km.fetch_key,
+                          ADDRESS, "http://site.domain/key", OpenPGPKey)
+
+    def test_fetch_uri_address_differ(self):
+        """
+        Test that fetch key raises KeyAttributesDiffer if the address
+        don't match
+        """
+        km = self._key_manager()
+
+        class Response(object):
+            ok = True
+            content = PUBLIC_KEY
+
+        km._fetcher.get = Mock(return_value=Response())
+        km.ca_cert_path = 'cacertpath'
+        self.assertRaises(KeyAttributesDiffer, km.fetch_key,
+                          ADDRESS_2, "http://site.domain/key", OpenPGPKey)
 
 
 class KeyManagerCryptoTestCase(KeyManagerWithSoledadTestCase):

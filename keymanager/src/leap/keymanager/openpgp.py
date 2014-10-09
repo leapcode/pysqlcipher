@@ -327,7 +327,10 @@ class OpenPGPScheme(EncryptionScheme):
                 privkey = gpg.list_keys(secret=True).pop()
             except IndexError:
                 pass
-            pubkey = gpg.list_keys(secret=False).pop()  # unitary keyring
+            try:
+                pubkey = gpg.list_keys(secret=False).pop()  # unitary keyring
+            except IndexError:
+                return (None, None)
 
             # extract adress from first uid on key
             match = re.match(mail_regex, pubkey['uids'].pop())

@@ -1,0 +1,1 @@
+- Add 'fetch_key' method to fetch keys from a URI (closes #5932)
