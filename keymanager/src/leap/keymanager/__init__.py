@@ -515,11 +515,14 @@ class KeyManager(object):
         """
         Put C{key} in local storage.
 
-        :param key: The key to be stored.
-        :type key: OpenPGPKey
+        :param key: The key to be stored. It can be ascii key or an OpenPGPKey
+        :type key: str or OpenPGPKey
         """
         try:
-            self._wrapper_map[type(key)].put_key(key)
+            if isinstance(key, basestring):
+                self._wrapper_map[OpenPGPKey].put_ascii_key(key)
+            else:
+                self._wrapper_map[type(key)].put_key(key)
         except IndexError as e:
             leap_assert(False, "Unsupported key type. Error {0!r}".format(e))
 

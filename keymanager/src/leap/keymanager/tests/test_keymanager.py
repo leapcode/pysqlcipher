@@ -466,6 +466,17 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         self.assertIsInstance(key, OpenPGPKey)
         self.assertEqual(ADDRESS, key.address)
 
+    def test_put_key_ascii(self):
+        """
+        Test that putting ascii key works
+        """
+        km = self._key_manager(url='http://nickserver.domain')
+
+        km.put_key(PUBLIC_KEY)
+        key = km.get_key(ADDRESS, OpenPGPKey)
+        self.assertIsInstance(key, OpenPGPKey)
+        self.assertEqual(ADDRESS, key.address)
+
 
 class KeyManagerCryptoTestCase(KeyManagerWithSoledadTestCase):
 
