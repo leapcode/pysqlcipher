@@ -19,9 +19,9 @@ Incoming mail fetcher.
 """
 import copy
 import logging
+import shlex
 import threading
 import time
-import sys
 import traceback
 import warnings
 
@@ -29,6 +29,7 @@ from email.parser import Parser
 from email.generator import Generator
 from email.utils import parseaddr
 from StringIO import StringIO
+from urlparse import urlparse
 
 from twisted.python import log
 from twisted.internet import defer, reactor
@@ -169,7 +170,7 @@ class LeapIncomingMail(object):
                               DeprecationWarning)
                 doclist = self._soledad.get_from_index(
                     fields.JUST_MAIL_COMPAT_IDX, "*")
-            self._process_doclist(doclist)
+            return self._process_doclist(doclist)
 
         logger.debug("fetching mail for: %s %s" % (
             self._soledad.uuid, self._userid))
@@ -209,7 +210,7 @@ class LeapIncomingMail(object):
 
     def _errback(self, failure):
         logger.exception(failure.value)
-        traceback.print_tb(*sys.exc_info())
+        traceback.print_exc()
 
     @deferred_to_thread
     def _sync_soledad(self):
@@ -273,6 +274,7 @@ class LeapIncomingMail(object):
             return
         num_mails = len(doclist)
 
+        deferreds = []
         for index, doc in enumerate(doclist):
             logger.debug("processing doc %d of %d" % (index + 1, num_mails))
             leap_events.signal(
@@ -288,19 +290,15 @@ class LeapIncomingMail(object):
             if has_errors is None:
                 warnings.warn("JUST_MAIL_COMPAT_IDX will be deprecated!",
                               DeprecationWarning)
+
             if has_errors:
                 logger.debug("skipping msg with decrypting errors...")
-
-            if self._is_msg(keys) and not has_errors:
-                # Evaluating to bool of has_errors is intentional here.
-                # We don't mind at this point if it's None or False.
-
-                # Ok, this looks like a legit msg, and with no errors.
-                # Let's process it!
-
-                d1 = self._decrypt_doc(doc)
-                d = defer.gatherResults([d1], consumeErrors=True)
+            elif self._is_msg(keys):
+                d = self._decrypt_doc(doc)
+                d.addCallback(self._extract_keys)
                 d.addCallbacks(self._add_message_locally, self._errback)
+                deferreds.append(d)
+        return defer.gatherResults(deferreds, consumeErrors=True)
 
     #
     # operations on individual messages
@@ -581,20 +579,77 @@ class LeapIncomingMail(object):
                 data, self._pkey)
         return (decrdata, valid_sig)
 
-    def _add_message_locally(self, result):
+    def _extract_keys(self, msgtuple):
         """
-        Adds a message to local inbox and delete it from the incoming db
-        in soledad.
+        Parse message headers for an *OpenPGP* header as described on the
+        `IETF draft
+        <http://tools.ietf.org/html/draft-josefsson-openpgp-mailnews-header-06>`
+        only urls with https and the same hostname than the email are supported
+        for security reasons.
 
-        # XXX this comes from a gatherresult...
         :param msgtuple: a tuple consisting of a SoledadDocument
                          instance containing the incoming message
                          and data, the json-encoded, decrypted content of the
                          incoming message
         :type msgtuple: (SoledadDocument, str)
         """
-        msgtuple = first(result)
+        OpenPGP_HEADER = 'OpenPGP'
+        doc, data = msgtuple
 
+        # XXX the parsing of the message is done in mailbox.addMessage, maybe
+        #     we should do it in this module so we don't need to parse it again
+        #     here
+        msg = self._parser.parsestr(data)
+        header = msg.get(OpenPGP_HEADER, None)
+        if header is not None:
+            self._extract_openpgp_header(msg, header)
+
+        return msgtuple
+
+    def _extract_openpgp_header(self, msg, header):
+        """
+        Import keys from the OpenPGP header
+
+        :param msg: parsed email
+        :type msg: email.Message
+        :param header: OpenPGP header string
+        :type header: str
+        """
+        fields = dict([f.strip(' ').split('=') for f in header.split(';')])
+        if 'url' in fields:
+            url = shlex.split(fields['url'])[0]  # remove quotations
+            _, fromAddress = parseaddr(msg['from'])
+            urlparts = urlparse(url)
+            fromHostname = fromAddress.split('@')[1]
+            if (urlparts.scheme == 'https'
+                    and urlparts.hostname == fromHostname):
+                try:
+                    self._keymanager.fetch_key(fromAddress, url, OpenPGPKey)
+                    logger.info("Imported key from header %s" % (url,))
+                except keymanager_errors.KeyNotFound:
+                    logger.warning("Url from OpenPGP header %s failed"
+                                   % (url,))
+                except keymanager_errors.KeyAttributesDiffer:
+                    logger.warning("Key from OpenPGP header url %s didn't "
+                                   "match the from address %s"
+                                   % (url, fromAddress))
+            else:
+                logger.debug("No valid url on OpenPGP header %s" % (url,))
+        else:
+            logger.debug("There is no url on the OpenPGP header: %s"
+                         % (header,))
+
+    def _add_message_locally(self, msgtuple):
+        """
+        Adds a message to local inbox and delete it from the incoming db
+        in soledad.
+
+        :param msgtuple: a tuple consisting of a SoledadDocument
+                         instance containing the incoming message
+                         and data, the json-encoded, decrypted content of the
+                         incoming message
+        :type msgtuple: (SoledadDocument, str)
+        """
         doc, data = msgtuple
         log.msg('adding message %s to local db' % (doc.doc_id,))
 

@@ -26,11 +26,6 @@ XXX add authors from the original twisted tests.
 """
 # XXX review license of the original tests!!!
 
-try:
-    from cStringIO import StringIO
-except ImportError:
-    from StringIO import StringIO
-
 import os
 import types
 
@@ -218,7 +213,7 @@ class MessageCollectionTestCase(IMAP4HelperMixin, unittest.TestCase):
         #mc._soledad.create_doc(newmsg)
         #self.assertEqual(mc.count(), 3)
         #self.assertEqual(
-            #len(mc._soledad.get_from_index(mc.TYPE_IDX, "flags")), 4)
+        #len(mc._soledad.get_from_index(mc.TYPE_IDX, "flags")), 4)
 
 
 class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):

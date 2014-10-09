@@ -32,7 +32,7 @@ from leap.mail.smtp.gateway import (
     SMTPFactory,
     EncryptedMessage,
 )
-from leap.mail.smtp.tests import (
+from leap.mail.tests import (
     TestCaseWithKeyManager,
     ADDRESS,
     ADDRESS_2,

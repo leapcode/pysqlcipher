@@ -29,7 +29,7 @@ from functools import partial
 
 from pycryptopp.hash import sha256
 from twisted.mail import imap4
-from twisted.internet import defer
+from twisted.internet import defer, reactor
 from zope.interface import implements
 from zope.proxy import sameProxiedObjects
 
@@ -134,7 +134,6 @@ class LeapMessage(fields, MBoxParser):
         self.__chash = None
         self.__bdoc = None
 
-        from twisted.internet import reactor
         self.reactor = reactor
 
     # XXX make these properties public
@@ -740,7 +739,6 @@ class MessageCollection(WithMsgFields, IndexedDB, MBoxParser):
             else:
                 self._initialized[mbox] = True
 
-        from twisted.internet import reactor
         self.reactor = reactor
 
     def _get_empty_doc(self, _type=FLAGS_DOC):
