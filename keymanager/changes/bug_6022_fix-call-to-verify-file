@@ -1,0 +1,1 @@
+  o Fix call to python-gnupg's verify_file() method (#6022).
