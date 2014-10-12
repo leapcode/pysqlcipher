@@ -25,11 +25,16 @@ try:
     import simplejson as json
 except ImportError:
     import json  # noqa
+import logging
 import re
 
 
 from abc import ABCMeta, abstractmethod
 from leap.common.check import leap_assert
+
+from leap.keymanager.validation import ValidationLevel, toValidationLevel
+
+logger = logging.getLogger(__name__)
 
 
 #
@@ -106,6 +111,13 @@ def build_key_from_dict(kClass, address, kdict):
     leap_assert(
         address == kdict[KEY_ADDRESS_KEY],
         'Wrong address in key data.')
+    try:
+        validation = toValidationLevel(kdict[KEY_VALIDATION_KEY])
+    except ValueError:
+        logger.error("Not valid validation level (%s) for key %s",
+                     (kdict[KEY_VALIDATION_KEY], kdict[KEY_ID_KEY]))
+        validation = ValidationLevel.Weak_Chain
+
     return kClass(
         address,
         key_id=kdict[KEY_ID_KEY],
@@ -116,7 +128,7 @@ def build_key_from_dict(kClass, address, kdict):
         expiry_date=kdict[KEY_EXPIRY_DATE_KEY],
         first_seen_at=kdict[KEY_FIRST_SEEN_AT_KEY],
         last_audited_at=kdict[KEY_LAST_AUDITED_AT_KEY],
-        validation=kdict[KEY_VALIDATION_KEY],  # TODO: verify for validation.
+        validation=validation,
     )
 
 
@@ -173,7 +185,7 @@ class EncryptionKey(object):
             KEY_PRIVATE_KEY: self.private,
             KEY_LENGTH_KEY: self.length,
             KEY_EXPIRY_DATE_KEY: self.expiry_date,
-            KEY_VALIDATION_KEY: self.validation,
+            KEY_VALIDATION_KEY: str(self.validation),
             KEY_FIRST_SEEN_AT_KEY: self.first_seen_at,
             KEY_LAST_AUDITED_AT_KEY: self.last_audited_at,
             KEY_TAGS_KEY: [KEYMANAGER_KEY_TAG],

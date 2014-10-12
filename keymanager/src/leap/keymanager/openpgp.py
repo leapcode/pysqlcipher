@@ -38,6 +38,7 @@ from leap.keymanager.keys import (
     KEYMANAGER_KEY_TAG,
     TAGS_ADDRESS_PRIVATE_INDEX,
 )
+from leap.keymanager.validation import ValidationLevel
 
 
 logger = logging.getLogger(__name__)
@@ -183,7 +184,7 @@ def _build_key_from_gpg(address, key, key_data):
         private=True if key['type'] == 'sec' else False,
         length=key['length'],
         expiry_date=key['expires'],
-        validation=None,  # TODO: verify for validation.
+        validation=ValidationLevel.Weak_Chain,
     )
 
 

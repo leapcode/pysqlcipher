@@ -48,7 +48,12 @@ from leap.common.events import signal
 from leap.common.events import events_pb2 as proto
 from leap.common.decorators import memoized_method
 
-from leap.keymanager.errors import KeyNotFound, KeyAttributesDiffer
+from leap.keymanager.errors import (
+    KeyNotFound,
+    KeyAddressMismatch,
+    KeyNotValidUpgrade
+)
+from leap.keymanager.validation import ValidationLevel, can_upgrade
 
 from leap.keymanager.keys import (
     EncryptionKey,
@@ -208,8 +213,11 @@ class KeyManager(object):
             server_keys = res.json()
             # insert keys in local database
             if self.OPENPGP_KEY in server_keys:
-                self._wrapper_map[OpenPGPKey].put_ascii_key(
-                    server_keys['openpgp'])
+                self.put_raw_key(
+                    server_keys['openpgp'],
+                    OpenPGPKey,
+                    address=address,
+                    validation=ValidationLevel.Provider_Trust)
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
                 raise KeyNotFound(address)
@@ -230,7 +238,7 @@ class KeyManager(object):
         replace any prior keys for the same address in its database.
 
         :param ktype: The type of the key.
-        :type ktype: KeyType
+        :type ktype: subclass of EncryptionKey
 
         :raise KeyNotFound: If the key was not found in local database.
         """
@@ -260,7 +268,7 @@ class KeyManager(object):
         :param address: The address bound to the key.
         :type address: str
         :param ktype: The type of the key.
-        :type ktype: KeyType
+        :type ktype: subclass of EncryptionKey
         :param private: Look for a private key instead of a public one?
         :type private: bool
         :param fetch_remote: If key not found in local storage try to fetch
@@ -323,7 +331,7 @@ class KeyManager(object):
         Generate a key of type C{ktype} bound to the user's address.
 
         :param ktype: The type of the key.
-        :type ktype: KeyType
+        :type ktype: subclass of EncryptionKey
 
         :return: The generated key.
         :rtype: EncryptionKey
@@ -515,32 +523,74 @@ class KeyManager(object):
         """
         Put C{key} in local storage.
 
-        :param key: The key to be stored. It can be ascii key or an OpenPGPKey
-        :type key: str or OpenPGPKey
+        :param key: The key to be stored
+        :type key: EncryptionKey
+        :raises KeyNotValidUpdate: if a key with the same uid exists and the
+                                   new one is not a valid update for it
         """
         try:
-            if isinstance(key, basestring):
-                self._wrapper_map[OpenPGPKey].put_ascii_key(key)
-            else:
-                self._wrapper_map[type(key)].put_key(key)
-        except IndexError as e:
-            leap_assert(False, "Unsupported key type. Error {0!r}".format(e))
+            old_key = self._wrapper_map[type(key)].get_key(key.address,
+                                                           private=key.private)
+        except KeyNotFound:
+            old_key = None
 
-    def fetch_key(self, address, uri, ktype):
+        if key.private or can_upgrade(key, old_key):
+            try:
+                self._wrapper_map[type(key)].put_key(key)
+            except IndexError as e:
+                leap_assert(
+                    False, "Unsupported key type. Error {0!r}".format(e))
+        else:
+            raise KeyNotValidUpgrade("Key %s can not be upgraded by new key %s"
+                                     % (old_key.key_id, key.key_id))
+
+    def put_raw_key(self, key, ktype, address=None,
+                    validation=ValidationLevel.Weak_Chain):
+        """
+        Put C{key} in local storage.
+
+        :param key: The ascii key to be stored
+        :type key: str
+        :param ktype: the type of the key.
+        :type ktype: subclass of EncryptionKey
+        :param address: if set used to check that the key is for this address
+        :type address: str
+        :param validation: validation level for this key
+                           (default: 'Weak_Chain')
+        :type validation: ValidationLevel
+
+        :raises KeyAddressMismatch: if address doesn't match any uid on the key
+        :raises KeyNotValidUpdate: if a key with the same uid exists and the
+                                   new one is not a valid update for it
+        """
+        pubkey, _ = self._wrapper_map[ktype].parse_ascii_key(key)
+        if address is not None and address != pubkey.address:
+            raise KeyAddressMismatch("Key UID %s, but expected %s"
+                                     % (pubkey.address, address))
+
+        pubkey.validation = validation
+        self.put_key(pubkey)
+
+    def fetch_key(self, address, uri, ktype,
+                  validation=ValidationLevel.Weak_Chain):
         """
         Fetch a public key for C{address} from the network and put it in
         local storage.
-
-        Raises C{openpgp.errors.KeyNotFound} if not valid key on C{uri}.
-        Raises C{openpgp.errors.KeyAttributesDiffer} if address don't match
-        any uid on the key.
 
         :param address: The email address of the key.
         :type address: str
         :param uri: The URI of the key.
         :type uri: str
-        :param ktype: The type of the key.
-        :type ktype: KeyType
+        :param ktype: the type of the key.
+        :type ktype: subclass of EncryptionKey
+        :param validation: validation level for this key
+                           (default: 'Weak_Chain')
+        :type validation: ValidationLevel
+
+        :raises KeyNotFound: if not valid key on C{uri}
+        :raises KeyAddressMismatch: if address doesn't match any uid on the key
+        :raises KeyNotValidUpdate: if a key with the same uid exists and the
+                                   new one is not a valid update for it
         """
         res = self._get(uri)
         if not res.ok:
@@ -551,8 +601,10 @@ class KeyManager(object):
         if pubkey is None:
             raise KeyNotFound(uri)
         if pubkey.address != address:
-            raise KeyAttributesDiffer("UID %s found, but expected %s"
-                                      % (pubkey.address, address))
+            raise KeyAddressMismatch("UID %s found, but expected %s"
+                                     % (pubkey.address, address))
+
+        pubkey.validation = validation
         self.put_key(pubkey)
 
 from ._version import get_versions
