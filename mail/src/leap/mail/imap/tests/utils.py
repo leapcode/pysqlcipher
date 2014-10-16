@@ -139,31 +139,32 @@ class IMAP4HelperMixin(BaseLeapTest):
 
         ###########
 
-        d = defer.Deferred()
+        d_server_ready = defer.Deferred()
+
         self.server = LeapIMAPServer(
             uuid=UUID, userid=USERID,
             contextFactory=self.serverCTX,
-            # XXX do we really need this??
             soledad=self._soledad)
 
-        self.client = SimpleClient(d, contextFactory=self.clientCTX)
-        self.connected = d
-
-        # XXX REVIEW-ME.
-        # We're adding theAccount here to server
-        # but it was also passed to initialization
-        # as it was passed to realm.
-        # I THINK we ONLY need to do it at one place now.
+        self.client = SimpleClient(
+            d_server_ready, contextFactory=self.clientCTX)
 
         theAccount = SoledadBackedAccount(
             USERID,
             soledad=self._soledad,
             memstore=memstore)
+        d_account_ready = theAccount.callWhenReady(lambda r: None)
         LeapIMAPServer.theAccount = theAccount
 
+        self.connected = defer.gatherResults(
+            [d_server_ready, d_account_ready])
+
+        # XXX FIXME --------------------------------------------
+        # XXX this needs to be done differently,
+        # have to be hooked on initialization callback instead.
         # in case we get something from previous tests...
-        for mb in self.server.theAccount.mailboxes:
-            self.server.theAccount.delete(mb)
+        #for mb in self.server.theAccount.mailboxes:
+            #self.server.theAccount.delete(mb)
 
         # email parser
         self.parser = parser.Parser()

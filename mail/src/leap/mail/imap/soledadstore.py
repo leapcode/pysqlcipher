@@ -40,11 +40,6 @@ from leap.mail.utils import first, empty, accumulator_queue
 logger = logging.getLogger(__name__)
 
 
-# TODO
-# [ ] Implement a retry queue?
-# [ ] Consider journaling of operations.
-
-
 class ContentDedup(object):
     """
     Message deduplication.
@@ -132,6 +127,7 @@ A lock per document.
 # http://stackoverflow.com/a/2437645/1157664
 # Setting this to twice the number of threads in the threadpool
 # should be safe.
+
 put_locks = defaultdict(lambda: threading.Lock())
 mbox_doc_locks = defaultdict(lambda: threading.Lock())
 
@@ -429,7 +425,6 @@ class SoledadStore(ContentDedup):
                     continue
 
                 if item.part == MessagePartType.fdoc:
-                    #logger.debug("PUT dirty fdoc")
                     yield item, call
 
                 # XXX also for linkage-doc !!!
@@ -479,7 +474,7 @@ class SoledadStore(ContentDedup):
                 return query.pop()
             else:
                 logger.error("Could not find mbox document for %r" %
-                            (mbox,))
+                             (mbox,))
         except Exception as exc:
             logger.exception("Unhandled error %r" % exc)
 
@@ -552,8 +547,10 @@ class SoledadStore(ContentDedup):
         :type uid: int
         :rtype: SoledadDocument or None
         """
+        # TODO -- inlineCallbacks
         result = None
         try:
+            # TODO -- yield
             flag_docs = self._soledad.get_from_index(
                 fields.TYPE_MBOX_UID_IDX,
                 fields.TYPE_FLAGS_VAL, mbox, str(uid))

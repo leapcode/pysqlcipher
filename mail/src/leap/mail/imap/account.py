@@ -22,6 +22,7 @@ import logging
 import os
 import time
 
+from twisted.internet import defer
 from twisted.mail import imap4
 from twisted.python import log
 from zope.interface import implements
@@ -65,6 +66,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
     _soledad = None
     selected = None
     closed = False
+    _initialized = False
 
     def __init__(self, account_name, soledad, memstore=None):
         """
@@ -93,14 +95,39 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
 
         self.__mailboxes = set([])
 
-        self.initialize_db()
+        self._deferred_initialization = defer.Deferred()
+        self._initialize_storage()
 
-        # every user should have the right to an inbox folder
-        # at least, so let's make one!
-        self._load_mailboxes()
+    def _initialize_storage(self):
 
-        if not self.mailboxes:
-            self.addMailbox(self.INBOX_NAME)
+        def add_mailbox_if_none(result):
+            # every user should have the right to an inbox folder
+            # at least, so let's make one!
+            if not self.mailboxes:
+                self.addMailbox(self.INBOX_NAME)
+
+        def finish_initialization(result):
+            self._initialized = True
+            self._deferred_initialization.callback(None)
+
+        def load_mbox_cache(result):
+            d = self._load_mailboxes()
+            d.addCallback(lambda _: result)
+            return d
+
+        d = self.initialize_db()
+
+        d.addCallback(load_mbox_cache)
+        d.addCallback(add_mailbox_if_none)
+        d.addCallback(finish_initialization)
+
+    def callWhenReady(self, cb):
+        if self._initialized:
+            cb(self)
+            return defer.succeed(None)
+        else:
+            self._deferred_initialization.addCallback(cb)
+            return self._deferred_initialization
 
     def _get_empty_mailbox(self):
         """
@@ -120,10 +147,14 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         :rtype: SoledadDocument
         """
         # XXX use soledadstore instead ...;
-        doc = self._soledad.get_from_index(
+        def get_first_if_any(docs):
+            return docs[0] if docs else None
+
+        d = self._soledad.get_from_index(
             self.TYPE_MBOX_IDX, self.MBOX_KEY,
             self._parse_mailbox_name(name))
-        return doc[0] if doc else None
+        d.addCallback(get_first_if_any)
+        return d
 
     @property
     def mailboxes(self):
@@ -134,19 +165,12 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         return sorted(self.__mailboxes)
 
     def _load_mailboxes(self):
-        self.__mailboxes.update(
-            [doc.content[self.MBOX_KEY]
-             for doc in self._soledad.get_from_index(
-                 self.TYPE_IDX, self.MBOX_KEY)])
-
-    @property
-    def subscriptions(self):
-        """
-        A list of the current subscriptions for this account.
-        """
-        return [doc.content[self.MBOX_KEY]
-                for doc in self._soledad.get_from_index(
-                    self.TYPE_SUBS_IDX, self.MBOX_KEY, '1')]
+        def update_mailboxes(db_indexes):
+            self.__mailboxes.update(
+                [doc.content[self.MBOX_KEY] for doc in db_indexes])
+        d = self._soledad.get_from_index(self.TYPE_IDX, self.MBOX_KEY)
+        d.addCallback(update_mailboxes)
+        return d
 
     def getMailbox(self, name):
         """
@@ -182,7 +206,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
                             one is provided.
         :type creation_ts: int
 
-        :returns: True if successful
+        :returns: a Deferred that will contain the document if successful.
         :rtype: bool
         """
         name = self._parse_mailbox_name(name)
@@ -203,21 +227,29 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         mbox[self.MBOX_KEY] = name
         mbox[self.CREATED_KEY] = creation_ts
 
-        doc = self._soledad.create_doc(mbox)
-        self._load_mailboxes()
-        return bool(doc)
+        def load_mbox_cache(result):
+            d = self._load_mailboxes()
+            d.addCallback(lambda _: result)
+            return d
+
+        d = self._soledad.create_doc(mbox)
+        d.addCallback(load_mbox_cache)
+        return d
 
     def create(self, pathspec):
         """
         Create a new mailbox from the given hierarchical name.
 
-        :param pathspec: The full hierarchical name of a new mailbox to create.
-                         If any of the inferior hierarchical names to this one
-                         do not exist, they are created as well.
+        :param pathspec:
+            The full hierarchical name of a new mailbox to create.
+            If any of the inferior hierarchical names to this one
+            do not exist, they are created as well.
         :type pathspec: str
 
-        :return: A true value if the creation succeeds.
-        :rtype: bool
+        :return:
+            A deferred that will fire with a true value if the creation
+            succeeds.
+        :rtype: Deferred
 
         :raise MailboxException: Raised if this mailbox cannot be added.
         """
@@ -225,18 +257,43 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         paths = filter(
             None,
             self._parse_mailbox_name(pathspec).split('/'))
+
+        subs = []
+        sep = '/'
+
         for accum in range(1, len(paths)):
             try:
-                self.addMailbox('/'.join(paths[:accum]))
+                partial = sep.join(paths[:accum])
+                d = self.addMailbox(partial)
+                subs.append(d)
             except imap4.MailboxCollision:
                 pass
         try:
-            self.addMailbox('/'.join(paths))
+            df = self.addMailbox(sep.join(paths))
         except imap4.MailboxCollision:
             if not pathspec.endswith('/'):
-                return False
-        self._load_mailboxes()
-        return True
+                df = defer.succeed(False)
+            else:
+                df = defer.succeed(True)
+        finally:
+            subs.append(df)
+
+        def all_good(result):
+            return all(result)
+
+        def load_mbox_cache(result):
+            d = self._load_mailboxes()
+            d.addCallback(lambda _: result)
+            return d
+
+        if subs:
+            d1 = defer.gatherResults(subs, consumeErrors=True)
+            d1.addCallback(load_mbox_cache)
+            d1.addCallback(all_good)
+        else:
+            d1 = defer.succeed(False)
+            d1.addCallback(load_mbox_cache)
+        return d1
 
     def select(self, name, readwrite=1):
         """
@@ -275,17 +332,20 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         :param name: the mailbox to be deleted
         :type name: str
 
-        :param force: if True, it will not check for noselect flag or inferior
-                      names. use with care.
+        :param force:
+            if True, it will not check for noselect flag or inferior
+            names. use with care.
         :type force: bool
+        :rtype: Deferred
         """
         name = self._parse_mailbox_name(name)
 
         if name not in self.mailboxes:
-            raise imap4.MailboxException("No such mailbox: %r" % name)
+            err = imap4.MailboxException("No such mailbox: %r" % name)
+            return defer.fail(err)
         mbox = self.getMailbox(name)
 
-        if force is False:
+        if not force:
             # See if this box is flagged \Noselect
             # XXX use mbox.flags instead?
             mbox_flags = mbox.getFlags()
@@ -294,11 +354,12 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
                 # as part of their root.
                 for others in self.mailboxes:
                     if others != name and others.startswith(name):
-                        raise imap4.MailboxException, (
+                        err = imap4.MailboxException(
                             "Hierarchically inferior mailboxes "
                             "exist and \\Noselect is set")
+                        return defer.fail(err)
         self.__mailboxes.discard(name)
-        mbox.destroy()
+        return mbox.destroy()
 
         # XXX FIXME --- not honoring the inferior names...
 
@@ -331,14 +392,30 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
             if new in self.mailboxes:
                 raise imap4.MailboxCollision(repr(new))
 
-        for (old, new) in inferiors:
-            self._memstore.rename_fdocs_mailbox(old, new)
-            mbox = self._get_mailbox_by_name(old)
-            mbox.content[self.MBOX_KEY] = new
-            self.__mailboxes.discard(old)
-            self._soledad.put_doc(mbox)
+        rename_deferreds = []
 
-        self._load_mailboxes()
+        def load_mbox_cache(result):
+            d = self._load_mailboxes()
+            d.addCallback(lambda _: result)
+            return d
+
+        def update_mbox_doc_name(mbox, oldname, newname, update_deferred):
+            mbox.content[self.MBOX_KEY] = newname
+            d = self._soledad.put_doc(mbox)
+            d.addCallback(lambda r: update_deferred.callback(True))
+
+        for (old, new) in inferiors:
+            self.__mailboxes.discard(old)
+            self._memstore.rename_fdocs_mailbox(old, new)
+
+            d0 = defer.Deferred()
+            d = self._get_mailbox_by_name(old)
+            d.addCallback(update_mbox_doc_name, old, new, d0)
+            rename_deferreds.append(d0)
+
+        d1 = defer.gatherResults(rename_deferreds, consumeErrors=True)
+        d1.addCallback(load_mbox_cache)
+        return d1
 
     def _inferiorNames(self, name):
         """
@@ -354,6 +431,8 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
                 inferiors.append(infname)
         return inferiors
 
+    # TODO ------------------ can we preserve the attr?
+    # maybe add to memory store.
     def isSubscribed(self, name):
         """
         Returns True if user is subscribed to this mailbox.
@@ -361,10 +440,35 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         :param name: the mailbox to be checked.
         :type name: str
 
-        :rtype: bool
+        :rtype: Deferred (will fire with bool)
         """
-        mbox = self._get_mailbox_by_name(name)
-        return mbox.content.get('subscribed', False)
+        subscribed = self.SUBSCRIBED_KEY
+
+        def is_subscribed(mbox):
+            subs_bool = bool(mbox.content.get(subscribed, False))
+            return subs_bool
+
+        d = self._get_mailbox_by_name(name)
+        d.addCallback(is_subscribed)
+        return d
+
+    # TODO ------------------ can we preserve the property?
+    # maybe add to memory store.
+
+    def _get_subscriptions(self):
+        """
+        Return a list of the current subscriptions for this account.
+
+        :returns: A deferred that will fire with the subscriptions.
+        :rtype: Deferred
+        """
+        def get_docs_content(docs):
+            return [doc.content[self.MBOX_KEY] for doc in docs]
+
+        d = self._soledad.get_from_index(
+            self.TYPE_SUBS_IDX, self.MBOX_KEY, '1')
+        d.addCallback(get_docs_content)
+        return d
 
     def _set_subscription(self, name, value):
         """
@@ -376,26 +480,42 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         :param value: the boolean value
         :type value: bool
         """
+        # XXX Note that this kind of operation has
+        # no guarantees of atomicity. We should not be accessing mbox
+        # documents concurrently.
+
+        subscribed = self.SUBSCRIBED_KEY
+
+        def update_subscribed_value(mbox):
+            mbox.content[subscribed] = value
+            return self._soledad.put_doc(mbox)
+
         # maybe we should store subscriptions in another
         # document...
         if name not in self.mailboxes:
-            self.addMailbox(name)
-        mbox = self._get_mailbox_by_name(name)
-
-        if mbox:
-            mbox.content[self.SUBSCRIBED_KEY] = value
-            self._soledad.put_doc(mbox)
+            d = self.addMailbox(name)
+            d.addCallback(lambda v: self._get_mailbox_by_name(name))
+        else:
+            d = self._get_mailbox_by_name(name)
+        d.addCallback(update_subscribed_value)
+        return d
 
     def subscribe(self, name):
         """
-        Subscribe to this mailbox
+        Subscribe to this mailbox if not already subscribed.
 
         :param name: name of the mailbox
         :type name: str
+        :rtype: Deferred
         """
         name = self._parse_mailbox_name(name)
-        if name not in self.subscriptions:
-            self._set_subscription(name, True)
+
+        def check_and_subscribe(subscriptions):
+            if name not in subscriptions:
+                return self._set_subscription(name, True)
+        d = self._get_subscriptions()
+        d.addCallback(check_and_subscribe)
+        return d
 
     def unsubscribe(self, name):
         """
@@ -403,12 +523,21 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
 
         :param name: name of the mailbox
         :type name: str
+        :rtype: Deferred
         """
         name = self._parse_mailbox_name(name)
-        if name not in self.subscriptions:
-            raise imap4.MailboxException(
-                "Not currently subscribed to %r" % name)
-        self._set_subscription(name, False)
+
+        def check_and_unsubscribe(subscriptions):
+            if name not in subscriptions:
+                raise imap4.MailboxException(
+                    "Not currently subscribed to %r" % name)
+            return self._set_subscription(name, False)
+        d = self._get_subscriptions()
+        d.addCallback(check_and_unsubscribe)
+        return d
+
+    def getSubscriptions(self):
+        return self._get_subscriptions()
 
     def listMailboxes(self, ref, wildcard):
         """

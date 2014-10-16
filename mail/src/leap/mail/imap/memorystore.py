@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+
 # memorystore.py
 # Copyright (C) 2014 LEAP
 #
@@ -112,8 +112,6 @@ class MemoryStore(object):
         :param write_period: the interval to dump messages to disk, in seconds.
         :type write_period: int
         """
-        self.reactor = reactor
-
         self._permanent_store = permanent_store
         self._write_period = write_period
 
@@ -241,6 +239,7 @@ class MemoryStore(object):
             self.producer = None
             self._write_loop = None
 
+    # TODO -- remove
     def _start_write_loop(self):
         """
         Start loop for writing to disk database.
@@ -250,6 +249,7 @@ class MemoryStore(object):
         if not self._write_loop.running:
             self._write_loop.start(self._write_period, now=True)
 
+    # TODO -- remove
     def _stop_write_loop(self):
         """
         Stop loop for writing to disk database.
@@ -278,17 +278,18 @@ class MemoryStore(object):
         :type uid: int
         :param message: a message to be added
         :type message: MessageWrapper
-        :param observer: the deferred that will fire with the
-                         UID of the message. If notify_on_disk is True,
-                         this will happen when the message is written to
-                         Soledad. Otherwise it will fire as soon as we've
-                         added the message to the memory store.
+        :param observer:
+            the deferred that will fire with the UID of the message. If
+            notify_on_disk is True, this will happen when the message is
+            written to Soledad. Otherwise it will fire as soon as we've added
+            the message to the memory store.
         :type observer: Deferred
-        :param notify_on_disk: whether the `observer` deferred should
-                               wait until the message is written to disk to
-                               be fired.
+        :param notify_on_disk:
+            whether the `observer` deferred should wait until the message is
+            written to disk to be fired.
         :type notify_on_disk: bool
         """
+        # TODO -- return a deferred
         log.msg("Adding new doc to memstore %r (%r)" % (mbox, uid))
         key = mbox, uid
 
@@ -306,7 +307,7 @@ class MemoryStore(object):
             else:
                 # Caller does not care, just fired and forgot, so we pass
                 # a defer that will inmediately have its callback triggered.
-                self.reactor.callFromThread(observer.callback, uid)
+                reactor.callFromThread(observer.callback, uid)
 
     def put_message(self, mbox, uid, message, notify_on_disk=True):
         """
@@ -442,6 +443,7 @@ class MemoryStore(object):
 
         :return: MessageWrapper or None
         """
+        # TODO -- return deferred
         if dirtystate == DirtyState.dirty:
             flags_only = True
 
@@ -467,6 +469,7 @@ class MemoryStore(object):
             chash = fdoc.get(fields.CONTENT_HASH_KEY)
             hdoc = self._hdoc_store[chash]
             if empty(hdoc):
+                # XXX this will be a deferred
                 hdoc = self._permanent_store.get_headers_doc(chash)
                 if empty(hdoc):
                     return None
@@ -531,7 +534,8 @@ class MemoryStore(object):
 
     # IMessageStoreWriter
 
-    @deferred_to_thread
+    # TODO -- I think we don't need this anymore.
+    # instead, we can have
     def write_messages(self, store):
         """
         Write the message documents in this MemoryStore to a different store.
@@ -657,7 +661,7 @@ class MemoryStore(object):
         with self._last_uid_lock:
             self._last_uid[mbox] += 1
             value = self._last_uid[mbox]
-            self.reactor.callInThread(self.write_last_uid, mbox, value)
+            reactor.callInThread(self.write_last_uid, mbox, value)
             return value
 
     def write_last_uid(self, mbox, value):
@@ -1077,6 +1081,7 @@ class MemoryStore(object):
             return None
         return self._rflags_store[mbox]['set']
 
+    # XXX -- remove
     def all_rdocs_iter(self):
         """
         Return an iterator through all in-memory recent flag dicts, wrapped
@@ -1125,6 +1130,7 @@ class MemoryStore(object):
             self.remove_message(mbox, uid)
         return mem_deleted
 
+    # TODO -- remove
     def stop_and_flush(self):
         """
         Stop the write loop and trigger a write to the producer.
@@ -1180,6 +1186,7 @@ class MemoryStore(object):
         :type observer: Deferred
         """
         mem_deleted = self.remove_all_deleted(mbox)
+        # TODO return a DeferredList
         observer.callback(mem_deleted)
 
     def _delete_from_soledad_and_memory(self, result, mbox, observer):
@@ -1313,8 +1320,8 @@ class MemoryStore(object):
         :rtype: bool
         """
         # FIXME this should return a deferred !!!
-        # XXX ----- can fire when all new + dirty deferreds
-        # are done (gatherResults)
+        # TODO this should be moved to soledadStore instead
+        # (all pending deferreds)
         return getattr(self, self.WRITING_FLAG)
 
     @property

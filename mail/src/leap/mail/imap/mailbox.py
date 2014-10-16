@@ -303,20 +303,31 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         We do this to be able to filter the requests efficiently.
         """
         primed = self._known_uids_primed.get(self.mbox, False)
-        if not primed:
-            known_uids = self.messages.all_soledad_uid_iter()
+        # XXX handle the maybeDeferred
+
+        def set_primed(known_uids):
             self._memstore.set_known_uids(self.mbox, known_uids)
             self._known_uids_primed[self.mbox] = True
+
+        if not primed:
+            d = self.messages.all_soledad_uid_iter()
+            d.addCallback(set_primed)
+            return d
 
     def prime_flag_docs_to_memstore(self):
         """
         Prime memstore with all the flags documents.
         """
         primed = self._fdoc_primed.get(self.mbox, False)
-        if not primed:
-            all_flag_docs = self.messages.get_all_soledad_flag_docs()
-            self._memstore.load_flag_docs(self.mbox, all_flag_docs)
+
+        def set_flag_docs(flag_docs):
+            self._memstore.load_flag_docs(self.mbox, flag_docs)
             self._fdoc_primed[self.mbox] = True
+
+        if not primed:
+            d = self.messages.get_all_soledad_flag_docs()
+            d.addCallback(set_flag_docs)
+            return d
 
     def getUIDValidity(self):
         """
@@ -522,21 +533,30 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
         Should cleanup resources, and set the \\Noselect flag
         on the mailbox.
+
         """
         # XXX this will overwrite all the existing flags!
         # should better simply addFlag
         self.setFlags((self.NOSELECT_FLAG,))
-        self.deleteAllDocs()
 
         # XXX removing the mailbox in situ for now,
         # we should postpone the removal
 
-        # XXX move to memory store??
-        mbox_doc = self._get_mbox_doc()
-        if mbox_doc is None:
-            # memory-only store!
-            return
-        self._soledad.delete_doc(self._get_mbox_doc())
+        def remove_mbox_doc(ignored):
+            # XXX move to memory store??
+
+            def _remove_mbox_doc(doc):
+                if doc is None:
+                    # memory-only store!
+                    return defer.succeed(True)
+                return self._soledad.delete_doc(doc)
+
+            doc = self._get_mbox_doc()
+            return _remove_mbox_doc(doc)
+
+        d = self.deleteAllDocs()
+        d.addCallback(remove_mbox_doc)
+        return d
 
     def _close_cb(self, result):
         self.closed = True
@@ -1006,9 +1026,16 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         """
         Delete all docs in this mailbox
         """
-        docs = self.messages.get_all_docs()
-        for doc in docs:
-            self.messages._soledad.delete_doc(doc)
+        def del_all_docs(docs):
+            todelete = []
+            for doc in docs:
+                d = self.messages._soledad.delete_doc(doc)
+                todelete.append(d)
+            return defer.gatherResults(todelete)
+
+        d = self.messages.get_all_docs()
+        d.addCallback(del_all_docs)
+        return d
 
     def unset_recent_flags(self, uid_seq):
         """

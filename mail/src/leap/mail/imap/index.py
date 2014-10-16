@@ -19,6 +19,8 @@ Index for SoledadBackedAccount, Mailbox and Messages.
 """
 import logging
 
+from twisted.internet import defer
+
 from leap.common.check import leap_assert, leap_assert_type
 
 from leap.mail.imap.fields import fields
@@ -39,6 +41,9 @@ class IndexedDB(object):
     """
     # TODO we might want to move this to soledad itself, check
 
+    _index_creation_deferreds = []
+    index_ready = False
+
     def initialize_db(self):
         """
         Initialize the database.
@@ -46,24 +51,40 @@ class IndexedDB(object):
         leap_assert(self._soledad,
                     "Need a soledad attribute accesible in the instance")
         leap_assert_type(self.INDEXES, dict)
+        self._index_creation_deferreds = []
+
+        def _on_indexes_created(ignored):
+            self.index_ready = True
+
+        def _create_index(name, expression):
+            d = self._soledad.create_index(name, *expression)
+            self._index_creation_deferreds.append(d)
+
+        def _create_indexes(db_indexes):
+            db_indexes = dict(db_indexes)
+            for name, expression in fields.INDEXES.items():
+                if name not in db_indexes:
+                    # The index does not yet exist.
+                    _create_index(name, expression)
+                    continue
+
+                if expression == db_indexes[name]:
+                    # The index exists and is up to date.
+                    continue
+                # The index exists but the definition is not what expected, so
+                # we delete it and add the proper index expression.
+                d1 = self._soledad.delete_index(name)
+                d1.addCallback(lambda _: _create_index(name, expression))
+
+            all_created = defer.gatherResults(self._index_creation_deferreds)
+            all_created.addCallback(_on_indexes_created)
+            return all_created
 
         # Ask the database for currently existing indexes.
         if not self._soledad:
             logger.debug("NO SOLEDAD ON IMAP INITIALIZATION")
             return
-        db_indexes = dict()
         if self._soledad is not None:
-            db_indexes = dict(self._soledad.list_indexes())
-        for name, expression in fields.INDEXES.items():
-            if name not in db_indexes:
-                # The index does not yet exist.
-                self._soledad.create_index(name, *expression)
-                continue
-
-            if expression == db_indexes[name]:
-                # The index exists and is up to date.
-                continue
-            # The index exists but the definition is not what expected, so we
-            # delete it and add the proper index expression.
-            self._soledad.delete_index(name)
-            self._soledad.create_index(name, *expression)
+            d = self._soledad.list_indexes()
+            d.addCallback(_create_indexes)
+            return d
