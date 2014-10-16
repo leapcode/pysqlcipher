@@ -14,20 +14,14 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
-
-
 """
-Base classes and keys for SMTP gateway tests.
+Base classes and keys for leap.mail tests.
 """
-
 import os
 import distutils.spawn
 import shutil
 import tempfile
 from mock import Mock
-
-
-from twisted.trial import unittest
 
 
 from leap.soledad.client import Soledad
@@ -43,7 +37,7 @@ from leap.common.testing.basetest import BaseLeapTest
 def _find_gpg():
     gpg_path = distutils.spawn.find_executable('gpg')
     return os.path.realpath(gpg_path) if gpg_path is not None else "/usr/bin/gpg"
-    
+
 
 class TestCaseWithKeyManager(BaseLeapTest):
 
@@ -100,23 +94,25 @@ class TestCaseWithKeyManager(BaseLeapTest):
             def __call__(self):
                 return self
 
-        Soledad._shared_db = MockSharedDB()
-
-        return Soledad(
+        soledad = Soledad(
             uuid,
             passphrase,
             secrets_path=secrets_path,
             local_db_path=local_db_path,
             server_url=server_url,
             cert_file=cert_file,
+            syncable=False
         )
+
+        soledad._shared_db = MockSharedDB()
+        return soledad
 
     def _keymanager_instance(self, address):
         """
         Return a Key Manager instance for tests.
         """
         self._config = {
-            'host': 'http://provider/',
+            'host': 'https://provider/',
             'port': 25,
             'username': address,
             'password': '<password>',

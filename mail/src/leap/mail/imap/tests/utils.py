@@ -65,7 +65,7 @@ def initialize_soledad(email, gnupg_home, tempdir):
     passphrase = u"verysecretpassphrase"
     secret_path = os.path.join(tempdir, "secret.gpg")
     local_db_path = os.path.join(tempdir, "soledad.u1db")
-    server_url = "http://provider"
+    server_url = "https://provider"
     cert_file = ""
 
     class MockSharedDB(object):
@@ -86,7 +86,8 @@ def initialize_soledad(email, gnupg_home, tempdir):
         secret_path,
         local_db_path,
         server_url,
-        cert_file)
+        cert_file,
+        syncable=False)
 
     return _soledad
 
