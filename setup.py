@@ -181,7 +181,24 @@ class MyBuildExt(build_ext):
             ext.sources.append(os.path.join(AMALGAMATION_ROOT, "sqlite3.c"))
             ext.include_dirs.append(AMALGAMATION_ROOT)
 
-            ext.extra_link_args.append("-lcrypto")
+            if sys.platform == "win32":
+                # Try to locate openssl
+                openssl_conf = os.environ.get('OPENSSL_CONF')
+                if not openssl_conf:
+                    sys.exit('Fatal error: OpenSSL could not be detected!') 
+                openssl = os.path.dirname(os.path.dirname(openssl_conf))
+
+                # Configure the compiler
+                ext.include_dirs.append(os.path.join(openssl, "include"))
+                ext.define_macros.append(("inline", "__inline"))
+
+                # Configure the linker
+                ext.extra_link_args.append("libeay32.lib")
+                ext.extra_link_args.append(
+                    "/LIBPATH:" + os.path.join(openssl, "lib")
+                )
+            else:
+                ext.extra_link_args.append("-lcrypto")
 
         if self.static:
             self._build_extension(ext)
