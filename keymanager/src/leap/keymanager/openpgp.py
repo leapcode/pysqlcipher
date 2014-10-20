@@ -452,10 +452,8 @@ class OpenPGPScheme(EncryptionScheme):
         Return a gpg wrapper that implements the context manager protocol and
         contains C{keys}.
 
-        :param key_data: ASCII armored key data.
-        :type key_data: str
-        :param gpgbinary: Name for GnuPG binary executable.
-        :type gpgbinary: C{str}
+        :param keys: keys to conform the keyring.
+        :type key: list(OpenPGPKey)
 
         :return: a TempGPGWrapper instance
         :rtype: TempGPGWrapper
