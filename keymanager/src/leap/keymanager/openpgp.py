@@ -37,6 +37,8 @@ from leap.keymanager.keys import (
     build_key_from_dict,
     KEYMANAGER_KEY_TAG,
     TAGS_ADDRESS_PRIVATE_INDEX,
+    KEY_FINGERPRINT_KEY,
+    KEY_DATA_KEY,
 )
 from leap.keymanager.validation import ValidationLevel
 
@@ -394,6 +396,16 @@ class OpenPGPScheme(EncryptionScheme):
         if doc is None:
             self._soledad.create_doc_from_json(key.get_json())
         else:
+            if key.fingerprint == doc.content[KEY_FINGERPRINT_KEY]:
+                # in case of an update of the key merge them with gnupg
+                with self._temporary_gpgwrapper() as gpg:
+                    gpg.import_keys(doc.content[KEY_DATA_KEY])
+                    gpg.import_keys(key.key_data)
+                    gpgkey = gpg.list_keys(secret=key.private).pop()
+                    key = _build_key_from_gpg(
+                        key.address, gpgkey,
+                        gpg.export_keys(gpgkey['fingerprint'],
+                                        secret=key.private))
             doc.set_json(key.get_json())
             self._soledad.put_doc(doc)
 

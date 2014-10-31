@@ -73,7 +73,6 @@ def can_upgrade(new_key, old_key):
 
     # An update of the same key
     if new_key.fingerprint == old_key.fingerprint:
-        # XXX wich one is newer? is that a downgrade attack? (#6210)
         return True
 
     # Manually verified fingerprint
