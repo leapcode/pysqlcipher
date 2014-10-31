@@ -141,16 +141,7 @@ class EncryptionKey(object):
     Abstract class for encryption keys.
 
     A key is "validated" if the nicknym agent has bound the user address to a
-    public key. Nicknym supports three different levels of key validation:
-
-    * Level 3 - path trusted: A path of cryptographic signatures can be traced
-      from a trusted key to the key under evaluation. By default, only the
-      provider key from the user's provider is a "trusted key".
-    * level 2 - provider signed: The key has been signed by a provider key for
-      the same domain, but the provider key is not validated using a trust
-      path (i.e. it is only registered)
-    * level 1 - registered: The key has been encountered and saved, it has no
-      signatures (that are meaningful to the nicknym agent).
+    public key.
     """
 
     __metaclass__ = ABCMeta
