@@ -18,6 +18,8 @@
 Tests for the Validation Levels
 """
 
+from datetime import datetime
+
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.keymanager.errors import (
     KeyNotValidUpgrade
@@ -152,8 +154,7 @@ Osuse7+NkyUHgMXMVW7cz+nU7iO+ht2rkBtv+Z5LGlzgHTeFjKci
 -----END PGP PUBLIC KEY BLOCK-----
 """
 # updated expiration date
-# Tue 24 Oct 2034 05:13:00 PM BST
-EXPIRED_KEY_NEW_EXPIRY_DATE = "2045319180"
+EXPIRED_KEY_NEW_EXPIRY_DATE = datetime.fromtimestamp(2045319180)
 EXPIRED_KEY_UPDATED = """
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 Version: GnuPG v1.4.12 (GNU/Linux)

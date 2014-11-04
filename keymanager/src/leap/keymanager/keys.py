@@ -30,6 +30,7 @@ import re
 
 
 from abc import ABCMeta, abstractmethod
+from datetime import datetime
 from leap.common.check import leap_assert
 
 from leap.keymanager.validation import ValidationLevel, toValidationLevel
@@ -118,6 +119,10 @@ def build_key_from_dict(kClass, address, kdict):
                      (kdict[KEY_VALIDATION_KEY], kdict[KEY_ID_KEY]))
         validation = ValidationLevel.Weak_Chain
 
+    expiry_date = None
+    if kdict[KEY_EXPIRY_DATE_KEY]:
+        expiry_date = datetime.fromtimestamp(int(kdict[KEY_EXPIRY_DATE_KEY]))
+
     return kClass(
         address,
         key_id=kdict[KEY_ID_KEY],
@@ -125,7 +130,7 @@ def build_key_from_dict(kClass, address, kdict):
         key_data=kdict[KEY_DATA_KEY],
         private=kdict[KEY_PRIVATE_KEY],
         length=kdict[KEY_LENGTH_KEY],
-        expiry_date=kdict[KEY_EXPIRY_DATE_KEY],
+        expiry_date=expiry_date,
         first_seen_at=kdict[KEY_FIRST_SEEN_AT_KEY],
         last_audited_at=kdict[KEY_LAST_AUDITED_AT_KEY],
         validation=validation,
@@ -167,6 +172,10 @@ class EncryptionKey(object):
         :return: The JSON string describing this key.
         :rtype: str
         """
+        expiry_str = ""
+        if self.expiry_date is not None:
+            expiry_str = self.expiry_date.strftime("%s")
+
         return json.dumps({
             KEY_ADDRESS_KEY: self.address,
             KEY_TYPE_KEY: str(self.__class__),
@@ -175,7 +184,7 @@ class EncryptionKey(object):
             KEY_DATA_KEY: self.key_data,
             KEY_PRIVATE_KEY: self.private,
             KEY_LENGTH_KEY: self.length,
-            KEY_EXPIRY_DATE_KEY: self.expiry_date,
+            KEY_EXPIRY_DATE_KEY: expiry_str,
             KEY_VALIDATION_KEY: str(self.validation),
             KEY_FIRST_SEEN_AT_KEY: self.first_seen_at,
             KEY_LAST_AUDITED_AT_KEY: self.last_audited_at,

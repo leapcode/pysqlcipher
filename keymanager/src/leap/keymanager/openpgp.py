@@ -25,6 +25,7 @@ import tempfile
 import io
 
 
+from datetime import datetime
 from gnupg import GPG
 from gnupg.gnupg import GPGUtilities
 
@@ -178,6 +179,10 @@ def _build_key_from_gpg(address, key, key_data):
     :return: An instance of the key.
     :rtype: OpenPGPKey
     """
+    expiry_date = None
+    if key['expires']:
+        expiry_date = datetime.fromtimestamp(int(key['expires']))
+
     return OpenPGPKey(
         address,
         key_id=key['keyid'],
@@ -185,7 +190,7 @@ def _build_key_from_gpg(address, key, key_data):
         key_data=key_data,
         private=True if key['type'] == 'sec' else False,
         length=key['length'],
-        expiry_date=key['expires'],
+        expiry_date=expiry_date,
         validation=ValidationLevel.Weak_Chain,
     )
 
