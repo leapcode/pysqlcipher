@@ -581,8 +581,8 @@ class LeapIncomingMail(object):
 
     def _extract_keys(self, msgtuple):
         """
-        Parse message headers for an *OpenPGP* header as described on the
-        `IETF draft
+        Retrieve attached keys to the mesage and parse message headers for an
+        *OpenPGP* header as described on the `IETF draft
         <http://tools.ietf.org/html/draft-josefsson-openpgp-mailnews-header-06>`
         only urls with https and the same hostname than the email are supported
         for security reasons.
@@ -600,31 +600,35 @@ class LeapIncomingMail(object):
         #     we should do it in this module so we don't need to parse it again
         #     here
         msg = self._parser.parsestr(data)
+        _, fromAddress = parseaddr(msg['from'])
+
         header = msg.get(OpenPGP_HEADER, None)
         if header is not None:
-            self._extract_openpgp_header(msg, header)
+            self._extract_openpgp_header(header, fromAddress)
+
+        if msg.is_multipart():
+            self._extract_attached_key(msg.get_payload(), fromAddress)
 
         return msgtuple
 
-    def _extract_openpgp_header(self, msg, header):
+    def _extract_openpgp_header(self, header, address):
         """
         Import keys from the OpenPGP header
 
-        :param msg: parsed email
-        :type msg: email.Message
         :param header: OpenPGP header string
         :type header: str
+        :param address: email address in the from header
+        :type address: str
         """
         fields = dict([f.strip(' ').split('=') for f in header.split(';')])
         if 'url' in fields:
             url = shlex.split(fields['url'])[0]  # remove quotations
-            _, fromAddress = parseaddr(msg['from'])
             urlparts = urlparse(url)
-            fromHostname = fromAddress.split('@')[1]
+            addressHostname = address.split('@')[1]
             if (urlparts.scheme == 'https'
-                    and urlparts.hostname == fromHostname):
+                    and urlparts.hostname == addressHostname):
                 try:
-                    self._keymanager.fetch_key(fromAddress, url, OpenPGPKey)
+                    self._keymanager.fetch_key(address, url, OpenPGPKey)
                     logger.info("Imported key from header %s" % (url,))
                 except keymanager_errors.KeyNotFound:
                     logger.warning("Url from OpenPGP header %s failed"
@@ -632,12 +636,31 @@ class LeapIncomingMail(object):
                 except keymanager_errors.KeyAttributesDiffer:
                     logger.warning("Key from OpenPGP header url %s didn't "
                                    "match the from address %s"
-                                   % (url, fromAddress))
+                                   % (url, address))
             else:
                 logger.debug("No valid url on OpenPGP header %s" % (url,))
         else:
             logger.debug("There is no url on the OpenPGP header: %s"
                          % (header,))
+
+    def _extract_attached_key(self, attachments, address):
+        """
+        Import keys from the attachments
+
+        :param attachments: email attachment list
+        :type attachments: list(email.Message)
+        :param address: email address in the from header
+        :type address: str
+        """
+        MIME_KEY = "application/pgp-keys"
+
+        for attachment in attachments:
+            if MIME_KEY == attachment.get_content_type():
+                logger.debug("Add key from attachment")
+                self._keymanager.put_raw_key(
+                    attachment.get_payload(),
+                    OpenPGPKey,
+                    address=address)
 
     def _add_message_locally(self, msgtuple):
         """

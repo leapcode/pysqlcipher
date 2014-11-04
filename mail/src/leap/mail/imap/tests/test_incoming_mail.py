@@ -24,6 +24,8 @@ Test case for leap.email.imap.fetch
 
 import json
 
+from email.mime.application import MIMEApplication
+from email.mime.multipart import MIMEMultipart
 from email.parser import Parser
 from mock import Mock
 from twisted.trial import unittest
@@ -105,13 +107,13 @@ subject: independence of cyberspace
         email = self._create_incoming_email(message.as_string())
         self._mock_soledad_get_from_index(fields.JUST_MAIL_IDX, [email])
         self.fetcher._keymanager.fetch_key = Mock()
-        d = self.fetcher.fetch()
 
         def fetch_key_called(ret):
             self.fetcher._keymanager.fetch_key.assert_called_once_with(
                 self.FROM_ADDRESS, KEYURL, OpenPGPKey)
-        d.addCallback(fetch_key_called)
 
+        d = self.fetcher.fetch()
+        d.addCallback(fetch_key_called)
         return d
 
     def testExtractOpenPGPHeaderInvalidUrl(self):
@@ -126,12 +128,35 @@ subject: independence of cyberspace
         email = self._create_incoming_email(message.as_string())
         self._mock_soledad_get_from_index(fields.JUST_MAIL_IDX, [email])
         self.fetcher._keymanager.fetch_key = Mock()
-        d = self.fetcher.fetch()
 
         def fetch_key_called(ret):
             self.assertFalse(self.fetcher._keymanager.fetch_key.called)
-        d.addCallback(fetch_key_called)
 
+        d = self.fetcher.fetch()
+        d.addCallback(fetch_key_called)
+        return d
+
+    def testExtractAttachedKey(self):
+        """
+        Test the OpenPGP header key extraction
+        """
+        KEY = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n..."
+
+        message = MIMEMultipart()
+        message.add_header("from", self.FROM_ADDRESS)
+        key = MIMEApplication("", "pgp-keys")
+        key.set_payload(KEY)
+        message.attach(key)
+        email = self._create_incoming_email(message.as_string())
+        self._mock_soledad_get_from_index(fields.JUST_MAIL_IDX, [email])
+        self.fetcher._keymanager.put_raw_key = Mock()
+
+        def put_raw_key_called(ret):
+            self.fetcher._keymanager.put_raw_key.assert_called_once_with(
+                KEY, OpenPGPKey, address=self.FROM_ADDRESS)
+
+        d = self.fetcher.fetch()
+        d.addCallback(put_raw_key_called)
         return d
 
     def _create_incoming_email(self, email_str):
