@@ -27,6 +27,7 @@ except ImportError:
     import json  # noqa
 import logging
 import re
+import time
 
 
 from abc import ABCMeta, abstractmethod
@@ -50,9 +51,11 @@ KEY_DATA_KEY = 'key_data'
 KEY_PRIVATE_KEY = 'private'
 KEY_LENGTH_KEY = 'length'
 KEY_EXPIRY_DATE_KEY = 'expiry_date'
-KEY_FIRST_SEEN_AT_KEY = 'first_seen_at'
 KEY_LAST_AUDITED_AT_KEY = 'last_audited_at'
+KEY_REFRESHED_AT_KEY = 'refreshed_at'
 KEY_VALIDATION_KEY = 'validation'
+KEY_ENCR_USED_KEY = 'encr_used'
+KEY_SIGN_USED_KEY = 'sign_used'
 KEY_TAGS_KEY = 'tags'
 
 
@@ -110,7 +113,7 @@ def build_key_from_dict(kClass, address, kdict):
     :rtype: C{kClass}
     """
     leap_assert(
-        address == kdict[KEY_ADDRESS_KEY],
+        address in kdict[KEY_ADDRESS_KEY],
         'Wrong address in key data.')
     try:
         validation = toValidationLevel(kdict[KEY_VALIDATION_KEY])
@@ -119,22 +122,38 @@ def build_key_from_dict(kClass, address, kdict):
                      (kdict[KEY_VALIDATION_KEY], kdict[KEY_ID_KEY]))
         validation = ValidationLevel.Weak_Chain
 
-    expiry_date = None
-    if kdict[KEY_EXPIRY_DATE_KEY]:
-        expiry_date = datetime.fromtimestamp(int(kdict[KEY_EXPIRY_DATE_KEY]))
+    expiry_date = _to_datetime(kdict[KEY_EXPIRY_DATE_KEY])
+    last_audited_at = _to_datetime(kdict[KEY_LAST_AUDITED_AT_KEY])
+    refreshed_at = _to_datetime(kdict[KEY_REFRESHED_AT_KEY])
 
     return kClass(
-        address,
+        [address],
         key_id=kdict[KEY_ID_KEY],
         fingerprint=kdict[KEY_FINGERPRINT_KEY],
         key_data=kdict[KEY_DATA_KEY],
         private=kdict[KEY_PRIVATE_KEY],
         length=kdict[KEY_LENGTH_KEY],
         expiry_date=expiry_date,
-        first_seen_at=kdict[KEY_FIRST_SEEN_AT_KEY],
-        last_audited_at=kdict[KEY_LAST_AUDITED_AT_KEY],
+        last_audited_at=last_audited_at,
+        refreshed_at=refreshed_at,
         validation=validation,
+        encr_used=kdict[KEY_ENCR_USED_KEY],
+        sign_used=kdict[KEY_SIGN_USED_KEY],
     )
+
+
+def _to_datetime(unix_time):
+    if unix_time != 0:
+        return datetime.fromtimestamp(unix_time)
+    else:
+        return None
+
+
+def _to_unix_time(date):
+    if date is not None:
+        return int(time.mktime(date.timetuple()))
+    else:
+        return 0
 
 
 #
@@ -151,9 +170,10 @@ class EncryptionKey(object):
 
     __metaclass__ = ABCMeta
 
-    def __init__(self, address, key_id=None, fingerprint=None,
-                 key_data=None, private=None, length=None, expiry_date=None,
-                 validation=None, first_seen_at=None, last_audited_at=None):
+    def __init__(self, address, key_id="", fingerprint="",
+                 key_data="", private=False, length=0, expiry_date=None,
+                 validation=ValidationLevel.Weak_Chain, last_audited_at=None,
+                 refreshed_at=None, encr_used=False, sign_used=False):
         self.address = address
         self.key_id = key_id
         self.fingerprint = fingerprint
@@ -162,8 +182,10 @@ class EncryptionKey(object):
         self.length = length
         self.expiry_date = expiry_date
         self.validation = validation
-        self.first_seen_at = first_seen_at
         self.last_audited_at = last_audited_at
+        self.refreshed_at = refreshed_at
+        self.encr_used = encr_used
+        self.sign_used = sign_used
 
     def get_json(self):
         """
@@ -172,9 +194,9 @@ class EncryptionKey(object):
         :return: The JSON string describing this key.
         :rtype: str
         """
-        expiry_str = ""
-        if self.expiry_date is not None:
-            expiry_str = self.expiry_date.strftime("%s")
+        expiry_date = _to_unix_time(self.expiry_date)
+        last_audited_at = _to_unix_time(self.last_audited_at)
+        refreshed_at = _to_unix_time(self.refreshed_at)
 
         return json.dumps({
             KEY_ADDRESS_KEY: self.address,
@@ -184,10 +206,12 @@ class EncryptionKey(object):
             KEY_DATA_KEY: self.key_data,
             KEY_PRIVATE_KEY: self.private,
             KEY_LENGTH_KEY: self.length,
-            KEY_EXPIRY_DATE_KEY: expiry_str,
+            KEY_EXPIRY_DATE_KEY: expiry_date,
+            KEY_LAST_AUDITED_AT_KEY: last_audited_at,
+            KEY_REFRESHED_AT_KEY: refreshed_at,
             KEY_VALIDATION_KEY: str(self.validation),
-            KEY_FIRST_SEEN_AT_KEY: self.first_seen_at,
-            KEY_LAST_AUDITED_AT_KEY: self.last_audited_at,
+            KEY_ENCR_USED_KEY: self.encr_used,
+            KEY_SIGN_USED_KEY: self.sign_used,
             KEY_TAGS_KEY: [KEYMANAGER_KEY_TAG],
         })
 

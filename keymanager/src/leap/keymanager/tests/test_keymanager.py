@@ -21,6 +21,7 @@ Tests for the Key Manager.
 """
 
 
+from datetime import datetime
 from mock import Mock
 from leap.common.testing.basetest import BaseLeapTest
 from leap.keymanager import (
@@ -75,16 +76,18 @@ class KeyManagerUtilTestCase(BaseLeapTest):
 
     def test_build_key_from_dict(self):
         kdict = {
-            'address': ADDRESS,
-            'key_id': 'key_id',
-            'fingerprint': 'fingerprint',
-            'key_data': 'key_data',
-            'private': 'private',
-            'length': 'length',
-            'expiry_date': '',
-            'first_seen_at': 'first_seen_at',
-            'last_audited_at': 'last_audited_at',
+            'address': [ADDRESS],
+            'key_id': KEY_FINGERPRINT[-16:],
+            'fingerprint': KEY_FINGERPRINT,
+            'key_data': PUBLIC_KEY,
+            'private': False,
+            'length': 4096,
+            'expiry_date': 0,
+            'last_audited_at': 0,
+            'refreshed_at': 1311239602,
             'validation': str(ValidationLevel.Weak_Chain),
+            'encr_used': False,
+            'sign_used': True,
         }
         key = build_key_from_dict(OpenPGPKey, ADDRESS, kdict)
         self.assertEqual(
@@ -109,13 +112,19 @@ class KeyManagerUtilTestCase(BaseLeapTest):
             None, key.expiry_date,
             'Wrong data in key.')
         self.assertEqual(
-            kdict['first_seen_at'], key.first_seen_at,
+            None, key.last_audited_at,
             'Wrong data in key.')
         self.assertEqual(
-            kdict['last_audited_at'], key.last_audited_at,
+            datetime.fromtimestamp(kdict['refreshed_at']), key.refreshed_at,
             'Wrong data in key.')
         self.assertEqual(
             toValidationLevel(kdict['validation']), key.validation,
+            'Wrong data in key.')
+        self.assertEqual(
+            kdict['encr_used'], key.encr_used,
+            'Wrong data in key.')
+        self.assertEqual(
+            kdict['sign_used'], key.sign_used,
             'Wrong data in key.')
 
 
@@ -127,9 +136,9 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         key = pgp.gen_key('user@leap.se')
         self.assertIsInstance(key, openpgp.OpenPGPKey)
         self.assertEqual(
-            'user@leap.se', key.address, 'Wrong address bound to key.')
+            ['user@leap.se'], key.address, 'Wrong address bound to key.')
         self.assertEqual(
-            '4096', key.length, 'Wrong key length.')
+            4096, key.length, 'Wrong key length.')
 
     def test_openpgp_put_delete_key(self):
         pgp = openpgp.OpenPGPScheme(
@@ -147,10 +156,10 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         pgp.put_ascii_key(PUBLIC_KEY)
         key = pgp.get_key(ADDRESS, private=False)
         self.assertIsInstance(key, openpgp.OpenPGPKey)
+        self.assertTrue(
+            ADDRESS in key.address, 'Wrong address bound to key.')
         self.assertEqual(
-            ADDRESS, key.address, 'Wrong address bound to key.')
-        self.assertEqual(
-            '4096', key.length, 'Wrong key length.')
+            4096, key.length, 'Wrong key length.')
         pgp.delete_key(key)
         self.assertRaises(KeyNotFound, pgp.get_key, ADDRESS)
 
@@ -162,7 +171,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         self.assertRaises(
             KeyNotFound, pgp.get_key, ADDRESS, private=True)
         key = pgp.get_key(ADDRESS, private=False)
-        self.assertEqual(ADDRESS, key.address)
+        self.assertTrue(ADDRESS in key.address)
         self.assertFalse(key.private)
         self.assertEqual(KEY_FINGERPRINT, key.fingerprint)
         pgp.delete_key(key)
@@ -311,12 +320,12 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         # get public keys
         keys = km.get_all_keys(False)
         self.assertEqual(len(keys), 1, 'Wrong number of keys')
-        self.assertEqual(ADDRESS, keys[0].address)
+        self.assertTrue(ADDRESS in keys[0].address)
         self.assertFalse(keys[0].private)
         # get private keys
         keys = km.get_all_keys(True)
         self.assertEqual(len(keys), 1, 'Wrong number of keys')
-        self.assertEqual(ADDRESS, keys[0].address)
+        self.assertTrue(ADDRESS in keys[0].address)
         self.assertTrue(keys[0].private)
 
     def test_get_public_key(self):
@@ -326,7 +335,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         key = km.get_key(ADDRESS, OpenPGPKey, private=False,
                          fetch_remote=False)
         self.assertTrue(key is not None)
-        self.assertEqual(key.address, ADDRESS)
+        self.assertTrue(ADDRESS in key.address)
         self.assertEqual(
             key.fingerprint.lower(), KEY_FINGERPRINT.lower())
         self.assertFalse(key.private)
@@ -338,7 +347,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         key = km.get_key(ADDRESS, OpenPGPKey, private=True,
                          fetch_remote=False)
         self.assertTrue(key is not None)
-        self.assertEqual(key.address, ADDRESS)
+        self.assertTrue(ADDRESS in key.address)
         self.assertEqual(
             key.fingerprint.lower(), KEY_FINGERPRINT.lower())
         self.assertTrue(key.private)
@@ -430,7 +439,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         # try to get key fetching from server.
         key = km.get_key(ADDRESS, OpenPGPKey)
         self.assertIsInstance(key, OpenPGPKey)
-        self.assertEqual(ADDRESS, key.address)
+        self.assertTrue(ADDRESS in key.address)
 
     def test_put_key_ascii(self):
         """
@@ -441,7 +450,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         km.put_raw_key(PUBLIC_KEY, OpenPGPKey)
         key = km.get_key(ADDRESS, OpenPGPKey)
         self.assertIsInstance(key, OpenPGPKey)
-        self.assertEqual(ADDRESS, key.address)
+        self.assertTrue(ADDRESS in key.address)
 
     def test_fetch_uri_ascii_key(self):
         """

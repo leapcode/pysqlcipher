@@ -319,7 +319,7 @@ class KeyManager(object):
         return map(
             lambda doc: build_key_from_dict(
                 self._key_class_from_type(doc.content['type']),
-                doc.content['address'],
+                doc.content['address'][0],
                 doc.content),
             self._soledad.get_from_index(
                 TAGS_PRIVATE_INDEX,
@@ -529,7 +529,7 @@ class KeyManager(object):
                                    new one is not a valid update for it
         """
         try:
-            old_key = self._wrapper_map[type(key)].get_key(key.address,
+            old_key = self._wrapper_map[type(key)].get_key(key.address[0],
                                                            private=key.private)
         except KeyNotFound:
             old_key = None
@@ -564,7 +564,7 @@ class KeyManager(object):
                                    new one is not a valid update for it
         """
         pubkey, _ = self._wrapper_map[ktype].parse_ascii_key(key)
-        if address is not None and address != pubkey.address:
+        if address is not None and address not in pubkey.address:
             raise KeyAddressMismatch("Key UID %s, but expected %s"
                                      % (pubkey.address, address))
 
@@ -600,9 +600,9 @@ class KeyManager(object):
         pubkey, _ = self._wrapper_map[ktype].parse_ascii_key(res.content)
         if pubkey is None:
             raise KeyNotFound(uri)
-        if pubkey.address != address:
+        if address not in pubkey.address:
             raise KeyAddressMismatch("UID %s found, but expected %s"
-                                     % (pubkey.address, address))
+                                     % (str(pubkey.address), address))
 
         pubkey.validation = validation
         self.put_key(pubkey)

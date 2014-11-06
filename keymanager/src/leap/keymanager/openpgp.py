@@ -41,7 +41,6 @@ from leap.keymanager.keys import (
     KEY_FINGERPRINT_KEY,
     KEY_DATA_KEY,
 )
-from leap.keymanager.validation import ValidationLevel
 
 
 logger = logging.getLogger(__name__)
@@ -109,9 +108,9 @@ class TempGPGWrapper(object):
         # itself is enough to also have the public key in the keyring,
         # and we want to count the keys afterwards.
 
-        privaddrs = map(lambda privkey: privkey.address, privkeys)
+        privaddrs = map(lambda privkey: privkey.address[0], privkeys)
         publkeys = filter(
-            lambda pubkey: pubkey.address not in privaddrs, publkeys)
+            lambda pubkey: pubkey.address[0] not in privaddrs, publkeys)
 
         listkeys = lambda: self._gpg.list_keys()
         listsecretkeys = lambda: self._gpg.list_keys(secret=True)
@@ -184,14 +183,14 @@ def _build_key_from_gpg(address, key, key_data):
         expiry_date = datetime.fromtimestamp(int(key['expires']))
 
     return OpenPGPKey(
-        address,
+        [address],
         key_id=key['keyid'],
         fingerprint=key['fingerprint'],
         key_data=key_data,
         private=True if key['type'] == 'sec' else False,
-        length=key['length'],
+        length=int(key['length']),
         expiry_date=expiry_date,
-        validation=ValidationLevel.Weak_Chain,
+        refreshed_at=datetime.now(),
     )
 
 
@@ -397,7 +396,7 @@ class OpenPGPScheme(EncryptionScheme):
         :param key: The key to be stored.
         :type key: OpenPGPKey
         """
-        doc = self._get_key_doc(key.address, private=key.private)
+        doc = self._get_key_doc(key.address[0], private=key.private)
         if doc is None:
             self._soledad.create_doc_from_json(key.get_json())
         else:
@@ -408,7 +407,7 @@ class OpenPGPScheme(EncryptionScheme):
                     gpg.import_keys(key.key_data)
                     gpgkey = gpg.list_keys(secret=key.private).pop()
                     key = _build_key_from_gpg(
-                        key.address, gpgkey,
+                        key.address[0], gpgkey,
                         gpg.export_keys(gpgkey['fingerprint'],
                                         secret=key.private))
             doc.set_json(key.get_json())
@@ -452,12 +451,11 @@ class OpenPGPScheme(EncryptionScheme):
         :type key: EncryptionKey
         """
         leap_assert_type(key, OpenPGPKey)
-        stored_key = self.get_key(key.address, private=key.private)
-        if stored_key is None:
+        doc = self._get_key_doc(key.address[0], key.private)
+        if doc is None:
             raise errors.KeyNotFound(key)
-        if stored_key.__dict__ != key.__dict__:
+        if doc.content[KEY_FINGERPRINT_KEY] != key.fingerprint:
             raise errors.KeyAttributesDiffer(key)
-        doc = self._get_key_doc(key.address, key.private)
         self._soledad.delete_doc(doc)
 
     #
