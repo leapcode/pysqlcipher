@@ -36,8 +36,7 @@ from leap.keymanager.keys import (
     EncryptionScheme,
     is_address,
     build_key_from_dict,
-    KEYMANAGER_KEY_TAG,
-    TAGS_ADDRESS_PRIVATE_INDEX,
+    TYPE_ADDRESS_PRIVATE_INDEX,
     KEY_FINGERPRINT_KEY,
     KEY_DATA_KEY,
 )
@@ -209,6 +208,9 @@ class OpenPGPScheme(EncryptionScheme):
     A wrapper for OpenPGP keys management and use (encryption, decyption,
     signing and verification).
     """
+
+    # type used on the soledad documents
+    OPENPGP_KEY_TYPE = OpenPGPKey.__name__
 
     def __init__(self, soledad, gpgbinary=None):
         """
@@ -427,8 +429,8 @@ class OpenPGPScheme(EncryptionScheme):
         :rtype: leap.soledad.document.SoledadDocument
         """
         doclist = self._soledad.get_from_index(
-            TAGS_ADDRESS_PRIVATE_INDEX,
-            KEYMANAGER_KEY_TAG,
+            TYPE_ADDRESS_PRIVATE_INDEX,
+            self.OPENPGP_KEY_TYPE,
             address,
             '1' if private else '0')
         if len(doclist) is 0:

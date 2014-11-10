@@ -71,14 +71,14 @@ KEYMANAGER_KEY_TAG = 'keymanager-key'
 #
 
 TAGS_PRIVATE_INDEX = 'by-tags-private'
-TAGS_ADDRESS_PRIVATE_INDEX = 'by-tags-address-private'
+TYPE_ADDRESS_PRIVATE_INDEX = 'by-type-address-private'
 INDEXES = {
     TAGS_PRIVATE_INDEX: [
         KEY_TAGS_KEY,
         'bool(%s)' % KEY_PRIVATE_KEY,
     ],
-    TAGS_ADDRESS_PRIVATE_INDEX: [
-        KEY_TAGS_KEY,
+    TYPE_ADDRESS_PRIVATE_INDEX: [
+        KEY_TYPE_KEY,
         KEY_ADDRESS_KEY,
         'bool(%s)' % KEY_PRIVATE_KEY,
     ]
@@ -200,7 +200,7 @@ class EncryptionKey(object):
 
         return json.dumps({
             KEY_ADDRESS_KEY: self.address,
-            KEY_TYPE_KEY: str(self.__class__),
+            KEY_TYPE_KEY: self.__class__.__name__,
             KEY_ID_KEY: self.key_id,
             KEY_FINGERPRINT_KEY: self.fingerprint,
             KEY_DATA_KEY: self.key_data,

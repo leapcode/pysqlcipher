@@ -134,7 +134,7 @@ class KeyManager(object):
         Return key class from string representation of key type.
         """
         return filter(
-            lambda klass: str(klass) == ktype,
+            lambda klass: klass.__name__ == ktype,
             self._wrapper_map).pop()
 
     def _get(self, uri, data=None):
