@@ -2,6 +2,16 @@
 Changes in pysqlcipher
 ======================
 
+Release 2.6.4
+-------------
+
+Bugfixes
+''''''''
+
+- Use HTTPS URI for amalgamation (`GH#11'_)
+
+.. _`GH#11`: https://github.com/leapcode/pysqlcipher/issues/11
+
 Release 2.6.3-1
 ---------------
 
