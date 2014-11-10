@@ -8,9 +8,11 @@ Release 2.6.4
 Bugfixes
 ''''''''
 
-- Use HTTPS URI for amalgamation (`GH#11'_)
+- Use HTTPS URI for amalgamation (`GH#11`_)
+- Add support for msvc (`GH#12`_)
 
 .. _`GH#11`: https://github.com/leapcode/pysqlcipher/issues/11
+.. _`GH#12`: https://github.com/leapcode/pysqlcipher/issues/12
 
 Release 2.6.3-1
 ---------------
