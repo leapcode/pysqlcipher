@@ -36,9 +36,12 @@ from leap.keymanager.keys import (
     EncryptionScheme,
     is_address,
     build_key_from_dict,
+    TYPE_ID_PRIVATE_INDEX,
     TYPE_ADDRESS_PRIVATE_INDEX,
     KEY_FINGERPRINT_KEY,
     KEY_DATA_KEY,
+    KEY_ID_KEY,
+    KEYMANAGER_ACTIVE_TYPE,
 )
 
 
@@ -193,6 +196,18 @@ def _build_key_from_gpg(address, key, key_data):
     )
 
 
+def _parse_address(address):
+    """
+    Remove the identity suffix after the '+' until the '@'
+    e.g.: test_user+something@provider.com becomes test_user@provider.com
+    since the key belongs to the identity without the '+' suffix.
+
+    :type address: str
+    :rtype: str
+    """
+    return re.sub(r'\+.*\@', '@', address)
+
+
 #
 # The OpenPGP wrapper
 #
@@ -210,7 +225,8 @@ class OpenPGPScheme(EncryptionScheme):
     """
 
     # type used on the soledad documents
-    OPENPGP_KEY_TYPE = OpenPGPKey.__name__
+    KEY_TYPE = OpenPGPKey.__name__
+    ACTIVE_TYPE = KEY_TYPE + KEYMANAGER_ACTIVE_TYPE
 
     def __init__(self, soledad, gpgbinary=None):
         """
@@ -282,7 +298,7 @@ class OpenPGPScheme(EncryptionScheme):
                 openpgp_key = _build_key_from_gpg(
                     address, key,
                     gpg.export_keys(key['fingerprint'], secret=secret))
-                self.put_key(openpgp_key)
+                self.put_key(openpgp_key, address)
 
         return self.get_key(address, private=True)
 
@@ -299,10 +315,7 @@ class OpenPGPScheme(EncryptionScheme):
         :rtype: OpenPGPKey
         @raise KeyNotFound: If the key was not found on local storage.
         """
-        # Remove the identity suffix after the '+' until the '@'
-        # e.g.: test_user+something@provider.com becomes test_user@provider.com
-        # since the key belongs to the identity without the '+' suffix.
-        address = re.sub(r'\+.*\@', '@', address)
+        address = _parse_address(address)
 
         doc = self._get_key_doc(address, private)
         if doc is None:
@@ -371,12 +384,15 @@ class OpenPGPScheme(EncryptionScheme):
 
             return (openpgp_pubkey, openpgp_privkey)
 
-    def put_ascii_key(self, key_data):
+    def put_ascii_key(self, key_data, address=None):
         """
         Put key contained in ascii-armored C{key_data} in local storage.
 
         :param key_data: The key data to be stored.
         :type key_data: str or unicode
+        :param address: address for which this key will be active. If not set
+                        all the uids will be activated
+        :type address: str
         """
         leap_assert_type(key_data, (str, unicode))
 
@@ -387,21 +403,41 @@ class OpenPGPScheme(EncryptionScheme):
             leap_assert(False, repr(e))
 
         if openpgp_pubkey is not None:
-            self.put_key(openpgp_pubkey)
+            self.put_key(openpgp_pubkey, address)
         if openpgp_privkey is not None:
-            self.put_key(openpgp_privkey)
+            self.put_key(openpgp_privkey, address)
 
-    def put_key(self, key):
+    def put_key(self, key, address=None):
         """
         Put C{key} in local storage.
 
         :param key: The key to be stored.
         :type key: OpenPGPKey
+        :param address: address for which this key will be active. If not set
+                        all the uids will be activated
+        :type address: str
         """
-        doc = self._get_key_doc(key.address[0], private=key.private)
-        if doc is None:
-            self._soledad.create_doc_from_json(key.get_json())
+        if address is not None:
+            active_address = [_parse_address(address)]
         else:
+            active_address = key.address
+
+        self._put_key_doc(key)
+        self._put_active_doc(key, active_address)
+
+    def _put_key_doc(self, key):
+        """
+        Put key document in soledad
+
+        :type key: OpenPGPKey
+        """
+        docs = self._soledad.get_from_index(
+            TYPE_ID_PRIVATE_INDEX,
+            self.KEY_TYPE,
+            key.key_id,
+            '1' if key.private else '0')
+        if len(docs) != 0:
+            doc = docs.pop()
             if key.fingerprint == doc.content[KEY_FINGERPRINT_KEY]:
                 # in case of an update of the key merge them with gnupg
                 with self._temporary_gpgwrapper() as gpg:
@@ -412,8 +448,41 @@ class OpenPGPScheme(EncryptionScheme):
                         key.address[0], gpgkey,
                         gpg.export_keys(gpgkey['fingerprint'],
                                         secret=key.private))
-            doc.set_json(key.get_json())
-            self._soledad.put_doc(doc)
+                doc.set_json(key.get_json())
+                self._soledad.put_doc(doc)
+            else:
+                logger.critical(
+                    "Can't put a key whith the same key_id and different "
+                    "fingerprint: %s, %s"
+                    % (key.fingerprint, doc.content[KEY_FINGERPRINT_KEY]))
+        else:
+            self._soledad.create_doc_from_json(key.get_json())
+
+    def _put_active_doc(self, key, addresses):
+        """
+        Put active key document in soledad
+
+        :type key: OpenPGPKey
+        :type addresses: list(str)
+        """
+        for address in addresses:
+            docs = self._soledad.get_from_index(
+                TYPE_ADDRESS_PRIVATE_INDEX,
+                self.ACTIVE_TYPE,
+                address,
+                '1' if key.private else '0')
+            if len(docs) == 1:
+                doc = docs.pop()
+                doc.set_json(key.get_active_json(address))
+                self._soledad.put_doc(doc)
+            else:
+                if len(docs) > 1:
+                    logger.error("There is more than one active key document "
+                                 "for the address %s" % (address,))
+                    for doc in docs:
+                        self._soledad.delete_doc(doc)
+                self._soledad.create_doc_from_json(
+                    key.get_active_json(address))
 
     def _get_key_doc(self, address, private=False):
         """
@@ -428,17 +497,26 @@ class OpenPGPScheme(EncryptionScheme):
         :return: The document with the key or None if it does not exist.
         :rtype: leap.soledad.document.SoledadDocument
         """
-        doclist = self._soledad.get_from_index(
+        activedoc = self._soledad.get_from_index(
             TYPE_ADDRESS_PRIVATE_INDEX,
-            self.OPENPGP_KEY_TYPE,
+            self.ACTIVE_TYPE,
             address,
             '1' if private else '0')
-        if len(doclist) is 0:
+        if len(activedoc) is 0:
             return None
         leap_assert(
+            len(activedoc) is 1,
+            'Found more than one key for address %s!' % (address,))
+
+        key_id = activedoc[0].content[KEY_ID_KEY]
+        doclist = self._soledad.get_from_index(
+            TYPE_ID_PRIVATE_INDEX,
+            self.KEY_TYPE,
+            key_id,
+            '1' if private else '0')
+        leap_assert(
             len(doclist) is 1,
-            'Found more than one %s key for address!' %
-            'private' if private else 'public')
+            'There is %d keys for id %s!' % (len(doclist), key_id))
         return doclist.pop()
 
     def delete_key(self, key):
@@ -447,17 +525,37 @@ class OpenPGPScheme(EncryptionScheme):
 
         May raise:
             errors.KeyNotFound
-            errors.KeyAttributesDiffer
 
         :param key: The key to be removed.
         :type key: EncryptionKey
         """
         leap_assert_type(key, OpenPGPKey)
-        doc = self._get_key_doc(key.address[0], key.private)
+        activedocs = self._soledad.get_from_index(
+            TYPE_ID_PRIVATE_INDEX,
+            self.ACTIVE_TYPE,
+            key.key_id,
+            '1' if key.private else '0')
+        for doc in activedocs:
+            self._soledad.delete_doc(doc)
+
+        docs = self._soledad.get_from_index(
+            TYPE_ID_PRIVATE_INDEX,
+            self.KEY_TYPE,
+            key.key_id,
+            '1' if key.private else '0')
+        if len(docs) == 0:
+            raise errors.KeyNotFound(key)
+        if len(docs) > 1:
+            logger.critical("There is more than one key for key_id %s"
+                            % key.key_id)
+
+        doc = None
+        for d in docs:
+            if d.content['fingerprint'] == key.fingerprint:
+                doc = d
+                break
         if doc is None:
             raise errors.KeyNotFound(key)
-        if doc.content[KEY_FINGERPRINT_KEY] != key.fingerprint:
-            raise errors.KeyAttributesDiffer(key)
         self._soledad.delete_doc(doc)
 
     #

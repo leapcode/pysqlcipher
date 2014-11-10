@@ -64,6 +64,8 @@ KEY_TAGS_KEY = 'tags'
 #
 
 KEYMANAGER_KEY_TAG = 'keymanager-key'
+KEYMANAGER_ACTIVE_TAG = 'keymanager-active'
+KEYMANAGER_ACTIVE_TYPE = '-active'
 
 
 #
@@ -71,10 +73,16 @@ KEYMANAGER_KEY_TAG = 'keymanager-key'
 #
 
 TAGS_PRIVATE_INDEX = 'by-tags-private'
+TYPE_ID_PRIVATE_INDEX = 'by-type-id-private'
 TYPE_ADDRESS_PRIVATE_INDEX = 'by-type-address-private'
 INDEXES = {
     TAGS_PRIVATE_INDEX: [
         KEY_TAGS_KEY,
+        'bool(%s)' % KEY_PRIVATE_KEY,
+    ],
+    TYPE_ID_PRIVATE_INDEX: [
+        KEY_TYPE_KEY,
+        KEY_ID_KEY,
         'bool(%s)' % KEY_PRIVATE_KEY,
     ],
     TYPE_ADDRESS_PRIVATE_INDEX: [
@@ -213,6 +221,23 @@ class EncryptionKey(object):
             KEY_ENCR_USED_KEY: self.encr_used,
             KEY_SIGN_USED_KEY: self.sign_used,
             KEY_TAGS_KEY: [KEYMANAGER_KEY_TAG],
+        })
+
+    def get_active_json(self, address):
+        """
+        Return a JSON string describing this key.
+
+        :param address: Address for wich the key is active
+        :type address: str
+        :return: The JSON string describing this key.
+        :rtype: str
+        """
+        return json.dumps({
+            KEY_ADDRESS_KEY: address,
+            KEY_TYPE_KEY: self.__class__.__name__ + KEYMANAGER_ACTIVE_TYPE,
+            KEY_ID_KEY: self.key_id,
+            KEY_PRIVATE_KEY: self.private,
+            KEY_TAGS_KEY: [KEYMANAGER_ACTIVE_TAG],
         })
 
     def __repr__(self):
