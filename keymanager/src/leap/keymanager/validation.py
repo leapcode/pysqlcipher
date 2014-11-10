@@ -73,7 +73,6 @@ def can_upgrade(new_key, old_key):
 
     # An update of the same key
     if new_key.fingerprint == old_key.fingerprint:
-        # XXX wich one is newer? is that a downgrade attack? (#6210)
         return True
 
     # Manually verified fingerprint
@@ -81,11 +80,10 @@ def can_upgrade(new_key, old_key):
         return True
 
     # Expired key and higher validation level
-    if old_key.expiry_date:
-        old_expiry_date = datetime.fromtimestamp(int(old_key.expiry_date))
-        if (old_expiry_date < datetime.now() and
-                new_key.validation >= old_key.validation):
-            return True
+    if (old_key.expiry_date is not None and
+            old_key.expiry_date < datetime.now() and
+            new_key.validation >= old_key.validation):
+        return True
 
     # No expiration date and higher validation level
     elif new_key.validation >= old_key.validation:

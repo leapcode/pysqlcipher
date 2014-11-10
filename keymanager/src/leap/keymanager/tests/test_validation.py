@@ -18,6 +18,8 @@
 Tests for the Validation Levels
 """
 
+from datetime import datetime
+
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.keymanager.errors import (
     KeyNotValidUpgrade
@@ -71,6 +73,13 @@ class ValidationLevelTestCase(KeyManagerWithSoledadTestCase):
             UNRELATED_KEY,
             OpenPGPKey,
             validation=ValidationLevel.Provider_Trust)
+
+    def test_roll_back(self):
+        km = self._key_manager()
+        km.put_raw_key(EXPIRED_KEY_UPDATED, OpenPGPKey)
+        km.put_raw_key(EXPIRED_KEY, OpenPGPKey)
+        key = km.get_key(ADDRESS, OpenPGPKey, fetch_remote=False)
+        self.assertEqual(key.expiry_date, EXPIRED_KEY_NEW_EXPIRY_DATE)
 
 
 # Key material for testing
@@ -144,6 +153,41 @@ Osuse7+NkyUHgMXMVW7cz+nU7iO+ht2rkBtv+Z5LGlzgHTeFjKci
 =WhX+
 -----END PGP PUBLIC KEY BLOCK-----
 """
+# updated expiration date
+EXPIRED_KEY_NEW_EXPIRY_DATE = datetime.fromtimestamp(2045319180)
+EXPIRED_KEY_UPDATED = """
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+Version: GnuPG v1.4.12 (GNU/Linux)
+
+mQENBBvrfd0BCADGNpspaNhsbhSjKioCWrE2MTTYC+Sdpes22RabdhQyOCWvlSbj
+b8p0y3kmnMOtVBT+c22/w7eu2YBfIpS4RswgE5ypr/1kZLFQueVe/cp29GjPvLwJ
+82A3EOHcmXs8rSJ76h2bnkySvbJawz9rwCcaXhpdAwC+sjWvbqiwZYEL+90I4Xp3
+acDh9vNtPxDCg5RdI0bfdIEBGgHTfsda3kWGvo1wH5SgrTRq0+EcTI7aJgkMmM/A
+IhnpACE52NvGdG9eB3x7xyQFsQqK8F0XvEev2UJH4SR7vb+Z7FNTJKCy6likYbSV
+wGGFuowFSESnzXuUI6PcjyuO6FUbMgeM5euFABEBAAG0HExlYXAgVGVzdCBLZXkg
+PGxlYXBAbGVhcC5zZT6JAT4EEwECACgCGwMGCwkIBwMCBhUIAgkKCwQWAgMBAh4B
+AheABQJUURIXBQld/ZovAAoJEG8V8AShiFp8xUcIALcAHZbaxvyhHRGOrwDddbH0
+fFDK0AqKTsIT7y4D/HLFCP5zG3Ck7qGPZdkHXZfzq8rIb+zUjW3oJIVI1IucHxG2
+T5kppa8RFCBAFlRWYf6R3isX3YL0d3QSragjoxRNPcHNU8ALHcvfSonFHBoi4fH4
+4rvgksAiT68SsdPaoXDlabx5T15evu/7T5e/DGMQVPMxiaSuSQhbOKuMk2wcFdmL
+tBYHLZPa54hHPNhEDyxLgtKKph0gObk9ojKfH9kPvLveIcpS5CqTJfN/kqBz7CJW
+wEeAi2iG3H1OEB25aCUdTxXSRNlGqEgcWPaWxtc1RzlARu7LB64OUZuRy4puiAG5
+AQ0EG+t93QEIAKqRq/2sBDW4g3FU+11LhixT+GosrfVvnitz3S9k2tBXok/wYpI1
+XeA+kTHiF0LaqoaciDRvkA9DvhDbSrNM1yeuYRyZiHlTmoPZ/Fkl60oA2cyLd1L5
+sXbuipY3TEiakugdSU4rzgi0hFycm6Go6yq2G6eC6UALvD9CTMdZHw40TadG9xpm
+4thYPuJ1kPH8/bkbTi9sLHoApYgL+7ssje8w4epr0qD4IGxeKwJPf/tbTRpnd8w3
+leldixHHKAutNt49p0pkXlORAHRpUmp+KMZhFvCvIPwe9o5mYtMR7sDRxjY61ZEQ
+KLyKoh5wsJsaPXBjdG7cf6G/cBcwvnQVUHcAEQEAAYkBJQQYAQIADwUCG+t93QIb
+DAUJAAFRgAAKCRBvFfAEoYhafOPgB/9z4YCyT/N0262HtegHykhsyykuqEeNb1LV
+D9INcP+RbCX/0IjFgP4DTMPP7qqF1OBwR276maALT321Gqxc5HN5YrwxGdmoyBLm
+unaQJJlD+7B1C+jnO6r4m44obvJ/NMERxVyzkXap3J2VgRIO1wNLI9I0sH6Kj5/j
+Mgy06OwXDcqIc+jB4sIJ3Tnm8LZ3phJzNEm9mI8Ak0oJ7IEcMndR6DzmRt1rJQcq
+K/D7hOG02zvyRhxF27U1qR1MxeU/gNnOx8q4dnVyWB+EiV1sFl4iTOyYHEsoyd7W
+Osuse7+NkyUHgMXMVW7cz+nU7iO+ht2rkBtv+Z5LGlzgHTeFjKci
+=79Ll
+-----END PGP PUBLIC KEY BLOCK-----
+"""
+
 
 import unittest
 if __name__ == "__main__":

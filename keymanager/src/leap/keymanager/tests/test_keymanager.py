@@ -81,7 +81,7 @@ class KeyManagerUtilTestCase(BaseLeapTest):
             'key_data': 'key_data',
             'private': 'private',
             'length': 'length',
-            'expiry_date': 'expiry_date',
+            'expiry_date': '',
             'first_seen_at': 'first_seen_at',
             'last_audited_at': 'last_audited_at',
             'validation': str(ValidationLevel.Weak_Chain),
@@ -106,7 +106,7 @@ class KeyManagerUtilTestCase(BaseLeapTest):
             kdict['length'], key.length,
             'Wrong data in key.')
         self.assertEqual(
-            kdict['expiry_date'], key.expiry_date,
+            None, key.expiry_date,
             'Wrong data in key.')
         self.assertEqual(
             kdict['first_seen_at'], key.first_seen_at,
