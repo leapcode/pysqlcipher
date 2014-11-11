@@ -493,8 +493,8 @@ class KeyManager(object):
                              verified using this detached signature.
         :type detached_sig: str
 
-        :return: The signed data.
-        :rtype: str
+        :return: signature matches
+        :rtype: bool
         """
         leap_assert_type(pubkey, EncryptionKey)
         leap_assert(pubkey.__class__ in self._wrapper_map, 'Unknown key type.')

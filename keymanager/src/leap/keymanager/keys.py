@@ -411,7 +411,7 @@ class EncryptionScheme(object):
                              verified against this sdetached signature.
         :type detached_sig: str
 
-        :return: The signed data.
-        :rtype: str
+        :return: signature matches
+        :rtype: bool
         """
         pass

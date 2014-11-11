@@ -742,8 +742,8 @@ class OpenPGPScheme(EncryptionScheme):
                              verified against this detached signature.
         :type detached_sig: str
 
-        :return: The ascii-armored signed data.
-        :rtype: str
+        :return: signature matches
+        :rtype: bool
         """
         leap_assert_type(pubkey, OpenPGPKey)
         leap_assert(pubkey.private is False)
