@@ -48,7 +48,7 @@ PYSQLITE_EXPERIMENTAL = False
 
 DEV_VERSION = None
 
-PATCH_VERSION = "1"
+PATCH_VERSION = None
 
 sources = ["src/module.c", "src/connection.c", "src/cursor.c", "src/cache.c",
            "src/microprotocols.c", "src/prepare_protocol.c", "src/statement.c",
@@ -184,7 +184,7 @@ class MyBuildExt(build_ext):
                 # Try to locate openssl
                 openssl_conf = os.environ.get('OPENSSL_CONF')
                 if not openssl_conf:
-                    sys.exit('Fatal error: OpenSSL could not be detected!') 
+                    sys.exit('Fatal error: OpenSSL could not be detected!')
                 openssl = os.path.dirname(os.path.dirname(openssl_conf))
 
                 # Configure the compiler
@@ -329,14 +329,19 @@ def get_setup_args():
     if PATCH_VERSION:
         PYSQLITE_VERSION += "-%s" % PATCH_VERSION
 
+    # Need to bump minor version, patch handled badly.
+    PYSQLCIPHER_VERSION = "2.6.4"
+
     setup_args = dict(
         name="pysqlcipher",
-        version=PYSQLITE_VERSION,
+        #version=PYSQLITE_VERSION,
+        version=PYSQLCIPHER_VERSION,
         description="DB-API 2.0 interface for SQLCIPHER 3.x",
         long_description=long_description,
         author="Kali Kaneko",
-        author_email="kali@futeisha.org",
-        license="zlib/libpng",  # is THIS a license?
+        author_email="kali@leap.se",
+        license="zlib/libpng",
+        # XXX check
         # It says MIT in the google project
         platforms="ALL",
         url="http://github.com/leapcode/pysqlcipher/",
