@@ -109,20 +109,15 @@ def is_address(address):
     return bool(re.match('[\w.-]+@[\w.-]+', address))
 
 
-def build_key_from_dict(kClass, address, kdict):
+def build_key_from_dict(kClass, kdict):
     """
-    Build an C{kClass} key bound to C{address} based on info in C{kdict}.
+    Build an C{kClass} key based on info in C{kdict}.
 
-    :param address: The address bound to the key.
-    :type address: str
     :param kdict: Dictionary with key data.
     :type kdict: dict
     :return: An instance of the key.
     :rtype: C{kClass}
     """
-    leap_assert(
-        address in kdict[KEY_ADDRESS_KEY],
-        'Wrong address in key data.')
     try:
         validation = toValidationLevel(kdict[KEY_VALIDATION_KEY])
     except ValueError:
@@ -135,7 +130,7 @@ def build_key_from_dict(kClass, address, kdict):
     refreshed_at = _to_datetime(kdict[KEY_REFRESHED_AT_KEY])
 
     return kClass(
-        [address],
+        kdict[KEY_ADDRESS_KEY],
         key_id=kdict[KEY_ID_KEY],
         fingerprint=kdict[KEY_FINGERPRINT_KEY],
         key_data=kdict[KEY_DATA_KEY],
@@ -315,12 +310,14 @@ class EncryptionScheme(object):
         pass
 
     @abstractmethod
-    def put_key(self, key):
+    def put_key(self, key, address):
         """
         Put a key in local storage.
 
         :param key: The key to be stored.
         :type key: EncryptionKey
+        :param address: address for which this key will be active.
+        :type address: str
         """
         pass
 

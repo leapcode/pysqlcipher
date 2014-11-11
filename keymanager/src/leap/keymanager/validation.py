@@ -67,10 +67,6 @@ def can_upgrade(new_key, old_key):
     if old_key is None:
         return True
 
-    if new_key.address != old_key.address:
-        # XXX how do we map multiple IDs? (#6212)
-        return False
-
     # An update of the same key
     if new_key.fingerprint == old_key.fingerprint:
         return True

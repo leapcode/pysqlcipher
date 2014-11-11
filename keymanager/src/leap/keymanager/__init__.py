@@ -319,7 +319,6 @@ class KeyManager(object):
         return map(
             lambda doc: build_key_from_dict(
                 self._key_class_from_type(doc.content['type']),
-                doc.content['address'][0],
                 doc.content),
             self._soledad.get_from_index(
                 TAGS_PRIVATE_INDEX,
@@ -519,26 +518,25 @@ class KeyManager(object):
         except IndexError as e:
             leap_assert(False, "Unsupported key type. Error {0!r}".format(e))
 
-    def put_key(self, key, address=None):
+    def put_key(self, key, address):
         """
         Put C{key} in local storage.
 
         :param key: The key to be stored
         :type key: EncryptionKey
-        :param address: address for which this key will be active. If not set
-                        all the uids will be activated
+        :param address: address for which this key will be active
         :type address: str
 
         :raises KeyAddressMismatch: if address doesn't match any uid on the key
         :raises KeyNotValidUpdate: if a key with the same uid exists and the
                                    new one is not a valid update for it
         """
-        if address is not None and address not in key.address:
+        if address not in key.address:
             raise KeyAddressMismatch("UID %s found, but expected %s"
                                      % (str(key.address), address))
 
         try:
-            old_key = self._wrapper_map[type(key)].get_key(key.address[0],
+            old_key = self._wrapper_map[type(key)].get_key(address,
                                                            private=key.private)
         except KeyNotFound:
             old_key = None
@@ -553,7 +551,7 @@ class KeyManager(object):
             raise KeyNotValidUpgrade("Key %s can not be upgraded by new key %s"
                                      % (old_key.key_id, key.key_id))
 
-    def put_raw_key(self, key, ktype, address=None,
+    def put_raw_key(self, key, ktype, address,
                     validation=ValidationLevel.Weak_Chain):
         """
         Put C{key} in local storage.
