@@ -22,6 +22,8 @@ import logging
 
 from twisted.internet import reactor
 from twisted.internet.error import CannotListenError
+from twisted.mail import smtp
+from leap.mail.service import OutgoingMail
 
 logger = logging.getLogger(__name__)
 
@@ -59,8 +61,8 @@ def setup_smtp_gateway(port, userid, keymanager, smtp_host, smtp_port,
     :returns: tuple of SMTPFactory, twisted.internet.tcp.Port
     """
     # configure the use of this service with twistd
-    factory = SMTPFactory(userid, keymanager, smtp_host, smtp_port, smtp_cert,
-                          smtp_key, encrypted_only)
+    outgoing_mail = OutgoingMail(str(userid), keymanager, smtp_cert, smtp_key, smtp_host, smtp_port)
+    factory = SMTPFactory(userid, keymanager, encrypted_only, outgoing_mail)
     try:
         tport = reactor.listenTCP(port, factory, interface="localhost")
         signal(proto.SMTP_SERVICE_STARTED, str(port))

@@ -1,0 +1,1 @@
+- Creates a OutgoingMail class that has the logic for encrypting, signing and sending messages. Factors that logic out of EncryptedMessage so it can be used by other clients (Closes: #6357)

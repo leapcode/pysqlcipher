@@ -17,12 +17,15 @@
 """
 Mail utilities.
 """
+from email.utils import parseaddr
 import json
 import re
 import traceback
 import Queue
 
 from leap.soledad.common.document import SoledadDocument
+from leap.common.check import leap_assert_type
+from twisted.mail import smtp
 
 
 CHARSET_PATTERN = r"""charset=([\w-]+)"""
@@ -223,6 +226,26 @@ def accumulator_queue(fun, lim):
 
     return _accumulator
 
+
+def validate_address(address):
+    """
+    Validate C{address} as defined in RFC 2822.
+
+    :param address: The address to be validated.
+    :type address: str
+
+    @return: A valid address.
+    @rtype: str
+
+    @raise smtp.SMTPBadRcpt: Raised if C{address} is invalid.
+    """
+    leap_assert_type(address, str)
+    # in the following, the address is parsed as described in RFC 2822 and
+    # ('', '') is returned if the parse fails.
+    _, address = parseaddr(address)
+    if address == '':
+        raise smtp.SMTPBadRcpt(address)
+    return address
 
 #
 # String manipulation
