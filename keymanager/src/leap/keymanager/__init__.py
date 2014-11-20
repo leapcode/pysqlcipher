@@ -43,7 +43,7 @@ except (ImportError, AssertionError):
 import logging
 import requests
 
-from leap.common.check import leap_assert, leap_assert_type
+from leap.common.check import leap_assert
 from leap.common.events import signal
 from leap.common.events import events_pb2 as proto
 from leap.common.decorators import memoized_method
@@ -56,7 +56,6 @@ from leap.keymanager.errors import (
 from leap.keymanager.validation import ValidationLevel, can_upgrade
 
 from leap.keymanager.keys import (
-    EncryptionKey,
     build_key_from_dict,
     KEYMANAGER_KEY_TAG,
     TAGS_PRIVATE_INDEX,
@@ -395,70 +394,92 @@ class KeyManager(object):
     # encrypt/decrypt and sign/verify API
     #
 
-    def encrypt(self, data, pubkey, passphrase=None, sign=None,
-                cipher_algo='AES256'):
+    def encrypt(self, data, address, ktype, passphrase=None, sign=None,
+                cipher_algo='AES256', fetch_remote=True):
         """
-        Encrypt C{data} using public @{key} and sign with C{sign} key.
+        Encrypt C{data} for C{address} and sign with C{sign} address.
 
         :param data: The data to be encrypted.
         :type data: str
-        :param pubkey: The key used to encrypt.
-        :type pubkey: EncryptionKey
+        :param address: The address to encrypt it for.
+        :type address: str
+        :param ktype: The type of the key.
+        :type ktype: subclass of EncryptionKey
         :param passphrase: The passphrase for the secret key used for the
                            signature.
         :type passphrase: str
-        :param sign: The key used for signing.
-        :type sign: EncryptionKey
+        :param sign: The address to be used for signature.
+        :type sign: str
         :param cipher_algo: The cipher algorithm to use.
         :type cipher_algo: str
+        :param fetch_remote: If key not found in local storage try to fetch
+                             from nickserver
+        :type fetch_remote: bool
 
         :return: The encrypted data.
         :rtype: str
-        """
-        leap_assert_type(pubkey, EncryptionKey)
-        leap_assert(pubkey.__class__ in self._wrapper_map, 'Unknown key type.')
-        leap_assert(pubkey.private is False, 'Key is not public.')
-        return self._wrapper_map[pubkey.__class__].encrypt(
-            data, pubkey, passphrase, sign, cipher_algo=cipher_algo)
 
-    def decrypt(self, data, privkey, passphrase=None, verify=None):
+        :raise KeyNotFound: If any of the keys was not found both locally and
+                            in keyserver.
+        :raise EncryptError: Raised if failed encrypting for some reason.
         """
-        Decrypt C{data} using private @{privkey} and verify with C{verify} key.
+        pubkey = self.get_key(address, ktype, private=False,
+                              fetch_remote=fetch_remote)
+        privkey = None
+        if sign is not None:
+            privkey = self.get_key(sign, ktype, private=True)
+        return self._wrapper_map[ktype].encrypt(
+            data, pubkey, passphrase, privkey, cipher_algo=cipher_algo)
+
+    def decrypt(self, data, address, ktype, passphrase=None, verify=None,
+                fetch_remote=True):
+        """
+        Decrypt C{data} using private key from @{address} and verify with
+        C{verify} address.
 
         :param data: The data to be decrypted.
         :type data: str
-        :param privkey: The key used to decrypt.
-        :type privkey: OpenPGPKey
+        :param address: The address to who was encrypted.
+        :type address: str
+        :param ktype: The type of the key.
+        :type ktype: subclass of EncryptionKey
         :param passphrase: The passphrase for the secret key used for
                            decryption.
         :type passphrase: str
-        :param verify: The key used to verify a signature.
-        :type verify: OpenPGPKey
+        :param verify: The address to be used for signature.
+        :type verify: str
+        :param fetch_remote: If key for verify not found in local storage try
+                             to fetch from nickserver
+        :type fetch_remote: bool
 
         :return: The decrypted data.
         :rtype: str
 
+        :raise KeyNotFound: If any of the keys was not found both locally and
+                            in keyserver.
+        :raise DecryptError: Raised if failed decrypting for some reason.
         :raise InvalidSignature: Raised if unable to verify the signature with
-                                 C{verify} key.
+                                 C{verify} address.
         """
-        leap_assert_type(privkey, EncryptionKey)
-        leap_assert(
-            privkey.__class__ in self._wrapper_map,
-            'Unknown key type.')
-        leap_assert(privkey.private is True, 'Key is not private.')
-        return self._wrapper_map[privkey.__class__].decrypt(
-            data, privkey, passphrase, verify)
+        privkey = self.get_key(address, ktype, private=True)
+        pubkey = None
+        if verify is not None:
+            pubkey = self.get_key(verify, ktype, private=False,
+                                  fetch_remote=fetch_remote)
+        return self._wrapper_map[ktype].decrypt(
+            data, privkey, passphrase, pubkey)
 
-    def sign(self, data, privkey, digest_algo='SHA512', clearsign=False,
+    def sign(self, data, address, ktype, digest_algo='SHA512', clearsign=False,
              detach=True, binary=False):
         """
-        Sign C{data} with C{privkey}.
+        Sign C{data} with C{address}.
 
         :param data: The data to be signed.
         :type data: str
-
-        :param privkey: The private key to be used to sign.
-        :type privkey: EncryptionKey
+        :param address: The address to be used to sign.
+        :type address: EncryptionKey
+        :param ktype: The type of the key.
+        :type ktype: subclass of EncryptionKey
         :param digest_algo: The hash digest to use.
         :type digest_algo: str
         :param clearsign: If True, create a cleartext signature.
@@ -470,36 +491,46 @@ class KeyManager(object):
 
         :return: The signed data.
         :rtype: str
+
+        :raise KeyNotFound: If the key was not found both locally and
+                            in keyserver.
+        :raise SignFailed: If there was any error signing.
         """
-        leap_assert_type(privkey, EncryptionKey)
-        leap_assert(
-            privkey.__class__ in self._wrapper_map,
-            'Unknown key type.')
-        leap_assert(privkey.private is True, 'Key is not private.')
-        return self._wrapper_map[privkey.__class__].sign(
+        privkey = self.get_key(address, ktype, private=True)
+        return self._wrapper_map[ktype].sign(
             data, privkey, digest_algo=digest_algo, clearsign=clearsign,
             detach=detach, binary=binary)
 
-    def verify(self, data, pubkey, detached_sig=None):
+    def verify(self, data, address, ktype, detached_sig=None,
+               fetch_remote=True):
         """
-        Verify signed C{data} with C{pubkey}, eventually using
+        Verify signed C{data} with C{address}, eventually using
         C{detached_sig}.
 
         :param data: The data to be verified.
         :type data: str
-        :param pubkey: The public key to be used on verification.
-        :type pubkey: EncryptionKey
+        :param address: The address to be used to verify.
+        :type address: EncryptionKey
+        :param ktype: The type of the key.
+        :type ktype: subclass of EncryptionKey
         :param detached_sig: A detached signature. If given, C{data} is
                              verified using this detached signature.
         :type detached_sig: str
+        :param fetch_remote: If key for verify not found in local storage try
+                             to fetch from nickserver
+        :type fetch_remote: bool
 
         :return: signature matches
         :rtype: bool
+
+        :raise KeyNotFound: If the key was not found both locally and
+                            in keyserver.
+        :raise InvalidSignature: Raised if unable to verify the signature with
+                                 C{verify} address.
         """
-        leap_assert_type(pubkey, EncryptionKey)
-        leap_assert(pubkey.__class__ in self._wrapper_map, 'Unknown key type.')
-        leap_assert(pubkey.private is False, 'Key is not public.')
-        return self._wrapper_map[pubkey.__class__].verify(
+        pubkey = self.get_key(address, ktype, private=False,
+                              fetch_remote=fetch_remote)
+        return self._wrapper_map[ktype].verify(
             data, pubkey, detached_sig=detached_sig)
 
     def delete_key(self, key):

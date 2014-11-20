@@ -218,10 +218,9 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
             self._soledad, gpgbinary=GPG_BINARY_PATH)
         pgp.put_ascii_key(PUBLIC_KEY, ADDRESS)
         data = 'data'
-        pubkey = pgp.get_key(ADDRESS, private=False)
         self.assertRaises(
             AssertionError,
-            pgp.sign, data, pubkey)
+            pgp.sign, data, ADDRESS, OpenPGPKey)
 
     def test_verify_with_wrong_key_raises(self):
         pgp = openpgp.OpenPGPScheme(
@@ -510,34 +509,24 @@ class KeyManagerCryptoTestCase(KeyManagerWithSoledadTestCase):
         km = self._key_manager()
         # put raw private key
         km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
-        # get public key
-        pubkey = km.get_key(
-            ADDRESS, OpenPGPKey, private=False, fetch_remote=False)
         # encrypt
-        encdata = km.encrypt(self.RAW_DATA, pubkey)
+        encdata = km.encrypt(self.RAW_DATA, ADDRESS, OpenPGPKey,
+                             fetch_remote=False)
         self.assertNotEqual(self.RAW_DATA, encdata)
-        # get private key
-        privkey = km.get_key(
-            ADDRESS, OpenPGPKey, private=True, fetch_remote=False)
         # decrypt
-        rawdata = km.decrypt(encdata, privkey)
+        rawdata = km.decrypt(encdata, ADDRESS, OpenPGPKey)
         self.assertEqual(self.RAW_DATA, rawdata)
 
     def test_keymanager_openpgp_sign_verify(self):
         km = self._key_manager()
         # put raw private keys
         km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
-        # get private key for signing
-        privkey = km.get_key(
-            ADDRESS, OpenPGPKey, private=True, fetch_remote=False)
         # encrypt
-        signdata = km.sign(self.RAW_DATA, privkey, detach=False)
+        signdata = km.sign(self.RAW_DATA, ADDRESS, OpenPGPKey, detach=False)
         self.assertNotEqual(self.RAW_DATA, signdata)
-        # get public key for verifying
-        pubkey = km.get_key(
-            ADDRESS, OpenPGPKey, private=False, fetch_remote=False)
         # decrypt
-        self.assertTrue(km.verify(signdata, pubkey))
+        self.assertTrue(km.verify(signdata, ADDRESS, OpenPGPKey,
+                                  fetch_remote=False))
 
 
 # Key material for testing
