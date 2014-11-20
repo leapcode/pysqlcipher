@@ -452,22 +452,21 @@ class KeyManager(object):
                              to fetch from nickserver
         :type fetch_remote: bool
 
-        :return: The decrypted data.
-        :rtype: str
+        :return: The decrypted data and the signing key if signature verifies
+        :rtype: (unicode, EncryptionKey)
 
         :raise KeyNotFound: If any of the keys was not found both locally and
                             in keyserver.
         :raise DecryptError: Raised if failed decrypting for some reason.
-        :raise InvalidSignature: Raised if unable to verify the signature with
-                                 C{verify} address.
         """
         privkey = self.get_key(address, ktype, private=True)
         pubkey = None
         if verify is not None:
             pubkey = self.get_key(verify, ktype, private=False,
                                   fetch_remote=fetch_remote)
-        return self._wrapper_map[ktype].decrypt(
+        decrypted, signed = self._wrapper_map[ktype].decrypt(
             data, privkey, passphrase, pubkey)
+        return (decrypted, pubkey if signed else None)
 
     def sign(self, data, address, ktype, digest_algo='SHA512', clearsign=False,
              detach=True, binary=False):
@@ -520,18 +519,17 @@ class KeyManager(object):
                              to fetch from nickserver
         :type fetch_remote: bool
 
-        :return: signature matches
-        :rtype: bool
+        :return: The signing key if signature verifies else None
+        :rtype: EncryptionKey
 
         :raise KeyNotFound: If the key was not found both locally and
                             in keyserver.
-        :raise InvalidSignature: Raised if unable to verify the signature with
-                                 C{verify} address.
         """
         pubkey = self.get_key(address, ktype, private=False,
                               fetch_remote=fetch_remote)
-        return self._wrapper_map[ktype].verify(
+        signed = self._wrapper_map[ktype].verify(
             data, pubkey, detached_sig=detached_sig)
+        return pubkey if signed else None
 
     def delete_key(self, key):
         """

@@ -183,11 +183,12 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
             self._soledad, gpgbinary=GPG_BINARY_PATH)
         pgp.put_ascii_key(PUBLIC_KEY, ADDRESS)
         pubkey = pgp.get_key(ADDRESS, private=False)
-        cyphertext = pgp.encrypt('data', pubkey)
+        data = 'data'
+        cyphertext = pgp.encrypt(data, pubkey)
         # assert
         self.assertTrue(cyphertext is not None)
         self.assertTrue(cyphertext != '')
-        self.assertTrue(cyphertext != 'data')
+        self.assertTrue(cyphertext != data)
         self.assertTrue(pgp.is_encrypted(cyphertext))
         self.assertTrue(pgp.is_encrypted(cyphertext))
         # decrypt
@@ -195,6 +196,8 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
             KeyNotFound, pgp.get_key, ADDRESS, private=True)
         pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         privkey = pgp.get_key(ADDRESS, private=True)
+        decrypted, _ = pgp.decrypt(cyphertext, privkey)
+        self.assertEqual(decrypted, data)
         pgp.delete_key(pubkey)
         pgp.delete_key(privkey)
         self.assertRaises(
@@ -231,9 +234,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         signed = pgp.sign(data, privkey)
         pgp.put_ascii_key(PUBLIC_KEY_2, ADDRESS_2)
         wrongkey = pgp.get_key(ADDRESS_2)
-        self.assertRaises(
-            errors.InvalidSignature,
-            pgp.verify, signed, wrongkey)
+        self.assertFalse(pgp.verify(signed, wrongkey))
 
     def test_encrypt_sign_with_public_raises(self):
         pgp = openpgp.OpenPGPScheme(
@@ -260,7 +261,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
             pgp.decrypt,
             encrypted_and_signed, privkey, verify=privkey)
 
-    def test_decrypt_verify_with_wrong_key_raises(self):
+    def test_decrypt_verify_with_wrong_key(self):
         pgp = openpgp.OpenPGPScheme(
             self._soledad, gpgbinary=GPG_BINARY_PATH)
         pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
@@ -270,9 +271,10 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         encrypted_and_signed = pgp.encrypt(data, pubkey, sign=privkey)
         pgp.put_ascii_key(PUBLIC_KEY_2, ADDRESS_2)
         wrongkey = pgp.get_key(ADDRESS_2)
-        self.assertRaises(
-            errors.InvalidSignature,
-            pgp.verify, encrypted_and_signed, wrongkey)
+        decrypted, validsign = pgp.decrypt(encrypted_and_signed, privkey,
+                                           verify=wrongkey)
+        self.assertEqual(decrypted, data)
+        self.assertFalse(validsign)
 
     def test_sign_verify(self):
         pgp = openpgp.OpenPGPScheme(
@@ -296,9 +298,10 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         data = 'data'
         encrypted_and_signed = pgp.encrypt(
             data, pubkey2, sign=privkey)
-        res = pgp.decrypt(
+        res, validsign = pgp.decrypt(
             encrypted_and_signed, privkey2, verify=pubkey)
-        self.assertTrue(data, res)
+        self.assertEqual(data, res)
+        self.assertTrue(validsign)
 
     def test_sign_verify_detached_sig(self):
         pgp = openpgp.OpenPGPScheme(
@@ -308,7 +311,8 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         privkey = pgp.get_key(ADDRESS, private=True)
         signature = pgp.sign(data, privkey, detach=True)
         pubkey = pgp.get_key(ADDRESS, private=False)
-        self.assertTrue(pgp.verify(data, pubkey, detached_sig=signature))
+        validsign = pgp.verify(data, pubkey, detached_sig=signature)
+        self.assertTrue(validsign)
 
 
 class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
@@ -509,24 +513,46 @@ class KeyManagerCryptoTestCase(KeyManagerWithSoledadTestCase):
         km = self._key_manager()
         # put raw private key
         km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
+        km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY_2, ADDRESS_2)
         # encrypt
         encdata = km.encrypt(self.RAW_DATA, ADDRESS, OpenPGPKey,
-                             fetch_remote=False)
+                             sign=ADDRESS_2, fetch_remote=False)
         self.assertNotEqual(self.RAW_DATA, encdata)
         # decrypt
-        rawdata = km.decrypt(encdata, ADDRESS, OpenPGPKey)
+        rawdata, signingkey = km.decrypt(encdata, ADDRESS, OpenPGPKey,
+                                         verify=ADDRESS_2, fetch_remote=False)
         self.assertEqual(self.RAW_DATA, rawdata)
+        key = km.get_key(ADDRESS_2, OpenPGPKey, private=False,
+                         fetch_remote=False)
+        self.assertEqual(signingkey.fingerprint, key.fingerprint)
+
+    def test_keymanager_openpgp_encrypt_decrypt_wrong_sign(self):
+        km = self._key_manager()
+        # put raw keys
+        km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
+        km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY_2, ADDRESS_2)
+        # encrypt
+        encdata = km.encrypt(self.RAW_DATA, ADDRESS, OpenPGPKey,
+                             sign=ADDRESS_2, fetch_remote=False)
+        self.assertNotEqual(self.RAW_DATA, encdata)
+        # verify
+        rawdata, signingkey = km.decrypt(encdata, ADDRESS, OpenPGPKey,
+                                         verify=ADDRESS, fetch_remote=False)
+        self.assertEqual(self.RAW_DATA, rawdata)
+        self.assertTrue(signingkey is None)
 
     def test_keymanager_openpgp_sign_verify(self):
         km = self._key_manager()
         # put raw private keys
         km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
-        # encrypt
         signdata = km.sign(self.RAW_DATA, ADDRESS, OpenPGPKey, detach=False)
         self.assertNotEqual(self.RAW_DATA, signdata)
-        # decrypt
-        self.assertTrue(km.verify(signdata, ADDRESS, OpenPGPKey,
-                                  fetch_remote=False))
+        # verify
+        signingkey = km.verify(signdata, ADDRESS, OpenPGPKey,
+                               fetch_remote=False)
+        key = km.get_key(ADDRESS, OpenPGPKey, private=False,
+                         fetch_remote=False)
+        self.assertEqual(signingkey.fingerprint, key.fingerprint)
 
 
 # Key material for testing

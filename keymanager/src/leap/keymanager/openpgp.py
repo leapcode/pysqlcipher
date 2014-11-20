@@ -640,12 +640,10 @@ class OpenPGPScheme(EncryptionScheme):
         :param verify: The key used to verify a signature.
         :type verify: OpenPGPKey
 
-        :return: The decrypted data.
-        :rtype: unicode
+        :return: The decrypted data and if signature verifies
+        :rtype: (unicode, bool)
 
         :raise DecryptError: Raised if failed decrypting for some reason.
-        :raise InvalidSignature: Raised if unable to verify the signature with
-                                 C{verify} key.
         """
         leap_assert(privkey.private is True, 'Key is not private.')
         keys = [privkey]
@@ -658,15 +656,15 @@ class OpenPGPScheme(EncryptionScheme):
                 result = gpg.decrypt(
                     data, passphrase=passphrase, always_trust=True)
                 self._assert_gpg_result_ok(result)
-                # verify signature
-                if (verify is not None):
-                    if result.valid is False or \
-                            verify.fingerprint != result.pubkey_fingerprint:
-                        raise errors.InvalidSignature(
-                            'Failed to verify signature with key %s: %s' %
-                            (verify.key_id, result.stderr))
 
-                return result.data
+                # verify signature
+                sign_valid = False
+                if (verify is not None and
+                        result.valid is True and
+                        verify.fingerprint == result.pubkey_fingerprint):
+                    sign_valid = True
+
+                return (result.data, sign_valid)
             except errors.GPGError as e:
                 logger.error('Failed to decrypt: %s.' % str(e))
                 raise errors.DecryptError(str(e))
@@ -764,9 +762,4 @@ class OpenPGPScheme(EncryptionScheme):
             valid = result.valid
             rfprint = result.fingerprint
             kfprint = gpgpubkey['fingerprint']
-            # raise in case sig is invalid
-            if valid is False or rfprint != kfprint:
-                raise errors.InvalidSignature(
-                    'Failed to verify signature '
-                    'with key %s.' % gpgpubkey['keyid'])
-            return True
+            return valid and rfprint == kfprint

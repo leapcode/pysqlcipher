@@ -373,11 +373,10 @@ class EncryptionScheme(object):
         :param verify: The key used to verify a signature.
         :type verify: OpenPGPKey
 
-        :return: The decrypted data.
-        :rtype: str
+        :return: The decrypted data and if signature verifies
+        :rtype: (unicode, bool)
 
-        @raise InvalidSignature: Raised if unable to verify the signature with
-            C{verify} key.
+        :raise DecryptError: Raised if failed decrypting for some reason.
         """
         pass
 

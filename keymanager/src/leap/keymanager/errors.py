@@ -51,13 +51,6 @@ class NoPasswordGiven(Exception):
     pass
 
 
-class InvalidSignature(Exception):
-    """
-    Raised when signature could not be verified.
-    """
-    pass
-
-
 class EncryptError(Exception):
     """
     Raised upon failures of encryption.
