@@ -4,3 +4,4 @@ requests
 # if we bump the gnupg version, bump also the sanity check
 # in keymanager.__init__
 gnupg>=1.2.3
+enum
