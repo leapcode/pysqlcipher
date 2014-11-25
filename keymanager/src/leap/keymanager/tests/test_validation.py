@@ -37,47 +37,48 @@ class ValidationLevelTestCase(KeyManagerWithSoledadTestCase):
 
     def test_none_old_key(self):
         km = self._key_manager()
-        km.put_raw_key(PUBLIC_KEY, OpenPGPKey)
+        km.put_raw_key(PUBLIC_KEY, OpenPGPKey, ADDRESS)
         key = km.get_key(ADDRESS, OpenPGPKey, fetch_remote=False)
         self.assertEqual(key.fingerprint, KEY_FINGERPRINT)
 
     def test_cant_upgrade(self):
         km = self._key_manager()
-        km.put_raw_key(PUBLIC_KEY, OpenPGPKey,
+        km.put_raw_key(PUBLIC_KEY, OpenPGPKey, ADDRESS,
                        validation=ValidationLevel.Provider_Trust)
         self.assertRaises(KeyNotValidUpgrade, km.put_raw_key, UNRELATED_KEY,
-                          OpenPGPKey)
+                          OpenPGPKey, ADDRESS)
 
     def test_fingerprint_level(self):
         km = self._key_manager()
-        km.put_raw_key(PUBLIC_KEY, OpenPGPKey)
-        km.put_raw_key(UNRELATED_KEY, OpenPGPKey,
+        km.put_raw_key(PUBLIC_KEY, OpenPGPKey, ADDRESS)
+        km.put_raw_key(UNRELATED_KEY, OpenPGPKey, ADDRESS,
                        validation=ValidationLevel.Fingerprint)
         key = km.get_key(ADDRESS, OpenPGPKey, fetch_remote=False)
         self.assertEqual(key.fingerprint, UNRELATED_FINGERPRINT)
 
     def test_expired_key(self):
         km = self._key_manager()
-        km.put_raw_key(EXPIRED_KEY, OpenPGPKey)
-        km.put_raw_key(UNRELATED_KEY, OpenPGPKey)
+        km.put_raw_key(EXPIRED_KEY, OpenPGPKey, ADDRESS)
+        km.put_raw_key(UNRELATED_KEY, OpenPGPKey, ADDRESS)
         key = km.get_key(ADDRESS, OpenPGPKey, fetch_remote=False)
         self.assertEqual(key.fingerprint, UNRELATED_FINGERPRINT)
 
     def test_expired_fail_lower_level(self):
         km = self._key_manager()
-        km.put_raw_key(EXPIRED_KEY, OpenPGPKey,
+        km.put_raw_key(EXPIRED_KEY, OpenPGPKey, ADDRESS,
                        validation=ValidationLevel.Third_Party_Endorsement)
         self.assertRaises(
             KeyNotValidUpgrade,
             km.put_raw_key,
             UNRELATED_KEY,
             OpenPGPKey,
+            ADDRESS,
             validation=ValidationLevel.Provider_Trust)
 
     def test_roll_back(self):
         km = self._key_manager()
-        km.put_raw_key(EXPIRED_KEY_UPDATED, OpenPGPKey)
-        km.put_raw_key(EXPIRED_KEY, OpenPGPKey)
+        km.put_raw_key(EXPIRED_KEY_UPDATED, OpenPGPKey, ADDRESS)
+        km.put_raw_key(EXPIRED_KEY, OpenPGPKey, ADDRESS)
         key = km.get_key(ADDRESS, OpenPGPKey, fetch_remote=False)
         self.assertEqual(key.expiry_date, EXPIRED_KEY_NEW_EXPIRY_DATE)
 

@@ -134,7 +134,7 @@ class KeyManager(object):
         Return key class from string representation of key type.
         """
         return filter(
-            lambda klass: str(klass) == ktype,
+            lambda klass: klass.__name__ == ktype,
             self._wrapper_map).pop()
 
     def _get(self, uri, data=None):
@@ -319,7 +319,6 @@ class KeyManager(object):
         return map(
             lambda doc: build_key_from_dict(
                 self._key_class_from_type(doc.content['type']),
-                doc.content['address'],
                 doc.content),
             self._soledad.get_from_index(
                 TAGS_PRIVATE_INDEX,
@@ -494,8 +493,8 @@ class KeyManager(object):
                              verified using this detached signature.
         :type detached_sig: str
 
-        :return: The signed data.
-        :rtype: str
+        :return: signature matches
+        :rtype: bool
         """
         leap_assert_type(pubkey, EncryptionKey)
         leap_assert(pubkey.__class__ in self._wrapper_map, 'Unknown key type.')
@@ -519,24 +518,32 @@ class KeyManager(object):
         except IndexError as e:
             leap_assert(False, "Unsupported key type. Error {0!r}".format(e))
 
-    def put_key(self, key):
+    def put_key(self, key, address):
         """
         Put C{key} in local storage.
 
         :param key: The key to be stored
         :type key: EncryptionKey
+        :param address: address for which this key will be active
+        :type address: str
+
+        :raises KeyAddressMismatch: if address doesn't match any uid on the key
         :raises KeyNotValidUpdate: if a key with the same uid exists and the
                                    new one is not a valid update for it
         """
+        if address not in key.address:
+            raise KeyAddressMismatch("UID %s found, but expected %s"
+                                     % (str(key.address), address))
+
         try:
-            old_key = self._wrapper_map[type(key)].get_key(key.address,
+            old_key = self._wrapper_map[type(key)].get_key(address,
                                                            private=key.private)
         except KeyNotFound:
             old_key = None
 
         if key.private or can_upgrade(key, old_key):
             try:
-                self._wrapper_map[type(key)].put_key(key)
+                self._wrapper_map[type(key)].put_key(key, address)
             except IndexError as e:
                 leap_assert(
                     False, "Unsupported key type. Error {0!r}".format(e))
@@ -544,7 +551,7 @@ class KeyManager(object):
             raise KeyNotValidUpgrade("Key %s can not be upgraded by new key %s"
                                      % (old_key.key_id, key.key_id))
 
-    def put_raw_key(self, key, ktype, address=None,
+    def put_raw_key(self, key, ktype, address,
                     validation=ValidationLevel.Weak_Chain):
         """
         Put C{key} in local storage.
@@ -553,7 +560,7 @@ class KeyManager(object):
         :type key: str
         :param ktype: the type of the key.
         :type ktype: subclass of EncryptionKey
-        :param address: if set used to check that the key is for this address
+        :param address: address for which this key will be active
         :type address: str
         :param validation: validation level for this key
                            (default: 'Weak_Chain')
@@ -564,12 +571,9 @@ class KeyManager(object):
                                    new one is not a valid update for it
         """
         pubkey, _ = self._wrapper_map[ktype].parse_ascii_key(key)
-        if address is not None and address != pubkey.address:
-            raise KeyAddressMismatch("Key UID %s, but expected %s"
-                                     % (pubkey.address, address))
 
         pubkey.validation = validation
-        self.put_key(pubkey)
+        self.put_key(pubkey, address)
 
     def fetch_key(self, address, uri, ktype,
                   validation=ValidationLevel.Weak_Chain):
@@ -600,12 +604,9 @@ class KeyManager(object):
         pubkey, _ = self._wrapper_map[ktype].parse_ascii_key(res.content)
         if pubkey is None:
             raise KeyNotFound(uri)
-        if pubkey.address != address:
-            raise KeyAddressMismatch("UID %s found, but expected %s"
-                                     % (pubkey.address, address))
 
         pubkey.validation = validation
-        self.put_key(pubkey)
+        self.put_key(pubkey, address)
 
 from ._version import get_versions
 __version__ = get_versions()['version']

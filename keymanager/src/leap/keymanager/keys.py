@@ -27,6 +27,7 @@ except ImportError:
     import json  # noqa
 import logging
 import re
+import time
 
 
 from abc import ABCMeta, abstractmethod
@@ -50,9 +51,11 @@ KEY_DATA_KEY = 'key_data'
 KEY_PRIVATE_KEY = 'private'
 KEY_LENGTH_KEY = 'length'
 KEY_EXPIRY_DATE_KEY = 'expiry_date'
-KEY_FIRST_SEEN_AT_KEY = 'first_seen_at'
 KEY_LAST_AUDITED_AT_KEY = 'last_audited_at'
+KEY_REFRESHED_AT_KEY = 'refreshed_at'
 KEY_VALIDATION_KEY = 'validation'
+KEY_ENCR_USED_KEY = 'encr_used'
+KEY_SIGN_USED_KEY = 'sign_used'
 KEY_TAGS_KEY = 'tags'
 
 
@@ -61,6 +64,8 @@ KEY_TAGS_KEY = 'tags'
 #
 
 KEYMANAGER_KEY_TAG = 'keymanager-key'
+KEYMANAGER_ACTIVE_TAG = 'keymanager-active'
+KEYMANAGER_ACTIVE_TYPE = '-active'
 
 
 #
@@ -68,14 +73,20 @@ KEYMANAGER_KEY_TAG = 'keymanager-key'
 #
 
 TAGS_PRIVATE_INDEX = 'by-tags-private'
-TAGS_ADDRESS_PRIVATE_INDEX = 'by-tags-address-private'
+TYPE_ID_PRIVATE_INDEX = 'by-type-id-private'
+TYPE_ADDRESS_PRIVATE_INDEX = 'by-type-address-private'
 INDEXES = {
     TAGS_PRIVATE_INDEX: [
         KEY_TAGS_KEY,
         'bool(%s)' % KEY_PRIVATE_KEY,
     ],
-    TAGS_ADDRESS_PRIVATE_INDEX: [
-        KEY_TAGS_KEY,
+    TYPE_ID_PRIVATE_INDEX: [
+        KEY_TYPE_KEY,
+        KEY_ID_KEY,
+        'bool(%s)' % KEY_PRIVATE_KEY,
+    ],
+    TYPE_ADDRESS_PRIVATE_INDEX: [
+        KEY_TYPE_KEY,
         KEY_ADDRESS_KEY,
         'bool(%s)' % KEY_PRIVATE_KEY,
     ]
@@ -98,20 +109,15 @@ def is_address(address):
     return bool(re.match('[\w.-]+@[\w.-]+', address))
 
 
-def build_key_from_dict(kClass, address, kdict):
+def build_key_from_dict(kClass, kdict):
     """
-    Build an C{kClass} key bound to C{address} based on info in C{kdict}.
+    Build an C{kClass} key based on info in C{kdict}.
 
-    :param address: The address bound to the key.
-    :type address: str
     :param kdict: Dictionary with key data.
     :type kdict: dict
     :return: An instance of the key.
     :rtype: C{kClass}
     """
-    leap_assert(
-        address == kdict[KEY_ADDRESS_KEY],
-        'Wrong address in key data.')
     try:
         validation = toValidationLevel(kdict[KEY_VALIDATION_KEY])
     except ValueError:
@@ -119,22 +125,38 @@ def build_key_from_dict(kClass, address, kdict):
                      (kdict[KEY_VALIDATION_KEY], kdict[KEY_ID_KEY]))
         validation = ValidationLevel.Weak_Chain
 
-    expiry_date = None
-    if kdict[KEY_EXPIRY_DATE_KEY]:
-        expiry_date = datetime.fromtimestamp(int(kdict[KEY_EXPIRY_DATE_KEY]))
+    expiry_date = _to_datetime(kdict[KEY_EXPIRY_DATE_KEY])
+    last_audited_at = _to_datetime(kdict[KEY_LAST_AUDITED_AT_KEY])
+    refreshed_at = _to_datetime(kdict[KEY_REFRESHED_AT_KEY])
 
     return kClass(
-        address,
+        kdict[KEY_ADDRESS_KEY],
         key_id=kdict[KEY_ID_KEY],
         fingerprint=kdict[KEY_FINGERPRINT_KEY],
         key_data=kdict[KEY_DATA_KEY],
         private=kdict[KEY_PRIVATE_KEY],
         length=kdict[KEY_LENGTH_KEY],
         expiry_date=expiry_date,
-        first_seen_at=kdict[KEY_FIRST_SEEN_AT_KEY],
-        last_audited_at=kdict[KEY_LAST_AUDITED_AT_KEY],
+        last_audited_at=last_audited_at,
+        refreshed_at=refreshed_at,
         validation=validation,
+        encr_used=kdict[KEY_ENCR_USED_KEY],
+        sign_used=kdict[KEY_SIGN_USED_KEY],
     )
+
+
+def _to_datetime(unix_time):
+    if unix_time != 0:
+        return datetime.fromtimestamp(unix_time)
+    else:
+        return None
+
+
+def _to_unix_time(date):
+    if date is not None:
+        return int(time.mktime(date.timetuple()))
+    else:
+        return 0
 
 
 #
@@ -151,9 +173,10 @@ class EncryptionKey(object):
 
     __metaclass__ = ABCMeta
 
-    def __init__(self, address, key_id=None, fingerprint=None,
-                 key_data=None, private=None, length=None, expiry_date=None,
-                 validation=None, first_seen_at=None, last_audited_at=None):
+    def __init__(self, address, key_id="", fingerprint="",
+                 key_data="", private=False, length=0, expiry_date=None,
+                 validation=ValidationLevel.Weak_Chain, last_audited_at=None,
+                 refreshed_at=None, encr_used=False, sign_used=False):
         self.address = address
         self.key_id = key_id
         self.fingerprint = fingerprint
@@ -162,8 +185,10 @@ class EncryptionKey(object):
         self.length = length
         self.expiry_date = expiry_date
         self.validation = validation
-        self.first_seen_at = first_seen_at
         self.last_audited_at = last_audited_at
+        self.refreshed_at = refreshed_at
+        self.encr_used = encr_used
+        self.sign_used = sign_used
 
     def get_json(self):
         """
@@ -172,23 +197,42 @@ class EncryptionKey(object):
         :return: The JSON string describing this key.
         :rtype: str
         """
-        expiry_str = ""
-        if self.expiry_date is not None:
-            expiry_str = self.expiry_date.strftime("%s")
+        expiry_date = _to_unix_time(self.expiry_date)
+        last_audited_at = _to_unix_time(self.last_audited_at)
+        refreshed_at = _to_unix_time(self.refreshed_at)
 
         return json.dumps({
             KEY_ADDRESS_KEY: self.address,
-            KEY_TYPE_KEY: str(self.__class__),
+            KEY_TYPE_KEY: self.__class__.__name__,
             KEY_ID_KEY: self.key_id,
             KEY_FINGERPRINT_KEY: self.fingerprint,
             KEY_DATA_KEY: self.key_data,
             KEY_PRIVATE_KEY: self.private,
             KEY_LENGTH_KEY: self.length,
-            KEY_EXPIRY_DATE_KEY: expiry_str,
+            KEY_EXPIRY_DATE_KEY: expiry_date,
+            KEY_LAST_AUDITED_AT_KEY: last_audited_at,
+            KEY_REFRESHED_AT_KEY: refreshed_at,
             KEY_VALIDATION_KEY: str(self.validation),
-            KEY_FIRST_SEEN_AT_KEY: self.first_seen_at,
-            KEY_LAST_AUDITED_AT_KEY: self.last_audited_at,
+            KEY_ENCR_USED_KEY: self.encr_used,
+            KEY_SIGN_USED_KEY: self.sign_used,
             KEY_TAGS_KEY: [KEYMANAGER_KEY_TAG],
+        })
+
+    def get_active_json(self, address):
+        """
+        Return a JSON string describing this key.
+
+        :param address: Address for wich the key is active
+        :type address: str
+        :return: The JSON string describing this key.
+        :rtype: str
+        """
+        return json.dumps({
+            KEY_ADDRESS_KEY: address,
+            KEY_TYPE_KEY: self.__class__.__name__ + KEYMANAGER_ACTIVE_TYPE,
+            KEY_ID_KEY: self.key_id,
+            KEY_PRIVATE_KEY: self.private,
+            KEY_TAGS_KEY: [KEYMANAGER_ACTIVE_TAG],
         })
 
     def __repr__(self):
@@ -266,12 +310,14 @@ class EncryptionScheme(object):
         pass
 
     @abstractmethod
-    def put_key(self, key):
+    def put_key(self, key, address):
         """
         Put a key in local storage.
 
         :param key: The key to be stored.
         :type key: EncryptionKey
+        :param address: address for which this key will be active.
+        :type address: str
         """
         pass
 
@@ -365,7 +411,7 @@ class EncryptionScheme(object):
                              verified against this sdetached signature.
         :type detached_sig: str
 
-        :return: The signed data.
-        :rtype: str
+        :return: signature matches
+        :rtype: bool
         """
         pass

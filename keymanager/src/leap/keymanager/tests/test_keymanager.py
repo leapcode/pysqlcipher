@@ -21,6 +21,7 @@ Tests for the Key Manager.
 """
 
 
+from datetime import datetime
 from mock import Mock
 from leap.common.testing.basetest import BaseLeapTest
 from leap.keymanager import (
@@ -75,18 +76,20 @@ class KeyManagerUtilTestCase(BaseLeapTest):
 
     def test_build_key_from_dict(self):
         kdict = {
-            'address': ADDRESS,
-            'key_id': 'key_id',
-            'fingerprint': 'fingerprint',
-            'key_data': 'key_data',
-            'private': 'private',
-            'length': 'length',
-            'expiry_date': '',
-            'first_seen_at': 'first_seen_at',
-            'last_audited_at': 'last_audited_at',
+            'address': [ADDRESS],
+            'key_id': KEY_FINGERPRINT[-16:],
+            'fingerprint': KEY_FINGERPRINT,
+            'key_data': PUBLIC_KEY,
+            'private': False,
+            'length': 4096,
+            'expiry_date': 0,
+            'last_audited_at': 0,
+            'refreshed_at': 1311239602,
             'validation': str(ValidationLevel.Weak_Chain),
+            'encr_used': False,
+            'sign_used': True,
         }
-        key = build_key_from_dict(OpenPGPKey, ADDRESS, kdict)
+        key = build_key_from_dict(OpenPGPKey, kdict)
         self.assertEqual(
             kdict['address'], key.address,
             'Wrong data in key.')
@@ -109,13 +112,19 @@ class KeyManagerUtilTestCase(BaseLeapTest):
             None, key.expiry_date,
             'Wrong data in key.')
         self.assertEqual(
-            kdict['first_seen_at'], key.first_seen_at,
+            None, key.last_audited_at,
             'Wrong data in key.')
         self.assertEqual(
-            kdict['last_audited_at'], key.last_audited_at,
+            datetime.fromtimestamp(kdict['refreshed_at']), key.refreshed_at,
             'Wrong data in key.')
         self.assertEqual(
             toValidationLevel(kdict['validation']), key.validation,
+            'Wrong data in key.')
+        self.assertEqual(
+            kdict['encr_used'], key.encr_used,
+            'Wrong data in key.')
+        self.assertEqual(
+            kdict['sign_used'], key.sign_used,
             'Wrong data in key.')
 
 
@@ -127,15 +136,15 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         key = pgp.gen_key('user@leap.se')
         self.assertIsInstance(key, openpgp.OpenPGPKey)
         self.assertEqual(
-            'user@leap.se', key.address, 'Wrong address bound to key.')
+            ['user@leap.se'], key.address, 'Wrong address bound to key.')
         self.assertEqual(
-            '4096', key.length, 'Wrong key length.')
+            4096, key.length, 'Wrong key length.')
 
     def test_openpgp_put_delete_key(self):
         pgp = openpgp.OpenPGPScheme(
             self._soledad, gpgbinary=GPG_BINARY_PATH)
         self.assertRaises(KeyNotFound, pgp.get_key, ADDRESS)
-        pgp.put_ascii_key(PUBLIC_KEY)
+        pgp.put_ascii_key(PUBLIC_KEY, ADDRESS)
         key = pgp.get_key(ADDRESS, private=False)
         pgp.delete_key(key)
         self.assertRaises(KeyNotFound, pgp.get_key, ADDRESS)
@@ -144,13 +153,13 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         pgp = openpgp.OpenPGPScheme(
             self._soledad, gpgbinary=GPG_BINARY_PATH)
         self.assertRaises(KeyNotFound, pgp.get_key, ADDRESS)
-        pgp.put_ascii_key(PUBLIC_KEY)
+        pgp.put_ascii_key(PUBLIC_KEY, ADDRESS)
         key = pgp.get_key(ADDRESS, private=False)
         self.assertIsInstance(key, openpgp.OpenPGPKey)
+        self.assertTrue(
+            ADDRESS in key.address, 'Wrong address bound to key.')
         self.assertEqual(
-            ADDRESS, key.address, 'Wrong address bound to key.')
-        self.assertEqual(
-            '4096', key.length, 'Wrong key length.')
+            4096, key.length, 'Wrong key length.')
         pgp.delete_key(key)
         self.assertRaises(KeyNotFound, pgp.get_key, ADDRESS)
 
@@ -158,11 +167,11 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         pgp = openpgp.OpenPGPScheme(
             self._soledad, gpgbinary=GPG_BINARY_PATH)
         self.assertRaises(KeyNotFound, pgp.get_key, ADDRESS)
-        pgp.put_ascii_key(PUBLIC_KEY)
+        pgp.put_ascii_key(PUBLIC_KEY, ADDRESS)
         self.assertRaises(
             KeyNotFound, pgp.get_key, ADDRESS, private=True)
         key = pgp.get_key(ADDRESS, private=False)
-        self.assertEqual(ADDRESS, key.address)
+        self.assertTrue(ADDRESS in key.address)
         self.assertFalse(key.private)
         self.assertEqual(KEY_FINGERPRINT, key.fingerprint)
         pgp.delete_key(key)
@@ -172,7 +181,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         # encrypt
         pgp = openpgp.OpenPGPScheme(
             self._soledad, gpgbinary=GPG_BINARY_PATH)
-        pgp.put_ascii_key(PUBLIC_KEY)
+        pgp.put_ascii_key(PUBLIC_KEY, ADDRESS)
         pubkey = pgp.get_key(ADDRESS, private=False)
         cyphertext = pgp.encrypt('data', pubkey)
         # assert
@@ -184,7 +193,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         # decrypt
         self.assertRaises(
             KeyNotFound, pgp.get_key, ADDRESS, private=True)
-        pgp.put_ascii_key(PRIVATE_KEY)
+        pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         privkey = pgp.get_key(ADDRESS, private=True)
         pgp.delete_key(pubkey)
         pgp.delete_key(privkey)
@@ -207,7 +216,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_sign_with_public_raises(self):
         pgp = openpgp.OpenPGPScheme(
             self._soledad, gpgbinary=GPG_BINARY_PATH)
-        pgp.put_ascii_key(PUBLIC_KEY)
+        pgp.put_ascii_key(PUBLIC_KEY, ADDRESS)
         data = 'data'
         pubkey = pgp.get_key(ADDRESS, private=False)
         self.assertRaises(
@@ -217,11 +226,11 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_verify_with_wrong_key_raises(self):
         pgp = openpgp.OpenPGPScheme(
             self._soledad, gpgbinary=GPG_BINARY_PATH)
-        pgp.put_ascii_key(PRIVATE_KEY)
+        pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         data = 'data'
         privkey = pgp.get_key(ADDRESS, private=True)
         signed = pgp.sign(data, privkey)
-        pgp.put_ascii_key(PUBLIC_KEY_2)
+        pgp.put_ascii_key(PUBLIC_KEY_2, ADDRESS_2)
         wrongkey = pgp.get_key(ADDRESS_2)
         self.assertRaises(
             errors.InvalidSignature,
@@ -230,7 +239,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_encrypt_sign_with_public_raises(self):
         pgp = openpgp.OpenPGPScheme(
             self._soledad, gpgbinary=GPG_BINARY_PATH)
-        pgp.put_ascii_key(PRIVATE_KEY)
+        pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         data = 'data'
         privkey = pgp.get_key(ADDRESS, private=True)
         pubkey = pgp.get_key(ADDRESS, private=False)
@@ -241,7 +250,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_decrypt_verify_with_private_raises(self):
         pgp = openpgp.OpenPGPScheme(
             self._soledad, gpgbinary=GPG_BINARY_PATH)
-        pgp.put_ascii_key(PRIVATE_KEY)
+        pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         data = 'data'
         privkey = pgp.get_key(ADDRESS, private=True)
         pubkey = pgp.get_key(ADDRESS, private=False)
@@ -255,12 +264,12 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_decrypt_verify_with_wrong_key_raises(self):
         pgp = openpgp.OpenPGPScheme(
             self._soledad, gpgbinary=GPG_BINARY_PATH)
-        pgp.put_ascii_key(PRIVATE_KEY)
+        pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         data = 'data'
         privkey = pgp.get_key(ADDRESS, private=True)
         pubkey = pgp.get_key(ADDRESS, private=False)
         encrypted_and_signed = pgp.encrypt(data, pubkey, sign=privkey)
-        pgp.put_ascii_key(PUBLIC_KEY_2)
+        pgp.put_ascii_key(PUBLIC_KEY_2, ADDRESS_2)
         wrongkey = pgp.get_key(ADDRESS_2)
         self.assertRaises(
             errors.InvalidSignature,
@@ -269,7 +278,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_sign_verify(self):
         pgp = openpgp.OpenPGPScheme(
             self._soledad, gpgbinary=GPG_BINARY_PATH)
-        pgp.put_ascii_key(PRIVATE_KEY)
+        pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         data = 'data'
         privkey = pgp.get_key(ADDRESS, private=True)
         signed = pgp.sign(data, privkey, detach=False)
@@ -279,10 +288,10 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_encrypt_sign_decrypt_verify(self):
         pgp = openpgp.OpenPGPScheme(
             self._soledad, gpgbinary=GPG_BINARY_PATH)
-        pgp.put_ascii_key(PRIVATE_KEY)
+        pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         pubkey = pgp.get_key(ADDRESS, private=False)
         privkey = pgp.get_key(ADDRESS, private=True)
-        pgp.put_ascii_key(PRIVATE_KEY_2)
+        pgp.put_ascii_key(PRIVATE_KEY_2, ADDRESS_2)
         pubkey2 = pgp.get_key(ADDRESS_2, private=False)
         privkey2 = pgp.get_key(ADDRESS_2, private=True)
         data = 'data'
@@ -295,7 +304,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_sign_verify_detached_sig(self):
         pgp = openpgp.OpenPGPScheme(
             self._soledad, gpgbinary=GPG_BINARY_PATH)
-        pgp.put_ascii_key(PRIVATE_KEY)
+        pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         data = 'data'
         privkey = pgp.get_key(ADDRESS, private=True)
         signature = pgp.sign(data, privkey, detach=True)
@@ -307,38 +316,38 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
 
     def test_get_all_keys_in_db(self):
         km = self._key_manager()
-        km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY)
+        km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
         # get public keys
         keys = km.get_all_keys(False)
         self.assertEqual(len(keys), 1, 'Wrong number of keys')
-        self.assertEqual(ADDRESS, keys[0].address)
+        self.assertTrue(ADDRESS in keys[0].address)
         self.assertFalse(keys[0].private)
         # get private keys
         keys = km.get_all_keys(True)
         self.assertEqual(len(keys), 1, 'Wrong number of keys')
-        self.assertEqual(ADDRESS, keys[0].address)
+        self.assertTrue(ADDRESS in keys[0].address)
         self.assertTrue(keys[0].private)
 
     def test_get_public_key(self):
         km = self._key_manager()
-        km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY)
+        km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
         # get the key
         key = km.get_key(ADDRESS, OpenPGPKey, private=False,
                          fetch_remote=False)
         self.assertTrue(key is not None)
-        self.assertEqual(key.address, ADDRESS)
+        self.assertTrue(ADDRESS in key.address)
         self.assertEqual(
             key.fingerprint.lower(), KEY_FINGERPRINT.lower())
         self.assertFalse(key.private)
 
     def test_get_private_key(self):
         km = self._key_manager()
-        km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY)
+        km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
         # get the key
         key = km.get_key(ADDRESS, OpenPGPKey, private=True,
                          fetch_remote=False)
         self.assertTrue(key is not None)
-        self.assertEqual(key.address, ADDRESS)
+        self.assertTrue(ADDRESS in key.address)
         self.assertEqual(
             key.fingerprint.lower(), KEY_FINGERPRINT.lower())
         self.assertTrue(key.private)
@@ -355,7 +364,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         """
         token = "mytoken"
         km = self._key_manager(token=token)
-        km._wrapper_map[OpenPGPKey].put_ascii_key(PUBLIC_KEY)
+        km._wrapper_map[OpenPGPKey].put_ascii_key(PUBLIC_KEY, ADDRESS)
         km._fetcher.put = Mock()
         # the following data will be used on the send
         km.ca_cert_path = 'capath'
@@ -430,7 +439,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         # try to get key fetching from server.
         key = km.get_key(ADDRESS, OpenPGPKey)
         self.assertIsInstance(key, OpenPGPKey)
-        self.assertEqual(ADDRESS, key.address)
+        self.assertTrue(ADDRESS in key.address)
 
     def test_put_key_ascii(self):
         """
@@ -438,10 +447,10 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         """
         km = self._key_manager(url='http://nickserver.domain')
 
-        km.put_raw_key(PUBLIC_KEY, OpenPGPKey)
+        km.put_raw_key(PUBLIC_KEY, OpenPGPKey, ADDRESS)
         key = km.get_key(ADDRESS, OpenPGPKey)
         self.assertIsInstance(key, OpenPGPKey)
-        self.assertEqual(ADDRESS, key.address)
+        self.assertTrue(ADDRESS in key.address)
 
     def test_fetch_uri_ascii_key(self):
         """
@@ -500,7 +509,7 @@ class KeyManagerCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_keymanager_openpgp_encrypt_decrypt(self):
         km = self._key_manager()
         # put raw private key
-        km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY)
+        km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
         # get public key
         pubkey = km.get_key(
             ADDRESS, OpenPGPKey, private=False, fetch_remote=False)
@@ -517,7 +526,7 @@ class KeyManagerCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_keymanager_openpgp_sign_verify(self):
         km = self._key_manager()
         # put raw private keys
-        km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY)
+        km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
         # get private key for signing
         privkey = km.get_key(
             ADDRESS, OpenPGPKey, private=True, fetch_remote=False)
