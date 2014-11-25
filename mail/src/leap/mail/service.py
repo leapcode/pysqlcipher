@@ -81,8 +81,9 @@ class OutgoingMail:
         :type port: int
         """
 
-        # XXX: should we keep these checks?
         # assert params
+        leap_assert_type(from_address, str)
+        leap_assert('@' in from_address)
         leap_assert_type(keymanager, KeyManager)
         leap_assert_type(host, str)
         leap_assert(host != '')
