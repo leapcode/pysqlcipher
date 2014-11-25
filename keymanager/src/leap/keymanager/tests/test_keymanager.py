@@ -205,7 +205,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_verify_with_private_raises(self):
         pgp = openpgp.OpenPGPScheme(
             self._soledad, gpgbinary=GPG_BINARY_PATH)
-        pgp.put_ascii_key(PRIVATE_KEY)
+        pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         data = 'data'
         privkey = pgp.get_key(ADDRESS, private=True)
         signed = pgp.sign(data, privkey)
