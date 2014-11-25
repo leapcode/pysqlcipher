@@ -51,6 +51,7 @@ class SimpleClient(imap4.IMAP4Client):
         self.transport.loseConnection()
 
 
+# XXX move to common helper
 def initialize_soledad(email, gnupg_home, tempdir):
     """
     Initializes soledad by hand
@@ -110,9 +111,7 @@ class IMAP4HelperMixin(BaseLeapTest):
         """
         Setup method for each test.
 
-        Initializes and run a LEAP IMAP4 Server,
-        but passing the same Soledad instance (it's costly to initialize),
-        so we have to be sure to restore state across tests.
+        Initializes and run a LEAP IMAP4 Server.
         """
         self.old_path = os.environ['PATH']
         self.old_home = os.environ['HOME']
@@ -172,19 +171,17 @@ class IMAP4HelperMixin(BaseLeapTest):
     def tearDown(self):
         """
         tearDown method called after each test.
-
-        Deletes all documents in the Index, and deletes
-        instances of server and client.
         """
         try:
             self._soledad.close()
+        except Exception:
+            print "ERROR WHILE CLOSING SOLEDAD"
+        finally:
             os.environ["PATH"] = self.old_path
             os.environ["HOME"] = self.old_home
             # safety check
             assert 'leap_tests-' in self.tempdir
             shutil.rmtree(self.tempdir)
-        except Exception:
-            print "ERROR WHILE CLOSING SOLEDAD"
 
     def populateMessages(self):
         """
@@ -223,5 +220,3 @@ class IMAP4HelperMixin(BaseLeapTest):
 
     def loopback(self):
         return loopback.loopbackAsync(self.server, self.client)
-
-

@@ -28,10 +28,10 @@ from twisted.python import log
 from zope.interface import implements
 
 from leap.common.check import leap_assert, leap_assert_type
-from leap.mail.imap.index import IndexedDB
+
+from leap.mail.mail import Account
 from leap.mail.imap.fields import WithMsgFields
-from leap.mail.imap.parser import MBoxParser
-from leap.mail.imap.mailbox import SoledadMailbox
+from leap.mail.imap.mailbox import SoledadMailbox, normalize_mailbox
 from leap.soledad.client import Soledad
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,6 @@ logger = logging.getLogger(__name__)
 PROFILE_CMD = os.environ.get('LEAP_PROFILE_IMAPCMD', False)
 
 if PROFILE_CMD:
-
     def _debugProfiling(result, cmdname, start):
         took = (time.time() - start) * 1000
         log.msg("CMD " + cmdname + " TOOK: " + str(took) + " msec")
@@ -47,96 +46,43 @@ if PROFILE_CMD:
 
 
 #######################################
-# Soledad Account
+# Soledad IMAP Account
 #######################################
 
+# TODO remove MsgFields too
 
-# TODO change name to LeapIMAPAccount, since we're using
-# the memstore.
-# IndexedDB should also not be here anymore.
-
-class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
+class IMAPAccount(WithMsgFields):
     """
-    An implementation of IAccount and INamespacePresenteer
+    An implementation of an imap4 Account
     that is backed by Soledad Encrypted Documents.
     """
 
     implements(imap4.IAccount, imap4.INamespacePresenter)
 
-    _soledad = None
     selected = None
     closed = False
-    _initialized = False
 
-    def __init__(self, account_name, soledad, memstore=None):
+    def __init__(self, user_id, store):
         """
-        Creates a SoledadAccountIndex that keeps track of the mailboxes
-        and subscriptions handled by this account.
+        Keeps track of the mailboxes and subscriptions handled by this account.
 
-        :param acct_name: The name of the account (user id).
-        :type acct_name: str
+        :param account: The name of the account (user id).
+        :type account: str
 
-        :param soledad: a Soledad instance.
-        :type soledad: Soledad
-        :param memstore: a MemoryStore instance.
-        :type memstore: MemoryStore
+        :param store: a Soledad instance.
+        :type store: Soledad
         """
-        leap_assert(soledad, "Need a soledad instance to initialize")
-        leap_assert_type(soledad, Soledad)
+        # XXX assert a generic store interface instead, so that we
+        # can plug the memory store wrapper seamlessly.
+        leap_assert(store, "Need a store instance to initialize")
+        leap_assert_type(store, Soledad)
 
         # XXX SHOULD assert too that the name matches the user/uuid with which
         # soledad has been initialized.
+        self.user_id = user_id
+        self.account = Account(store)
 
-        # XXX ??? why is this parsing mailbox name??? it's account...
-        # userid? homogenize.
-        self._account_name = self._parse_mailbox_name(account_name)
-        self._soledad = soledad
-        self._memstore = memstore
-
-        self.__mailboxes = set([])
-
-        self._deferred_initialization = defer.Deferred()
-        self._initialize_storage()
-
-    def _initialize_storage(self):
-
-        def add_mailbox_if_none(result):
-            # every user should have the right to an inbox folder
-            # at least, so let's make one!
-            if not self.mailboxes:
-                self.addMailbox(self.INBOX_NAME)
-
-        def finish_initialization(result):
-            self._initialized = True
-            self._deferred_initialization.callback(None)
-
-        def load_mbox_cache(result):
-            d = self._load_mailboxes()
-            d.addCallback(lambda _: result)
-            return d
-
-        d = self.initialize_db()
-
-        d.addCallback(load_mbox_cache)
-        d.addCallback(add_mailbox_if_none)
-        d.addCallback(finish_initialization)
-
-    def callWhenReady(self, cb):
-        if self._initialized:
-            cb(self)
-            return defer.succeed(None)
-        else:
-            self._deferred_initialization.addCallback(cb)
-            return self._deferred_initialization
-
-    def _get_empty_mailbox(self):
-        """
-        Returns an empty mailbox.
-
-        :rtype: dict
-        """
-        return copy.deepcopy(self.EMPTY_MBOX)
-
+    # XXX should hide this in the adaptor...
     def _get_mailbox_by_name(self, name):
         """
         Return an mbox document by name.
@@ -146,32 +92,17 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
 
         :rtype: SoledadDocument
         """
-        # XXX use soledadstore instead ...;
         def get_first_if_any(docs):
             return docs[0] if docs else None
 
-        d = self._soledad.get_from_index(
+        d = self._store.get_from_index(
             self.TYPE_MBOX_IDX, self.MBOX_KEY,
-            self._parse_mailbox_name(name))
+            normalize_mailbox(name))
         d.addCallback(get_first_if_any)
         return d
 
-    @property
-    def mailboxes(self):
-        """
-        A list of the current mailboxes for this account.
-        :rtype: set
-        """
-        return sorted(self.__mailboxes)
-
-    def _load_mailboxes(self):
-        def update_mailboxes(db_indexes):
-            self.__mailboxes.update(
-                [doc.content[self.MBOX_KEY] for doc in db_indexes])
-        d = self._soledad.get_from_index(self.TYPE_IDX, self.MBOX_KEY)
-        d.addCallback(update_mailboxes)
-        return d
-
+    # XXX move to Account?
+    # XXX needed?
     def getMailbox(self, name):
         """
         Return a Mailbox with that name, without selecting it.
@@ -182,18 +113,28 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         :returns: a a SoledadMailbox instance
         :rtype: SoledadMailbox
         """
-        name = self._parse_mailbox_name(name)
+        name = normalize_mailbox(name)
 
-        if name not in self.mailboxes:
+        if name not in self.account.mailboxes:
             raise imap4.MailboxException("No such mailbox: %r" % name)
 
-        return SoledadMailbox(name, self._soledad,
-                              memstore=self._memstore)
+        # XXX Does mailbox really need reference to soledad?
+        return SoledadMailbox(name, self._store)
 
     #
     # IAccount
     #
 
+    def _get_empty_mailbox(self):
+        """
+        Returns an empty mailbox.
+
+        :rtype: dict
+        """
+        # XXX move to mailbox module
+        return copy.deepcopy(mailbox.EMPTY_MBOX)
+
+    # TODO use mail.Account.add_mailbox
     def addMailbox(self, name, creation_ts=None):
         """
         Add a mailbox to the account.
@@ -209,7 +150,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         :returns: a Deferred that will contain the document if successful.
         :rtype: bool
         """
-        name = self._parse_mailbox_name(name)
+        name = normalize_mailbox(name)
 
         leap_assert(name, "Need a mailbox name to create a mailbox")
 
@@ -232,10 +173,12 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
             d.addCallback(lambda _: result)
             return d
 
-        d = self._soledad.create_doc(mbox)
+        d = self._store.create_doc(mbox)
         d.addCallback(load_mbox_cache)
         return d
 
+    # TODO use mail.Account.create_mailbox?
+    # Watch out, imap specific exceptions raised here.
     def create(self, pathspec):
         """
         Create a new mailbox from the given hierarchical name.
@@ -254,9 +197,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         :raise MailboxException: Raised if this mailbox cannot be added.
         """
         # TODO raise MailboxException
-        paths = filter(
-            None,
-            self._parse_mailbox_name(pathspec).split('/'))
+        paths = filter(None, normalize_mailbox(pathspec).split('/'))
 
         subs = []
         sep = '/'
@@ -295,6 +236,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
             d1.addCallback(load_mbox_cache)
         return d1
 
+    # TODO use mail.Account.get_collection_by_mailbox
     def select(self, name, readwrite=1):
         """
         Selects a mailbox.
@@ -307,21 +249,16 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
 
         :rtype: SoledadMailbox
         """
-        if PROFILE_CMD:
-            start = time.time()
-
-        name = self._parse_mailbox_name(name)
+        name = normalize_mailbox(name)
         if name not in self.mailboxes:
             logger.warning("No such mailbox!")
             return None
         self.selected = name
 
-        sm = SoledadMailbox(
-            name, self._soledad, self._memstore, readwrite)
-        if PROFILE_CMD:
-            _debugProfiling(None, "SELECT", start)
+        sm = SoledadMailbox(name, self._store, readwrite)
         return sm
 
+    # TODO use mail.Account.delete_mailbox
     def delete(self, name, force=False):
         """
         Deletes a mailbox.
@@ -338,7 +275,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         :type force: bool
         :rtype: Deferred
         """
-        name = self._parse_mailbox_name(name)
+        name = normalize_mailbox(name)
 
         if name not in self.mailboxes:
             err = imap4.MailboxException("No such mailbox: %r" % name)
@@ -369,6 +306,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         #  ??! -- can this be rite?
         # self._index.removeMailbox(name)
 
+    # TODO use mail.Account.rename_mailbox
     def rename(self, oldname, newname):
         """
         Renames a mailbox.
@@ -379,8 +317,8 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         :param newname: new name of the mailbox
         :type newname: str
         """
-        oldname = self._parse_mailbox_name(oldname)
-        newname = self._parse_mailbox_name(newname)
+        oldname = normalize_mailbox(oldname)
+        newname = normalize_mailbox(newname)
 
         if oldname not in self.mailboxes:
             raise imap4.NoSuchMailbox(repr(oldname))
@@ -431,6 +369,32 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
                 inferiors.append(infname)
         return inferiors
 
+    # TODO use mail.Account.list_mailboxes
+    def listMailboxes(self, ref, wildcard):
+        """
+        List the mailboxes.
+
+        from rfc 3501:
+        returns a subset of names from the complete set
+        of all names available to the client.  Zero or more untagged LIST
+        replies are returned, containing the name attributes, hierarchy
+        delimiter, and name.
+
+        :param ref: reference name
+        :type ref: str
+
+        :param wildcard: mailbox name with possible wildcards
+        :type wildcard: str
+        """
+        # XXX use wildcard in index query
+        ref = self._inferiorNames(normalize_mailbox(ref))
+        wildcard = imap4.wildcardToRegexp(wildcard, '/')
+        return [(i, self.getMailbox(i)) for i in ref if wildcard.match(i)]
+
+    #
+    # The rest of the methods are specific for leap.mail.imap.account.Account
+    #
+
     # TODO ------------------ can we preserve the attr?
     # maybe add to memory store.
     def isSubscribed(self, name):
@@ -442,6 +406,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
 
         :rtype: Deferred (will fire with bool)
         """
+        # TODO use Flags class
         subscribed = self.SUBSCRIBED_KEY
 
         def is_subscribed(mbox):
@@ -465,7 +430,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         def get_docs_content(docs):
             return [doc.content[self.MBOX_KEY] for doc in docs]
 
-        d = self._soledad.get_from_index(
+        d = self._store.get_from_index(
             self.TYPE_SUBS_IDX, self.MBOX_KEY, '1')
         d.addCallback(get_docs_content)
         return d
@@ -488,7 +453,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
 
         def update_subscribed_value(mbox):
             mbox.content[subscribed] = value
-            return self._soledad.put_doc(mbox)
+            return self._store.put_doc(mbox)
 
         # maybe we should store subscriptions in another
         # document...
@@ -508,7 +473,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         :type name: str
         :rtype: Deferred
         """
-        name = self._parse_mailbox_name(name)
+        name = normalize_mailbox(name)
 
         def check_and_subscribe(subscriptions):
             if name not in subscriptions:
@@ -525,7 +490,7 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         :type name: str
         :rtype: Deferred
         """
-        name = self._parse_mailbox_name(name)
+        name = normalize_mailbox(name)
 
         def check_and_unsubscribe(subscriptions):
             if name not in subscriptions:
@@ -538,28 +503,6 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
 
     def getSubscriptions(self):
         return self._get_subscriptions()
-
-    def listMailboxes(self, ref, wildcard):
-        """
-        List the mailboxes.
-
-        from rfc 3501:
-        returns a subset of names from the complete set
-        of all names available to the client.  Zero or more untagged LIST
-        replies are returned, containing the name attributes, hierarchy
-        delimiter, and name.
-
-        :param ref: reference name
-        :type ref: str
-
-        :param wildcard: mailbox name with possible wildcards
-        :type wildcard: str
-        """
-        # XXX use wildcard in index query
-        ref = self._inferiorNames(
-            self._parse_mailbox_name(ref))
-        wildcard = imap4.wildcardToRegexp(wildcard, '/')
-        return [(i, self.getMailbox(i)) for i in ref if wildcard.match(i)]
 
     #
     # INamespacePresenter
@@ -592,4 +535,4 @@ class SoledadBackedAccount(WithMsgFields, IndexedDB, MBoxParser):
         """
         Representation string for this object.
         """
-        return "<SoledadBackedAccount (%s)>" % self._account_name
+        return "<IMAPAccount (%s)>" % self.user_id

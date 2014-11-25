@@ -1,6 +1,6 @@
 # *- coding: utf-8 -*-
 # mailbox.py
-# Copyright (C) 2013 LEAP
+# Copyright (C) 2013, 2014 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@
 Soledad Mailbox.
 """
 import copy
+import re
 import threading
 import logging
 import StringIO
@@ -27,6 +28,7 @@ import os
 from collections import defaultdict
 
 from twisted.internet import defer
+from twisted.internet import reactor
 from twisted.internet.task import deferLater
 from twisted.python import log
 
@@ -36,14 +38,17 @@ from zope.interface import implements
 from leap.common import events as leap_events
 from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
 from leap.common.check import leap_assert, leap_assert_type
+from leap.mail.constants import INBOX_NAME
 from leap.mail.decorators import deferred_to_thread
 from leap.mail.utils import empty
 from leap.mail.imap.fields import WithMsgFields, fields
 from leap.mail.imap.messages import MessageCollection
 from leap.mail.imap.messageparts import MessageWrapper
-from leap.mail.imap.parser import MBoxParser
 
 logger = logging.getLogger(__name__)
+
+# TODO
+# [ ] Restore profile_cmd instrumentation
 
 """
 If the environment variable `LEAP_SKIPNOTIFY` is set, we avoid
@@ -71,7 +76,9 @@ if PROFILE_CMD:
         d.addErrback(lambda f: log.msg(f.getTraceback()))
 
 
-class SoledadMailbox(WithMsgFields, MBoxParser):
+# TODO Rename to Mailbox
+# TODO Remove WithMsgFields
+class SoledadMailbox(WithMsgFields):
     """
     A Soledad-backed IMAP mailbox.
 
@@ -115,7 +122,9 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
     _last_uid_primed = {}
     _known_uids_primed = {}
 
-    def __init__(self, mbox, soledad, memstore, rw=1):
+    # TODO pass the collection to the constructor
+    # TODO pass the mbox_doc too
+    def __init__(self, mbox, store, rw=1):
         """
         SoledadMailbox constructor. Needs to get passed a name, plus a
         Soledad instance.
@@ -123,30 +132,21 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :param mbox: the mailbox name
         :type mbox: str
 
-        :param soledad: a Soledad instance.
-        :type soledad: Soledad
-
-        :param memstore: a MemoryStore instance
-        :type memstore: MemoryStore
+        :param store:
+        :type store: Soledad
 
         :param rw: read-and-write flag for this mailbox
         :type rw: int
         """
         leap_assert(mbox, "Need a mailbox name to initialize")
-        leap_assert(soledad, "Need a soledad instance to initialize")
+        leap_assert(store, "Need a store instance to initialize")
 
-        from twisted.internet import reactor
-        self.reactor = reactor
-
-        self.mbox = self._parse_mailbox_name(mbox)
+        self.mbox = normalize_mailbox(mbox)
         self.rw = rw
 
-        self._soledad = soledad
-        self._memstore = memstore
+        self.store = store
 
-        self.messages = MessageCollection(
-            mbox=mbox, soledad=self._soledad, memstore=self._memstore)
-
+        self.messages = MessageCollection(mbox=mbox, soledad=store)
         self._uidvalidity = None
 
         # XXX careful with this get/set (it would be
@@ -214,7 +214,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         """
         return self._memstore.get_mbox_doc(self.mbox)
 
-    # XXX the memstore->soledadstore method in memstore is not complete
     def getFlags(self):
         """
         Returns the flags defined for this mailbox.
@@ -227,7 +226,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
             flags = self.INIT_FLAGS
         return map(str, flags)
 
-    # XXX the memstore->soledadstore method in memstore is not complete
     def setFlags(self, flags):
         """
         Sets flags for this mailbox.
@@ -468,8 +466,8 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
 
         d = self._do_add_message(message, flags=flags, date=date,
                                  notify_on_disk=notify_on_disk)
-        if PROFILE_CMD:
-            do_profile_cmd(d, "APPEND")
+        #if PROFILE_CMD:
+            #do_profile_cmd(d, "APPEND")
 
         # XXX should review now that we're not using qtreactor.
         # A better place for this would be  the COPY/APPEND dispatcher
@@ -477,7 +475,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         # to work fine for now.
 
         def notifyCallback(x):
-            self.reactor.callLater(0, self.notify_new)
+            reactor.callLater(0, self.notify_new)
             return x
 
         d.addCallback(notifyCallback)
@@ -630,9 +628,9 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :rtype: deferred
         """
         d = defer.Deferred()
-        self.reactor.callInThread(self._do_fetch, messages_asked, uid, d)
-        if PROFILE_CMD:
-            do_profile_cmd(d, "FETCH")
+
+        # XXX do not need no thread...
+        reactor.callInThread(self._do_fetch, messages_asked, uid, d)
         d.addCallback(self.cb_signal_unread_to_ui)
         return d
 
@@ -800,7 +798,6 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         d.addCallback(self.__cb_signal_unread_to_ui)
         return result
 
-    @deferred_to_thread
     def _get_unseen_deferred(self):
         return self.getUnseenCount()
 
@@ -897,7 +894,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         :rtype: C{list} or C{Deferred}
         """
         # TODO see if we can raise w/o interrupting flow
-        #:raise IllegalQueryError: Raised when query is not valid.
+        # :raise IllegalQueryError: Raised when query is not valid.
         # example query:
         #  ['UNDELETED', 'HEADER', 'Message-ID',
         #   '52D44F11.9060107@dev.bitmask.net']
@@ -991,7 +988,7 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         d.addCallback(createCopy)
         d.addErrback(lambda f: log.msg(f.getTraceback()))
 
-    @deferred_to_thread
+    #@deferred_to_thread
     def _get_msg_copy(self, message):
         """
         Get a copy of the fdoc for this message, and check whether
@@ -1049,3 +1046,22 @@ class SoledadMailbox(WithMsgFields, MBoxParser):
         """
         return u"<SoledadMailbox: mbox '%s' (%s)>" % (
             self.mbox, self.messages.count())
+
+
+def normalize_mailbox(name):
+    """
+    Return a normalized representation of the mailbox ``name``.
+
+    This method ensures that an eventual initial 'inbox' part of a
+    mailbox name is made uppercase.
+
+    :param name: the name of the mailbox
+    :type name: unicode
+
+    :rtype: unicode
+    """
+    _INBOX_RE = re.compile(INBOX_NAME, re.IGNORECASE)
+    if _INBOX_RE.match(name):
+        # ensure inital INBOX is uppercase
+        return INBOX_NAME + name[len(INBOX_NAME):]
+    return name

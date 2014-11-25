@@ -20,6 +20,7 @@ Interfaces for the IMAP module.
 from zope.interface import Interface, Attribute
 
 
+# TODO remove  ----------------
 class IMessageContainer(Interface):
     """
     I am a container around the different documents that a message
@@ -38,6 +39,7 @@ class IMessageContainer(Interface):
         """
 
 
+# TODO remove --------------------
 class IMessageStore(Interface):
     """
     I represent a generic storage for LEAP Messages.

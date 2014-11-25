@@ -94,6 +94,8 @@ class MessageCollectionTestCase(IMAP4HelperMixin, unittest.TestCase):
         MessageCollection interface in this particular TestCase
         """
         super(MessageCollectionTestCase, self).setUp()
+
+        # TODO deprecate memstore
         memstore = MemoryStore()
         self.messages = MessageCollection("testmbox%s" % (self.count,),
                                           self._soledad, memstore=memstore)
