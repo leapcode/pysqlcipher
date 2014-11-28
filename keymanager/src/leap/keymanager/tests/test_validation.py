@@ -19,6 +19,7 @@ Tests for the Validation Levels
 """
 
 from datetime import datetime
+from twisted.internet.defer import inlineCallbacks
 
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.keymanager.errors import (
@@ -35,51 +36,57 @@ from leap.keymanager.validation import ValidationLevel
 
 class ValidationLevelTestCase(KeyManagerWithSoledadTestCase):
 
+    @inlineCallbacks
     def test_none_old_key(self):
         km = self._key_manager()
-        km.put_raw_key(PUBLIC_KEY, OpenPGPKey, ADDRESS)
-        key = km.get_key(ADDRESS, OpenPGPKey, fetch_remote=False)
+        yield km.put_raw_key(PUBLIC_KEY, OpenPGPKey, ADDRESS)
+        key = yield km.get_key(ADDRESS, OpenPGPKey, fetch_remote=False)
         self.assertEqual(key.fingerprint, KEY_FINGERPRINT)
 
+    @inlineCallbacks
     def test_cant_upgrade(self):
         km = self._key_manager()
-        km.put_raw_key(PUBLIC_KEY, OpenPGPKey, ADDRESS,
-                       validation=ValidationLevel.Provider_Trust)
-        self.assertRaises(KeyNotValidUpgrade, km.put_raw_key, UNRELATED_KEY,
-                          OpenPGPKey, ADDRESS)
+        yield km.put_raw_key(PUBLIC_KEY, OpenPGPKey, ADDRESS,
+                             validation=ValidationLevel.Provider_Trust)
+        d = km.put_raw_key(UNRELATED_KEY, OpenPGPKey, ADDRESS)
+        yield self.assertFailure(d, KeyNotValidUpgrade)
 
+    @inlineCallbacks
     def test_fingerprint_level(self):
         km = self._key_manager()
-        km.put_raw_key(PUBLIC_KEY, OpenPGPKey, ADDRESS)
-        km.put_raw_key(UNRELATED_KEY, OpenPGPKey, ADDRESS,
-                       validation=ValidationLevel.Fingerprint)
-        key = km.get_key(ADDRESS, OpenPGPKey, fetch_remote=False)
+        yield km.put_raw_key(PUBLIC_KEY, OpenPGPKey, ADDRESS)
+        yield km.put_raw_key(UNRELATED_KEY, OpenPGPKey, ADDRESS,
+                             validation=ValidationLevel.Fingerprint)
+        key = yield km.get_key(ADDRESS, OpenPGPKey, fetch_remote=False)
         self.assertEqual(key.fingerprint, UNRELATED_FINGERPRINT)
 
+    @inlineCallbacks
     def test_expired_key(self):
         km = self._key_manager()
-        km.put_raw_key(EXPIRED_KEY, OpenPGPKey, ADDRESS)
-        km.put_raw_key(UNRELATED_KEY, OpenPGPKey, ADDRESS)
-        key = km.get_key(ADDRESS, OpenPGPKey, fetch_remote=False)
+        yield km.put_raw_key(EXPIRED_KEY, OpenPGPKey, ADDRESS)
+        yield km.put_raw_key(UNRELATED_KEY, OpenPGPKey, ADDRESS)
+        key = yield km.get_key(ADDRESS, OpenPGPKey, fetch_remote=False)
         self.assertEqual(key.fingerprint, UNRELATED_FINGERPRINT)
 
+    @inlineCallbacks
     def test_expired_fail_lower_level(self):
         km = self._key_manager()
-        km.put_raw_key(EXPIRED_KEY, OpenPGPKey, ADDRESS,
-                       validation=ValidationLevel.Third_Party_Endorsement)
-        self.assertRaises(
-            KeyNotValidUpgrade,
-            km.put_raw_key,
+        yield km.put_raw_key(
+            EXPIRED_KEY, OpenPGPKey, ADDRESS,
+            validation=ValidationLevel.Third_Party_Endorsement)
+        d = km.put_raw_key(
             UNRELATED_KEY,
             OpenPGPKey,
             ADDRESS,
             validation=ValidationLevel.Provider_Trust)
+        yield self.assertFailure(d, KeyNotValidUpgrade)
 
+    @inlineCallbacks
     def test_roll_back(self):
         km = self._key_manager()
-        km.put_raw_key(EXPIRED_KEY_UPDATED, OpenPGPKey, ADDRESS)
-        km.put_raw_key(EXPIRED_KEY, OpenPGPKey, ADDRESS)
-        key = km.get_key(ADDRESS, OpenPGPKey, fetch_remote=False)
+        yield km.put_raw_key(EXPIRED_KEY_UPDATED, OpenPGPKey, ADDRESS)
+        yield km.put_raw_key(EXPIRED_KEY, OpenPGPKey, ADDRESS)
+        key = yield km.get_key(ADDRESS, OpenPGPKey, fetch_remote=False)
         self.assertEqual(key.expiry_date, EXPIRED_KEY_NEW_EXPIRY_DATE)
 
 

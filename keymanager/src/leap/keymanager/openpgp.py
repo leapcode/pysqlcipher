@@ -28,6 +28,7 @@ import io
 from datetime import datetime
 from gnupg import GPG
 from gnupg.gnupg import GPGUtilities
+from twisted.internet import defer
 
 from leap.common.check import leap_assert, leap_assert_type, leap_check
 from leap.keymanager import errors
@@ -243,6 +244,7 @@ class OpenPGPScheme(EncryptionScheme):
         :type gpgbinary: C{str}
         """
         EncryptionScheme.__init__(self, soledad)
+        self._wait_indexes("get_key", "put_key")
         self._gpgbinary = gpgbinary
 
     #
@@ -255,59 +257,67 @@ class OpenPGPScheme(EncryptionScheme):
 
         :param address: The address bound to the key.
         :type address: str
-        :return: The key bound to C{address}.
-        :rtype: OpenPGPKey
-        @raise KeyAlreadyExists: If key already exists in local database.
+
+        :return: A Deferred which fires with the key bound to address, or fails
+                 with KeyAlreadyExists if key already exists in local database.
+        :rtype: Deferred
         """
         # make sure the key does not already exist
         leap_assert(is_address(address), 'Not an user address: %s' % address)
-        try:
-            self.get_key(address)
+
+        def _gen_key(_):
+            with self._temporary_gpgwrapper() as gpg:
+                # TODO: inspect result, or use decorator
+                params = gpg.gen_key_input(
+                    key_type='RSA',
+                    key_length=4096,
+                    name_real=address,
+                    name_email=address,
+                    name_comment='')
+                logger.info("About to generate keys... "
+                            "This might take SOME time.")
+                gpg.gen_key(params)
+                logger.info("Keys for %s have been successfully "
+                            "generated." % (address,))
+                pubkeys = gpg.list_keys()
+
+                # assert for new key characteristics
+
+                # XXX This exception is not properly catched by the soledad
+                # bootstrapping, so if we do not finish generating the keys
+                # we end with a blocked thread -- kali
+
+                leap_assert(
+                    len(pubkeys) is 1,  # a unitary keyring!
+                    'Keyring has wrong number of keys: %d.' % len(pubkeys))
+                key = gpg.list_keys(secret=True).pop()
+                leap_assert(
+                    len(key['uids']) is 1,  # with just one uid!
+                    'Wrong number of uids for key: %d.' % len(key['uids']))
+                uid_match = False
+                for uid in key['uids']:
+                    if re.match('.*<%s>$' % address, uid) is not None:
+                        uid_match = True
+                        return
+                leap_assert(uid_match, 'Key not correctly bound to address.')
+                # insert both public and private keys in storage
+                deferreds = []
+                for secret in [True, False]:
+                    key = gpg.list_keys(secret=secret).pop()
+                    openpgp_key = _build_key_from_gpg(
+                        key,
+                        gpg.export_keys(key['fingerprint'], secret=secret))
+                    d = self.put_key(openpgp_key, address)
+                    deferreds.append(d)
+                return defer.gatherResults(deferreds)
+
+        def key_already_exists(_):
             raise errors.KeyAlreadyExists(address)
-        except errors.KeyNotFound:
-            logger.debug('Key for %s not found' % (address,))
 
-        with self._temporary_gpgwrapper() as gpg:
-            # TODO: inspect result, or use decorator
-            params = gpg.gen_key_input(
-                key_type='RSA',
-                key_length=4096,
-                name_real=address,
-                name_email=address,
-                name_comment='')
-            logger.info("About to generate keys... This might take SOME time.")
-            gpg.gen_key(params)
-            logger.info("Keys for %s have been successfully "
-                        "generated." % (address,))
-            pubkeys = gpg.list_keys()
-
-            # assert for new key characteristics
-
-            # XXX This exception is not properly catched by the soledad
-            # bootstrapping, so if we do not finish generating the keys
-            # we end with a blocked thread -- kali
-
-            leap_assert(
-                len(pubkeys) is 1,  # a unitary keyring!
-                'Keyring has wrong number of keys: %d.' % len(pubkeys))
-            key = gpg.list_keys(secret=True).pop()
-            leap_assert(
-                len(key['uids']) is 1,  # with just one uid!
-                'Wrong number of uids for key: %d.' % len(key['uids']))
-            uid_match = False
-            for uid in key['uids']:
-                if re.match('.*<%s>$' % address, uid) is not None:
-                    uid_match = True
-                    return
-            leap_assert(uid_match, 'Key not correctly bound to address.')
-            # insert both public and private keys in storage
-            for secret in [True, False]:
-                key = gpg.list_keys(secret=secret).pop()
-                openpgp_key = _build_key_from_gpg(
-                    key, gpg.export_keys(key['fingerprint'], secret=secret))
-                self.put_key(openpgp_key, address)
-
-        return self.get_key(address, private=True)
+        d = self.get_key(address)
+        d.addCallbacks(key_already_exists, _gen_key)
+        d.addCallback(lambda _: self.get_key(address, private=True))
+        return d
 
     def get_key(self, address, private=False):
         """
@@ -318,19 +328,24 @@ class OpenPGPScheme(EncryptionScheme):
         :param private: Look for a private key instead of a public one?
         :type private: bool
 
-        :return: The key bound to C{address}.
-        :rtype: OpenPGPKey
-        @raise KeyNotFound: If the key was not found on local storage.
+        :return: A Deferred which fires with the OpenPGPKey bound to address,
+                 or which fails with KeyNotFound if the key was not found on
+                 local storage.
+        :rtype: Deferred
         """
         address = _parse_address(address)
 
-        doc = self._get_key_doc(address, private)
-        if doc is None:
-            raise errors.KeyNotFound(address)
-        leap_assert(
-            address in doc.content[KEY_ADDRESS_KEY],
-            'Wrong address in key data.')
-        return build_key_from_dict(OpenPGPKey, doc.content)
+        def build_key(doc):
+            if doc is None:
+                raise errors.KeyNotFound(address)
+            leap_assert(
+                address in doc.content[KEY_ADDRESS_KEY],
+                'Wrong address in key data.')
+            return build_key_from_dict(OpenPGPKey, doc.content)
+
+        d = self._get_key_doc(address, private)
+        d.addCallback(build_key)
+        return d
 
     def parse_ascii_key(self, key_data):
         """
@@ -388,6 +403,9 @@ class OpenPGPScheme(EncryptionScheme):
         :type key_data: str or unicode
         :param address: address for which this key will be active
         :type address: str
+
+        :return: A Deferred which fires when the OpenPGPKey is in the storage.
+        :rtype: Deferred
         """
         leap_assert_type(key_data, (str, unicode))
 
@@ -395,12 +413,17 @@ class OpenPGPScheme(EncryptionScheme):
         try:
             openpgp_pubkey, openpgp_privkey = self.parse_ascii_key(key_data)
         except (errors.KeyAddressMismatch, errors.KeyFingerprintMismatch) as e:
-            leap_assert(False, repr(e))
+            return defer.fail(e)
 
+        def put_key(_, key):
+            return self.put_key(key, address)
+
+        d = defer.succeed(None)
         if openpgp_pubkey is not None:
-            self.put_key(openpgp_pubkey, address)
+            d.addCallback(put_key, openpgp_pubkey)
         if openpgp_privkey is not None:
-            self.put_key(openpgp_privkey, address)
+            d.addCallback(put_key, openpgp_privkey)
+        return d
 
     def put_key(self, key, address):
         """
@@ -410,42 +433,59 @@ class OpenPGPScheme(EncryptionScheme):
         :type key: OpenPGPKey
         :param address: address for which this key will be active.
         :type address: str
+
+        :return: A Deferred which fires when the key is in the storage.
+        :rtype: Deferred
         """
-        self._put_key_doc(key)
-        self._put_active_doc(key, address)
+        d = self._put_key_doc(key)
+        d.addCallback(lambda _: self._put_active_doc(key, address))
+        return d
 
     def _put_key_doc(self, key):
         """
         Put key document in soledad
 
         :type key: OpenPGPKey
+        :rtype: Deferred
         """
-        docs = self._soledad.get_from_index(
+        def check_and_put(docs, key):
+            if len(docs) == 1:
+                doc = docs.pop()
+                if key.fingerprint == doc.content[KEY_FINGERPRINT_KEY]:
+                    # in case of an update of the key merge them with gnupg
+                    with self._temporary_gpgwrapper() as gpg:
+                        gpg.import_keys(doc.content[KEY_DATA_KEY])
+                        gpg.import_keys(key.key_data)
+                        gpgkey = gpg.list_keys(secret=key.private).pop()
+                        key = _build_key_from_gpg(
+                            gpgkey,
+                            gpg.export_keys(gpgkey['fingerprint'],
+                                            secret=key.private))
+                    doc.set_json(key.get_json())
+                    d = self._soledad.put_doc(doc)
+                else:
+                    logger.critical(
+                        "Can't put a key whith the same key_id and different "
+                        "fingerprint: %s, %s"
+                        % (key.fingerprint, doc.content[KEY_FINGERPRINT_KEY]))
+                    d = defer.fail(
+                        errors.KeyFingerprintMismatch(key.fingerprint))
+            elif len(docs) > 1:
+                logger.critical(
+                    "There is more than one key with the same key_id %s"
+                    % (key.key_id,))
+                d = defer.fail(errors.KeyAttributesDiffer(key.key_id))
+            else:
+                d = self._soledad.create_doc_from_json(key.get_json())
+            return d
+
+        d = self._soledad.get_from_index(
             TYPE_ID_PRIVATE_INDEX,
             self.KEY_TYPE,
             key.key_id,
             '1' if key.private else '0')
-        if len(docs) != 0:
-            doc = docs.pop()
-            if key.fingerprint == doc.content[KEY_FINGERPRINT_KEY]:
-                # in case of an update of the key merge them with gnupg
-                with self._temporary_gpgwrapper() as gpg:
-                    gpg.import_keys(doc.content[KEY_DATA_KEY])
-                    gpg.import_keys(key.key_data)
-                    gpgkey = gpg.list_keys(secret=key.private).pop()
-                    key = _build_key_from_gpg(
-                        gpgkey,
-                        gpg.export_keys(gpgkey['fingerprint'],
-                                        secret=key.private))
-                doc.set_json(key.get_json())
-                self._soledad.put_doc(doc)
-            else:
-                logger.critical(
-                    "Can't put a key whith the same key_id and different "
-                    "fingerprint: %s, %s"
-                    % (key.fingerprint, doc.content[KEY_FINGERPRINT_KEY]))
-        else:
-            self._soledad.create_doc_from_json(key.get_json())
+        d.addCallback(check_and_put, key)
+        return d
 
     def _put_active_doc(self, key, address):
         """
@@ -453,24 +493,37 @@ class OpenPGPScheme(EncryptionScheme):
 
         :type key: OpenPGPKey
         :type addresses: str
+        :rtype: Deferred
         """
-        docs = self._soledad.get_from_index(
+        def check_and_put(docs):
+            if len(docs) == 1:
+                doc = docs.pop()
+                doc.set_json(key.get_active_json(address))
+                d = self._soledad.put_doc(doc)
+            else:
+                if len(docs) > 1:
+                    logger.error("There is more than one active key document "
+                                 "for the address %s" % (address,))
+                    deferreds = []
+                    for doc in docs:
+                        delete = self._soledad.delete_doc(doc)
+                        deferreds.append(delete)
+                    d = defer.gatherResults(deferreds, consumeErrors=True)
+                else:
+                    d = defer.succeed(None)
+
+                d.addCallback(
+                    lambda _: self._soledad.create_doc_from_json(
+                        key.get_active_json(address)))
+            return d
+
+        d = self._soledad.get_from_index(
             TYPE_ADDRESS_PRIVATE_INDEX,
             self.ACTIVE_TYPE,
             address,
             '1' if key.private else '0')
-        if len(docs) == 1:
-            doc = docs.pop()
-            doc.set_json(key.get_active_json(address))
-            self._soledad.put_doc(doc)
-        else:
-            if len(docs) > 1:
-                logger.error("There is more than one active key document "
-                             "for the address %s" % (address,))
-                for doc in docs:
-                    self._soledad.delete_doc(doc)
-            self._soledad.create_doc_from_json(
-                key.get_active_json(address))
+        d.addCallback(check_and_put)
+        return d
 
     def _get_key_doc(self, address, private=False):
         """
@@ -482,69 +535,94 @@ class OpenPGPScheme(EncryptionScheme):
         :type address: str
         :param private: Whether to look for a private key.
         :type private: bool
-        :return: The document with the key or None if it does not exist.
-        :rtype: leap.soledad.document.SoledadDocument
+
+        :return: A Deferred which fires with the SoledadDocument with the key
+                 or None if it does not exist.
+        :rtype: Deferred
         """
-        activedoc = self._soledad.get_from_index(
+        def get_key_from_active_doc(activedoc):
+            if len(activedoc) is 0:
+                return None
+            leap_assert(
+                len(activedoc) is 1,
+                'Found more than one key for address %s!' % (address,))
+
+            key_id = activedoc[0].content[KEY_ID_KEY]
+            d = self._soledad.get_from_index(
+                TYPE_ID_PRIVATE_INDEX,
+                self.KEY_TYPE,
+                key_id,
+                '1' if private else '0')
+            d.addCallback(get_doc, key_id)
+            return d
+
+        def get_doc(doclist, key_id):
+            leap_assert(
+                len(doclist) is 1,
+                'There is %d keys for id %s!' % (len(doclist), key_id))
+            return doclist.pop()
+
+        d = self._soledad.get_from_index(
             TYPE_ADDRESS_PRIVATE_INDEX,
             self.ACTIVE_TYPE,
             address,
             '1' if private else '0')
-        if len(activedoc) is 0:
-            return None
-        leap_assert(
-            len(activedoc) is 1,
-            'Found more than one key for address %s!' % (address,))
-
-        key_id = activedoc[0].content[KEY_ID_KEY]
-        doclist = self._soledad.get_from_index(
-            TYPE_ID_PRIVATE_INDEX,
-            self.KEY_TYPE,
-            key_id,
-            '1' if private else '0')
-        leap_assert(
-            len(doclist) is 1,
-            'There is %d keys for id %s!' % (len(doclist), key_id))
-        return doclist.pop()
+        d.addCallback(get_key_from_active_doc)
+        return d
 
     def delete_key(self, key):
         """
         Remove C{key} from storage.
 
-        May raise:
-            errors.KeyNotFound
-
         :param key: The key to be removed.
         :type key: EncryptionKey
+
+        :return: A Deferred which fires when the key is deleted, or which
+                 fails with KeyNotFound if the key was not found on local
+                 storage.
+        :rtype: Deferred
         """
         leap_assert_type(key, OpenPGPKey)
-        activedocs = self._soledad.get_from_index(
+
+        def delete_docs(activedocs):
+            deferreds = []
+            for doc in activedocs:
+                d = self._soledad.delete_doc(doc)
+                deferreds.append(d)
+            return defer.gatherResults(deferreds)
+
+        def get_key_docs(_):
+            return self._soledad.get_from_index(
+                TYPE_ID_PRIVATE_INDEX,
+                self.KEY_TYPE,
+                key.key_id,
+                '1' if key.private else '0')
+
+        def delete_key(docs):
+            if len(docs) == 0:
+                raise errors.KeyNotFound(key)
+            if len(docs) > 1:
+                logger.critical("There is more than one key for key_id %s"
+                                % key.key_id)
+
+            doc = None
+            for d in docs:
+                if d.content['fingerprint'] == key.fingerprint:
+                    doc = d
+                    break
+            if doc is None:
+                raise errors.KeyNotFound(key)
+            return self._soledad.delete_doc(doc)
+
+        d = self._soledad.get_from_index(
             TYPE_ID_PRIVATE_INDEX,
             self.ACTIVE_TYPE,
             key.key_id,
             '1' if key.private else '0')
-        for doc in activedocs:
-            self._soledad.delete_doc(doc)
-
-        docs = self._soledad.get_from_index(
-            TYPE_ID_PRIVATE_INDEX,
-            self.KEY_TYPE,
-            key.key_id,
-            '1' if key.private else '0')
-        if len(docs) == 0:
-            raise errors.KeyNotFound(key)
-        if len(docs) > 1:
-            logger.critical("There is more than one key for key_id %s"
-                            % key.key_id)
-
-        doc = None
-        for d in docs:
-            if d.content['fingerprint'] == key.fingerprint:
-                doc = d
-                break
-        if doc is None:
-            raise errors.KeyNotFound(key)
-        self._soledad.delete_doc(doc)
+        d.addCallback(delete_docs)
+        d.addCallback(get_key_docs)
+        d.addCallback(delete_key)
+        return d
 
     #
     # Data encryption, decryption, signing and verifying
