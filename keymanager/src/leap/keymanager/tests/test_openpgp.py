@@ -43,6 +43,9 @@ from leap.keymanager.tests import (
 
 class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
 
+    # set the trial timeout to 20min, needed by the key generation test
+    timeout = 1200
+
     @inlineCallbacks
     def _test_openpgp_gen_key(self):
         pgp = openpgp.OpenPGPScheme(

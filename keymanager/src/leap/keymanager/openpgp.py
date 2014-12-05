@@ -282,11 +282,6 @@ class OpenPGPScheme(EncryptionScheme):
                 pubkeys = gpg.list_keys()
 
                 # assert for new key characteristics
-
-                # XXX This exception is not properly catched by the soledad
-                # bootstrapping, so if we do not finish generating the keys
-                # we end with a blocked thread -- kali
-
                 leap_assert(
                     len(pubkeys) is 1,  # a unitary keyring!
                     'Keyring has wrong number of keys: %d.' % len(pubkeys))
@@ -298,8 +293,9 @@ class OpenPGPScheme(EncryptionScheme):
                 for uid in key['uids']:
                     if re.match('.*<%s>$' % address, uid) is not None:
                         uid_match = True
-                        return
+                        break
                 leap_assert(uid_match, 'Key not correctly bound to address.')
+
                 # insert both public and private keys in storage
                 deferreds = []
                 for secret in [True, False]:
