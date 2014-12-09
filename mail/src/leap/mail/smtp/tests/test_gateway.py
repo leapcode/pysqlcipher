@@ -23,6 +23,7 @@ SMTP gateway tests.
 import re
 from datetime import datetime
 
+from twisted.internet.defer import inlineCallbacks, fail
 from twisted.test import proto_helpers
 
 from mock import Mock
@@ -34,7 +35,7 @@ from leap.mail.tests import (
     ADDRESS,
     ADDRESS_2,
 )
-from leap.keymanager import openpgp
+from leap.keymanager import openpgp, errors
 
 
 # some regexps
@@ -87,7 +88,8 @@ class TestSmtpGateway(TestCaseWithKeyManager):
         proto = SMTPFactory(
             u'anotheruser@leap.se',
             self._km,
-            self._config['encrypted_only'], outgoing_mail=Mock()).buildProtocol(('127.0.0.1', 0))
+            self._config['encrypted_only'],
+            outgoing_mail=Mock()).buildProtocol(('127.0.0.1', 0))
         # snip...
         transport = proto_helpers.StringTransport()
         proto.makeConnection(transport)
@@ -98,23 +100,26 @@ class TestSmtpGateway(TestCaseWithKeyManager):
                              'Did not get expected answer from gateway.')
         proto.setTimeout(None)
 
+    @inlineCallbacks
     def test_missing_key_rejects_address(self):
         """
         Test if server rejects to send unencrypted when 'encrypted_only' is
         True.
         """
         # remove key from key manager
-        pubkey = self._km.get_key(ADDRESS, openpgp.OpenPGPKey)
+        pubkey = yield self._km.get_key(ADDRESS, openpgp.OpenPGPKey)
         pgp = openpgp.OpenPGPScheme(
             self._soledad, gpgbinary=self.GPG_BINARY_PATH)
-        pgp.delete_key(pubkey)
+        yield pgp.delete_key(pubkey)
         # mock the key fetching
-        self._km.fetch_keys_from_server = Mock(return_value=[])
+        self._km._fetch_keys_from_server = Mock(
+            return_value=fail(errors.KeyNotFound()))
         # prepare the SMTP factory
         proto = SMTPFactory(
             u'anotheruser@leap.se',
             self._km,
-            self._config['encrypted_only'], outgoing_mail=Mock()).buildProtocol(('127.0.0.1', 0))
+            self._config['encrypted_only'],
+            outgoing_mail=Mock()).buildProtocol(('127.0.0.1', 0))
         transport = proto_helpers.StringTransport()
         proto.makeConnection(transport)
         proto.lineReceived(self.EMAIL_DATA[0] + '\r\n')
@@ -127,18 +132,20 @@ class TestSmtpGateway(TestCaseWithKeyManager):
             lines[-1],
             'Address should have been rejecetd with appropriate message.')
 
+    @inlineCallbacks
     def test_missing_key_accepts_address(self):
         """
         Test if server accepts to send unencrypted when 'encrypted_only' is
         False.
         """
         # remove key from key manager
-        pubkey = self._km.get_key(ADDRESS, openpgp.OpenPGPKey)
+        pubkey = yield self._km.get_key(ADDRESS, openpgp.OpenPGPKey)
         pgp = openpgp.OpenPGPScheme(
             self._soledad, gpgbinary=self.GPG_BINARY_PATH)
-        pgp.delete_key(pubkey)
+        yield pgp.delete_key(pubkey)
         # mock the key fetching
-        self._km.fetch_keys_from_server = Mock(return_value=[])
+        self._km._fetch_keys_from_server = Mock(
+            return_value=fail(errors.KeyNotFound()))
         # prepare the SMTP factory with encrypted only equal to false
         proto = SMTPFactory(
             u'anotheruser@leap.se',

@@ -24,7 +24,6 @@ from OpenSSL import SSL
 from twisted.mail import smtp
 from twisted.internet import reactor
 from twisted.internet import defer
-from twisted.internet.threads import deferToThread
 from twisted.protocols.amp import ssl
 from twisted.python import log
 
@@ -111,17 +110,17 @@ class OutgoingMail:
         :type recipient: smtp.User
         :return: a deferred which delivers the message when fired
         """
-        d = deferToThread(lambda: self._maybe_encrypt_and_sign(raw, recipient))
+        d = self._maybe_encrypt_and_sign(raw, recipient)
         d.addCallback(self._route_msg)
         d.addErrback(self.sendError)
-
         return d
 
     def sendSuccess(self, smtp_sender_result):
         """
         Callback for a successful send.
 
-        :param smtp_sender_result: The result from the ESMTPSender from _route_msg
+        :param smtp_sender_result: The result from the ESMTPSender from
+                                   _route_msg
         :type smtp_sender_result: tuple(int, list(tuple))
         """
         dest_addrstr = smtp_sender_result[1][0][0]
@@ -145,7 +144,8 @@ class OutgoingMail:
         """
         Sends the msg using the ESMTPSenderFactory.
 
-        :param encrypt_and_sign_result: A tuple containing the 'maybe' encrypted message and the recipient
+        :param encrypt_and_sign_result: A tuple containing the 'maybe'
+                                        encrypted message and the recipient
         :type encrypt_and_sign_result: tuple
         """
         message, recipient = encrypt_and_sign_result
@@ -172,7 +172,6 @@ class OutgoingMail:
         reactor.connectSSL(
             self._host, self._port, factory,
             contextFactory=SSLContextFactory(self._cert, self._key))
-
 
     def _maybe_encrypt_and_sign(self, raw, recipient):
         """
@@ -209,16 +208,20 @@ class OutgoingMail:
         :param recipient: The recipient for the message
         :type: recipient: smtp.User
 
+        :return: A Deferred that will be fired with a MIMEMultipart message
+                 and the original recipient Message
+        :rtype: Deferred
         """
         # pass if the original message's content-type is "multipart/encrypted"
         lines = raw.split('\r\n')
         origmsg = Parser().parsestr(raw)
 
         if origmsg.get_content_type() == 'multipart/encrypted':
-            return origmsg
+            return defer.success((origmsg, recipient))
 
         from_address = validate_address(self._from_address)
         username, domain = from_address.split('@')
+        to_address = validate_address(recipient.dest.addrstr)
 
         # add a nice footer to the outgoing message
         # XXX: footer will eventually optional or be removed
@@ -230,80 +233,93 @@ class OutgoingMail:
 
         origmsg = Parser().parsestr('\r\n'.join(lines))
 
-        # get sender and recipient data
-        signkey = self._keymanager.get_key(from_address, OpenPGPKey, private=True)
-        log.msg("Will sign the message with %s." % signkey.fingerprint)
-        to_address = validate_address(recipient.dest.addrstr)
-        try:
-            # try to get the recipient pubkey
-            pubkey = self._keymanager.get_key(to_address, OpenPGPKey)
-            log.msg("Will encrypt the message to %s." % pubkey.fingerprint)
-            signal(proto.SMTP_START_ENCRYPT_AND_SIGN,
-                   "%s,%s" % (self._from_address, to_address))
-            newmsg = self._encrypt_and_sign(origmsg, pubkey, signkey)
-
+        def signal_encrypt_sign(newmsg):
             signal(proto.SMTP_END_ENCRYPT_AND_SIGN,
                    "%s,%s" % (self._from_address, to_address))
-        except KeyNotFound:
-            # at this point we _can_ send unencrypted mail, because if the
-            # configuration said the opposite the address would have been
-            # rejected in SMTPDelivery.validateTo().
-            log.msg('Will send unencrypted message to %s.' % to_address)
-            signal(proto.SMTP_START_SIGN, self._from_address)
-            newmsg = self._sign(origmsg, signkey)
+            return newmsg, recipient
+
+        def signal_sign(newmsg):
             signal(proto.SMTP_END_SIGN, self._from_address)
-        return newmsg, recipient
+            return newmsg, recipient
 
+        def if_key_not_found_send_unencrypted(failure):
+            if failure.check(KeyNotFound):
+                log.msg('Will send unencrypted message to %s.' % to_address)
+                signal(proto.SMTP_START_SIGN, self._from_address)
+                d = self._sign(origmsg, from_address)
+                d.addCallback(signal_sign)
+                return d
+            else:
+                return failure
 
-    def _encrypt_and_sign(self, origmsg, pubkey, signkey):
+        log.msg("Will encrypt the message with %s and sign with %s."
+                % (to_address, from_address))
+        signal(proto.SMTP_START_ENCRYPT_AND_SIGN,
+               "%s,%s" % (self._from_address, to_address))
+        d = self._encrypt_and_sign(origmsg, to_address, from_address)
+        d.addCallbacks(signal_encrypt_sign, if_key_not_found_send_unencrypted)
+        return d
+
+    def _encrypt_and_sign(self, origmsg, encrypt_address, sign_address):
         """
         Create an RFC 3156 compliang PGP encrypted and signed message using
-        C{pubkey} to encrypt and C{signkey} to sign.
+        C{encrypt_address} to encrypt and C{sign_address} to sign.
 
         :param origmsg: The original message
         :type origmsg: email.message.Message
-        :param pubkey: The public key used to encrypt the message.
-        :type pubkey: OpenPGPKey
-        :param signkey: The private key used to sign the message.
-        :type signkey: OpenPGPKey
-        :return: The encrypted and signed message
-        :rtype: MultipartEncrypted
+        :param encrypt_address: The address used to encrypt the message.
+        :type encrypt_address: str
+        :param sign_address: The address used to sign the message.
+        :type sign_address: str
+
+        :return: A Deferred with the MultipartEncrypted message
+        :rtype: Deferred
         """
         # create new multipart/encrypted message with 'pgp-encrypted' protocol
-        newmsg = MultipartEncrypted('application/pgp-encrypted')
-        # move (almost) all headers from original message to the new message
-        self._fix_headers(origmsg, newmsg, signkey)
-        # create 'application/octet-stream' encrypted message
-        encmsg = MIMEApplication(
-            self._keymanager.encrypt(origmsg.as_string(unixfrom=False), pubkey,
-                                     sign=signkey),
-            _subtype='octet-stream', _encoder=lambda x: x)
-        encmsg.add_header('content-disposition', 'attachment',
-                          filename='msg.asc')
-        # create meta message
-        metamsg = PGPEncrypted()
-        metamsg.add_header('Content-Disposition', 'attachment')
-        # attach pgp message parts to new message
-        newmsg.attach(metamsg)
-        newmsg.attach(encmsg)
-        return newmsg
 
+        def encrypt(res):
+            newmsg, origmsg = res
+            d = self._keymanager.encrypt(
+                origmsg.as_string(unixfrom=False),
+                encrypt_address, OpenPGPKey, sign=sign_address)
+            d.addCallback(lambda encstr: (newmsg, encstr))
+            return d
 
-    def _sign(self, origmsg, signkey):
+        def create_encrypted_message(res):
+            newmsg, encstr = res
+            encmsg = MIMEApplication(
+                encstr, _subtype='octet-stream', _encoder=lambda x: x)
+            encmsg.add_header('content-disposition', 'attachment',
+                              filename='msg.asc')
+            # create meta message
+            metamsg = PGPEncrypted()
+            metamsg.add_header('Content-Disposition', 'attachment')
+            # attach pgp message parts to new message
+            newmsg.attach(metamsg)
+            newmsg.attach(encmsg)
+            return newmsg
+
+        d = self._fix_headers(
+            origmsg,
+            MultipartEncrypted('application/pgp-encrypted'),
+            sign_address)
+        d.addCallback(encrypt)
+        d.addCallback(create_encrypted_message)
+        return d
+
+    def _sign(self, origmsg, sign_address):
         """
-        Create an RFC 3156 compliant PGP signed MIME message using C{signkey}.
+        Create an RFC 3156 compliant PGP signed MIME message using
+        C{sign_address}.
 
         :param origmsg: The original message
         :type origmsg: email.message.Message
-        :param signkey: The private key used to sign the message.
-        :type signkey: leap.common.keymanager.openpgp.OpenPGPKey
-        :return: The signed message.
-        :rtype: MultipartSigned
+        :param sign_address: The address used to sign the message.
+        :type sign_address: str
+
+        :return: A Deferred with the MultipartSigned message.
+        :rtype: Deferred
         """
-        # create new multipart/signed message
-        newmsg = MultipartSigned('application/pgp-signature', 'pgp-sha512')
-        # move (almost) all headers from original message to the new message
-        self._fix_headers(origmsg, newmsg, signkey)
         # apply base64 content-transfer-encoding
         encode_base64_rec(origmsg)
         # get message text with headers and replace \n for \r\n
@@ -316,17 +332,27 @@ class OutgoingMail:
         if origmsg.is_multipart():
             if not msgtext.endswith("\r\n"):
                 msgtext += "\r\n"
-        # calculate signature
-        signature = self._keymanager.sign(msgtext, signkey, digest_algo='SHA512',
-                                          clearsign=False, detach=True, binary=False)
-        sigmsg = PGPSignature(signature)
-        # attach original message and signature to new message
-        newmsg.attach(origmsg)
-        newmsg.attach(sigmsg)
-        return newmsg
 
+        def create_signed_message(res):
+            (msg, _), signature = res
+            sigmsg = PGPSignature(signature)
+            # attach original message and signature to new message
+            msg.attach(origmsg)
+            msg.attach(sigmsg)
+            return msg
 
-    def _fix_headers(self, origmsg, newmsg, signkey):
+        dh = self._fix_headers(
+            origmsg,
+            MultipartSigned('application/pgp-signature', 'pgp-sha512'),
+            sign_address)
+        ds = self._keymanager.sign(
+            msgtext, sign_address, OpenPGPKey, digest_algo='SHA512',
+            clearsign=False, detach=True, binary=False)
+        d = defer.gatherResults([dh, ds])
+        d.addCallback(create_signed_message)
+        return d
+
+    def _fix_headers(self, origmsg, newmsg, sign_address):
         """
         Move some headers from C{origmsg} to C{newmsg}, delete unwanted
         headers from C{origmsg} and add new headers to C{newms}.
@@ -360,8 +386,13 @@ class OutgoingMail:
         :type origmsg: email.message.Message
         :param newmsg: The new message being created.
         :type newmsg: email.message.Message
-        :param signkey: The key used to sign C{newmsg}
-        :type signkey: OpenPGPKey
+        :param sign_address: The address used to sign C{newmsg}
+        :type sign_address: str
+
+        :return: A Deferred with a touple:
+                 (new Message with the unencrypted headers,
+                  original Message with headers removed)
+        :rtype: Deferred
         """
         # move headers from origmsg to newmsg
         headers = origmsg.items()
@@ -375,11 +406,17 @@ class OutgoingMail:
             del (origmsg[hkey])
         # add a new message-id to newmsg
         newmsg.add_header('Message-Id', smtp.messageid())
-        # add openpgp header to newmsg
-        username, domain = signkey.address.split('@')
-        newmsg.add_header(
-            'OpenPGP', 'id=%s' % signkey.key_id,
-            url='https://%s/key/%s' % (domain, username),
-            preference='signencrypt')
         # delete user-agent from origmsg
         del (origmsg['user-agent'])
+
+        def add_openpgp_header(signkey):
+            username, domain = sign_address.split('@')
+            newmsg.add_header(
+                'OpenPGP', 'id=%s' % signkey.key_id,
+                url='https://%s/key/%s' % (domain, username),
+                preference='signencrypt')
+            return newmsg, origmsg
+
+        d = self._keymanager.get_key(sign_address, OpenPGPKey, private=True)
+        d.addCallback(add_openpgp_header)
+        return d

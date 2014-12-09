@@ -22,7 +22,8 @@ SMTP gateway tests.
 
 import re
 from datetime import datetime
-from twisted.mail.smtp import User, Address
+from twisted.internet.defer import fail
+from twisted.mail.smtp import User
 
 from mock import Mock
 
@@ -33,7 +34,7 @@ from leap.mail.tests import (
     ADDRESS,
     ADDRESS_2,
 )
-from leap.keymanager import openpgp
+from leap.keymanager import openpgp, errors
 
 
 class TestOutgoingMail(TestCaseWithKeyManager):
@@ -54,132 +55,133 @@ class TestOutgoingMail(TestCaseWithKeyManager):
                   'QUIT']
 
     def setUp(self):
-        TestCaseWithKeyManager.setUp(self)
         self.lines = [line for line in self.EMAIL_DATA[4:12]]
         self.lines.append('')  # add a trailing newline
         self.raw = '\r\n'.join(self.lines)
+        self.expected_body = ('\r\n'.join(self.EMAIL_DATA[9:12]) +
+                              "\r\n\r\n--\r\nI prefer encrypted email - "
+                              "https://leap.se/key/anotheruser\r\n")
         self.fromAddr = ADDRESS_2
-        self.outgoing_mail = OutgoingMail(self.fromAddr, self._km, self._config['cert'], self._config['key'],
-                                        self._config['host'], self._config['port'])
-        self.proto = SMTPFactory(
-            u'anotheruser@leap.se',
-            self._km,
-            self._config['encrypted_only'],
-            self.outgoing_mail).buildProtocol(('127.0.0.1', 0))
-        self.dest = User(ADDRESS, 'gateway.leap.se', self.proto, ADDRESS)
 
-    def test_openpgp_encrypt_decrypt(self):
-        "Test if openpgp can encrypt and decrypt."
-        text = "simple raw text"
-        pubkey = self._km.get_key(
-            ADDRESS, openpgp.OpenPGPKey, private=False)
-        encrypted = self._km.encrypt(text, pubkey)
-        self.assertNotEqual(
-            text, encrypted, "Ciphertext is equal to plaintext.")
-        privkey = self._km.get_key(
-            ADDRESS, openpgp.OpenPGPKey, private=True)
-        decrypted = self._km.decrypt(encrypted, privkey)
-        self.assertEqual(text, decrypted,
-                         "Decrypted text differs from plaintext.")
+        def init_outgoing_and_proto(_):
+            self.outgoing_mail = OutgoingMail(
+                self.fromAddr, self._km, self._config['cert'],
+                self._config['key'], self._config['host'],
+                self._config['port'])
+            self.proto = SMTPFactory(
+                u'anotheruser@leap.se',
+                self._km,
+                self._config['encrypted_only'],
+                self.outgoing_mail).buildProtocol(('127.0.0.1', 0))
+            self.dest = User(ADDRESS, 'gateway.leap.se', self.proto, ADDRESS)
+
+        d = TestCaseWithKeyManager.setUp(self)
+        d.addCallback(init_outgoing_and_proto)
+        return d
 
     def test_message_encrypt(self):
         """
         Test if message gets encrypted to destination email.
         """
+        def check_decryption(res):
+            decrypted, _ = res
+            self.assertEqual(
+                '\n' + self.expected_body,
+                decrypted,
+                'Decrypted text differs from plaintext.')
 
-        message, _ = self.outgoing_mail._maybe_encrypt_and_sign(self.raw, self.dest)
-
-        # assert structure of encrypted message
-        self.assertTrue('Content-Type' in message)
-        self.assertEqual('multipart/encrypted', message.get_content_type())
-        self.assertEqual('application/pgp-encrypted',
-                         message.get_param('protocol'))
-        self.assertEqual(2, len(message.get_payload()))
-        self.assertEqual('application/pgp-encrypted',
-                         message.get_payload(0).get_content_type())
-        self.assertEqual('application/octet-stream',
-                         message.get_payload(1).get_content_type())
-        privkey = self._km.get_key(
-            ADDRESS, openpgp.OpenPGPKey, private=True)
-        decrypted = self._km.decrypt(
-            message.get_payload(1).get_payload(), privkey)
-
-        expected = '\n' + '\r\n'.join(
-            self.EMAIL_DATA[9:12]) + '\r\n\r\n--\r\n' + 'I prefer encrypted email - https://leap.se/key/anotheruser\r\n'
-        self.assertEqual(
-            expected,
-            decrypted,
-            'Decrypted text differs from plaintext.')
+        d = self.outgoing_mail._maybe_encrypt_and_sign(self.raw, self.dest)
+        d.addCallback(self._assert_encrypted)
+        d.addCallback(lambda message: self._km.decrypt(
+            message.get_payload(1).get_payload(), ADDRESS, openpgp.OpenPGPKey))
+        d.addCallback(check_decryption)
+        return d
 
     def test_message_encrypt_sign(self):
         """
         Test if message gets encrypted to destination email and signed with
         sender key.
-        """
-        message, _ = self.outgoing_mail._maybe_encrypt_and_sign(self.raw, self.dest)
+        '"""
+        def check_decryption_and_verify(res):
+            decrypted, signkey = res
+            self.assertEqual(
+                '\n' + self.expected_body,
+                decrypted,
+                'Decrypted text differs from plaintext.')
+            self.assertTrue(ADDRESS_2 in signkey.address,
+                            "Verification failed")
 
-        # assert structure of encrypted message
-        self.assertTrue('Content-Type' in message)
-        self.assertEqual('multipart/encrypted', message.get_content_type())
-        self.assertEqual('application/pgp-encrypted',
-                         message.get_param('protocol'))
-        self.assertEqual(2, len(message.get_payload()))
-        self.assertEqual('application/pgp-encrypted',
-                         message.get_payload(0).get_content_type())
-        self.assertEqual('application/octet-stream',
-                         message.get_payload(1).get_content_type())
-        # decrypt and verify
-        privkey = self._km.get_key(
-            ADDRESS, openpgp.OpenPGPKey, private=True)
-        pubkey = self._km.get_key(ADDRESS_2, openpgp.OpenPGPKey)
-        decrypted = self._km.decrypt(
-            message.get_payload(1).get_payload(), privkey, verify=pubkey)
-        self.assertEqual(
-            '\n' + '\r\n'.join(self.EMAIL_DATA[9:12]) + '\r\n\r\n--\r\n' +
-            'I prefer encrypted email - https://leap.se/key/anotheruser\r\n',
-            decrypted,
-            'Decrypted text differs from plaintext.')
+        d = self.outgoing_mail._maybe_encrypt_and_sign(self.raw, self.dest)
+        d.addCallback(self._assert_encrypted)
+        d.addCallback(lambda message: self._km.decrypt(
+            message.get_payload(1).get_payload(), ADDRESS, openpgp.OpenPGPKey,
+            verify=ADDRESS_2))
+        d.addCallback(check_decryption_and_verify)
+        return d
 
     def test_message_sign(self):
         """
         Test if message is signed with sender key.
         """
         # mock the key fetching
-        self._km.fetch_keys_from_server = Mock(return_value=[])
+        self._km._fetch_keys_from_server = Mock(
+            return_value=fail(errors.KeyNotFound()))
         recipient = User('ihavenopubkey@nonleap.se',
-                    'gateway.leap.se', self.proto, ADDRESS)
-        self.outgoing_mail = OutgoingMail(self.fromAddr, self._km, self._config['cert'], self._config['key'],
-                                        self._config['host'], self._config['port'])
+                         'gateway.leap.se', self.proto, ADDRESS)
+        self.outgoing_mail = OutgoingMail(
+            self.fromAddr, self._km, self._config['cert'], self._config['key'],
+            self._config['host'], self._config['port'])
 
-        message, _ = self.outgoing_mail._maybe_encrypt_and_sign(self.raw, recipient)
+        def check_signed(res):
+            message, _ = res
+            self.assertTrue('Content-Type' in message)
+            self.assertEqual('multipart/signed', message.get_content_type())
+            self.assertEqual('application/pgp-signature',
+                             message.get_param('protocol'))
+            self.assertEqual('pgp-sha512', message.get_param('micalg'))
+            # assert content of message
+            self.assertEqual(self.expected_body,
+                             message.get_payload(0).get_payload(decode=True))
+            # assert content of signature
+            self.assertTrue(
+                message.get_payload(1).get_payload().startswith(
+                    '-----BEGIN PGP SIGNATURE-----\n'),
+                'Message does not start with signature header.')
+            self.assertTrue(
+                message.get_payload(1).get_payload().endswith(
+                    '-----END PGP SIGNATURE-----\n'),
+                'Message does not end with signature footer.')
+            return message
 
-        # assert structure of signed message
+        def verify(message):
+            # replace EOL before verifying (according to rfc3156)
+            signed_text = re.sub('\r?\n', '\r\n',
+                                 message.get_payload(0).as_string())
+
+            def assert_verify(key):
+                self.assertTrue(ADDRESS_2 in key.address,
+                                 'Signature could not be verified.')
+
+            d = self._km.verify(
+                signed_text, ADDRESS_2, openpgp.OpenPGPKey,
+                detached_sig=message.get_payload(1).get_payload())
+            d.addCallback(assert_verify)
+            return d
+
+        d = self.outgoing_mail._maybe_encrypt_and_sign(self.raw, recipient)
+        d.addCallback(check_signed)
+        d.addCallback(verify)
+        return d
+
+    def _assert_encrypted(self, res):
+        message, _ = res
         self.assertTrue('Content-Type' in message)
-        self.assertEqual('multipart/signed', message.get_content_type())
-        self.assertEqual('application/pgp-signature',
+        self.assertEqual('multipart/encrypted', message.get_content_type())
+        self.assertEqual('application/pgp-encrypted',
                          message.get_param('protocol'))
-        self.assertEqual('pgp-sha512', message.get_param('micalg'))
-        # assert content of message
-        self.assertEqual(
-            '\r\n'.join(self.EMAIL_DATA[9:13]) + '\r\n--\r\n' +
-            'I prefer encrypted email - https://leap.se/key/anotheruser\r\n',
-            message.get_payload(0).get_payload(decode=True))
-        # assert content of signature
-        self.assertTrue(
-            message.get_payload(1).get_payload().startswith(
-                '-----BEGIN PGP SIGNATURE-----\n'),
-            'Message does not start with signature header.')
-        self.assertTrue(
-            message.get_payload(1).get_payload().endswith(
-                '-----END PGP SIGNATURE-----\n'),
-            'Message does not end with signature footer.')
-        # assert signature is valid
-        pubkey = self._km.get_key(ADDRESS_2, openpgp.OpenPGPKey)
-        # replace EOL before verifying (according to rfc3156)
-        signed_text = re.sub('\r?\n', '\r\n',
-                             message.get_payload(0).as_string())
-        self.assertTrue(
-            self._km.verify(signed_text,
-                            pubkey,
-                            detached_sig=message.get_payload(1).get_payload()),
-            'Signature could not be verified.')
+        self.assertEqual(2, len(message.get_payload()))
+        self.assertEqual('application/pgp-encrypted',
+                         message.get_payload(0).get_content_type())
+        self.assertEqual('application/octet-stream',
+                         message.get_payload(1).get_content_type())
+        return message

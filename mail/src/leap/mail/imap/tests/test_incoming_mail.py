@@ -28,7 +28,6 @@ from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.parser import Parser
 from mock import Mock
-from twisted.trial import unittest
 
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.mail.imap.account import SoledadBackedAccount
@@ -48,7 +47,7 @@ from leap.soledad.common.crypto import (
 )
 
 
-class LeapIncomingMailTestCase(TestCaseWithKeyManager, unittest.TestCase):
+class LeapIncomingMailTestCase(TestCaseWithKeyManager):
     """
     Tests for the incoming mail parser
     """
@@ -147,31 +146,42 @@ subject: independence of cyberspace
         key = MIMEApplication("", "pgp-keys")
         key.set_payload(KEY)
         message.attach(key)
-        email = self._create_incoming_email(message.as_string())
-        self._mock_soledad_get_from_index(fields.JUST_MAIL_IDX, [email])
-        self.fetcher._keymanager.put_raw_key = Mock()
 
         def put_raw_key_called(ret):
             self.fetcher._keymanager.put_raw_key.assert_called_once_with(
                 KEY, OpenPGPKey, address=self.FROM_ADDRESS)
 
-        d = self.fetcher.fetch()
+        d = self.mock_fetch(message.as_string())
         d.addCallback(put_raw_key_called)
+        return d
+
+    def _mock_fetch(self, message):
+        self.fetcher._keymanager.fetch_key = Mock()
+        d = self._create_incoming_email(message)
+        d.addCallback(
+            lambda email:
+            self._mock_soledad_get_from_index(fields.JUST_MAIL_IDX, [email]))
+        d.addCallback(lambda _: self.fetcher.fetch())
         return d
 
     def _create_incoming_email(self, email_str):
         email = SoledadDocument()
-        pubkey = self._km.get_key(ADDRESS, OpenPGPKey)
         data = json.dumps(
             {"incoming": True, "content": email_str},
             ensure_ascii=False)
-        email.content = {
-            fields.INCOMING_KEY: True,
-            fields.ERROR_DECRYPTING_KEY: False,
-            ENC_SCHEME_KEY: EncryptionSchemes.PUBKEY,
-            ENC_JSON_KEY: str(self._km.encrypt(data, pubkey))
-        }
-        return email
+
+        def set_email_content(pubkey):
+            email.content = {
+                fields.INCOMING_KEY: True,
+                fields.ERROR_DECRYPTING_KEY: False,
+                ENC_SCHEME_KEY: EncryptionSchemes.PUBKEY,
+                ENC_JSON_KEY: str(self._km.encrypt(data, pubkey))
+            }
+            return email
+
+        d = self._km.get_key(ADDRESS, OpenPGPKey)
+        d.addCallback(set_email_content)
+        return d
 
     def _mock_soledad_get_from_index(self, index_name, value):
         get_from_index = self._soledad.get_from_index

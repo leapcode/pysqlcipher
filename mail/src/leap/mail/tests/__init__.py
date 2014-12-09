@@ -19,16 +19,14 @@ Base classes and keys for leap.mail tests.
 """
 import os
 import distutils.spawn
-import shutil
-import tempfile
 from mock import Mock
+from twisted.internet.defer import gatherResults
+from twisted.trial import unittest
 
 
 from leap.soledad.client import Soledad
-from leap.keymanager import (
-    KeyManager,
-    openpgp,
-)
+from leap.keymanager import KeyManager
+from leap.keymanager.openpgp import OpenPGPKey
 
 
 from leap.common.testing.basetest import BaseLeapTest
@@ -39,22 +37,12 @@ def _find_gpg():
     return os.path.realpath(gpg_path) if gpg_path is not None else "/usr/bin/gpg"
 
 
-class TestCaseWithKeyManager(BaseLeapTest):
+class TestCaseWithKeyManager(unittest.TestCase, BaseLeapTest):
 
     GPG_BINARY_PATH = _find_gpg()
 
     def setUp(self):
-        # mimic BaseLeapTest.setUpClass behaviour, because this is deprecated
-        # in Twisted: http://twistedmatrix.com/trac/ticket/1870
-        self.old_path = os.environ['PATH']
-        self.old_home = os.environ['HOME']
-        self.tempdir = tempfile.mkdtemp(prefix="leap_tests-")
-        self.home = self.tempdir
-        bin_tdir = os.path.join(
-            self.tempdir,
-            'bin')
-        os.environ["PATH"] = bin_tdir
-        os.environ["HOME"] = self.tempdir
+        self.setUpEnv()
 
         # setup our own stuff
         address = 'leap@leap.se'  # user's address in the form user@provider
@@ -65,36 +53,7 @@ class TestCaseWithKeyManager(BaseLeapTest):
         server_url = 'http://provider/'
         cert_file = ''
 
-        self._soledad = self._soledad_instance(
-            uuid, passphrase, secrets_path, local_db_path, server_url,
-            cert_file)
-        self._km = self._keymanager_instance(address)
-
-    def _soledad_instance(self, uuid, passphrase, secrets_path, local_db_path,
-                          server_url, cert_file):
-        """
-        Return a Soledad instance for tests.
-        """
-        # mock key fetching and storing so Soledad doesn't fail when trying to
-        # reach the server.
-        Soledad._fetch_keys_from_shared_db = Mock(return_value=None)
-        Soledad._assert_keys_in_shared_db = Mock(return_value=None)
-
-        # instantiate soledad
-        def _put_doc_side_effect(doc):
-            self._doc_put = doc
-
-        class MockSharedDB(object):
-
-            get_doc = Mock(return_value=None)
-            put_doc = Mock(side_effect=_put_doc_side_effect)
-            lock = Mock(return_value=('atoken', 300))
-            unlock = Mock(return_value=True)
-
-            def __call__(self):
-                return self
-
-        soledad = Soledad(
+        self._soledad = Soledad(
             uuid,
             passphrase,
             secrets_path=secrets_path,
@@ -103,13 +62,11 @@ class TestCaseWithKeyManager(BaseLeapTest):
             cert_file=cert_file,
             syncable=False
         )
+        return self._setup_keymanager(address)
 
-        soledad._shared_db = MockSharedDB()
-        return soledad
-
-    def _keymanager_instance(self, address):
+    def _setup_keymanager(self, address):
         """
-        Return a Key Manager instance for tests.
+        Set up Key Manager and return a Deferred that will be fired when done.
         """
         self._config = {
             'host': 'https://provider/',
@@ -132,26 +89,17 @@ class TestCaseWithKeyManager(BaseLeapTest):
                 pass
 
         nickserver_url = ''  # the url of the nickserver
-        km = KeyManager(address, nickserver_url, self._soledad,
-                        ca_cert_path='', gpgbinary=self.GPG_BINARY_PATH)
-        km._fetcher.put = Mock()
-        km._fetcher.get = Mock(return_value=Response())
+        self._km = KeyManager(address, nickserver_url, self._soledad,
+                              ca_cert_path='', gpgbinary=self.GPG_BINARY_PATH)
+        self._km._fetcher.put = Mock()
+        self._km._fetcher.get = Mock(return_value=Response())
 
-        # insert test keys in key manager.
-        pgp = openpgp.OpenPGPScheme(
-            self._soledad, gpgbinary=self.GPG_BINARY_PATH)
-        pgp.put_ascii_key(PRIVATE_KEY)
-        pgp.put_ascii_key(PRIVATE_KEY_2)
-
-        return km
+        d1 = self._km.put_raw_key(PRIVATE_KEY, OpenPGPKey, ADDRESS)
+        d2 = self._km.put_raw_key(PRIVATE_KEY_2, OpenPGPKey, ADDRESS_2)
+        return gatherResults([d1, d2])
 
     def tearDown(self):
-        # mimic LeapBaseTest.tearDownClass behaviour
-        os.environ["PATH"] = self.old_path
-        os.environ["HOME"] = self.old_home
-        # safety check
-        assert 'leap_tests-' in self.tempdir
-        shutil.rmtree(self.tempdir)
+        self.tearDownEnv()
 
 
 # Key material for testing
