@@ -37,7 +37,6 @@ from leap.keymanager.tests import (
     PUBLIC_KEY_2,
     PRIVATE_KEY,
     PRIVATE_KEY_2,
-    GPG_BINARY_PATH
 )
 
 
@@ -49,7 +48,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     @inlineCallbacks
     def _test_openpgp_gen_key(self):
         pgp = openpgp.OpenPGPScheme(
-            self._soledad, gpgbinary=GPG_BINARY_PATH)
+            self._soledad, gpgbinary=self.gpg_binary_path)
         yield self._assert_key_not_found(pgp, 'user@leap.se')
         key = yield pgp.gen_key('user@leap.se')
         self.assertIsInstance(key, openpgp.OpenPGPKey)
@@ -61,7 +60,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     @inlineCallbacks
     def test_openpgp_put_delete_key(self):
         pgp = openpgp.OpenPGPScheme(
-            self._soledad, gpgbinary=GPG_BINARY_PATH)
+            self._soledad, gpgbinary=self.gpg_binary_path)
         yield self._assert_key_not_found(pgp, ADDRESS)
         yield pgp.put_ascii_key(PUBLIC_KEY, ADDRESS)
         key = yield pgp.get_key(ADDRESS, private=False)
@@ -71,7 +70,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     @inlineCallbacks
     def test_openpgp_put_ascii_key(self):
         pgp = openpgp.OpenPGPScheme(
-            self._soledad, gpgbinary=GPG_BINARY_PATH)
+            self._soledad, gpgbinary=self.gpg_binary_path)
         yield self._assert_key_not_found(pgp, ADDRESS)
         yield pgp.put_ascii_key(PUBLIC_KEY, ADDRESS)
         key = yield pgp.get_key(ADDRESS, private=False)
@@ -86,7 +85,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     @inlineCallbacks
     def test_get_public_key(self):
         pgp = openpgp.OpenPGPScheme(
-            self._soledad, gpgbinary=GPG_BINARY_PATH)
+            self._soledad, gpgbinary=self.gpg_binary_path)
         yield self._assert_key_not_found(pgp, ADDRESS)
         yield pgp.put_ascii_key(PUBLIC_KEY, ADDRESS)
         yield self._assert_key_not_found(pgp, ADDRESS, private=True)
@@ -101,7 +100,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_openpgp_encrypt_decrypt(self):
         data = 'data'
         pgp = openpgp.OpenPGPScheme(
-            self._soledad, gpgbinary=GPG_BINARY_PATH)
+            self._soledad, gpgbinary=self.gpg_binary_path)
 
         # encrypt
         yield pgp.put_ascii_key(PUBLIC_KEY, ADDRESS)
@@ -130,7 +129,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_verify_with_private_raises(self):
         data = 'data'
         pgp = openpgp.OpenPGPScheme(
-            self._soledad, gpgbinary=GPG_BINARY_PATH)
+            self._soledad, gpgbinary=self.gpg_binary_path)
         yield pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         privkey = yield pgp.get_key(ADDRESS, private=True)
         signed = pgp.sign(data, privkey)
@@ -142,7 +141,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_sign_with_public_raises(self):
         data = 'data'
         pgp = openpgp.OpenPGPScheme(
-            self._soledad, gpgbinary=GPG_BINARY_PATH)
+            self._soledad, gpgbinary=self.gpg_binary_path)
         yield pgp.put_ascii_key(PUBLIC_KEY, ADDRESS)
         self.assertRaises(
             AssertionError,
@@ -152,7 +151,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_verify_with_wrong_key_raises(self):
         data = 'data'
         pgp = openpgp.OpenPGPScheme(
-            self._soledad, gpgbinary=GPG_BINARY_PATH)
+            self._soledad, gpgbinary=self.gpg_binary_path)
         yield pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         privkey = yield pgp.get_key(ADDRESS, private=True)
         signed = pgp.sign(data, privkey)
@@ -164,7 +163,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_encrypt_sign_with_public_raises(self):
         data = 'data'
         pgp = openpgp.OpenPGPScheme(
-            self._soledad, gpgbinary=GPG_BINARY_PATH)
+            self._soledad, gpgbinary=self.gpg_binary_path)
         yield pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         privkey = yield pgp.get_key(ADDRESS, private=True)
         pubkey = yield pgp.get_key(ADDRESS, private=False)
@@ -176,7 +175,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_decrypt_verify_with_private_raises(self):
         data = 'data'
         pgp = openpgp.OpenPGPScheme(
-            self._soledad, gpgbinary=GPG_BINARY_PATH)
+            self._soledad, gpgbinary=self.gpg_binary_path)
         yield pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         privkey = yield pgp.get_key(ADDRESS, private=True)
         pubkey = yield pgp.get_key(ADDRESS, private=False)
@@ -191,7 +190,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_decrypt_verify_with_wrong_key(self):
         data = 'data'
         pgp = openpgp.OpenPGPScheme(
-            self._soledad, gpgbinary=GPG_BINARY_PATH)
+            self._soledad, gpgbinary=self.gpg_binary_path)
         yield pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         privkey = yield pgp.get_key(ADDRESS, private=True)
         pubkey = yield pgp.get_key(ADDRESS, private=False)
@@ -207,7 +206,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_sign_verify(self):
         data = 'data'
         pgp = openpgp.OpenPGPScheme(
-            self._soledad, gpgbinary=GPG_BINARY_PATH)
+            self._soledad, gpgbinary=self.gpg_binary_path)
         yield pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         privkey = yield pgp.get_key(ADDRESS, private=True)
         signed = pgp.sign(data, privkey, detach=False)
@@ -218,7 +217,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     @inlineCallbacks
     def test_encrypt_sign_decrypt_verify(self):
         pgp = openpgp.OpenPGPScheme(
-            self._soledad, gpgbinary=GPG_BINARY_PATH)
+            self._soledad, gpgbinary=self.gpg_binary_path)
 
         yield pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         pubkey = yield pgp.get_key(ADDRESS, private=False)
@@ -240,7 +239,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_sign_verify_detached_sig(self):
         data = 'data'
         pgp = openpgp.OpenPGPScheme(
-            self._soledad, gpgbinary=GPG_BINARY_PATH)
+            self._soledad, gpgbinary=self.gpg_binary_path)
         yield pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         privkey = yield pgp.get_key(ADDRESS, private=True)
         signature = yield pgp.sign(data, privkey, detach=True)

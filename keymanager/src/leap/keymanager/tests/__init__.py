@@ -18,6 +18,9 @@
 Base classes for the Key Manager tests.
 """
 
+import distutils.spawn
+import os.path
+
 from twisted.internet.defer import gatherResults
 from twisted.trial import unittest
 
@@ -29,14 +32,13 @@ from leap.keymanager.openpgp import OpenPGPKey
 
 ADDRESS = 'leap@leap.se'
 ADDRESS_2 = 'anotheruser@leap.se'
-# XXX discover the gpg binary path
-GPG_BINARY_PATH = '/usr/bin/gpg'
 
 
 class KeyManagerWithSoledadTestCase(unittest.TestCase, BaseLeapTest):
 
     def setUp(self):
         self.setUpEnv()
+        self.gpg_binary_path = self._find_gpg()
 
         self._soledad = Soledad(
             u"leap@leap.se",
@@ -75,7 +77,14 @@ class KeyManagerWithSoledadTestCase(unittest.TestCase, BaseLeapTest):
 
     def _key_manager(self, user=ADDRESS, url='', token=None):
         return KeyManager(user, url, self._soledad, token=token,
-                          gpgbinary=GPG_BINARY_PATH)
+                          gpgbinary=self.gpg_binary_path)
+
+    def _find_gpg(self):
+        gpg_path = distutils.spawn.find_executable('gpg')
+        if gpg_path is not None:
+            return os.path.realpath(gpg_path)
+        else:
+            return "/usr/bin/gpg"
 
 
 # key 24D18DDF: public key "Leap Test Key <leap@leap.se>"
