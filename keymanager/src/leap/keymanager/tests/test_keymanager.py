@@ -29,6 +29,7 @@ from twisted.trial import unittest
 from leap.keymanager import (
     KeyNotFound,
     KeyAddressMismatch,
+    errors
 )
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.keymanager.keys import (
@@ -357,7 +358,7 @@ class KeyManagerCryptoTestCase(KeyManagerWithSoledadTestCase):
         rawdata, signingkey = yield km.decrypt(
             encdata, ADDRESS, OpenPGPKey, verify=ADDRESS, fetch_remote=False)
         self.assertEqual(self.RAW_DATA, rawdata)
-        self.assertTrue(signingkey is None)
+        self.assertTrue(isinstance(signingkey, errors.InvalidSignature))
 
     @inlineCallbacks
     def test_keymanager_openpgp_sign_verify(self):

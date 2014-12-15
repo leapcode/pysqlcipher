@@ -54,7 +54,8 @@ from leap.keymanager.errors import (
     KeyNotFound,
     KeyAddressMismatch,
     KeyNotValidUpgrade,
-    UnsupportedKeyTypeError
+    UnsupportedKeyTypeError,
+    InvalidSignature
 )
 from leap.keymanager.validation import ValidationLevel, can_upgrade
 
@@ -479,7 +480,12 @@ class KeyManager(object):
                 data, pubkey, passphrase, sign=signkey,
                 cipher_algo=cipher_algo)
 
-        d = self._get_keys(ktype, address, sign, fetch_remote=fetch_remote)
+        dpub = self.get_key(address, ktype, private=False,
+                            fetch_remote=fetch_remote)
+        dpriv = defer.succeed(None)
+        if sign is not None:
+            dpriv = self.get_key(sign, ktype, private=True)
+        d = defer.gatherResults([dpub, dpriv])
         d.addCallback(encrypt)
         return d
 
@@ -504,11 +510,12 @@ class KeyManager(object):
                              to fetch from nickserver
         :type fetch_remote: bool
 
-        :return: A Deferred which fires with the decrypted data as str and the
-                 signing EncryptionKey if signature verifies, or which fails
-                 with KeyNotFound if no keys were found neither locally or in
-                 keyserver or fails with DecryptError if failed decrypting for
-                 some reason.
+        :return: A Deferred which fires with:
+            * (decripted str, signing key) if validation works
+            * (decripted str, KeyNotFound) if signing key not found
+            * (decripted str, InvalidSignature) if signature is invalid
+            * KeyNotFound failure if private key not found
+            * DecryptError failure if decription failed
         :rtype: Deferred
 
         :raise UnsupportedKeyTypeError: if invalid key type
@@ -519,39 +526,25 @@ class KeyManager(object):
             pubkey, privkey = keys
             decrypted, signed = self._wrapper_map[ktype].decrypt(
                 data, privkey, passphrase=passphrase, verify=pubkey)
-            return (decrypted, pubkey if signed else None)
+            if pubkey is None:
+                signature = KeyNotFound(verify)
+            elif signed:
+                signature = pubkey
+            else:
+                signature = InvalidSignature(
+                    'Failed to verify signature with key %s' %
+                    (pubkey.key_id,))
+            return (decrypted, signature)
 
-        d = self._get_keys(ktype, verify, address, fetch_remote)
+        dpriv = self.get_key(address, ktype, private=True)
+        dpub = defer.succeed(None)
+        if verify is not None:
+            dpub = self.get_key(verify, ktype, private=False,
+                                fetch_remote=fetch_remote)
+            dpub.addErrback(lambda f: None if f.check(KeyNotFound) else f)
+        d = defer.gatherResults([dpub, dpriv])
         d.addCallback(decrypt)
         return d
-
-    def _get_keys(self, ktype, public, private, fetch_remote=True):
-        """
-        Get public and private keys of ktype.
-
-        :param ktype: The type of the key.
-        :type ktype: subclass of EncryptionKey
-        :param public: The address of the public key.
-        :type public: str
-        :param private: The address of the private key.
-        :type private: str
-        :param fetch_remote: If key for verify not found in local storage try
-                             to fetch from nickserver
-        :type fetch_remote: bool
-
-        :return: A Deferred which fires with a tuple with public and private
-                 EncryptionKeys, or which fails with KeyNotFound if no keys
-                 were found neither locally or in keyserver.
-        :rtype: Deferred
-        """
-        dpub = defer.succeed(None)
-        if public is not None:
-            dpub = self.get_key(public, ktype, private=False,
-                                fetch_remote=fetch_remote)
-        dpriv = defer.succeed(None)
-        if private is not None:
-            dpriv = self.get_key(private, ktype, private=True)
-        return defer.gatherResults([dpub, dpriv])
 
     def sign(self, data, address, ktype, digest_algo='SHA512', clearsign=False,
              detach=True, binary=False):
@@ -612,8 +605,9 @@ class KeyManager(object):
         :type fetch_remote: bool
 
         :return: A Deferred which fires with the signing EncryptionKey if
-                 signature verifies else None, or which fails with KeyNotFound
-                 if no key was found neither locally or in keyserver.
+                 signature verifies, or which fails with InvalidSignature if
+                 signature don't verifies or fails with KeyNotFound if no key
+                 was found neither locally or in keyserver.
         :rtype: Deferred
 
         :raise UnsupportedKeyTypeError: if invalid key type
@@ -623,7 +617,12 @@ class KeyManager(object):
         def verify(pubkey):
             signed = self._wrapper_map[ktype].verify(
                 data, pubkey, detached_sig=detached_sig)
-            return pubkey if signed else None
+            if signed:
+                return pubkey
+            else:
+                raise InvalidSignature(
+                    'Failed to verify signature with key %s' %
+                    (pubkey.key_id,))
 
         d = self.get_key(address, ktype, private=False,
                          fetch_remote=fetch_remote)
