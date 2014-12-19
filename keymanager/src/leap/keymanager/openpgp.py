@@ -40,8 +40,6 @@ from leap.keymanager.keys import (
     TYPE_ID_PRIVATE_INDEX,
     TYPE_ADDRESS_PRIVATE_INDEX,
     KEY_ADDRESS_KEY,
-    KEY_FINGERPRINT_KEY,
-    KEY_DATA_KEY,
     KEY_ID_KEY,
     KEYMANAGER_ACTIVE_TYPE,
 )
@@ -447,23 +445,30 @@ class OpenPGPScheme(EncryptionScheme):
         def check_and_put(docs, key):
             if len(docs) == 1:
                 doc = docs.pop()
-                if key.fingerprint == doc.content[KEY_FINGERPRINT_KEY]:
+                oldkey = build_key_from_dict(OpenPGPKey, doc.content)
+                if key.fingerprint == oldkey.fingerprint:
                     # in case of an update of the key merge them with gnupg
                     with self._temporary_gpgwrapper() as gpg:
-                        gpg.import_keys(doc.content[KEY_DATA_KEY])
+                        gpg.import_keys(oldkey.key_data)
                         gpg.import_keys(key.key_data)
                         gpgkey = gpg.list_keys(secret=key.private).pop()
-                        key = _build_key_from_gpg(
+                        mergedkey = _build_key_from_gpg(
                             gpgkey,
                             gpg.export_keys(gpgkey['fingerprint'],
                                             secret=key.private))
-                    doc.set_json(key.get_json())
+                    mergedkey.validation = max(
+                        [key.validation, oldkey.validation])
+                    mergedkey.last_audited_at = oldkey.last_audited_at
+                    mergedkey.refreshed_at = key.refreshed_at
+                    mergedkey.encr_used = key.encr_used or oldkey.encr_used
+                    mergedkey.sign_used = key.sign_used or oldkey.sign_used
+                    doc.set_json(mergedkey.get_json())
                     d = self._soledad.put_doc(doc)
                 else:
                     logger.critical(
                         "Can't put a key whith the same key_id and different "
                         "fingerprint: %s, %s"
-                        % (key.fingerprint, doc.content[KEY_FINGERPRINT_KEY]))
+                        % (key.fingerprint, oldkey.fingerprint))
                     d = defer.fail(
                         errors.KeyFingerprintMismatch(key.fingerprint))
             elif len(docs) > 1:
