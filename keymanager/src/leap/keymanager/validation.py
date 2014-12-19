@@ -82,7 +82,8 @@ def can_upgrade(new_key, old_key):
         return True
 
     # No expiration date and higher validation level
-    elif new_key.validation >= old_key.validation:
+    if (old_key.expiry_date is None and
+            new_key.validation > old_key.validation):
         return True
 
     return False
