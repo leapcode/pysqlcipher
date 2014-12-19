@@ -476,9 +476,13 @@ class KeyManager(object):
 
         def encrypt(keys):
             pubkey, signkey = keys
-            return self._wrapper_map[ktype].encrypt(
+            encrypted = self._wrapper_map[ktype].encrypt(
                 data, pubkey, passphrase, sign=signkey,
                 cipher_algo=cipher_algo)
+            pubkey.encr_used = True
+            d = self._wrapper_map[ktype].put_key(pubkey, address)
+            d.addCallback(lambda _: encrypted)
+            return d
 
         dpub = self.get_key(address, ktype, private=False,
                             fetch_remote=fetch_remote)
@@ -529,7 +533,10 @@ class KeyManager(object):
             if pubkey is None:
                 signature = KeyNotFound(verify)
             elif signed:
-                signature = pubkey
+                pubkey.sign_used = True
+                d = self._wrapper_map[ktype].put_key(pubkey, address)
+                d.addCallback(lambda _: (decrypted, pubkey))
+                return d
             else:
                 signature = InvalidSignature(
                     'Failed to verify signature with key %s' %
@@ -621,7 +628,10 @@ class KeyManager(object):
             signed = self._wrapper_map[ktype].verify(
                 data, pubkey, detached_sig=detached_sig)
             if signed:
-                return pubkey
+                pubkey.sign_used = True
+                d = self._wrapper_map[ktype].put_key(pubkey, address)
+                d.addCallback(lambda _: pubkey)
+                return d
             else:
                 raise InvalidSignature(
                     'Failed to verify signature with key %s' %
@@ -718,9 +728,12 @@ class KeyManager(object):
         :raise UnsupportedKeyTypeError: if invalid key type
         """
         self._assert_supported_key_type(ktype)
-        pubkey, _ = self._wrapper_map[ktype].parse_ascii_key(key)
+        pubkey, privkey = self._wrapper_map[ktype].parse_ascii_key(key)
         pubkey.validation = validation
-        return self.put_key(pubkey, address)
+        d = self.put_key(pubkey, address)
+        if privkey is not None:
+            d.addCallback(lambda _: self.put_key(privkey, address))
+        return d
 
     def fetch_key(self, address, uri, ktype,
                   validation=ValidationLevel.Weak_Chain):

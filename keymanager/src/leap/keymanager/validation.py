@@ -60,7 +60,6 @@ def can_upgrade(new_key, old_key):
     :type old_key: EncryptionKey
     :rtype: bool
     """
-    # XXX not succesfully used and strict high validation level (#6211)
     # XXX implement key signature checking (#6120)
 
     # First contact
@@ -83,6 +82,11 @@ def can_upgrade(new_key, old_key):
 
     # No expiration date and higher validation level
     if (old_key.expiry_date is None and
+            new_key.validation > old_key.validation):
+        return True
+
+    # Not successfully used and strict high validation level
+    if (not (old_key.sign_used and old_key.encr_used) and
             new_key.validation > old_key.validation):
         return True
 
