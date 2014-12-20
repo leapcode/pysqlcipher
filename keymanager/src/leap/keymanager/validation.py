@@ -60,8 +60,6 @@ def can_upgrade(new_key, old_key):
     :type old_key: EncryptionKey
     :rtype: bool
     """
-    # XXX implement key signature checking (#6120)
-
     # First contact
     if old_key is None:
         return True
@@ -88,6 +86,10 @@ def can_upgrade(new_key, old_key):
     # Not successfully used and strict high validation level
     if (not (old_key.sign_used and old_key.encr_used) and
             new_key.validation > old_key.validation):
+        return True
+
+    # New key signed by the old key
+    if old_key.key_id in new_key.signatures:
         return True
 
     return False

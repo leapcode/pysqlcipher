@@ -25,7 +25,7 @@ try:
     assert(GPGUtilities)  # pyflakes happy
     from gnupg import __version__ as _gnupg_version
     from pkg_resources import parse_version
-    assert(parse_version(_gnupg_version) >= parse_version('1.2.3'))
+    assert(parse_version(_gnupg_version) >= parse_version('1.4.0'))
 
 except (ImportError, AssertionError):
     print "*******"
