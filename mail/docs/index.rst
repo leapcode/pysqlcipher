@@ -6,7 +6,7 @@
 Welcome to leap.mail's documentation!
 =====================================
 
-This is the documentation for the ``leap.imap`` module. It is a twisted package
+This is the documentation for the ``leap.mail`` module. It is a twisted package
 that exposes two services, ``smtp`` and ``imap``, that run local proxies and interact
 with a remote ``LEAP`` provider that offers *a soledad syncronization endpoint*
 and receive the outgoing email.
