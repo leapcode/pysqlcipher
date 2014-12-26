@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # soledad.py
 # Copyright (C) 2014 LEAP
 #
@@ -20,6 +19,7 @@ Soledadad MailAdaptor module.
 import re
 from collections import defaultdict
 from email import message_from_string
+from functools import partial
 
 from pycryptopp.hash import sha256
 from twisted.internet import defer
@@ -27,6 +27,7 @@ from zope.interface import implements
 
 from leap.common.check import leap_assert, leap_assert_type
 
+from leap.mail import constants
 from leap.mail import walk
 from leap.mail.adaptors import soledad_indexes as indexes
 from leap.mail.constants import INBOX_NAME
@@ -60,7 +61,6 @@ class SoledadDocumentWrapper(models.DocumentWrapper):
     It ensures atomicity of the document operations on creation, update and
     deletion.
     """
-
     # TODO we could also use a _dirty flag (in models)
 
     # We keep a dictionary with DeferredLocks, that will be
@@ -79,12 +79,20 @@ class SoledadDocumentWrapper(models.DocumentWrapper):
     def __init__(self, **kwargs):
         doc_id = kwargs.pop('doc_id', None)
         self._doc_id = doc_id
+        self._future_doc_id = kwargs.pop('future_doc_id', None)
         self._lock = defer.DeferredLock()
         super(SoledadDocumentWrapper, self).__init__(**kwargs)
 
     @property
     def doc_id(self):
         return self._doc_id
+
+    @property
+    def future_doc_id(self):
+        return self._future_doc_id
+
+    def set_future_doc_id(self, doc_id):
+        self._future_doc_id = doc_id
 
     def create(self, store):
         """
@@ -105,8 +113,14 @@ class SoledadDocumentWrapper(models.DocumentWrapper):
 
         def update_doc_id(doc):
             self._doc_id = doc.doc_id
+            self._future_doc_id = None
             return doc
-        d = store.create_doc(self.serialize())
+
+        if self.future_doc_id is None:
+            d = store.create_doc(self.serialize())
+        else:
+            d = store.create_doc(self.serialize(),
+                                 doc_id=self.future_doc_id)
         d.addCallback(update_doc_id)
         return d
 
@@ -333,6 +347,12 @@ class FlagsDocWrapper(SoledadDocumentWrapper):
         class __meta__(object):
             index = "mbox"
 
+    def set_mbox(self, mbox):
+        # XXX raise error if already created, should use copy instead
+        new_id = constants.FDOCID.format(mbox=mbox, chash=self.chash)
+        self._future_doc_id = new_id
+        self.mbox = mbox
+
 
 class HeaderDocWrapper(SoledadDocumentWrapper):
 
@@ -370,6 +390,23 @@ class ContentDocWrapper(SoledadDocumentWrapper):
             index = "phash"
 
 
+class MetaMsgDocWrapper(SoledadDocumentWrapper):
+
+    class model(models.SerializableModel):
+        type_ = "meta"
+        fdoc = ""
+        hdoc = ""
+        cdocs = []
+
+    def set_mbox(self, mbox):
+        # XXX raise error if already created, should use copy instead
+        chash = re.findall(constants.FDOCID_CHASH_RE, self.fdoc)[0]
+        new_id = constants.METAMSGID.format(mbox=mbox, chash=chash)
+        new_fdoc_id = constants.FDOCID.format(mbox=mbox, chash=chash)
+        self._future_doc_id = new_id
+        self.fdoc = new_fdoc_id
+
+
 class MessageWrapper(object):
 
     # TODO generalize wrapper composition?
@@ -378,23 +415,32 @@ class MessageWrapper(object):
 
     implements(IMessageWrapper)
 
-    def __init__(self, fdoc, hdoc, cdocs=None):
+    def __init__(self, mdoc, fdoc, hdoc, cdocs=None):
         """
-        Need at least a flag-document and a header-document to instantiate a
-        MessageWrapper. Content-documents can be retrieved lazily.
+        Need at least a metamsg-document, a flag-document and a header-document
+        to instantiate a MessageWrapper. Content-documents can be retrieved
+        lazily.
 
         cdocs, if any, should be a dictionary in which the keys are ascending
         integers, beginning at one, and the values are dictionaries with the
         content of the content-docs.
         """
+        self.mdoc = MetaMsgDocWrapper(**mdoc)
+
         self.fdoc = FlagsDocWrapper(**fdoc)
+        self.fdoc.set_future_doc_id(self.mdoc.fdoc)
+
         self.hdoc = HeaderDocWrapper(**hdoc)
+        self.hdoc.set_future_doc_id(self.mdoc.hdoc)
+
         if cdocs is None:
             cdocs = {}
         cdocs_keys = cdocs.keys()
         assert sorted(cdocs_keys) == range(1, len(cdocs_keys) + 1)
         self.cdocs = dict([(key, ContentDocWrapper(**doc)) for (key, doc) in
                            cdocs.items()])
+        for doc_id, cdoc in zip(self.mdoc.cdocs, self.cdocs.values()):
+            cdoc.set_future_doc_id(doc_id)
 
     def create(self, store):
         """
@@ -403,16 +449,21 @@ class MessageWrapper(object):
         leap_assert(self.cdocs,
                     "Need non empty cdocs to create the "
                     "MessageWrapper documents")
+        leap_assert(self.mdoc.doc_id is None,
+                    "Cannot create: mdoc has a doc_id")
         leap_assert(self.fdoc.doc_id is None,
                     "Cannot create: fdoc has a doc_id")
 
+        # TODO check that the doc_ids in the mdoc are coherent
         # TODO I think we need to tolerate the no hdoc.doc_id case, for when we
         # are doing a copy to another mailbox.
-        leap_assert(self.hdoc.doc_id is None,
-                    "Cannot create: hdoc has a doc_id")
+        # leap_assert(self.hdoc.doc_id is None,
+        # "Cannot create: hdoc has a doc_id")
         d = []
+        d.append(self.mdoc.create(store))
         d.append(self.fdoc.create(store))
-        d.append(self.hdoc.create(store))
+        if self.hdoc.doc_id is None:
+            d.append(self.hdoc.create(store))
         for cdoc in self.cdocs.values():
             if cdoc.doc_id is not None:
                 # we could be just linking to an existing
@@ -431,6 +482,25 @@ class MessageWrapper(object):
         # Eventually this would have to do the duplicate search or send for the
         # garbage collector. At least the fdoc can be unlinked.
         raise NotImplementedError()
+
+    def copy(self, store, newmailbox):
+        """
+        Return a copy of this MessageWrapper in a new mailbox.
+        """
+        # 1. copy the fdoc, mdoc
+        # 2. remove the doc_id of that fdoc
+        # 3. create it (with new doc_id)
+        # 4. return new wrapper (new meta too!)
+        raise NotImplementedError()
+
+    def set_mbox(self, mbox):
+        """
+        Set the mailbox for this wrapper.
+        This method should only be used before the Documents for the
+        MessageWrapper have been created, will raise otherwise.
+        """
+        self.mdoc.set_mbox(mbox)
+        self.fdoc.set_mbox(mbox)
 
 #
 # Mailboxes
@@ -535,6 +605,7 @@ class SoledadMailAdaptor(SoledadIndexMixin):
     store = None
 
     indexes = indexes.MAIL_INDEXES
+    mboxwrapper_klass = MailboxWrapper
 
     # Message handling
 
@@ -552,11 +623,11 @@ class SoledadMailAdaptor(SoledadIndexMixin):
         :rtype: MessageClass instance.
         """
         assert(MessageClass is not None)
-        fdoc, hdoc, cdocs = _split_into_parts(raw_msg)
+        mdoc, fdoc, hdoc, cdocs = _split_into_parts(raw_msg)
         return self.get_msg_from_docs(
-            MessageClass, fdoc, hdoc, cdocs)
+            MessageClass, mdoc, fdoc, hdoc, cdocs)
 
-    def get_msg_from_docs(self, MessageClass, fdoc, hdoc, cdocs=None):
+    def get_msg_from_docs(self, MessageClass, mdoc, fdoc, hdoc, cdocs=None):
         """
         Get an instance of a MessageClass initialized with a MessageWrapper
         that contains the passed part documents.
@@ -582,7 +653,62 @@ class SoledadMailAdaptor(SoledadIndexMixin):
         :rtype: MessageClass instance.
         """
         assert(MessageClass is not None)
-        return MessageClass(MessageWrapper(fdoc, hdoc, cdocs))
+        return MessageClass(MessageWrapper(mdoc, fdoc, hdoc, cdocs))
+
+    def _get_msg_from_variable_doc_list(self, doc_list, msg_class):
+        if len(doc_list) == 2:
+            fdoc, hdoc = doc_list
+            cdocs = None
+        elif len(doc_list) > 2:
+            fdoc, hdoc = doc_list[:2]
+            cdocs = dict(enumerate(doc_list[2:], 1))
+        return self.get_msg_from_docs(msg_class, fdoc, hdoc, cdocs)
+
+    def get_msg_from_mdoc_id(self, MessageClass, store, doc_id,
+                             get_cdocs=False):
+        metamsg_id = doc_id
+
+        def wrap_meta_doc(doc):
+            cls = MetaMsgDocWrapper
+            return cls(doc_id=doc.doc_id, **doc.content)
+
+        def get_part_docs_from_mdoc_wrapper(wrapper):
+            d_docs = []
+            d_docs.append(store.get_doc(wrapper.fdoc))
+            d_docs.append(store.get_doc(wrapper.hdoc))
+            for cdoc in wrapper.cdocs:
+                d_docs.append(store.get_doc(cdoc))
+            d = defer.gatherResults(d_docs)
+            return d
+
+        def get_parts_doc_from_mdoc_id():
+            mbox = re.findall(constants.METAMSGID_MBOX_RE, doc_id)[0]
+            chash = re.findall(constants.METAMSGID_CHASH_RE, doc_id)[0]
+
+            def _get_fdoc_id_from_mdoc_id():
+                return constants.FDOCID.format(mbox=mbox, chash=chash)
+
+            def _get_hdoc_id_from_mdoc_id():
+                return constants.FDOCID.format(mbox=mbox, chash=chash)
+
+            d_docs = []
+            fdoc_id = _get_fdoc_id_from_mdoc_id(doc_id)
+            hdoc_id = _get_hdoc_id_from_mdoc_id(doc_id)
+            d_docs.append(store.get_doc(fdoc_id))
+            d_docs.append(store.get_doc(hdoc_id))
+            d = defer.gatherResults(d_docs)
+            return d
+
+        if get_cdocs:
+            d = store.get_doc(metamsg_id)
+            d.addCallback(wrap_meta_doc)
+            d.addCallback(get_part_docs_from_mdoc_wrapper)
+        else:
+            d = get_parts_doc_from_mdoc_id()
+
+        d.addCallback(partial(self._get_msg_from_variable_doc_list,
+                              msg_class=MessageClass))
+        return d
 
     def create_msg(self, store, msg):
         """
@@ -615,7 +741,7 @@ class SoledadMailAdaptor(SoledadIndexMixin):
 
     def get_or_create_mbox(self, store, name):
         """
-        Get the mailbox with the given name, or creatre one if it does not
+        Get the mailbox with the given name, or create one if it does not
         exist.
 
         :param name: the name of the mailbox
@@ -635,6 +761,9 @@ class SoledadMailAdaptor(SoledadIndexMixin):
         :rtype: defer.Deferred
         """
         return mbox_wrapper.update(store)
+
+    def delete_mbox(self, store, mbox_wrapper):
+        return mbox_wrapper.delete(store)
 
     def get_all_mboxes(self, store):
         """
@@ -660,15 +789,17 @@ def _split_into_parts(raw):
                       walk.get_body_phash_multi][int(multi)]
     body_phash = body_phash_fun(walk.get_payloads(msg))
     parts_map = walk.walk_msg_tree(parts, body_phash=body_phash)
+    cdocs_list = list(walk.get_raw_docs(msg, parts))
+    cdocs_phashes = [c['phash'] for c in cdocs_list]
 
+    mdoc = _build_meta_doc(chash, cdocs_phashes)
     fdoc = _build_flags_doc(chash, size, multi)
     hdoc = _build_headers_doc(msg, chash, parts_map)
 
     # The MessageWrapper expects a dict, one-indexed
-    cdocs = dict(enumerate(walk.get_raw_docs(msg, parts), 1))
+    cdocs = dict(enumerate(cdocs_list, 1))
 
-    # XXX convert each to_dicts...
-    return fdoc, hdoc, cdocs
+    return mdoc, fdoc, hdoc, cdocs
 
 
 def _parse_msg(raw):
@@ -678,6 +809,14 @@ def _parse_msg(raw):
     chash = sha256.SHA256(raw).hexdigest()
     multi = msg.is_multipart()
     return msg, parts, chash, size, multi
+
+
+def _build_meta_doc(chash, cdocs_phashes):
+    _mdoc = MetaMsgDocWrapper()
+    _mdoc.fdoc = constants.FDOCID.format(mbox=INBOX_NAME, chash=chash)
+    _mdoc.hdoc = constants.HDOCID.format(chash=chash)
+    _mdoc.cdocs = [constants.CDOCID.format(phash=p) for p in cdocs_phashes]
+    return _mdoc.serialize()
 
 
 def _build_flags_doc(chash, size, multi):

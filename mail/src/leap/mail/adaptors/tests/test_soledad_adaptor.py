@@ -18,104 +18,20 @@
 Tests for the Soledad Adaptor module - leap.mail.adaptors.soledad
 """
 import os
-import shutil
-import tempfile
-
 from functools import partial
 
 from twisted.internet import defer
 from twisted.trial import unittest
 
-from leap.common.testing.basetest import BaseLeapTest
 from leap.mail.adaptors import models
 from leap.mail.adaptors.soledad import SoledadDocumentWrapper
 from leap.mail.adaptors.soledad import SoledadIndexMixin
 from leap.mail.adaptors.soledad import SoledadMailAdaptor
-from leap.soledad.client import Soledad
-
-TEST_USER = "testuser@leap.se"
-TEST_PASSWD = "1234"
+from leap.mail.tests.common import SoledadTestMixin
 
 # DEBUG
 # import logging
 # logging.basicConfig(level=logging.DEBUG)
-
-
-def initialize_soledad(email, gnupg_home, tempdir):
-    """
-    Initializes soledad by hand
-
-    :param email: ID for the user
-    :param gnupg_home: path to home used by gnupg
-    :param tempdir: path to temporal dir
-    :rtype: Soledad instance
-    """
-
-    uuid = "foobar-uuid"
-    passphrase = u"verysecretpassphrase"
-    secret_path = os.path.join(tempdir, "secret.gpg")
-    local_db_path = os.path.join(tempdir, "soledad.u1db")
-    server_url = "https://provider"
-    cert_file = ""
-
-    soledad = Soledad(
-        uuid,
-        passphrase,
-        secret_path,
-        local_db_path,
-        server_url,
-        cert_file,
-        syncable=False)
-
-    return soledad
-
-
-# TODO move to common module
-# XXX remove duplication
-class SoledadTestMixin(BaseLeapTest):
-    """
-    It is **VERY** important that this base is added *AFTER* unittest.TestCase
-    """
-
-    def setUp(self):
-        self.results = []
-
-        self.old_path = os.environ['PATH']
-        self.old_home = os.environ['HOME']
-        self.tempdir = tempfile.mkdtemp(prefix="leap_tests-")
-        self.home = self.tempdir
-        bin_tdir = os.path.join(
-            self.tempdir,
-            'bin')
-        os.environ["PATH"] = bin_tdir
-        os.environ["HOME"] = self.tempdir
-
-        # Soledad: config info
-        self.gnupg_home = "%s/gnupg" % self.tempdir
-        self.email = 'leap@leap.se'
-
-        # initialize soledad by hand so we can control keys
-        self._soledad = initialize_soledad(
-            self.email,
-            self.gnupg_home,
-            self.tempdir)
-
-    def tearDown(self):
-        """
-        tearDown method called after each test.
-        """
-        self.results = []
-        try:
-            self._soledad.close()
-        except Exception as exc:
-            print "ERROR WHILE CLOSING SOLEDAD"
-            # logging.exception(exc)
-        finally:
-            os.environ["PATH"] = self.old_path
-            os.environ["HOME"] = self.old_home
-            # safety check
-            assert 'leap_tests-' in self.tempdir
-            shutil.rmtree(self.tempdir)
 
 
 class CounterWrapper(SoledadDocumentWrapper):
@@ -357,7 +273,7 @@ class SoledadDocWrapperTestCase(unittest.TestCase, SoledadTestMixin):
         d.addCallback(assert_actor_list_is_expected)
         return d
 
-here = os.path.split(os.path.abspath(__file__))[0]
+HERE = os.path.split(os.path.abspath(__file__))[0]
 
 
 class TestMessageClass(object):
@@ -391,7 +307,7 @@ class SoledadMailAdaptorTestCase(unittest.TestCase, SoledadTestMixin):
     def test_get_msg_from_string(self):
         adaptor = self.get_adaptor()
 
-        with open(os.path.join(here, "rfc822.message")) as f:
+        with open(os.path.join(HERE, "rfc822.message")) as f:
             raw = f.read()
 
         msg = adaptor.get_msg_from_string(TestMessageClass, raw)
@@ -416,6 +332,10 @@ class SoledadMailAdaptorTestCase(unittest.TestCase, SoledadTestMixin):
 
     def test_get_msg_from_docs(self):
         adaptor = self.get_adaptor()
+        mdoc = dict(
+            fdoc="F-Foobox-deadbeef",
+            hdoc="H-deadbeef",
+            cdocs=["C-deadabad"])
         fdoc = dict(
             mbox="Foobox",
             flags=('\Seen', '\Nice'),
@@ -423,13 +343,14 @@ class SoledadMailAdaptorTestCase(unittest.TestCase, SoledadTestMixin):
             seen=False, deleted=False,
             recent=False, multi=False)
         hdoc = dict(
+            chash="deadbeef",
             subject="Test Msg")
         cdocs = {
             1: dict(
                 raw='This is a test message')}
 
         msg = adaptor.get_msg_from_docs(
-            TestMessageClass, fdoc, hdoc, cdocs=cdocs)
+            TestMessageClass, mdoc, fdoc, hdoc, cdocs=cdocs)
         self.assertEqual(msg.wrapper.fdoc.flags,
                          ('\Seen', '\Nice'))
         self.assertEqual(msg.wrapper.fdoc.tags,
@@ -441,15 +362,20 @@ class SoledadMailAdaptorTestCase(unittest.TestCase, SoledadTestMixin):
         self.assertEqual(msg.wrapper.cdocs[1].raw,
                          "This is a test message")
 
+    def test_get_msg_from_metamsg_doc_id(self):
+        # XXX complete-me!
+        self.fail()
+
     def test_create_msg(self):
         adaptor = self.get_adaptor()
 
-        with open(os.path.join(here, "rfc822.message")) as f:
+        with open(os.path.join(HERE, "rfc822.message")) as f:
             raw = f.read()
         msg = adaptor.get_msg_from_string(TestMessageClass, raw)
 
         def check_create_result(created):
-            self.assertEqual(len(created), 3)
+            # that's one mdoc, one hdoc, one fdoc, one cdoc
+            self.assertEqual(len(created), 4)
             for doc in created:
                 self.assertTrue(
                     doc.__class__.__name__,
@@ -461,7 +387,7 @@ class SoledadMailAdaptorTestCase(unittest.TestCase, SoledadTestMixin):
 
     def test_update_msg(self):
         adaptor = self.get_adaptor()
-        with open(os.path.join(here, "rfc822.message")) as f:
+        with open(os.path.join(HERE, "rfc822.message")) as f:
             raw = f.read()
 
         def assert_msg_has_doc_id(ignored, msg):
@@ -493,7 +419,7 @@ class SoledadMailAdaptorTestCase(unittest.TestCase, SoledadTestMixin):
         msg = adaptor.get_msg_from_string(TestMessageClass, raw)
         d = adaptor.create_msg(adaptor.store, msg)
         d.addCallback(lambda _: adaptor.store.get_all_docs())
-        d.addCallback(partial(self.assert_num_docs, 3))
+        d.addCallback(partial(self.assert_num_docs, 4))
         d.addCallback(assert_msg_has_doc_id, msg)
         d.addCallback(assert_msg_has_no_flags, msg)
 

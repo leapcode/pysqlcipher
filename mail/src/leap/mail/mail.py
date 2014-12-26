@@ -20,6 +20,7 @@ Generic Access to Mail objects: Public LEAP Mail API.
 from twisted.internet import defer
 
 from leap.mail.constants import INBOX_NAME
+from leap.mail.mailbox_indexer import MailboxIndexer
 from leap.mail.adaptors.soledad import SoledadMailAdaptor
 
 
@@ -27,8 +28,17 @@ from leap.mail.adaptors.soledad import SoledadMailAdaptor
 # [ ] Probably change the name of this module to "api" or "account", mail is
 #     too generic (there's also IncomingMail, and OutgoingMail
 
+def _get_mdoc_id(mbox, chash):
+    """
+    Get the doc_id for the metamsg document.
+    """
+    return "M+{mbox}+{chash}".format(mbox=mbox, chash=chash)
+
 
 class Message(object):
+    """
+    Represents a single message, and gives access to all its attributes.
+    """
 
     def __init__(self, wrapper):
         """
@@ -37,45 +47,56 @@ class Message(object):
         self._wrapper = wrapper
 
     def get_wrapper(self):
+        """
+        Get the wrapper for this message.
+        """
         return self._wrapper
 
     # imap.IMessage methods
 
-    def get_flags():
+    def get_flags(self):
         """
         """
+        return tuple(self._wrapper.fdoc.flags)
 
-    def get_internal_date():
+    def get_internal_date(self):
         """
         """
+        return self._wrapper.fdoc.date
 
     # imap.IMessageParts
 
-    def get_headers():
+    def get_headers(self):
+        """
+        """
+        # XXX process here? from imap.messages
+        return self._wrapper.hdoc.headers
+
+    def get_body_file(self):
         """
         """
 
-    def get_body_file():
+    def get_size(self):
         """
         """
+        return self._wrapper.fdoc.size
 
-    def get_size():
+    def is_multipart(self):
         """
         """
+        return self._wrapper.fdoc.multi
 
-    def is_multipart():
+    def get_subpart(self, part):
         """
         """
-
-    def get_subpart(part):
-        """
-        """
+        # XXX ??? return MessagePart?
 
     # Custom methods.
 
-    def get_tags():
+    def get_tags(self):
         """
         """
+        return tuple(self._wrapper.fdoc.tags)
 
 
 class MessageCollection(object):
@@ -85,42 +106,173 @@ class MessageCollection(object):
     master documents.
 
     Since LEAP Mail is primarily oriented to store mail in Soledad, the default
-    (and, so far, only) implementation of the store is contained in this
-    Soledad Mail Adaptor. If you need to use a different adaptor, change the
+    (and, so far, only) implementation of the store is contained in the
+    Soledad Mail Adaptor, which is passed to every collection on creation by
+    the root Account object. If you need to use a different adaptor, change the
     adaptor class attribute in your Account object.
 
     Store is a reference to a particular instance of the message store (soledad
     instance or proxy, for instance).
     """
 
-    # TODO look at IMessageSet methods
+    # TODO
+    # [ ] look at IMessageSet methods
+    # [ ] make constructor with a per-instance deferredLock to use on
+    #     creation/deletion?
+    # [ ] instead of a mailbox, we could pass an arbitrary container with
+    #     pointers to different doc_ids (type: foo)
+    # [ ] To guarantee synchronicity of the documents sent together during a
+    #     sync, we could get hold of a deferredLock that inhibits
+    #     synchronization while we are updating (think more about this!)
 
     # Account should provide an adaptor instance when creating this collection.
     adaptor = None
     store = None
+    messageklass = Message
 
-    def get_message_by_doc_id(self, doc_id):
-        # ... get from soledad etc
-        # ... but that should be part of adaptor/store too... :/
-        fdoc, hdoc = None
-        return self.adaptor.from_docs(Message, fdoc=fdoc, hdoc=hdoc)
+    def __init__(self, adaptor, store, mbox_indexer=None, mbox_wrapper=None):
+        """
+        """
+        self.adaptor = adaptor
+        self.store = store
 
-    # TODO review if this is the best place for:
+        # TODO I have to think about what to do when there is no mbox passed to
+        # the initialization. We could still get the MetaMsg by index, instead
+        # of by doc_id. See get_message_by_content_hash
+        self.mbox_indexer = mbox_indexer
+        self.mbox_wrapper = mbox_wrapper
 
-    def create_docs():
-        pass
+    def is_mailbox_collection(self):
+        """
+        Return True if this collection represents a Mailbox.
+        :rtype: bool
+        """
+        return bool(self.mbox_wrapper)
 
-    def udpate_flags():
+    # Get messages
+
+    def get_message_by_content_hash(self, chash, get_cdocs=False):
+        """
+        Retrieve a message by its content hash.
+        :rtype: Deferred
+        """
+
+        if not self.is_mailbox_collection():
+            # instead of getting the metamsg by chash, query by (meta) index
+            # or use the internal collection of pointers-to-docs.
+            raise NotImplementedError()
+
+        metamsg_id = _get_mdoc_id(self.mbox_wrapper.mbox, chash)
+
+        return self.adaptor.get_msg_from_mdoc_id(
+            self.messageklass, self.store,
+            metamsg_id, get_cdocs=get_cdocs)
+
+    def get_message_by_uid(self, uid, absolute=True, get_cdocs=False):
+        """
+        Retrieve a message by its Unique Identifier.
+
+        If this is a Mailbox collection, that is the message UID, unique for a
+        given mailbox, or a relative sequence number depending on the absolute
+        flag. For now, only absolute identifiers are supported.
+        :rtype: Deferred
+        """
+        if not absolute:
+            raise NotImplementedError("Does not support relative ids yet")
+
+        def get_msg_from_mdoc_id(doc_id):
+            return self.adaptor.get_msg_from_mdoc_id(
+                self.messageklass, self.store,
+                doc_id, get_cdocs=get_cdocs)
+
+        d = self.mbox_indexer.get_doc_id_from_uid(self.mbox_wrapper.mbox, uid)
+        d.addCallback(get_msg_from_mdoc_id)
+        return d
+
+    def count(self):
+        """
+        Count the messages in this collection.
+        :rtype: int
+        """
+        if not self.is_mailbox_collection():
+            raise NotImplementedError()
+        return self.mbox_indexer.count(self.mbox_wrapper.mbox)
+
+    # Manipulate messages
+
+    def add_msg(self, raw_msg):
+        """
+        Add a message to this collection.
+        """
+        msg = self.adaptor.get_msg_from_string(Message, raw_msg)
+        wrapper = msg.get_wrapper()
+
+        if self.is_mailbox_collection():
+            mbox = self.mbox_wrapper.mbox
+            wrapper.set_mbox(mbox)
+
+        def insert_mdoc_id(_):
+            # XXX does this work?
+            doc_id = wrapper.mdoc.doc_id
+            return self.mbox_indexer.insert_doc(
+                self.mbox_wrapper.mbox, doc_id)
+
+        d = wrapper.create(self.store)
+        d.addCallback(insert_mdoc_id)
+        return d
+
+    def copy_msg(self, msg, newmailbox):
+        """
+        Copy the message to another collection. (it only makes sense for
+        mailbox collections)
+        """
+        if not self.is_mailbox_collection():
+            raise NotImplementedError()
+
+        def insert_copied_mdoc_id(wrapper):
+            return self.mbox_indexer.insert_doc(
+                newmailbox, wrapper.mdoc.doc_id)
+
+        wrapper = msg.get_wrapper()
+        d = wrapper.copy(self.store, newmailbox)
+        d.addCallback(insert_copied_mdoc_id)
+        return d
+
+    def delete_msg(self, msg):
+        """
+        Delete this message.
+        """
+        wrapper = msg.get_wrapper()
+
+        def delete_mdoc_id(_):
+            # XXX does this work?
+            doc_id = wrapper.mdoc.doc_id
+            return self.mbox_indexer.delete_doc_by_hash(
+                self.mbox_wrapper.mbox, doc_id)
+        d = wrapper.delete(self.store)
+        d.addCallback(delete_mdoc_id)
+        return d
+
+    # TODO should add a delete-by-uid to collection?
+
+    def udpate_flags(self, msg, flags, mode):
+        """
+        Update flags for a given message.
+        """
+        wrapper = msg.get_wrapper()
         # 1. update the flags in the message wrapper --- stored where???
-        # 2. call adaptor.update_msg(store)
+        # 2. update the special flags in the wrapper (seen, etc)
+        # 3. call adaptor.update_msg(store)
         pass
 
-    def update_tags():
+    def update_tags(self, msg, tags, mode):
+        """
+        Update tags for a given message.
+        """
+        wrapper = msg.get_wrapper()
         # 1. update the tags in the message wrapper --- stored where???
         # 2. call adaptor.update_msg(store)
         pass
-
-    # TODO add delete methods here?
 
 
 class Account(object):
@@ -147,8 +299,8 @@ class Account(object):
     def __init__(self, store):
         self.store = store
         self.adaptor = self.adaptor_class()
+        self.mbox_indexer = MailboxIndexer(self.store)
 
-        self.__mailboxes = set([])
         self._initialized = False
         self._deferred_initialization = defer.Deferred()
 
@@ -156,23 +308,16 @@ class Account(object):
 
     def _initialize_storage(self):
 
-        def add_mailbox_if_none(result):
-            # every user should have the right to an inbox folder
-            # at least, so let's make one!
-            if not self.mailboxes:
+        def add_mailbox_if_none(mboxes):
+            if not mboxes:
                 self.add_mailbox(INBOX_NAME)
 
         def finish_initialization(result):
             self._initialized = True
             self._deferred_initialization.callback(None)
 
-        def load_mbox_cache(result):
-            d = self._load_mailboxes()
-            d.addCallback(lambda _: result)
-            return d
-
         d = self.adaptor.initialize_store(self.store)
-        d.addCallback(load_mbox_cache)
+        d.addCallback(self.list_all_mailbox_names)
         d.addCallback(add_mailbox_if_none)
         d.addCallback(finish_initialization)
 
@@ -185,64 +330,83 @@ class Account(object):
             self._deferred_initialization.addCallback(cb)
             return self._deferred_initialization
 
-    @property
-    def mailboxes(self):
-        """
-        A list of the current mailboxes for this account.
-        :rtype: set
-        """
-        return sorted(self.__mailboxes)
-
-    def _load_mailboxes(self):
-
-        def update_mailboxes(mbox_names):
-            self.__mailboxes.update(mbox_names)
-
-        d = self.adaptor.get_all_mboxes(self.store)
-        d.addCallback(update_mailboxes)
-        return d
-
     #
     # Public API Starts
     #
 
-    # XXX params for IMAP only???
-    def list_mailboxes(self, ref, wildcard):
-        self.adaptor.get_all_mboxes(self.store)
+    def list_all_mailbox_names(self):
+        def filter_names(mboxes):
+            return [m.name for m in mboxes]
 
-    def add_mailbox(self, name, mbox=None):
-        pass
+        d = self.get_all_mailboxes()
+        d.addCallback(filter_names)
+        return d
 
-    def create_mailbox(self, pathspec):
-        pass
+    def get_all_mailboxes(self):
+        d = self.adaptor.get_all_mboxes(self.store)
+        return d
+
+    def add_mailbox(self, name):
+
+        def create_uid_table_cb(res):
+            d = self.mbox_uid.create_table(name)
+            d.addCallback(lambda _: res)
+            return d
+
+        d = self.adaptor.__class__.get_or_create(name)
+        d.addCallback(create_uid_table_cb)
+        return d
 
     def delete_mailbox(self, name):
-        pass
+        def delete_uid_table_cb(res):
+            d = self.mbox_uid.delete_table(name)
+            d.addCallback(lambda _: res)
+            return d
+
+        d = self.adaptor.delete_mbox(self.store)
+        d.addCallback(delete_uid_table_cb)
+        return d
 
     def rename_mailbox(self, oldname, newname):
-        pass
+        def _rename_mbox(wrapper):
+            wrapper.mbox = newname
+            return wrapper.update()
 
-    # FIXME yet to be decided if it belongs here...
+        def rename_uid_table_cb(res):
+            d = self.mbox_uid.rename_table(oldname, newname)
+            d.addCallback(lambda _: res)
+            return d
+
+        d = self.adaptor.__class__.get_or_create(oldname)
+        d.addCallback(_rename_mbox)
+        d.addCallback(rename_uid_table_cb)
+        return d
 
     def get_collection_by_mailbox(self, name):
         """
         :rtype: MessageCollection
         """
         # imap select will use this, passing the collection to SoledadMailbox
-        # XXX pass adaptor to MessageCollection
-        pass
+        def get_collection_for_mailbox(mbox_wrapper):
+            return MessageCollection(
+                self.adaptor, self.store, self.mbox_indexer, mbox_wrapper)
+
+        mboxwrapper_klass = self.adaptor.mboxwrapper_klass
+        d = mboxwrapper_klass.get_or_create(name)
+        d.addCallback(get_collection_for_mailbox)
+        return d
 
     def get_collection_by_docs(self, docs):
         """
         :rtype: MessageCollection
         """
         # get a collection of docs by a list of doc_id
-        # XXX pass adaptor to MessageCollection
-        pass
+        # get.docs(...) --> it should be a generator. does it behave in the
+        # threadpool?
+        raise NotImplementedError()
 
     def get_collection_by_tag(self, tag):
         """
         :rtype: MessageCollection
         """
-        # is this a good idea?
-        pass
+        raise NotImplementedError()
