@@ -485,8 +485,8 @@ class KeyManager(object):
         dpriv = defer.succeed(None)
         if sign is not None:
             dpriv = self.get_key(sign, ktype, private=True)
-        d = defer.gatherResults([dpub, dpriv])
-        d.addCallback(encrypt)
+        d = defer.gatherResults([dpub, dpriv], consumeErrors=True)
+        d.addCallbacks(encrypt, self._extract_first_error)
         return d
 
     def decrypt(self, data, address, ktype, passphrase=None, verify=None,
@@ -542,9 +542,12 @@ class KeyManager(object):
             dpub = self.get_key(verify, ktype, private=False,
                                 fetch_remote=fetch_remote)
             dpub.addErrback(lambda f: None if f.check(KeyNotFound) else f)
-        d = defer.gatherResults([dpub, dpriv])
-        d.addCallback(decrypt)
+        d = defer.gatherResults([dpub, dpriv], consumeErrors=True)
+        d.addCallbacks(decrypt, self._extract_first_error)
         return d
+
+    def _extract_first_error(self, failure):
+        return failure.value.subFailure
 
     def sign(self, data, address, ktype, digest_algo='SHA512', clearsign=False,
              detach=True, binary=False):

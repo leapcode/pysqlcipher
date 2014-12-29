@@ -375,6 +375,14 @@ class KeyManagerCryptoTestCase(KeyManagerWithSoledadTestCase):
                                fetch_remote=False)
         self.assertEqual(signingkey.fingerprint, key.fingerprint)
 
+    def test_keymanager_encrypt_key_not_found(self):
+        km = self._key_manager()
+        d = km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
+        d.addCallback(
+            lambda _: km.encrypt(self.RAW_DATA, ADDRESS_2, OpenPGPKey,
+                                 sign=ADDRESS, fetch_remote=False))
+        return self.assertFailure(d, KeyNotFound)
+
 
 import unittest
 if __name__ == "__main__":
