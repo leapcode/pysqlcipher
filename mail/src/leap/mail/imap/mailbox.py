@@ -1,6 +1,6 @@
 # *- coding: utf-8 -*-
 # mailbox.py
-# Copyright (C) 2013, 2014 LEAP
+# Copyright (C) 2013-2015 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,11 +15,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-Soledad Mailbox.
+IMAP Mailbox.
 """
-import copy
 import re
-import threading
 import logging
 import StringIO
 import cStringIO
@@ -29,7 +27,6 @@ from collections import defaultdict
 
 from twisted.internet import defer
 from twisted.internet import reactor
-from twisted.internet.task import deferLater
 from twisted.python import log
 
 from twisted.mail import imap4
@@ -38,17 +35,15 @@ from zope.interface import implements
 from leap.common import events as leap_events
 from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
 from leap.common.check import leap_assert, leap_assert_type
-from leap.mail.constants import INBOX_NAME
-from leap.mail.decorators import deferred_to_thread
-from leap.mail.utils import empty
-from leap.mail.imap.fields import WithMsgFields, fields
-from leap.mail.imap.messages import MessageCollection
-from leap.mail.imap.messageparts import MessageWrapper
+from leap.mail.constants import INBOX_NAME, MessageFlags
 
 logger = logging.getLogger(__name__)
 
-# TODO
+# TODO LIST
 # [ ] Restore profile_cmd instrumentation
+# [ ] finish the implementation of IMailboxListener
+# [ ] implement the rest of ISearchableMailbox
+
 
 """
 If the environment variable `LEAP_SKIPNOTIFY` is set, we avoid
@@ -75,16 +70,20 @@ if PROFILE_CMD:
         d.addCallback(_debugProfiling, name, time.time())
         d.addErrback(lambda f: log.msg(f.getTraceback()))
 
+INIT_FLAGS = (MessageFlags.SEEN_FLAG, MessageFlags.ANSWERED_FLAG,
+              MessageFlags.FLAGGED_FLAG, MessageFlags.DELETED_FLAG,
+              MessageFlags.DRAFT_FLAG, MessageFlags.RECENT_FLAG,
+              MessageFlags.LIST_FLAG)
 
-# TODO Rename to Mailbox
-# TODO Remove WithMsgFields
-class SoledadMailbox(WithMsgFields):
+
+class IMAPMailbox(object):
     """
     A Soledad-backed IMAP mailbox.
 
     Implements the high-level method needed for the Mailbox interfaces.
-    The low-level database methods are contained in MessageCollection class,
-    which we instantiate and make accessible in the `messages` attribute.
+    The low-level database methods are contained in IMAPMessageCollection
+    class, which we instantiate and make accessible in the `messages`
+    attribute.
     """
     implements(
         imap4.IMailbox,
@@ -93,17 +92,7 @@ class SoledadMailbox(WithMsgFields):
         imap4.ISearchableMailbox,
         imap4.IMessageCopier)
 
-    # XXX should finish the implementation of IMailboxListener
-    # XXX should completely implement ISearchableMailbox too
-
-    messages = None
-    _closed = False
-
-    INIT_FLAGS = (WithMsgFields.SEEN_FLAG, WithMsgFields.ANSWERED_FLAG,
-                  WithMsgFields.FLAGGED_FLAG, WithMsgFields.DELETED_FLAG,
-                  WithMsgFields.DRAFT_FLAG, WithMsgFields.RECENT_FLAG,
-                  WithMsgFields.LIST_FLAG)
-    flags = None
+    init_flags = INIT_FLAGS
 
     CMD_MSG = "MESSAGES"
     CMD_RECENT = "RECENT"
@@ -111,58 +100,31 @@ class SoledadMailbox(WithMsgFields):
     CMD_UIDVALIDITY = "UIDVALIDITY"
     CMD_UNSEEN = "UNSEEN"
 
-    # FIXME we should turn this into a datastructure with limited capacity
+    # TODO we should turn this into a datastructure with limited capacity
     _listeners = defaultdict(set)
 
-    next_uid_lock = threading.Lock()
-    last_uid_lock = threading.Lock()
-
-    # TODO unify all the `primed` dicts
-    _fdoc_primed = {}
-    _last_uid_primed = {}
-    _known_uids_primed = {}
-
-    # TODO pass the collection to the constructor
-    # TODO pass the mbox_doc too
-    def __init__(self, mbox, store, rw=1):
+    def __init__(self, collection, rw=1):
         """
         SoledadMailbox constructor. Needs to get passed a name, plus a
         Soledad instance.
 
-        :param mbox: the mailbox name
-        :type mbox: str
-
-        :param store:
-        :type store: Soledad
+        :param collection: instance of IMAPMessageCollection
+        :type collection: IMAPMessageCollection
 
         :param rw: read-and-write flag for this mailbox
         :type rw: int
         """
-        leap_assert(mbox, "Need a mailbox name to initialize")
-        leap_assert(store, "Need a store instance to initialize")
-
-        self.mbox = normalize_mailbox(mbox)
         self.rw = rw
 
-        self.store = store
-
-        self.messages = MessageCollection(mbox=mbox, soledad=store)
         self._uidvalidity = None
+        self.collection = collection
 
-        # XXX careful with this get/set (it would be
-        # hitting db unconditionally, move to memstore too)
-        # Now it's returning a fixed amount of flags from mem
-        # as a workaround.
         if not self.getFlags():
-            self.setFlags(self.INIT_FLAGS)
+            self.setFlags(self.init_flags)
 
-        if self._memstore:
-            self.prime_known_uids_to_memstore()
-            self.prime_last_uid_to_memstore()
-            self.prime_flag_docs_to_memstore()
-
-        # purge memstore from empty fdocs.
-        self._memstore.purge_fdoc_store(mbox)
+    @property
+    def mbox_name(self):
+        return self.collection.mbox_name
 
     @property
     def listeners(self):
@@ -175,11 +137,12 @@ class SoledadMailbox(WithMsgFields):
 
         :rtype: set
         """
-        return self._listeners[self.mbox]
+        return self._listeners[self.mbox_name]
 
-    # TODO this grows too crazily when many instances are fired, like
+    # FIXME this grows too crazily when many instances are fired, like
     # during imaptest stress testing. Should have a queue of limited size
     # instead.
+
     def addListener(self, listener):
         """
         Add a listener to the listeners queue.
@@ -204,16 +167,6 @@ class SoledadMailbox(WithMsgFields):
         """
         self.listeners.remove(listener)
 
-    def _get_mbox_doc(self):
-        """
-        Return mailbox document.
-
-        :return: A SoledadDocument containing this mailbox, or None if
-                 the query failed.
-        :rtype: SoledadDocument or None.
-        """
-        return self._memstore.get_mbox_doc(self.mbox)
-
     def getFlags(self):
         """
         Returns the flags defined for this mailbox.
@@ -221,10 +174,11 @@ class SoledadMailbox(WithMsgFields):
         :returns: tuple of flags for this mailbox
         :rtype: tuple of str
         """
-        flags = self._memstore.get_mbox_flags(self.mbox)
+        flags = self.collection.mbox_wrapper.flags
         if not flags:
-            flags = self.INIT_FLAGS
-        return map(str, flags)
+            flags = self.init_flags
+        flags_str = map(str, flags)
+        return flags_str
 
     def setFlags(self, flags):
         """
@@ -234,98 +188,31 @@ class SoledadMailbox(WithMsgFields):
         :type flags: tuple of str
         """
         # XXX this is setting (overriding) old flags.
+        # Better pass a mode flag
         leap_assert(isinstance(flags, tuple),
                     "flags expected to be a tuple")
-        self._memstore.set_mbox_flags(self.mbox, flags)
+        return self.collection.set_mbox_attr("flags", flags)
 
-    # XXX SHOULD BETTER IMPLEMENT ADD_FLAG, REMOVE_FLAG.
-
-    def _get_closed(self):
+    @property
+    def is_closed(self):
         """
         Return the closed attribute for this mailbox.
 
         :return: True if the mailbox is closed
         :rtype: bool
         """
-        return self._memstore.get_mbox_closed(self.mbox)
+        return self.collection.get_mbox_attr("closed")
 
-    def _set_closed(self, closed):
+    def set_closed(self, closed):
         """
         Set the closed attribute for this mailbox.
 
         :param closed: the state to be set
         :type closed: bool
+
+        :rtype: Deferred
         """
-        self._memstore.set_mbox_closed(self.mbox, closed)
-
-    closed = property(
-        _get_closed, _set_closed, doc="Closed attribute.")
-
-    def _get_last_uid(self):
-        """
-        Return the last uid for this mailbox.
-        If we have a memory store, the last UID will be the highest
-        recorded UID in the message store, or a counter cached from
-        the mailbox document in soledad if this is higher.
-
-        :return: the last uid for messages in this mailbox
-        :rtype: int
-        """
-        last = self._memstore.get_last_uid(self.mbox)
-        logger.debug("last uid for %s: %s (from memstore)" % (
-            repr(self.mbox), last))
-        return last
-
-    last_uid = property(
-        _get_last_uid, doc="Last_UID attribute.")
-
-    def prime_last_uid_to_memstore(self):
-        """
-        Prime memstore with last_uid value
-        """
-        primed = self._last_uid_primed.get(self.mbox, False)
-        if not primed:
-            mbox = self._get_mbox_doc()
-            if mbox is None:
-                # memory-only store
-                return
-            last = mbox.content.get('lastuid', 0)
-            logger.info("Priming Soledad last_uid to %s" % (last,))
-            self._memstore.set_last_soledad_uid(self.mbox, last)
-            self._last_uid_primed[self.mbox] = True
-
-    def prime_known_uids_to_memstore(self):
-        """
-        Prime memstore with the set of all known uids.
-
-        We do this to be able to filter the requests efficiently.
-        """
-        primed = self._known_uids_primed.get(self.mbox, False)
-        # XXX handle the maybeDeferred
-
-        def set_primed(known_uids):
-            self._memstore.set_known_uids(self.mbox, known_uids)
-            self._known_uids_primed[self.mbox] = True
-
-        if not primed:
-            d = self.messages.all_soledad_uid_iter()
-            d.addCallback(set_primed)
-            return d
-
-    def prime_flag_docs_to_memstore(self):
-        """
-        Prime memstore with all the flags documents.
-        """
-        primed = self._fdoc_primed.get(self.mbox, False)
-
-        def set_flag_docs(flag_docs):
-            self._memstore.load_flag_docs(self.mbox, flag_docs)
-            self._fdoc_primed[self.mbox] = True
-
-        if not primed:
-            d = self.messages.get_all_soledad_flag_docs()
-            d.addCallback(set_flag_docs)
-            return d
+        return self.collection.set_mbox_attr("closed", closed)
 
     def getUIDValidity(self):
         """
@@ -334,12 +221,7 @@ class SoledadMailbox(WithMsgFields):
         :return: unique validity identifier
         :rtype: int
         """
-        if self._uidvalidity is None:
-            mbox = self._get_mbox_doc()
-            if mbox is None:
-                return 0
-            self._uidvalidity = mbox.content.get(self.CREATED_KEY, 1)
-        return self._uidvalidity
+        return self.collection.get_mbox_attr("created")
 
     def getUID(self, message):
         """
@@ -354,9 +236,9 @@ class SoledadMailbox(WithMsgFields):
 
         :rtype: int
         """
-        msg = self.messages.get_msg_by_uid(message)
-        if msg is not None:
-            return msg.getUID()
+        d = self.collection.get_msg_by_uid(message)
+        d.addCallback(lambda m: m.getUID())
+        return d
 
     def getUIDNext(self):
         """
@@ -364,23 +246,20 @@ class SoledadMailbox(WithMsgFields):
         mailbox. Currently it returns the higher UID incremented by
         one.
 
-        We increment the next uid *each* time this function gets called.
-        In this way, there will be gaps if the message with the allocated
-        uid cannot be saved. But that is preferable to having race conditions
-        if we get to parallel message adding.
-
-        :rtype: int
+        :return: deferred with int
+        :rtype: Deferred
         """
-        with self.next_uid_lock:
-            return self.last_uid + 1
+        d = self.collection.get_uid_next()
+        return d
 
     def getMessageCount(self):
         """
         Returns the total count of messages in this mailbox.
 
-        :rtype: int
+        :return: deferred with int
+        :rtype: Deferred
         """
-        return self.messages.count()
+        return self.collection.count()
 
     def getUnseenCount(self):
         """
@@ -389,7 +268,7 @@ class SoledadMailbox(WithMsgFields):
         :return: count of messages flagged `unseen`
         :rtype: int
         """
-        return self.messages.count_unseen()
+        return self.collection.count_unseen()
 
     def getRecentCount(self):
         """
@@ -398,7 +277,7 @@ class SoledadMailbox(WithMsgFields):
         :return: count of messages flagged `recent`
         :rtype: int
         """
-        return self.messages.count_recent()
+        return self.collection.count_recent()
 
     def isWriteable(self):
         """
@@ -407,6 +286,8 @@ class SoledadMailbox(WithMsgFields):
         :return: 1 if mailbox is read-writeable, 0 otherwise.
         :rtype: int
         """
+        # XXX We don't need to store it in the mbox doc, do we?
+        # return int(self.collection.get_mbox_attr('rw'))
         return self.rw
 
     def getHierarchicalDelimiter(self):
@@ -431,14 +312,14 @@ class SoledadMailbox(WithMsgFields):
         if self.CMD_RECENT in names:
             r[self.CMD_RECENT] = self.getRecentCount()
         if self.CMD_UIDNEXT in names:
-            r[self.CMD_UIDNEXT] = self.last_uid + 1
+            r[self.CMD_UIDNEXT] = self.getUIDNext()
         if self.CMD_UIDVALIDITY in names:
             r[self.CMD_UIDVALIDITY] = self.getUIDValidity()
         if self.CMD_UNSEEN in names:
             r[self.CMD_UNSEEN] = self.getUnseenCount()
         return defer.succeed(r)
 
-    def addMessage(self, message, flags, date=None, notify_on_disk=False):
+    def addMessage(self, message, flags, date=None):
         """
         Adds a message to this mailbox.
 
@@ -464,10 +345,8 @@ class SoledadMailbox(WithMsgFields):
         else:
             flags = tuple(str(flag) for flag in flags)
 
-        d = self._do_add_message(message, flags=flags, date=date,
-                                 notify_on_disk=notify_on_disk)
-        #if PROFILE_CMD:
-            #do_profile_cmd(d, "APPEND")
+        # if PROFILE_CMD:
+        # do_profile_cmd(d, "APPEND")
 
         # XXX should review now that we're not using qtreactor.
         # A better place for this would be  the COPY/APPEND dispatcher
@@ -478,17 +357,9 @@ class SoledadMailbox(WithMsgFields):
             reactor.callLater(0, self.notify_new)
             return x
 
+        d = self.collection.add_message(flags=flags, date=date)
         d.addCallback(notifyCallback)
         d.addErrback(lambda f: log.msg(f.getTraceback()))
-        return d
-
-    def _do_add_message(self, message, flags, date, notify_on_disk=False):
-        """
-        Calls to the messageCollection add_msg method.
-        Invoked from addMessage.
-        """
-        d = self.messages.add_msg(message, flags=flags, date=date,
-                                  notify_on_disk=notify_on_disk)
         return d
 
     def notify_new(self, *args):
@@ -502,26 +373,34 @@ class SoledadMailbox(WithMsgFields):
 
         def cbNotifyNew(result):
             exists, recent = result
-            for l in self.listeners:
-                l.newMessages(exists, recent)
+            for listener in self.listeners:
+                listener.newMessages(exists, recent)
+
         d = self._get_notify_count()
         d.addCallback(cbNotifyNew)
         d.addCallback(self.cb_signal_unread_to_ui)
 
-    @deferred_to_thread
     def _get_notify_count(self):
         """
         Get message count and recent count for this mailbox
         Executed in a separate thread. Called from notify_new.
 
-        :return: number of messages and number of recent messages.
-        :rtype: tuple
+        :return: a deferred that will fire with a tuple, with number of
+                 messages and number of recent messages.
+        :rtype: Deferred
         """
-        exists = self.getMessageCount()
-        recent = self.getRecentCount()
-        logger.debug("NOTIFY (%r): there are %s messages, %s recent" % (
-            self.mbox, exists, recent))
-        return exists, recent
+        d_exists = self.getMessageCount()
+        d_recent = self.getRecentCount()
+        d_list = [d_exists, d_recent]
+
+        def log_num_msg(result):
+            exists, recent = result
+            logger.debug("NOTIFY (%r): there are %s messages, %s recent" % (
+                         self.mbox_name, exists, recent))
+
+        d = defer.gatherResults(d_list)
+        d.addCallback(log_num_msg)
+        return d
 
     # commands, do not rename methods
 
@@ -533,27 +412,18 @@ class SoledadMailbox(WithMsgFields):
         on the mailbox.
 
         """
-        # XXX this will overwrite all the existing flags!
+        # XXX this will overwrite all the existing flags
         # should better simply addFlag
-        self.setFlags((self.NOSELECT_FLAG,))
+        self.setFlags((MessageFlags.NOSELECT_FLAG,))
 
-        # XXX removing the mailbox in situ for now,
-        # we should postpone the removal
-
-        def remove_mbox_doc(ignored):
-            # XXX move to memory store??
-
-            def _remove_mbox_doc(doc):
-                if doc is None:
-                    # memory-only store!
-                    return defer.succeed(True)
-                return self._soledad.delete_doc(doc)
-
-            doc = self._get_mbox_doc()
-            return _remove_mbox_doc(doc)
+        def remove_mbox(_):
+            # FIXME collection does not have a delete_mbox method,
+            # it's in account.
+            # XXX should take care of deleting the uid table too.
+            return self.collection.delete_mbox(self.mbox_name)
 
         d = self.deleteAllDocs()
-        d.addCallback(remove_mbox_doc)
+        d.addCallback(remove_mbox)
         return d
 
     def _close_cb(self, result):
@@ -574,9 +444,11 @@ class SoledadMailbox(WithMsgFields):
         if not self.isWriteable():
             raise imap4.ReadOnlyMailbox
         d = defer.Deferred()
-        self._memstore.expunge(self.mbox, d)
+        # FIXME actually broken.
+        # Iterate through index, and do a expunge.
         return d
 
+    # FIXME -- get last_uid from mbox_indexer
     def _bound_seq(self, messages_asked):
         """
         Put an upper bound to a messages sequence if this is open.
@@ -596,6 +468,7 @@ class SoledadMailbox(WithMsgFields):
                     pass
         return messages_asked
 
+    # TODO -- needed? --- we can get the sequence from the indexer.
     def _filter_msg_seq(self, messages_asked):
         """
         Filter a message sequence returning only the ones that do exist in the
@@ -627,29 +500,6 @@ class SoledadMailbox(WithMsgFields):
 
         :rtype: deferred
         """
-        d = defer.Deferred()
-
-        # XXX do not need no thread...
-        reactor.callInThread(self._do_fetch, messages_asked, uid, d)
-        d.addCallback(self.cb_signal_unread_to_ui)
-        return d
-
-    # called in thread
-    def _do_fetch(self, messages_asked, uid, d):
-        """
-        :param messages_asked: IDs of the messages to retrieve information
-                               about
-        :type messages_asked: MessageSet
-
-        :param uid: If true, the IDs are UIDs. They are message sequence IDs
-                    otherwise.
-        :type uid: bool
-        :param d: deferred whose callback will be called with result.
-        :type d: Deferred
-
-        :rtype: A tuple of two-tuples of message sequence numbers and
-                LeapMessage
-        """
         # For the moment our UID is sequential, so we
         # can treat them all the same.
         # Change this to the flag that twisted expects when we
@@ -660,18 +510,23 @@ class SoledadMailbox(WithMsgFields):
 
         messages_asked = self._bound_seq(messages_asked)
         seq_messg = self._filter_msg_seq(messages_asked)
-        getmsg = lambda uid: self.messages.get_msg_by_uid(uid)
+        getmsg = self.collection.get_msg_by_uid
 
         # for sequence numbers (uid = 0)
         if sequence:
             logger.debug("Getting msg by index: INEFFICIENT call!")
+            # TODO --- implement sequences in mailbox indexer
             raise NotImplementedError
         else:
             got_msg = ((msgid, getmsg(msgid)) for msgid in seq_messg)
             result = ((msgid, msg) for msgid, msg in got_msg
                       if msg is not None)
-            self.reactor.callLater(0, self.unset_recent_flags, seq_messg)
-            self.reactor.callFromThread(d.callback, result)
+            reactor.callLater(0, self.unset_recent_flags, seq_messg)
+
+        # TODO -- call signal_to_ui
+        # d.addCallback(self.cb_signal_unread_to_ui)
+
+        return result
 
     def fetch_flags(self, messages_asked, uid):
         """
@@ -698,12 +553,11 @@ class SoledadMailbox(WithMsgFields):
         :rtype: tuple
         """
         d = defer.Deferred()
-        self.reactor.callInThread(self._do_fetch_flags, messages_asked, uid, d)
+        reactor.callLater(0, self._do_fetch_flags, messages_asked, uid, d)
         if PROFILE_CMD:
             do_profile_cmd(d, "FETCH-ALL-FLAGS")
         return d
 
-    # called in thread
     def _do_fetch_flags(self, messages_asked, uid, d):
         """
         :param messages_asked: IDs of the messages to retrieve information
@@ -733,10 +587,11 @@ class SoledadMailbox(WithMsgFields):
         messages_asked = self._bound_seq(messages_asked)
         seq_messg = self._filter_msg_seq(messages_asked)
 
-        all_flags = self._memstore.all_flags(self.mbox)
+        # FIXME use deferreds here
+        all_flags = self.collection.get_all_flags(self.mbox_name)
         result = ((msgid, flagsPart(
             msgid, all_flags.get(msgid, tuple()))) for msgid in seq_messg)
-        self.reactor.callFromThread(d.callback, result)
+        d.callback(result)
 
     def fetch_headers(self, messages_asked, uid):
         """
@@ -843,8 +698,8 @@ class SoledadMailbox(WithMsgFields):
             raise imap4.ReadOnlyMailbox
 
         d = defer.Deferred()
-        self.reactor.callLater(0, self._do_store, messages_asked, flags,
-                               mode, uid, d)
+        reactor.callLater(0, self._do_store, messages_asked, flags,
+                          mode, uid, d)
         if PROFILE_CMD:
             do_profile_cmd(d, "STORE")
         d.addCallback(self.cb_signal_unread_to_ui)
@@ -853,7 +708,7 @@ class SoledadMailbox(WithMsgFields):
 
     def _do_store(self, messages_asked, flags, mode, uid, observer):
         """
-        Helper method, invoke set_flags method in the MessageCollection.
+        Helper method, invoke set_flags method in the IMAPMessageCollection.
 
         See the documentation for the `store` method for the parameters.
 
@@ -869,7 +724,8 @@ class SoledadMailbox(WithMsgFields):
         flags = tuple(flags)
         messages_asked = self._bound_seq(messages_asked)
         seq_messg = self._filter_msg_seq(messages_asked)
-        self.messages.set_flags(self.mbox, seq_messg, flags, mode, observer)
+        self.collection.set_flags(
+            self.mbox_name, seq_messg, flags, mode, observer)
 
     # ISearchableMailbox
 
@@ -908,6 +764,7 @@ class SoledadMailbox(WithMsgFields):
                 msgid = str(query[3]).strip()
                 logger.debug("Searching for %s" % (msgid,))
                 d = self.messages._get_uid_from_msgid(str(msgid))
+                # XXX remove gatherResults
                 d1 = defer.gatherResults([d])
                 # we want a list, so return it all the same
                 return d1
@@ -928,94 +785,18 @@ class SoledadMailbox(WithMsgFields):
                  uid when the copy succeed.
         :rtype: Deferred
         """
-        d = defer.Deferred()
         if PROFILE_CMD:
             do_profile_cmd(d, "COPY")
 
         # A better place for this would be  the COPY/APPEND dispatcher
         # in server.py, but qtreactor hangs when I do that, so this seems
         # to work fine for now.
-        d.addCallback(lambda r: self.reactor.callLater(0, self.notify_new))
-        deferLater(self.reactor, 0, self._do_copy, message, d)
-        return d
+        #d.addCallback(lambda r: self.reactor.callLater(0, self.notify_new))
+        #deferLater(self.reactor, 0, self._do_copy, message, d)
+        #return d
 
-    def _do_copy(self, message, observer):
-        """
-        Call invoked from the deferLater in `copy`. This will
-        copy the flags and header documents, and pass them to the
-        `create_message` method in the MemoryStore, together with
-        the observer deferred that we've been passed along.
-
-        :param message: an IMessage implementor
-        :type message: LeapMessage
-        :param observer: the deferred that will fire with the
-                         UID of the message
-        :type observer: Deferred
-        """
-        memstore = self._memstore
-
-        def createCopy(result):
-            exist, new_fdoc = result
-            if exist:
-                # Should we signal error on the callback?
-                logger.warning("Destination message already exists!")
-
-                # XXX I'm not sure if we should raise the
-                # errback. This actually rases an ugly warning
-                # in some muas like thunderbird.
-                # UID 0 seems a good convention for no uid.
-                observer.callback(0)
-            else:
-                mbox = self.mbox
-                uid_next = memstore.increment_last_soledad_uid(mbox)
-
-                new_fdoc[self.UID_KEY] = uid_next
-                new_fdoc[self.MBOX_KEY] = mbox
-
-                flags = list(new_fdoc[self.FLAGS_KEY])
-                flags.append(fields.RECENT_FLAG)
-                new_fdoc[self.FLAGS_KEY] = tuple(set(flags))
-
-                # FIXME set recent!
-
-                self._memstore.create_message(
-                    self.mbox, uid_next,
-                    MessageWrapper(new_fdoc),
-                    observer=observer,
-                    notify_on_disk=False)
-
-        d = self._get_msg_copy(message)
-        d.addCallback(createCopy)
-        d.addErrback(lambda f: log.msg(f.getTraceback()))
-
-    #@deferred_to_thread
-    def _get_msg_copy(self, message):
-        """
-        Get a copy of the fdoc for this message, and check whether
-        it already exists.
-
-        :param message: an IMessage implementor
-        :type message: LeapMessage
-        :return: exist, new_fdoc
-        :rtype: tuple
-        """
-        # XXX  for clarity, this could be delegated to a
-        # MessageCollection mixin that implements copy too, and
-        # moved out of here.
-        msg = message
-        memstore = self._memstore
-
-        if empty(msg.fdoc):
-            logger.warning("Tried to copy a MSG with no fdoc")
-            return
-        new_fdoc = copy.deepcopy(msg.fdoc.content)
-        fdoc_chash = new_fdoc[fields.CONTENT_HASH_KEY]
-
-        dest_fdoc = memstore.get_fdoc_from_chash(
-            fdoc_chash, self.mbox)
-
-        exist = not empty(dest_fdoc)
-        return exist, new_fdoc
+        # FIXME not implemented !!! ---
+        return self.collection.copy_msg(message, self.mbox_name)
 
     # convenience fun
 
@@ -1023,29 +804,25 @@ class SoledadMailbox(WithMsgFields):
         """
         Delete all docs in this mailbox
         """
-        def del_all_docs(docs):
-            todelete = []
-            for doc in docs:
-                d = self.messages._soledad.delete_doc(doc)
-                todelete.append(d)
-            return defer.gatherResults(todelete)
-
-        d = self.messages.get_all_docs()
-        d.addCallback(del_all_docs)
-        return d
+        # FIXME not implemented
+        return self.collection.delete_all_docs()
 
     def unset_recent_flags(self, uid_seq):
         """
         Unset Recent flag for a sequence of UIDs.
         """
-        self.messages.unset_recent_flags(uid_seq)
+        # FIXME not implemented
+        return self.collection.unset_recent_flags(uid_seq)
 
     def __repr__(self):
         """
         Representation string for this mailbox.
         """
-        return u"<SoledadMailbox: mbox '%s' (%s)>" % (
-            self.mbox, self.messages.count())
+        return u"<IMAPMailbox: mbox '%s' (%s)>" % (
+            self.mbox_name, self.messages.count())
+
+
+_INBOX_RE = re.compile(INBOX_NAME, re.IGNORECASE)
 
 
 def normalize_mailbox(name):
@@ -1060,7 +837,8 @@ def normalize_mailbox(name):
 
     :rtype: unicode
     """
-    _INBOX_RE = re.compile(INBOX_NAME, re.IGNORECASE)
+    # XXX maybe it would make sense to normalize common folders too:
+    # trash, sent, drafts, etc...
     if _INBOX_RE.match(name):
         # ensure inital INBOX is uppercase
         return INBOX_NAME + name[len(INBOX_NAME):]

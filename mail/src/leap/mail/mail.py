@@ -20,6 +20,7 @@ Generic Access to Mail objects: Public LEAP Mail API.
 from twisted.internet import defer
 
 from leap.mail.constants import INBOX_NAME
+from leap.mail.constants import MessageFlags
 from leap.mail.mailbox_indexer import MailboxIndexer
 from leap.mail.adaptors.soledad import SoledadMailAdaptor
 
@@ -61,6 +62,18 @@ class Message(object):
 
     def get_internal_date(self):
         """
+        Retrieve the date internally associated with this message
+
+        According to the spec, this is NOT the date and time in the
+        RFC-822 header, but rather a date and time that reflects when the
+        message was received.
+
+        * In SMTP, date and time of final delivery.
+        * In COPY, internal date/time of the source message.
+        * In APPEND, date/time specified.
+
+        :return: An RFC822-formatted date string.
+        :rtype: str
         """
         return self._wrapper.fdoc.date
 
@@ -99,6 +112,15 @@ class Message(object):
         return tuple(self._wrapper.fdoc.tags)
 
 
+class Flagsmode(object):
+    """
+    Modes for setting the flags/tags.
+    """
+    APPEND = 1
+    REMOVE = -1
+    SET = 0
+
+
 class MessageCollection(object):
     """
     A generic collection of messages. It can be messages sharing the same
@@ -132,6 +154,7 @@ class MessageCollection(object):
 
     def __init__(self, adaptor, store, mbox_indexer=None, mbox_wrapper=None):
         """
+        Constructore for a MessageCollection.
         """
         self.adaptor = adaptor
         self.store = store
@@ -149,6 +172,20 @@ class MessageCollection(object):
         """
         return bool(self.mbox_wrapper)
 
+    @property
+    def mbox_name(self):
+        wrapper = getattr(self, "mbox_wrapper", None)
+        if not wrapper:
+            return None
+        return wrapper.mbox
+
+    def get_mbox_attr(self, attr):
+        return getattr(self.mbox_wrapper, attr)
+
+    def set_mbox_attr(self, attr, value):
+        setattr(self.mbox_wrapper, attr, value)
+        return self.mbox_wrapper.update(self.store)
+
     # Get messages
 
     def get_message_by_content_hash(self, chash, get_cdocs=False):
@@ -162,7 +199,7 @@ class MessageCollection(object):
             # or use the internal collection of pointers-to-docs.
             raise NotImplementedError()
 
-        metamsg_id = _get_mdoc_id(self.mbox_wrapper.mbox, chash)
+        metamsg_id = _get_mdoc_id(self.mbox_name, chash)
 
         return self.adaptor.get_msg_from_mdoc_id(
             self.messageklass, self.store,
@@ -181,25 +218,37 @@ class MessageCollection(object):
             raise NotImplementedError("Does not support relative ids yet")
 
         def get_msg_from_mdoc_id(doc_id):
+            # XXX pass UID?
             return self.adaptor.get_msg_from_mdoc_id(
                 self.messageklass, self.store,
                 doc_id, get_cdocs=get_cdocs)
 
-        d = self.mbox_indexer.get_doc_id_from_uid(self.mbox_wrapper.mbox, uid)
+        d = self.mbox_indexer.get_doc_id_from_uid(self.mbox_name, uid)
         d.addCallback(get_msg_from_mdoc_id)
         return d
 
     def count(self):
         """
         Count the messages in this collection.
-        :rtype: int
+        :return: a Deferred that will fire with the integer for the count.
+        :rtype: Deferred
         """
         if not self.is_mailbox_collection():
             raise NotImplementedError()
-        return self.mbox_indexer.count(self.mbox_wrapper.mbox)
+        return self.mbox_indexer.count(self.mbox_name)
+
+    def get_uid_next(self):
+        """
+        Get the next integer beyond the highest UID count for this mailbox.
+
+        :return: a Deferred that will fire with the integer for the next uid.
+        :rtype: Deferred
+        """
+        return self.mbox_indexer.get_uid_next(self.mbox_name)
 
     # Manipulate messages
 
+    # TODO pass flags, date too...
     def add_msg(self, raw_msg):
         """
         Add a message to this collection.
@@ -208,14 +257,14 @@ class MessageCollection(object):
         wrapper = msg.get_wrapper()
 
         if self.is_mailbox_collection():
-            mbox = self.mbox_wrapper.mbox
+            mbox = self.mbox_name
             wrapper.set_mbox(mbox)
 
         def insert_mdoc_id(_):
             # XXX does this work?
             doc_id = wrapper.mdoc.doc_id
             return self.mbox_indexer.insert_doc(
-                self.mbox_wrapper.mbox, doc_id)
+                self.mbox_name, doc_id)
 
         d = wrapper.create(self.store)
         d.addCallback(insert_mdoc_id)
@@ -248,31 +297,45 @@ class MessageCollection(object):
             # XXX does this work?
             doc_id = wrapper.mdoc.doc_id
             return self.mbox_indexer.delete_doc_by_hash(
-                self.mbox_wrapper.mbox, doc_id)
+                self.mbox_name, doc_id)
         d = wrapper.delete(self.store)
         d.addCallback(delete_mdoc_id)
         return d
 
     # TODO should add a delete-by-uid to collection?
 
+    def _update_flags_or_tags(self, old, new, mode):
+        if mode == Flagsmode.APPEND:
+            final = list((set(tuple(old) + new)))
+        elif mode == Flagsmode.REMOVE:
+            final = list(set(old).difference(set(new)))
+        elif mode == Flagsmode.SET:
+            final = new
+        return final
+
     def udpate_flags(self, msg, flags, mode):
         """
         Update flags for a given message.
         """
         wrapper = msg.get_wrapper()
-        # 1. update the flags in the message wrapper --- stored where???
-        # 2. update the special flags in the wrapper (seen, etc)
-        # 3. call adaptor.update_msg(store)
-        pass
+        current = wrapper.fdoc.flags
+        newflags = self._update_flags_or_tags(current, flags, mode)
+        wrapper.fdoc.flags = newflags
+
+        wrapper.fdoc.seen = MessageFlags.SEEN_FLAG in newflags
+        wrapper.fdoc.deleted = MessageFlags.DELETED_FLAG in newflags
+
+        return self.adaptor.update_msg(self.store, msg)
 
     def update_tags(self, msg, tags, mode):
         """
         Update tags for a given message.
         """
         wrapper = msg.get_wrapper()
-        # 1. update the tags in the message wrapper --- stored where???
-        # 2. call adaptor.update_msg(store)
-        pass
+        current = wrapper.fdoc.tags
+        newtags = self._update_flags_or_tags(current, tags, mode)
+        wrapper.fdoc.tags = newtags
+        return self.adaptor.update_msg(self.store, msg)
 
 
 class Account(object):
@@ -381,6 +444,8 @@ class Account(object):
         d.addCallback(_rename_mbox)
         d.addCallback(rename_uid_table_cb)
         return d
+
+    # Get Collections
 
     def get_collection_by_mailbox(self, name):
         """

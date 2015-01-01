@@ -513,9 +513,13 @@ class MailboxWrapper(SoledadDocumentWrapper):
         type_ = "mbox"
         mbox = INBOX_NAME
         flags = []
+        recent = []
+        created = 1
         closed = False
         subscribed = False
-        rw = True
+
+        # I think we don't need to store this one.
+        # rw = True
 
         class __meta__(object):
             index = "mbox"
@@ -655,6 +659,7 @@ class SoledadMailAdaptor(SoledadIndexMixin):
         assert(MessageClass is not None)
         return MessageClass(MessageWrapper(mdoc, fdoc, hdoc, cdocs))
 
+    # XXX pass UID too?
     def _get_msg_from_variable_doc_list(self, doc_list, msg_class):
         if len(doc_list) == 2:
             fdoc, hdoc = doc_list
@@ -664,12 +669,14 @@ class SoledadMailAdaptor(SoledadIndexMixin):
             cdocs = dict(enumerate(doc_list[2:], 1))
         return self.get_msg_from_docs(msg_class, fdoc, hdoc, cdocs)
 
+    # XXX pass UID too ?
     def get_msg_from_mdoc_id(self, MessageClass, store, doc_id,
                              get_cdocs=False):
         metamsg_id = doc_id
 
         def wrap_meta_doc(doc):
             cls = MetaMsgDocWrapper
+            # XXX pass UID?
             return cls(doc_id=doc.doc_id, **doc.content)
 
         def get_part_docs_from_mdoc_wrapper(wrapper):
@@ -692,8 +699,8 @@ class SoledadMailAdaptor(SoledadIndexMixin):
                 return constants.FDOCID.format(mbox=mbox, chash=chash)
 
             d_docs = []
-            fdoc_id = _get_fdoc_id_from_mdoc_id(doc_id)
-            hdoc_id = _get_hdoc_id_from_mdoc_id(doc_id)
+            fdoc_id = _get_fdoc_id_from_mdoc_id()
+            hdoc_id = _get_hdoc_id_from_mdoc_id()
             d_docs.append(store.get_doc(fdoc_id))
             d_docs.append(store.get_doc(hdoc_id))
             d = defer.gatherResults(d_docs)

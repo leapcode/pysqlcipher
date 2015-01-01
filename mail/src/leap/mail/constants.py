@@ -36,3 +36,17 @@ HDOCID_RE = "H\-[0-9a-fA-F]+"
 
 CDOCID = "C-{phash}"
 CDOCID_RE = "C\-[0-9a-fA-F]+"
+
+
+class MessageFlags(object):
+    """
+    Flags used in Message and Mailbox.
+    """
+    SEEN_FLAG = "\\Seen"
+    RECENT_FLAG = "\\Recent"
+    ANSWERED_FLAG = "\\Answered"
+    FLAGGED_FLAG = "\\Flagged"  # yo dawg
+    DELETED_FLAG = "\\Deleted"
+    DRAFT_FLAG = "\\Draft"
+    NOSELECT_FLAG = "\\Noselect"
+    LIST_FLAG = "List"  # is this OK? (no \. ie, no system flag)
