@@ -85,6 +85,35 @@ get_raw_docs = lambda msg, parts: (
     for payload, headers in get_payloads(msg)
     if not isinstance(payload, list))
 
+"""
+Groucho Marx: Now pay particular attention to this first clause, because it's
+              most important. There's the party of the first part shall be
+              known in this contract as the party of the first part. How do you
+              like that, that's pretty neat eh?
+
+Chico Marx: No, that's no good.
+Groucho Marx: What's the matter with it?
+
+Chico Marx: I don't know, let's hear it again.
+Groucho Marx: So the party of the first part shall be known in this contract as
+              the party of the first part.
+
+Chico Marx: Well it sounds a little better this time.
+Groucho Marx: Well, it grows on you. Would you like to hear it once more?
+
+Chico Marx: Just the first part.
+Groucho Marx: All right. It says the first part of the party of the first part
+              shall be known in this contract as the first part of the party of
+              the first part, shall be known in this contract - look, why
+              should we quarrel about a thing like this, we'll take it right
+              out, eh?
+
+Chico Marx: Yes, it's too long anyhow. Now what have we got left?
+Groucho Marx: Well I've got about a foot and a half. Now what's the matter?
+
+Chico Marx: I don't like the second party either.
+"""
+
 
 def walk_msg_tree(parts, body_phash=None):
     """
@@ -162,7 +191,7 @@ def walk_msg_tree(parts, body_phash=None):
 
     outer = parts[0]
     outer.pop(HEADERS)
-    if not PART_MAP in outer:
+    if PART_MAP not in outer:
         # we have a multipart with 1 part only, so kind of fix it
         # although it would be prettier if I take this special case at
         # the beginning of the walk.
@@ -177,36 +206,3 @@ def walk_msg_tree(parts, body_phash=None):
         pdoc = outer
     pdoc[BODY] = body_phash
     return pdoc
-
-"""
-Groucho Marx: Now pay particular attention to this first clause, because it's
-              most important. There's the party of the first part shall be
-              known in this contract as the party of the first part. How do you
-              like that, that's pretty neat eh?
-
-Chico Marx: No, that's no good.
-Groucho Marx: What's the matter with it?
-
-Chico Marx: I don't know, let's hear it again.
-Groucho Marx: So the party of the first part shall be known in this contract as
-              the party of the first part.
-
-Chico Marx: Well it sounds a little better this time.
-Groucho Marx: Well, it grows on you. Would you like to hear it once more?
-
-Chico Marx: Just the first part.
-Groucho Marx: All right. It says the first part of the party of the first part
-              shall be known in this contract as the first part of the party of
-              the first part, shall be known in this contract - look, why
-              should we quarrel about a thing like this, we'll take it right
-              out, eh?
-
-Chico Marx: Yes, it's too long anyhow. Now what have we got left?
-Groucho Marx: Well I've got about a foot and a half. Now what's the matter?
-
-Chico Marx: I don't like the second party either.
-"""
-
-"""
-I feel you deserved it after reading the above and try to debug your problem ;)
-"""

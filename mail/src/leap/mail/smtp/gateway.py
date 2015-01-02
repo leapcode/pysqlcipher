@@ -93,7 +93,7 @@ class SMTPFactory(ServerFactory):
                                mail or not.
         :type encrypted_only: bool
         :param outgoing_mail: The outgoing mail to send the message
-        :type outgoing_mail: leap.mail.service.OutgoingMail
+        :type outgoing_mail: leap.mail.outgoing.service.OutgoingMail
         """
 
         leap_assert_type(encrypted_only, bool)
@@ -141,7 +141,7 @@ class SMTPDelivery(object):
                                mail or not.
         :type encrypted_only: bool
         :param outgoing_mail: The outgoing mail to send the message
-        :type outgoing_mail: leap.mail.service.OutgoingMail
+        :type outgoing_mail: leap.mail.outgoing.service.OutgoingMail
         """
         self._userid = userid
         self._outgoing_mail = outgoing_mail
@@ -266,7 +266,7 @@ class EncryptedMessage(object):
         :param user: The recipient of this message.
         :type user: twisted.mail.smtp.User
         :param outgoing_mail: The outgoing mail to send the message
-        :type outgoing_mail: leap.mail.service.OutgoingMail
+        :type outgoing_mail: leap.mail.outgoing.service.OutgoingMail
         """
         # assert params
         leap_assert_type(user, smtp.User)

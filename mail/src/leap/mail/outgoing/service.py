@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# service.py
-# Copyright (C) 2013 LEAP
+# outgoing/service.py
+# Copyright (C) 2013-2015 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -41,6 +41,10 @@ from leap.mail.smtp.rfc3156 import RFC3156CompliantGenerator
 from leap.mail.smtp.rfc3156 import PGPSignature
 from leap.mail.smtp.rfc3156 import PGPEncrypted
 
+# TODO
+# [ ] rename this module to something else, service should be the implementor
+#     of IService
+
 
 class SSLContextFactory(ssl.ClientContextFactory):
     def __init__(self, cert, key):
@@ -48,6 +52,9 @@ class SSLContextFactory(ssl.ClientContextFactory):
         self.key = key
 
     def getContext(self):
+        # FIXME -- we should use sslv23 to allow for tlsv1.2
+        # and, if possible, explicitely disable sslv3 clientside.
+        # Servers should avoid sslv3
         self.method = SSL.TLSv1_METHOD  # SSLv23_METHOD
         ctx = ssl.ClientContextFactory.getContext(self)
         ctx.use_certificate_file(self.cert)
@@ -57,7 +64,7 @@ class SSLContextFactory(ssl.ClientContextFactory):
 
 class OutgoingMail:
     """
-    A service for handling encrypted mail.
+    A service for handling encrypted outgoing mail.
     """
 
     FOOTER_STRING = "I prefer encrypted email"

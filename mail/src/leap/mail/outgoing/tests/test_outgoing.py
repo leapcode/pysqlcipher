@@ -28,7 +28,7 @@ from twisted.mail.smtp import User
 from mock import Mock
 
 from leap.mail.smtp.gateway import SMTPFactory
-from leap.mail.service import OutgoingMail
+from leap.mail.outgoing.service import OutgoingMail
 from leap.mail.tests import (
     TestCaseWithKeyManager,
     ADDRESS,

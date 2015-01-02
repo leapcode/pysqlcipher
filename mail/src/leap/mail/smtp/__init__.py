@@ -22,7 +22,7 @@ import logging
 
 from twisted.internet import reactor
 from twisted.internet.error import CannotListenError
-from leap.mail.service import OutgoingMail
+from leap.mail.outgoing.service import OutgoingMail
 
 logger = logging.getLogger(__name__)
 
