@@ -32,7 +32,7 @@ from leap.mail.imap import interfaces
 from leap.mail.imap.fields import fields
 from leap.mail.utils import empty, first, find_charset
 
-MessagePartType = Enum("hdoc", "fdoc", "cdoc", "cdocs", "docs_id")
+MessagePartType = Enum("MessagePartType", "hdoc fdoc cdoc cdocs docs_id")
 
 
 logger = logging.getLogger(__name__)

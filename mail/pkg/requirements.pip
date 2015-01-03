@@ -4,4 +4,4 @@ leap.common>=0.3.7
 leap.keymanager>=0.3.8
 twisted  # >= 12.0.3 ??
 zope.proxy
-enum
+enum34

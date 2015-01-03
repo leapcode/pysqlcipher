@@ -52,10 +52,10 @@ logger = logging.getLogger(__name__)
 # soledad storage, in seconds.
 SOLEDAD_WRITE_PERIOD = 15
 
-FDOC = MessagePartType.fdoc.key
-HDOC = MessagePartType.hdoc.key
-CDOCS = MessagePartType.cdocs.key
-DOCS_ID = MessagePartType.docs_id.key
+FDOC = MessagePartType.fdoc.name
+HDOC = MessagePartType.hdoc.name
+CDOCS = MessagePartType.cdocs.name
+DOCS_ID = MessagePartType.docs_id.name
 
 
 @contextlib.contextmanager
@@ -73,7 +73,7 @@ def set_bool_flag(obj, att):
         setattr(obj, att, False)
 
 
-DirtyState = Enum("none", "dirty", "new")
+DirtyState = Enum("DirtyState", "none dirty new")
 
 
 class MemoryStore(object):
