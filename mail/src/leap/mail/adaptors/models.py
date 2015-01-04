@@ -89,7 +89,7 @@ class DocumentWrapper(object):
         if not attr.startswith('_') and attr not in normalized:
             raise RuntimeError(
                 "Cannot set attribute because it's not defined "
-                "in the model: %s" % attr)
+                "in the model %s: %s" % (self.__class__, attr))
         object.__setattr__(self, attr, value)
 
     def serialize(self):

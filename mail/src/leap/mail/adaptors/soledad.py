@@ -23,6 +23,7 @@ from functools import partial
 
 from pycryptopp.hash import sha256
 from twisted.internet import defer
+from twisted.python import util
 from zope.interface import implements
 
 from leap.common.check import leap_assert, leap_assert_type
@@ -36,6 +37,8 @@ from leap.mail.imap.mailbox import normalize_mailbox
 from leap.mail.utils import lowerdict, first
 from leap.mail.utils import stringify_parts_map
 from leap.mail.interfaces import IMailAdaptor, IMessageWrapper
+
+from leap.soledad.common.document import SoledadDocument
 
 
 # TODO
@@ -339,10 +342,10 @@ class FlagsDocWrapper(SoledadDocumentWrapper):
         seen = False
         deleted = False
         recent = False
-        multi = False
         flags = []
         tags = []
         size = 0
+        multi = False
 
         class __meta__(object):
             index = "mbox"
@@ -409,7 +412,6 @@ class MetaMsgDocWrapper(SoledadDocumentWrapper):
 
 class MessageWrapper(object):
 
-    # TODO generalize wrapper composition?
     # This could benefit of a DeferredLock to create/update all the
     # documents at the same time maybe, and defend against concurrent updates?
 
@@ -425,11 +427,19 @@ class MessageWrapper(object):
         integers, beginning at one, and the values are dictionaries with the
         content of the content-docs.
         """
+        if isinstance(mdoc, SoledadDocument):
+            mdoc = mdoc.content
+        if not mdoc:
+            mdoc = {}
         self.mdoc = MetaMsgDocWrapper(**mdoc)
 
+        if isinstance(fdoc, SoledadDocument):
+            fdoc = fdoc.content
         self.fdoc = FlagsDocWrapper(**fdoc)
         self.fdoc.set_future_doc_id(self.mdoc.fdoc)
 
+        if isinstance(hdoc, SoledadDocument):
+            hdoc = hdoc.content
         self.hdoc = HeaderDocWrapper(**hdoc)
         self.hdoc.set_future_doc_id(self.mdoc.hdoc)
 
@@ -501,6 +511,43 @@ class MessageWrapper(object):
         """
         self.mdoc.set_mbox(mbox)
         self.fdoc.set_mbox(mbox)
+
+    def set_flags(self, flags):
+        # TODO serialize the get + update
+        if flags is None:
+            flags = tuple()
+        leap_assert_type(flags, tuple)
+        self.fdoc.flags = list(flags)
+
+    def set_tags(self, tags):
+        # TODO serialize the get + update
+        if tags is None:
+            tags = tuple()
+        leap_assert_type(tags, tuple)
+        self.fdoc.tags = list(tags)
+
+    def set_date(self, date):
+        # XXX assert valid date format
+        self.hdoc.date = date
+
+    def get_subpart_dict(self, index):
+        """
+        :param index: index, 1-indexed
+        :type index: int
+        """
+        return self.hdoc.part_map[str(index)]
+
+    def get_body(self, store):
+        """
+        :rtype: deferred
+        """
+        body_phash = self.hdoc.body
+        if not body_phash:
+            return None
+        d = store.get_doc('C-' + body_phash)
+        d.addCallback(lambda doc: ContentDocWrapper(**doc.content))
+        return d
+
 
 #
 # Mailboxes
@@ -631,7 +678,8 @@ class SoledadMailAdaptor(SoledadIndexMixin):
         return self.get_msg_from_docs(
             MessageClass, mdoc, fdoc, hdoc, cdocs)
 
-    def get_msg_from_docs(self, MessageClass, mdoc, fdoc, hdoc, cdocs=None):
+    def get_msg_from_docs(self, MessageClass, mdoc, fdoc, hdoc, cdocs=None,
+                          uid=None):
         """
         Get an instance of a MessageClass initialized with a MessageWrapper
         that contains the passed part documents.
@@ -657,26 +705,24 @@ class SoledadMailAdaptor(SoledadIndexMixin):
         :rtype: MessageClass instance.
         """
         assert(MessageClass is not None)
-        return MessageClass(MessageWrapper(mdoc, fdoc, hdoc, cdocs))
+        return MessageClass(MessageWrapper(mdoc, fdoc, hdoc, cdocs), uid=uid)
 
-    # XXX pass UID too?
-    def _get_msg_from_variable_doc_list(self, doc_list, msg_class):
-        if len(doc_list) == 2:
-            fdoc, hdoc = doc_list
+    def _get_msg_from_variable_doc_list(self, doc_list, msg_class, uid=None):
+        if len(doc_list) == 3:
+            mdoc, fdoc, hdoc = doc_list
             cdocs = None
-        elif len(doc_list) > 2:
-            fdoc, hdoc = doc_list[:2]
-            cdocs = dict(enumerate(doc_list[2:], 1))
-        return self.get_msg_from_docs(msg_class, fdoc, hdoc, cdocs)
+        elif len(doc_list) > 3:
+            fdoc, hdoc = doc_list[:3]
+            cdocs = dict(enumerate(doc_list[3:], 1))
+        return self.get_msg_from_docs(
+            msg_class, mdoc, fdoc, hdoc, cdocs, uid=None)
 
-    # XXX pass UID too ?
     def get_msg_from_mdoc_id(self, MessageClass, store, doc_id,
-                             get_cdocs=False):
+                             uid=None, get_cdocs=False):
         metamsg_id = doc_id
 
         def wrap_meta_doc(doc):
             cls = MetaMsgDocWrapper
-            # XXX pass UID?
             return cls(doc_id=doc.doc_id, **doc.content)
 
         def get_part_docs_from_mdoc_wrapper(wrapper):
@@ -685,7 +731,12 @@ class SoledadMailAdaptor(SoledadIndexMixin):
             d_docs.append(store.get_doc(wrapper.hdoc))
             for cdoc in wrapper.cdocs:
                 d_docs.append(store.get_doc(cdoc))
+
+            def add_mdoc(doc_list):
+                return [wrapper.serialize()] + doc_list
+
             d = defer.gatherResults(d_docs)
+            d.addCallback(add_mdoc)
             return d
 
         def get_parts_doc_from_mdoc_id():
@@ -696,15 +747,20 @@ class SoledadMailAdaptor(SoledadIndexMixin):
                 return constants.FDOCID.format(mbox=mbox, chash=chash)
 
             def _get_hdoc_id_from_mdoc_id():
-                return constants.FDOCID.format(mbox=mbox, chash=chash)
+                return constants.HDOCID.format(mbox=mbox, chash=chash)
 
             d_docs = []
             fdoc_id = _get_fdoc_id_from_mdoc_id()
             hdoc_id = _get_hdoc_id_from_mdoc_id()
+
             d_docs.append(store.get_doc(fdoc_id))
             d_docs.append(store.get_doc(hdoc_id))
+
             d = defer.gatherResults(d_docs)
             return d
+
+        def add_mdoc_id_placeholder(docs_list):
+            return [None] + docs_list
 
         if get_cdocs:
             d = store.get_doc(metamsg_id)
@@ -712,9 +768,10 @@ class SoledadMailAdaptor(SoledadIndexMixin):
             d.addCallback(get_part_docs_from_mdoc_wrapper)
         else:
             d = get_parts_doc_from_mdoc_id()
+            d.addCallback(add_mdoc_id_placeholder)
 
         d.addCallback(partial(self._get_msg_from_variable_doc_list,
-                              msg_class=MessageClass))
+                              msg_class=MessageClass, uid=uid))
         return d
 
     def create_msg(self, store, msg):
@@ -791,17 +848,17 @@ def _split_into_parts(raw):
     # TODO populate Default FLAGS/TAGS (unseen?)
     # TODO seed propely the content_docs with defaults??
 
-    msg, parts, chash, size, multi = _parse_msg(raw)
-    body_phash_fun = [walk.get_body_phash_simple,
-                      walk.get_body_phash_multi][int(multi)]
-    body_phash = body_phash_fun(walk.get_payloads(msg))
+    msg, parts, chash, multi = _parse_msg(raw)
+    size = len(msg.as_string())
+    body_phash = walk.get_body_phash(msg)
+
     parts_map = walk.walk_msg_tree(parts, body_phash=body_phash)
     cdocs_list = list(walk.get_raw_docs(msg, parts))
     cdocs_phashes = [c['phash'] for c in cdocs_list]
 
     mdoc = _build_meta_doc(chash, cdocs_phashes)
     fdoc = _build_flags_doc(chash, size, multi)
-    hdoc = _build_headers_doc(msg, chash, parts_map)
+    hdoc = _build_headers_doc(msg, chash, body_phash, parts_map)
 
     # The MessageWrapper expects a dict, one-indexed
     cdocs = dict(enumerate(cdocs_list, 1))
@@ -812,10 +869,9 @@ def _split_into_parts(raw):
 def _parse_msg(raw):
     msg = message_from_string(raw)
     parts = walk.get_parts(msg)
-    size = len(raw)
     chash = sha256.SHA256(raw).hexdigest()
     multi = msg.is_multipart()
-    return msg, parts, chash, size, multi
+    return msg, parts, chash, multi
 
 
 def _build_meta_doc(chash, cdocs_phashes):
@@ -831,28 +887,31 @@ def _build_flags_doc(chash, size, multi):
     return _fdoc.serialize()
 
 
-def _build_headers_doc(msg, chash, parts_map):
+def _build_headers_doc(msg, chash, body_phash, parts_map):
     """
     Assemble a headers document from the original parsed message, the
     content-hash, and the parts map.
 
     It takes into account possibly repeated headers.
     """
-    headers = defaultdict(list)
-    for k, v in msg.items():
-        headers[k].append(v)
+    headers = msg.items()
 
-    # "fix" for repeated headers.
-    for k, v in headers.items():
-        newline = "\n%s: " % (k,)
-        headers[k] = newline.join(v)
+    # TODO move this manipulation to IMAP
+    #headers = defaultdict(list)
+    #for k, v in msg.items():
+        #headers[k].append(v)
+    ## "fix" for repeated headers.
+    #for k, v in headers.items():
+        #newline = "\n%s: " % (k,)
+        #headers[k] = newline.join(v)
 
-    lower_headers = lowerdict(headers)
+    lower_headers = lowerdict(dict(headers))
     msgid = first(_MSGID_RE.findall(
         lower_headers.get('message-id', '')))
 
     _hdoc = HeaderDocWrapper(
-        chash=chash, headers=lower_headers, msgid=msgid)
+        chash=chash, headers=headers, body=body_phash,
+        msgid=msgid)
 
     def copy_attr(headers, key, doc):
         if key in headers:

@@ -17,15 +17,24 @@
 """
 Generic Access to Mail objects: Public LEAP Mail API.
 """
+import logging
+import StringIO
+
 from twisted.internet import defer
 
+from leap.common.check import leap_assert_type
+from leap.common.mail import get_email_charset
+
+from leap.mail.adaptors.soledad import SoledadMailAdaptor
 from leap.mail.constants import INBOX_NAME
 from leap.mail.constants import MessageFlags
 from leap.mail.mailbox_indexer import MailboxIndexer
-from leap.mail.adaptors.soledad import SoledadMailAdaptor
+from leap.mail.utils import empty, find_charset
+
+logger = logging.getLogger(name=__name__)
 
 
-# TODO
+# TODO LIST
 # [ ] Probably change the name of this module to "api" or "account", mail is
 #     too generic (there's also IncomingMail, and OutgoingMail
 
@@ -36,16 +45,92 @@ def _get_mdoc_id(mbox, chash):
     return "M+{mbox}+{chash}".format(mbox=mbox, chash=chash)
 
 
+def _write_and_rewind(payload):
+    fd = StringIO.StringIO()
+    fd.write(payload)
+    fd.seek(0)
+    return fd
+
+
+class MessagePart(object):
+
+    # TODO pass cdocs in init
+
+    def __init__(self, part_map, cdocs={}):
+        self._pmap = part_map
+        self._cdocs = cdocs
+
+    def get_size(self):
+        return self._pmap['size']
+
+    def get_body_file(self):
+        pmap = self._pmap
+        multi = pmap.get('multi')
+        if not multi:
+            phash = pmap.get("phash")
+        else:
+            pmap_ = pmap.get('part_map')
+            first_part = pmap_.get('1', None)
+            if not empty(first_part):
+                phash = first_part['phash']
+            else:
+                phash = ""
+
+        payload = self._get_payload(phash)
+
+        if payload:
+            # FIXME
+            # content_type = self._get_ctype_from_document(phash)
+            # charset = find_charset(content_type)
+            charset = None
+            if charset is None:
+                charset = get_email_charset(payload)
+            try:
+                if isinstance(payload, unicode):
+                    payload = payload.encode(charset)
+            except UnicodeError as exc:
+                logger.error(
+                    "Unicode error, using 'replace'. {0!r}".format(exc))
+                payload = payload.encode(charset, 'replace')
+
+        return _write_and_rewind(payload)
+
+    def get_headers(self):
+        return self._pmap.get("headers", [])
+
+    def is_multipart(self):
+        multi = self._pmap.get("multi", False)
+        return multi
+
+    def get_subpart(self, part):
+        if not self.is_multipart():
+            raise TypeError
+
+        sub_pmap = self._pmap.get("part_map", {})
+        try:
+            part_map = sub_pmap[str(part + 1)]
+        except KeyError:
+            logger.debug("getSubpart for %s: KeyError" % (part,))
+            raise IndexError
+        return MessagePart(self._soledad, part_map)
+
+    def _get_payload(self, phash):
+        return self._cdocs.get(phash, "")
+
+
 class Message(object):
     """
     Represents a single message, and gives access to all its attributes.
     """
 
-    def __init__(self, wrapper):
+    def __init__(self, wrapper, uid=None):
         """
         :param wrapper: an instance of an implementor of IMessageWrapper
+        :param uid:
+        :type uid: int
         """
         self._wrapper = wrapper
+        self._uid = uid
 
     def get_wrapper(self):
         """
@@ -53,10 +138,18 @@ class Message(object):
         """
         return self._wrapper
 
+    def get_uid(self):
+        """
+        Get the (optional) UID.
+        """
+        return self._uid
+
     # imap.IMessage methods
 
     def get_flags(self):
         """
+        Get flags for this message.
+        :rtype: tuple
         """
         return tuple(self._wrapper.fdoc.flags)
 
@@ -81,28 +174,50 @@ class Message(object):
 
     def get_headers(self):
         """
+        Get the raw headers document.
         """
-        # XXX process here? from imap.messages
-        return self._wrapper.hdoc.headers
+        return [tuple(item) for item in self._wrapper.hdoc.headers]
 
-    def get_body_file(self):
+    def get_body_file(self, store):
         """
         """
+        def write_and_rewind_if_found(cdoc):
+            if not cdoc:
+                return None
+            return _write_and_rewind(cdoc.raw)
+
+        d = defer.maybeDeferred(self._wrapper.get_body, store)
+        d.addCallback(write_and_rewind_if_found)
+        return d
 
     def get_size(self):
         """
+        Size, in octets.
         """
         return self._wrapper.fdoc.size
 
     def is_multipart(self):
         """
+        Return True if this message is multipart.
         """
         return self._wrapper.fdoc.multi
 
     def get_subpart(self, part):
         """
+        :param part: The number of the part to retrieve, indexed from 0.
+        :type part: int
+        :rtype: MessagePart
         """
-        # XXX ??? return MessagePart?
+        if not self.is_multipart():
+            raise TypeError
+        part_index = part + 1
+        try:
+            subpart_dict = self._wrapper.get_subpart_dict(
+                part_index)
+        except KeyError:
+            raise TypeError
+        # XXX pass cdocs
+        return MessagePart(subpart_dict)
 
     # Custom methods.
 
@@ -137,7 +252,7 @@ class MessageCollection(object):
     instance or proxy, for instance).
     """
 
-    # TODO
+    # TODO LIST
     # [ ] look at IMessageSet methods
     # [ ] make constructor with a per-instance deferredLock to use on
     #     creation/deletion?
@@ -159,7 +274,7 @@ class MessageCollection(object):
         self.adaptor = adaptor
         self.store = store
 
-        # TODO I have to think about what to do when there is no mbox passed to
+        # XXX I have to think about what to do when there is no mbox passed to
         # the initialization. We could still get the MetaMsg by index, instead
         # of by doc_id. See get_message_by_content_hash
         self.mbox_indexer = mbox_indexer
@@ -218,10 +333,11 @@ class MessageCollection(object):
             raise NotImplementedError("Does not support relative ids yet")
 
         def get_msg_from_mdoc_id(doc_id):
-            # XXX pass UID?
+            if doc_id is None:
+                return None
             return self.adaptor.get_msg_from_mdoc_id(
                 self.messageklass, self.store,
-                doc_id, get_cdocs=get_cdocs)
+                doc_id, uid=uid, get_cdocs=get_cdocs)
 
         d = self.mbox_indexer.get_doc_id_from_uid(self.mbox_name, uid)
         d.addCallback(get_msg_from_mdoc_id)
@@ -248,26 +364,37 @@ class MessageCollection(object):
 
     # Manipulate messages
 
-    # TODO pass flags, date too...
-    def add_msg(self, raw_msg):
+    def add_msg(self, raw_msg, flags=None, tags=None, date=None):
         """
         Add a message to this collection.
         """
+        if not flags:
+            flags = tuple()
+        if not tags:
+            tags = tuple()
+        leap_assert_type(flags, tuple)
+        leap_assert_type(date, str)
+
         msg = self.adaptor.get_msg_from_string(Message, raw_msg)
         wrapper = msg.get_wrapper()
 
-        if self.is_mailbox_collection():
+        if not self.is_mailbox_collection():
+            raise NotImplementedError()
+
+        else:
             mbox = self.mbox_name
+            wrapper.set_flags(flags)
+            wrapper.set_tags(tags)
+            wrapper.set_date(date)
             wrapper.set_mbox(mbox)
 
-        def insert_mdoc_id(_):
-            # XXX does this work?
+        def insert_mdoc_id(_, wrapper):
             doc_id = wrapper.mdoc.doc_id
             return self.mbox_indexer.insert_doc(
                 self.mbox_name, doc_id)
 
         d = wrapper.create(self.store)
-        d.addCallback(insert_mdoc_id)
+        d.addCallback(insert_mdoc_id, wrapper)
         return d
 
     def copy_msg(self, msg, newmailbox):
@@ -337,6 +464,8 @@ class MessageCollection(object):
         wrapper.fdoc.tags = newtags
         return self.adaptor.update_msg(self.store, msg)
 
+
+# TODO -------------------- split into account object?
 
 class Account(object):
     """

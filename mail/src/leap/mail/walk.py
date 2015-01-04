@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # walk.py
-# Copyright (C) 2013 LEAP
+# Copyright (C) 2013-2015 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -56,15 +56,15 @@ get_payloads = lambda msg: ((x.get_payload(),
                              dict(((str.lower(k), v) for k, v in (x.items()))))
                             for x in msg.walk())
 
-get_body_phash_simple = lambda payloads: first(
-    [get_hash(payload) for payload, headers in payloads
-     if payloads])
 
-get_body_phash_multi = lambda payloads: (first(
-    [get_hash(payload) for payload, headers in payloads
-     if payloads
-     and "text/plain" in headers.get('content-type', '')])
-    or get_body_phash_simple(payloads))
+def get_body_phash(msg):
+    """
+    Find the body payload-hash for this message.
+    """
+    for part in msg.walk():
+        if part.get_content_type() == "text/plain":
+            # XXX avoid hashing again
+            return get_hash(part.get_payload())
 
 """
 On getting the raw docs, we get also some of the headers to be able to

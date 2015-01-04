@@ -46,27 +46,11 @@ class IMAPMessage(object):
 
     implements(imap4.IMessage)
 
-    # TODO ---- see what should we pass here instead
-    # where's UID added to the message?
-    # def __init__(self, soledad, uid, mbox):
-    def __init__(self, message, collection):
+    def __init__(self, message):
         """
         Initializes a LeapMessage.
-
-        :param soledad: a Soledad instance
-        :type soledad: Soledad
-        :param uid: the UID for the message.
-        :type uid: int or basestring
-        :param mbox: the mbox this message belongs to
-        :type mbox: str or unicode
         """
-        #self._uid = int(uid) if uid is not None else None
-        #self._mbox = normalize_mailbox(mbox)
-
         self.message = message
-
-        # TODO maybe not needed, see setFlags below
-        self.collection = collection
 
     # IMessage implementation
 
@@ -95,21 +79,21 @@ class IMAPMessage(object):
 
     # lookup method? IMAPMailbox?
 
-    def setFlags(self, flags, mode):
-        """
-        Sets the flags for this message
-
-        :param flags: the flags to update in the message.
-        :type flags: tuple of str
-        :param mode: the mode for setting. 1 is append, -1 is remove, 0 set.
-        :type mode: int
-        """
-        leap_assert(isinstance(flags, tuple), "flags need to be a tuple")
+    #def setFlags(self, flags, mode):
+        #"""
+        #Sets the flags for this message
+#
+        #:param flags: the flags to update in the message.
+        #:type flags: tuple of str
+        #:param mode: the mode for setting. 1 is append, -1 is remove, 0 set.
+        #:type mode: int
+        #"""
+        #leap_assert(isinstance(flags, tuple), "flags need to be a tuple")
         # XXX
         # return new flags
         # map to str
         #self.message.set_flags(flags, mode)
-        self.collection.update_flags(self.message, flags, mode)
+        #self.collection.update_flags(self.message, flags, mode)
 
     def getInternalDate(self):
         """
@@ -132,9 +116,6 @@ class IMAPMessage(object):
     # IMessagePart
     #
 
-    # XXX we should implement this interface too for the subparts
-    # so we allow nested parts...
-
     def getBodyFile(self):
         """
         Retrieve a file object containing only the body of this message.
@@ -142,53 +123,25 @@ class IMAPMessage(object):
         :return: file-like object opened for reading
         :rtype: StringIO
         """
-        #def write_fd(body):
-            #fd.write(body)
-            #fd.seek(0)
-            #return fd
-#
         # TODO refactor with getBodyFile in MessagePart
-#
-        #fd = StringIO.StringIO()
-#
-        #if self.bdoc is not None:
-            #bdoc_content = self.bdoc.content
-            #if empty(bdoc_content):
-                #logger.warning("No BDOC content found for message!!!")
-                #return write_fd("")
-#
-            #body = bdoc_content.get(self.RAW_KEY, "")
-            #content_type = bdoc_content.get('content-type', "")
-            #charset = find_charset(content_type)
-            #if charset is None:
-                #charset = self._get_charset(body)
-            #try:
-                #if isinstance(body, unicode):
-                    #body = body.encode(charset)
-            #except UnicodeError as exc:
-                #logger.error(
-                    #"Unicode error, using 'replace'. {0!r}".format(exc))
-                #logger.debug("Attempted to encode with: %s" % charset)
-                #body = body.encode(charset, 'replace')
-            #finally:
-                #return write_fd(body)
+
+        #body = bdoc_content.get(self.RAW_KEY, "")
+        #content_type = bdoc_content.get('content-type', "")
+        #charset = find_charset(content_type)
+        #if charset is None:
+            #charset = self._get_charset(body)
+        #try:
+            #if isinstance(body, unicode):
+                #body = body.encode(charset)
+        #except UnicodeError as exc:
+            #logger.error(
+                #"Unicode error, using 'replace'. {0!r}".format(exc))
+            #logger.debug("Attempted to encode with: %s" % charset)
+            #body = body.encode(charset, 'replace')
+        #finally:
+            #return write_fd(body)
 
         return self.message.get_body_file()
-
-    # TODO move to mail.mail
-    @memoized_method
-    def _get_charset(self, stuff):
-        """
-        Gets (guesses?) the charset of a payload.
-
-        :param stuff: the stuff to guess about.
-        :type stuff: basestring
-        :returns: charset
-        """
-        # XXX shouldn't we make the scope
-        # of the decorator somewhat more persistent?
-        # and put memory bounds.
-        return get_email_charset(stuff)
 
     def getSize(self):
         """
@@ -197,10 +150,6 @@ class IMAPMessage(object):
         :return: size of the message, in octets
         :rtype: int
         """
-        #size = None
-        #fdoc_content = self.fdoc.content
-        #size = fdoc_content.get(self.SIZE_KEY, False)
-        #return size
         return self.message.get_size()
 
     def getHeaders(self, negate, *names):
@@ -265,11 +214,7 @@ class IMAPMessage(object):
         """
         Return True if this message is multipart.
         """
-        #fdoc_content = self.fdoc.content
-        #is_multipart = fdoc_content.get(self.MULTIPART_KEY, False)
-        #return is_multipart
-
-        return self.message.fdoc.is_multi
+        return self.message.is_multipart()
 
     def getSubPart(self, part):
         """
@@ -282,64 +227,7 @@ class IMAPMessage(object):
         :rtype: Any object implementing C{IMessagePart}.
         :return: The specified sub-part.
         """
-        if not self.isMultipart():
-            raise TypeError
-        try:
-            pmap_dict = self._get_part_from_parts_map(part + 1)
-        except KeyError:
-            raise IndexError
-
-        # TODO move access to adaptor ----
-        return MessagePart(self._soledad, pmap_dict)
-
-    #
-    # accessors
-    #
-
-    # FIXME
-    # -- move to wrapper/adaptor
-    def _get_part_from_parts_map(self, part):
-        """
-        Get a part map from the headers doc
-
-        :raises: KeyError if key does not exist
-        :rtype: dict
-        """
-        raise NotImplementedError()
-
-        #hdoc_content = self.hdoc.content
-        #pmap = hdoc_content.get(fields.PARTS_MAP_KEY, {})
-#
-        # remember, lads, soledad is using strings in its keys,
-        # not integers!
-        #return pmap[str(part)]
-
-    # TODO move to wrapper/adaptor
-    def _get_body_doc(self):
-        """
-        Return the document that keeps the body for this
-        message.
-        """
-        # FIXME
-        # -- just get the body and retrieve the cdoc P-<phash>
-        #hdoc_content = self.hdoc.content
-        #body_phash = hdoc_content.get(
-            #fields.BODY_KEY, None)
-        #if not body_phash:
-            #logger.warning("No body phash for this document!")
-            #return None
-#
-        #if self._container is not None:
-            #bdoc = self._container.memstore.get_cdoc_from_phash(body_phash)
-            #if not empty(bdoc) and not empty(bdoc.content):
-                #return bdoc
-#
-        # no memstore, or no body doc found there
-        #d = self._soledad.get_from_index(
-            #fields.TYPE_P_HASH_IDX,
-            #fields.TYPE_CONTENT_VAL, str(body_phash))
-        #d.addCallback(lambda docs: first(docs))
-        #return d
+        return self.message.get_subpart(part)
 
 
 class IMAPMessageCollection(object):

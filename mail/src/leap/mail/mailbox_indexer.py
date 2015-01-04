@@ -22,6 +22,17 @@ import re
 from leap.mail.constants import METAMSGID_RE
 
 
+def _maybe_first_query_item(thing):
+    """
+    Return the first item the returned query result, or None
+    if empty.
+    """
+    try:
+        return thing[0][0]
+    except IndexError:
+        return None
+
+
 class WrongMetaDocIDError(Exception):
     pass
 
@@ -124,7 +135,7 @@ class MailboxIndexer(object):
             raise WrongMetaDocIDError("Wrong format for the MetaMsg doc_id")
 
         def get_rowid(result):
-            return result[0][0]
+            return _maybe_first_query_item(result)
 
         sql = ("INSERT INTO {preffix}{name} VALUES ("
                "NULL, ?)".format(
@@ -192,7 +203,7 @@ class MailboxIndexer(object):
         :rtype: Deferred
         """
         def get_hash(result):
-            return result[0][0]
+            return _maybe_first_query_item(result)
 
         sql = ("SELECT hash from {preffix}{name} "
                "WHERE uid=?".format(
@@ -217,7 +228,7 @@ class MailboxIndexer(object):
         :rtype: Deferred
         """
         def get_count(result):
-            return result[0][0]
+            return _maybe_first_query_item(result)
 
         sql = ("SELECT Count(*) FROM {preffix}{name};".format(
             preffix=self.table_preffix, name=mailbox))
@@ -243,7 +254,10 @@ class MailboxIndexer(object):
         assert mailbox
 
         def increment(result):
-            return result[0][0] + 1
+            uid = _maybe_first_query_item(result)
+            if uid is None:
+                return None
+            return uid + 1
 
         sql = ("SELECT MAX(rowid) FROM {preffix}{name} "
                "LIMIT 1;").format(
