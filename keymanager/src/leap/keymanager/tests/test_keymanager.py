@@ -79,7 +79,7 @@ class KeyManagerUtilTestCase(unittest.TestCase):
             'expiry_date': 0,
             'last_audited_at': 0,
             'refreshed_at': 1311239602,
-            'validation': str(ValidationLevel.Weak_Chain),
+            'validation': ValidationLevel.Weak_Chain.name,
             'encr_used': False,
             'sign_used': True,
         }

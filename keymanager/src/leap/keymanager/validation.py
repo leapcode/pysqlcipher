@@ -24,17 +24,17 @@ See:
 
 
 from datetime import datetime
-from enum import Enum
+from enum import IntEnum
 
 
-ValidationLevel = Enum(
-    "Weak_Chain",
-    "Provider_Trust",
-    "Provider_Endorsement",
-    "Third_Party_Endorsement",
-    "Third_Party_Consensus",
-    "Historically_Auditing",
-    "Known_Key",
+ValidationLevel = IntEnum("ValidationLevel",
+    "Weak_Chain "
+    "Provider_Trust "
+    "Provider_Endorsement "
+    "Third_Party_Endorsement "
+    "Third_Party_Consensus "
+    "Historically_Auditing "
+    "Known_Key "
     "Fingerprint")
 
 
@@ -49,7 +49,7 @@ def toValidationLevel(value):
     :raises ValueError: if C{value} is not a validation level
     """
     for level in ValidationLevel:
-        if value == str(level):
+        if value == level.name:
             return level
     raise ValueError("Not valid validation level: %s" % (value,))
 

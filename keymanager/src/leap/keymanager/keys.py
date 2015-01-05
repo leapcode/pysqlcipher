@@ -213,7 +213,7 @@ class EncryptionKey(object):
             KEY_EXPIRY_DATE_KEY: expiry_date,
             KEY_LAST_AUDITED_AT_KEY: last_audited_at,
             KEY_REFRESHED_AT_KEY: refreshed_at,
-            KEY_VALIDATION_KEY: str(self.validation),
+            KEY_VALIDATION_KEY: self.validation.name,
             KEY_ENCR_USED_KEY: self.encr_used,
             KEY_SIGN_USED_KEY: self.sign_used,
             KEY_TAGS_KEY: [KEYMANAGER_KEY_TAG],
