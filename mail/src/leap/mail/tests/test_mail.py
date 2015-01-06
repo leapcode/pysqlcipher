@@ -259,7 +259,23 @@ class MessageCollectionTestCase(unittest.TestCase,
         self.fail()
 
     def test_delete_msg(self):
-        self.fail()
+        d = self.add_msg_to_collection()
+
+        def del_msg(collection):
+            def _delete_it(msg):
+                return collection.delete_msg(msg)
+
+            d = collection.get_message_by_uid(1)
+            d.addCallback(_delete_it)
+            return d
+
+        d.addCallback(lambda _: self.get_collection())
+        d.addCallback(del_msg)
+        d.addCallback(self._test_delete_msg_cb)
+        return d
+
+    def _test_delete_msg_cb(self, _):
+        return partial(self.assert_collection_count, expected=0)
 
     def test_update_flags(self):
         d = self.add_msg_to_collection()

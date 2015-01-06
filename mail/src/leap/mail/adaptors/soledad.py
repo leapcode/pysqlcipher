@@ -290,7 +290,7 @@ class SoledadDocumentWrapper(models.DocumentWrapper):
                  in the model as the `list_index`.
         :rtype: Deferred
         """
-        # TODO
+        # TODO LIST (get_all)
         # [ ] extend support to indexes with n-ples
         # [ ] benchmark the cost of querying and returning indexes in a big
         #     database. This might badly need pagination before being put to
@@ -428,19 +428,28 @@ class MessageWrapper(object):
         content of the content-docs.
         """
         if isinstance(mdoc, SoledadDocument):
+            mdoc_id = mdoc.doc_id
             mdoc = mdoc.content
+        else:
+            mdoc_id = None
         if not mdoc:
             mdoc = {}
-        self.mdoc = MetaMsgDocWrapper(**mdoc)
+        self.mdoc = MetaMsgDocWrapper(doc_id=mdoc_id, **mdoc)
 
         if isinstance(fdoc, SoledadDocument):
+            fdoc_id = fdoc.doc_id
             fdoc = fdoc.content
-        self.fdoc = FlagsDocWrapper(**fdoc)
+        else:
+            fdoc_id = None
+        self.fdoc = FlagsDocWrapper(doc_id=fdoc_id, **fdoc)
         self.fdoc.set_future_doc_id(self.mdoc.fdoc)
 
         if isinstance(hdoc, SoledadDocument):
+            hdoc_id = hdoc.doc_id
             hdoc = hdoc.content
-        self.hdoc = HeaderDocWrapper(**hdoc)
+        else:
+            hdoc_id = None
+        self.hdoc = HeaderDocWrapper(doc_id=hdoc_id, **hdoc)
         self.hdoc.set_future_doc_id(self.mdoc.hdoc)
 
         if cdocs is None:
@@ -489,9 +498,15 @@ class MessageWrapper(object):
         return self.fdoc.update(store)
 
     def delete(self, store):
+        # TODO
         # Eventually this would have to do the duplicate search or send for the
-        # garbage collector. At least the fdoc can be unlinked.
-        raise NotImplementedError()
+        # garbage collector. At least mdoc and t the mdoc and fdoc can be
+        # unlinked.
+        d = []
+        if self.mdoc.doc_id:
+            d.append(self.mdoc.delete(store))
+        d.append(self.fdoc.delete(store))
+        return defer.gatherResults(d)
 
     def copy(self, store, newmailbox):
         """
@@ -564,9 +579,6 @@ class MailboxWrapper(SoledadDocumentWrapper):
         created = 1
         closed = False
         subscribed = False
-
-        # I think we don't need to store this one.
-        # rw = True
 
         class __meta__(object):
             index = "mbox"
@@ -717,9 +729,8 @@ class SoledadMailAdaptor(SoledadIndexMixin):
         return self.get_msg_from_docs(
             msg_class, mdoc, fdoc, hdoc, cdocs, uid=None)
 
-    def get_msg_from_mdoc_id(self, MessageClass, store, doc_id,
+    def get_msg_from_mdoc_id(self, MessageClass, store, mdoc_id,
                              uid=None, get_cdocs=False):
-        metamsg_id = doc_id
 
         def wrap_meta_doc(doc):
             cls = MetaMsgDocWrapper
@@ -740,8 +751,8 @@ class SoledadMailAdaptor(SoledadIndexMixin):
             return d
 
         def get_parts_doc_from_mdoc_id():
-            mbox = re.findall(constants.METAMSGID_MBOX_RE, doc_id)[0]
-            chash = re.findall(constants.METAMSGID_CHASH_RE, doc_id)[0]
+            mbox = re.findall(constants.METAMSGID_MBOX_RE, mdoc_id)[0]
+            chash = re.findall(constants.METAMSGID_CHASH_RE, mdoc_id)[0]
 
             def _get_fdoc_id_from_mdoc_id():
                 return constants.FDOCID.format(mbox=mbox, chash=chash)
@@ -753,22 +764,19 @@ class SoledadMailAdaptor(SoledadIndexMixin):
             fdoc_id = _get_fdoc_id_from_mdoc_id()
             hdoc_id = _get_hdoc_id_from_mdoc_id()
 
+            d_docs.append(store.get_doc(mdoc_id))
             d_docs.append(store.get_doc(fdoc_id))
             d_docs.append(store.get_doc(hdoc_id))
 
             d = defer.gatherResults(d_docs)
             return d
 
-        def add_mdoc_id_placeholder(docs_list):
-            return [None] + docs_list
-
         if get_cdocs:
-            d = store.get_doc(metamsg_id)
+            d = store.get_doc(mdoc_id)
             d.addCallback(wrap_meta_doc)
             d.addCallback(get_part_docs_from_mdoc_wrapper)
         else:
             d = get_parts_doc_from_mdoc_id()
-            d.addCallback(add_mdoc_id_placeholder)
 
         d.addCallback(partial(self._get_msg_from_variable_doc_list,
                               msg_class=MessageClass, uid=uid))
