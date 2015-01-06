@@ -625,14 +625,11 @@ class SoledadIndexMixin(object):
 
         leap_assert(store, "Need a store")
         leap_assert_type(self.indexes, dict)
+
         self._index_creation_deferreds = []
 
-        def _on_indexes_created(ignored):
-            self.store_ready = True
-
         def _create_index(name, expression):
-            d = store.create_index(name, *expression)
-            self._index_creation_deferreds.append(d)
+            return store.create_index(name, *expression)
 
         def _create_indexes(db_indexes):
             db_indexes = dict(db_indexes)
@@ -640,7 +637,8 @@ class SoledadIndexMixin(object):
             for name, expression in self.indexes.items():
                 if name not in db_indexes:
                     # The index does not yet exist.
-                    _create_index(name, expression)
+                    d = _create_index(name, expression)
+                    self._index_creation_deferreds.append(d)
                     continue
 
                 if expression == db_indexes[name]:
@@ -650,10 +648,15 @@ class SoledadIndexMixin(object):
                 # we delete it and add the proper index expression.
                 d1 = store.delete_index(name)
                 d1.addCallback(lambda _: _create_index(name, expression))
+                self._index_creation_deferreds.append(d1)
 
-            all_created = defer.gatherResults(self._index_creation_deferreds)
+            all_created = defer.gatherResults(
+                self._index_creation_deferreds, consumeErrors=True)
             all_created.addCallback(_on_indexes_created)
             return all_created
+
+        def _on_indexes_created(ignored):
+            self.store_ready = True
 
         # Ask the database for currently existing indexes, and create them
         # if not found.
@@ -832,9 +835,11 @@ class SoledadMailAdaptor(SoledadIndexMixin):
                  have been updated.
         :rtype: defer.Deferred
         """
+        leap_assert_type(mbox_wrapper, SoledadDocumentWrapper)
         return mbox_wrapper.update(store)
 
     def delete_mbox(self, store, mbox_wrapper):
+        leap_assert_type(mbox_wrapper, SoledadDocumentWrapper)
         return mbox_wrapper.delete(store)
 
     def get_all_mboxes(self, store):

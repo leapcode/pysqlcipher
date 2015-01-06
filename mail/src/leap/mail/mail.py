@@ -37,6 +37,9 @@ logger = logging.getLogger(name=__name__)
 # TODO LIST
 # [ ] Probably change the name of this module to "api" or "account", mail is
 #     too generic (there's also IncomingMail, and OutgoingMail
+# [ ] Change the doc_ids scheme for part-docs: use mailbox UID validity
+#     identifier, instead of name! (renames are broken!)
+# [ ] Profile add_msg.
 
 def _get_mdoc_id(mbox, chash):
     """
@@ -360,7 +363,7 @@ class MessageCollection(object):
         :return: a Deferred that will fire with the integer for the next uid.
         :rtype: Deferred
         """
-        return self.mbox_indexer.get_uid_next(self.mbox_name)
+        return self.mbox_indexer.get_next_uid(self.mbox_name)
 
     # Manipulate messages
 
@@ -464,8 +467,6 @@ class MessageCollection(object):
         return self.adaptor.update_msg(self.store, msg)
 
 
-# TODO -------------------- split into account object?
-
 class Account(object):
     """
     Account is the top level abstraction to access collections of messages
@@ -485,7 +486,6 @@ class Account(object):
 
     adaptor_class = SoledadMailAdaptor
     store = None
-    mailboxes = None
 
     def __init__(self, store):
         self.store = store
@@ -508,17 +508,17 @@ class Account(object):
             self._deferred_initialization.callback(None)
 
         d = self.adaptor.initialize_store(self.store)
-        d.addCallback(self.list_all_mailbox_names)
+        d.addCallback(lambda _: self.list_all_mailbox_names())
         d.addCallback(add_mailbox_if_none)
         d.addCallback(finish_initialization)
 
-    def callWhenReady(self, cb):
-        # XXX this could use adaptor.store_ready instead...??
+    def callWhenReady(self, cb, *args, **kw):
+        # use adaptor.store_ready instead?
         if self._initialized:
-            cb(self)
+            cb(self, *args, **kw)
             return defer.succeed(None)
         else:
-            self._deferred_initialization.addCallback(cb)
+            self._deferred_initialization.addCallback(cb, *args, **kw)
             return self._deferred_initialization
 
     #
@@ -527,7 +527,7 @@ class Account(object):
 
     def list_all_mailbox_names(self):
         def filter_names(mboxes):
-            return [m.name for m in mboxes]
+            return [m.mbox for m in mboxes]
 
         d = self.get_all_mailboxes()
         d.addCallback(filter_names)
@@ -540,35 +540,44 @@ class Account(object):
     def add_mailbox(self, name):
 
         def create_uid_table_cb(res):
-            d = self.mbox_uid.create_table(name)
+            d = self.mbox_indexer.create_table(name)
             d.addCallback(lambda _: res)
             return d
 
-        d = self.adaptor.__class__.get_or_create(name)
+        d = self.adaptor.get_or_create_mbox(self.store, name)
         d.addCallback(create_uid_table_cb)
         return d
 
     def delete_mailbox(self, name):
         def delete_uid_table_cb(res):
-            d = self.mbox_uid.delete_table(name)
+            d = self.mbox_indexer.delete_table(name)
             d.addCallback(lambda _: res)
             return d
 
-        d = self.adaptor.delete_mbox(self.store)
+        d = self.adaptor.get_or_create_mbox(self.store, name)
+        d.addCallback(
+            lambda wrapper: self.adaptor.delete_mbox(self.store, wrapper))
         d.addCallback(delete_uid_table_cb)
         return d
 
     def rename_mailbox(self, oldname, newname):
+        # TODO incomplete/wrong!!!
+        # Should rename also ALL of the document ids that are pointing
+        # to the old mailbox!!!
+
+        # TODO part-docs identifiers should have the UID_validity of the
+        # mailbox embedded, instead of the name! (so they can survive a rename)
+
         def _rename_mbox(wrapper):
             wrapper.mbox = newname
-            return wrapper.update()
+            return wrapper.update(self.store)
 
         def rename_uid_table_cb(res):
-            d = self.mbox_uid.rename_table(oldname, newname)
+            d = self.mbox_indexer.rename_table(oldname, newname)
             d.addCallback(lambda _: res)
             return d
 
-        d = self.adaptor.__class__.get_or_create(oldname)
+        d = self.adaptor.get_or_create_mbox(self.store, oldname)
         d.addCallback(_rename_mbox)
         d.addCallback(rename_uid_table_cb)
         return d
@@ -585,7 +594,8 @@ class Account(object):
                 self.adaptor, self.store, self.mbox_indexer, mbox_wrapper)
 
         mboxwrapper_klass = self.adaptor.mboxwrapper_klass
-        d = mboxwrapper_klass.get_or_create(name)
+        #d = mboxwrapper_klass.get_or_create(name)
+        d = self.adaptor.get_or_create_mbox(self.store, name)
         d.addCallback(get_collection_for_mailbox)
         return d
 

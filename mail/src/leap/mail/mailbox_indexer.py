@@ -256,7 +256,7 @@ class MailboxIndexer(object):
         def increment(result):
             uid = _maybe_first_query_item(result)
             if uid is None:
-                return None
+                return 1
             return uid + 1
 
         sql = ("SELECT MAX(rowid) FROM {preffix}{name} "

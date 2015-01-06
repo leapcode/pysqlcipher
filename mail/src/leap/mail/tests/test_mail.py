@@ -23,10 +23,8 @@ from functools import partial
 from email.parser import Parser
 from email.Utils import formatdate
 
-from twisted.python import util
-
 from leap.mail.adaptors.soledad import SoledadMailAdaptor
-from leap.mail.mail import MessageCollection
+from leap.mail.mail import MessageCollection, Account
 from leap.mail.mailbox_indexer import MailboxIndexer
 from leap.mail.tests.common import SoledadTestMixin
 
@@ -57,7 +55,6 @@ def _get_msg_time():
     return formatdate(timestamp)
 
 
-
 class CollectionMixin(object):
 
     def get_collection(self, mbox_collection=True):
@@ -86,6 +83,7 @@ class CollectionMixin(object):
         return d
 
 
+# TODO profile add_msg. Why are these tests so SLOW??!
 class MessageTestCase(unittest.TestCase, SoledadTestMixin, CollectionMixin):
     """
     Tests for the Message class.
@@ -256,7 +254,9 @@ class MessageCollectionTestCase(unittest.TestCase,
         return partial(self.assert_collection_count, expected=1)
 
     def test_coppy_msg(self):
-        self.fail()
+        # TODO ---- update when implementing messagecopier
+        # interface
+        self.fail("Not Yet Implemented")
 
     def test_delete_msg(self):
         d = self.add_msg_to_collection()
@@ -298,27 +298,81 @@ class AccountTestCase(unittest.TestCase, SoledadTestMixin):
     """
     Tests for the Account class.
     """
+    def get_account(self):
+        store = self._soledad
+        return Account(store)
 
     def test_add_mailbox(self):
-        self.fail()
+        acc = self.get_account()
+        d = acc.callWhenReady(lambda _: acc.add_mailbox("TestMailbox"))
+        d.addCallback(lambda _: acc.list_all_mailbox_names())
+        d.addCallback(self._test_add_mailbox_cb)
+        return d
+
+    def _test_add_mailbox_cb(self, mboxes):
+        expected = ['INBOX', 'TestMailbox']
+        self.assertItemsEqual(mboxes, expected)
 
     def test_delete_mailbox(self):
-        self.fail()
+        acc = self.get_account()
+        d = acc.callWhenReady(lambda _: acc.delete_mailbox("Inbox"))
+        d.addCallback(lambda _: acc.list_all_mailbox_names())
+        d.addCallback(self._test_delete_mailbox_cb)
+        return d
+
+    def _test_delete_mailbox_cb(self, mboxes):
+        expected = []
+        self.assertItemsEqual(mboxes, expected)
 
     def test_rename_mailbox(self):
-        self.fail()
+        acc = self.get_account()
+        d = acc.callWhenReady(lambda _: acc.add_mailbox("TestMailbox"))
+        d = acc.callWhenReady(lambda _: acc.rename_mailbox(
+            "TestMailbox", "RenamedMailbox"))
+        d.addCallback(lambda _: acc.list_all_mailbox_names())
+        d.addCallback(self._test_rename_mailbox_cb)
+        return d
 
-    def test_list_all_mailbox_names(self):
-        self.fail()
+    def _test_rename_mailbox_cb(self, mboxes):
+        expected = ['INBOX', 'RenamedMailbox']
+        self.assertItemsEqual(mboxes, expected)
 
     def test_get_all_mailboxes(self):
-        self.fail()
+        acc = self.get_account()
+        d = acc.callWhenReady(lambda _: acc.add_mailbox("OneMailbox"))
+        d.addCallback(lambda _: acc.add_mailbox("TwoMailbox"))
+        d.addCallback(lambda _: acc.add_mailbox("ThreeMailbox"))
+        d.addCallback(lambda _: acc.add_mailbox("anotherthing"))
+        d.addCallback(lambda _: acc.add_mailbox("anotherthing2"))
+        d.addCallback(lambda _: acc.get_all_mailboxes())
+        d.addCallback(self._test_get_all_mailboxes_cb)
+        return d
 
-    def test_get_collection_by_docs(self):
-        self.fail()
+    def _test_get_all_mailboxes_cb(self, mailboxes):
+        expected = ["INBOX", "OneMailbox", "TwoMailbox", "ThreeMailbox",
+                    "anotherthing", "anotherthing2"]
+        names = [m.mbox for m in mailboxes]
+        self.assertItemsEqual(names, expected)
 
     def test_get_collection_by_mailbox(self):
-        self.fail()
+        acc = self.get_account()
+        d = acc.callWhenReady(lambda _: acc.get_collection_by_mailbox("INBOX"))
+        d.addCallback(self._test_get_collection_by_mailbox_cb)
+        return d
+
+    def _test_get_collection_by_mailbox_cb(self, collection):
+        self.assertTrue(collection.is_mailbox_collection())
+
+        def assert_uid_next_empty_collection(uid):
+            self.assertEqual(uid, 1)
+        d = collection.get_uid_next()
+        d.addCallback(assert_uid_next_empty_collection)
+        return d
+
+    # XXX not yet implemented
+
+    def test_get_collection_by_docs(self):
+        self.fail("Not Yet Implemented")
 
     def test_get_collection_by_tag(self):
-        self.fail()
+        self.fail("Not Yet Implemented")
