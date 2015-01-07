@@ -114,6 +114,24 @@ class MailboxIndexer(object):
             preffix=self.table_preffix, name=sanitize(mailbox_id)))
         return self._query(sql)
 
+    def rename_table(self, oldmailbox, newmailbox):
+        """
+        Delete the UID table for a given mailbox.
+        :param oldmailbox: the old mailbox name
+        :type oldmailbox: str
+        :param newmailbox: the new mailbox name
+        :type newmailbox: str
+        :rtype: Deferred
+        """
+        assert oldmailbox
+        assert newmailbox
+        assert oldmailbox != newmailbox
+        sql = ("ALTER TABLE {preffix}{old} "
+               "RENAME TO {preffix}{new}".format(
+                   preffix=self.table_preffix,
+                   old=sanitize(oldmailbox), new=sanitize(newmailbox)))
+        return self._query(sql)
+
     def insert_doc(self, mailbox_id, doc_id):
         """
         Insert the doc_id for a MetaMsg in the UID table for a given mailbox.
@@ -134,7 +152,7 @@ class MailboxIndexer(object):
         assert doc_id
         mailbox_id = mailbox_id.replace('-', '_')
 
-        if not re.findall(METAMSGID_RE.format(mbox=mailbox_id), doc_id):
+        if not re.findall(METAMSGID_RE.format(mbox_uuid=mailbox_id), doc_id):
             raise WrongMetaDocIDError("Wrong format for the MetaMsg doc_id")
 
         def get_rowid(result):
@@ -148,9 +166,11 @@ class MailboxIndexer(object):
         sql_last = ("SELECT MAX(rowid) FROM {preffix}{name} "
                     "LIMIT 1;").format(
             preffix=self.table_preffix, name=sanitize(mailbox_id))
+
         d = self._query(sql, values)
         d.addCallback(lambda _: self._query(sql_last))
         d.addCallback(get_rowid)
+        d.addErrback(lambda f: f.printTraceback())
         return d
 
     def delete_doc_by_uid(self, mailbox_id, uid):
@@ -199,13 +219,14 @@ class MailboxIndexer(object):
         """
         Get the doc_id for a MetaMsg in the UID table for a given mailbox.
 
-        :param mailbox: the mailbox uuid
+        :param mailbox_id: the mailbox uuid
         :type mailbox: str
         :param uid: the uid for the MetaMsg for this mailbox
         :type uid: int
         :rtype: Deferred
         """
         check_good_uuid(mailbox_id)
+        mailbox_id = mailbox_id.replace('-', '_')
 
         def get_hash(result):
             return _maybe_first_query_item(result)
@@ -218,7 +239,24 @@ class MailboxIndexer(object):
         d.addCallback(get_hash)
         return d
 
-    def get_doc_ids_from_uids(self, mailbox, uids):
+    def get_uid_from_doc_id(self, mailbox_id, doc_id):
+        check_good_uuid(mailbox_id)
+        mailbox_id = mailbox_id.replace('-', '_')
+
+        def get_uid(result):
+            return _maybe_first_query_item(result)
+
+        sql = ("SELECT uid from {preffix}{name} "
+               "WHERE hash=?".format(
+                   preffix=self.table_preffix, name=sanitize(mailbox_id)))
+        values = (doc_id,)
+        d = self._query(sql, values)
+        d.addCallback(get_uid)
+        return d
+
+
+
+    def get_doc_ids_from_uids(self, mailbox_id, uids):
         # For IMAP relative numbering /sequences.
         # XXX dereference the range (n,*)
         raise NotImplementedError()
@@ -227,8 +265,8 @@ class MailboxIndexer(object):
         """
         Get the number of entries in the UID table for a given mailbox.
 
-        :param mailbox: the mailbox name
-        :type mailbox: str
+        :param mailbox_id: the mailbox uuid
+        :type mailbox_id: str
         :return: a deferred that will fire with an integer returning the count.
         :rtype: Deferred
         """
@@ -241,6 +279,7 @@ class MailboxIndexer(object):
             preffix=self.table_preffix, name=sanitize(mailbox_id)))
         d = self._query(sql)
         d.addCallback(get_count)
+        d.addErrback(lambda _: 0)
         return d
 
     def get_next_uid(self, mailbox_id):
@@ -252,7 +291,7 @@ class MailboxIndexer(object):
         only thing that can be assured is that it will be equal or greater than
         the value returned.
 
-        :param mailbox: the mailbox name
+        :param mailbox_id: the mailbox uuid
         :type mailbox: str
         :return: a deferred that will fire with an integer returning the next
                  uid.
@@ -272,4 +311,23 @@ class MailboxIndexer(object):
 
         d = self._query(sql)
         d.addCallback(increment)
+        return d
+
+    def all_uid_iter(self, mailbox_id):
+        """
+        Get a sequence of all the uids in this mailbox.
+
+        :param mailbox_id: the mailbox uuid
+        :type mailbox_id: str
+        """
+        check_good_uuid(mailbox_id)
+
+        sql = ("SELECT uid from {preffix}{name} ").format(
+            preffix=self.table_preffix, name=sanitize(mailbox_id))
+
+        def get_results(result):
+            return [x[0] for x in result]
+
+        d = self._query(sql)
+        d.addCallback(get_results)
         return d

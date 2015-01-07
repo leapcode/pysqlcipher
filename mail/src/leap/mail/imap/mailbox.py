@@ -21,9 +21,11 @@ import re
 import logging
 import StringIO
 import cStringIO
+import time
 import os
 
 from collections import defaultdict
+from email.utils import formatdate
 
 from twisted.internet import defer
 from twisted.internet import reactor
@@ -36,6 +38,7 @@ from leap.common import events as leap_events
 from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
 from leap.common.check import leap_assert, leap_assert_type
 from leap.mail.constants import INBOX_NAME, MessageFlags
+from leap.mail.imap.messages import IMAPMessage
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +91,7 @@ class IMAPMailbox(object):
     implements(
         imap4.IMailbox,
         imap4.IMailboxInfo,
-        imap4.ICloseableMailbox,
+        #imap4.ICloseableMailbox,
         imap4.ISearchableMailbox,
         imap4.IMessageCopier)
 
@@ -105,8 +108,7 @@ class IMAPMailbox(object):
 
     def __init__(self, collection, rw=1):
         """
-        SoledadMailbox constructor. Needs to get passed a name, plus a
-        Soledad instance.
+        SoledadMailbox constructor.
 
         :param collection: instance of IMAPMessageCollection
         :type collection: IMAPMessageCollection
@@ -115,6 +117,7 @@ class IMAPMailbox(object):
         :type rw: int
         """
         self.rw = rw
+        self.closed = False
 
         self._uidvalidity = None
         self.collection = collection
@@ -138,6 +141,11 @@ class IMAPMailbox(object):
         :rtype: set
         """
         return self._listeners[self.mbox_name]
+
+    def get_imap_message(self, message):
+        msg = IMAPMessage(message)
+        msg.store = self.collection.store
+        return msg
 
     # FIXME this grows too crazily when many instances are fired, like
     # during imaptest stress testing. Should have a queue of limited size
@@ -308,17 +316,24 @@ class IMAPMailbox(object):
         :type names: iter
         """
         r = {}
+        maybe = defer.maybeDeferred
         if self.CMD_MSG in names:
-            r[self.CMD_MSG] = self.getMessageCount()
+            r[self.CMD_MSG] = maybe(self.getMessageCount)
         if self.CMD_RECENT in names:
-            r[self.CMD_RECENT] = self.getRecentCount()
+            r[self.CMD_RECENT] = maybe(self.getRecentCount)
         if self.CMD_UIDNEXT in names:
-            r[self.CMD_UIDNEXT] = self.getUIDNext()
+            r[self.CMD_UIDNEXT] = maybe(self.getUIDNext)
         if self.CMD_UIDVALIDITY in names:
-            r[self.CMD_UIDVALIDITY] = self.getUIDValidity()
+            r[self.CMD_UIDVALIDITY] = maybe(self.getUIDValidity)
         if self.CMD_UNSEEN in names:
-            r[self.CMD_UNSEEN] = self.getUnseenCount()
-        return defer.succeed(r)
+            r[self.CMD_UNSEEN] = maybe(self.getUnseenCount)
+
+        def as_a_dict(values):
+            return dict(zip(r.keys(), values))
+
+        d = defer.gatherResults(r.values())
+        d.addCallback(as_a_dict)
+        return d
 
     def addMessage(self, message, flags, date=None):
         """
@@ -341,10 +356,14 @@ class IMAPMailbox(object):
 
         # XXX we could treat the message as an IMessage from here
         leap_assert_type(message, basestring)
+
         if flags is None:
             flags = tuple()
         else:
             flags = tuple(str(flag) for flag in flags)
+
+        if date is None:
+            date = formatdate(time.time())
 
         # if PROFILE_CMD:
         # do_profile_cmd(d, "APPEND")
@@ -419,10 +438,11 @@ class IMAPMailbox(object):
         self.setFlags((MessageFlags.NOSELECT_FLAG,))
 
         def remove_mbox(_):
-            # FIXME collection does not have a delete_mbox method,
-            # it's in account.
-            # XXX should take care of deleting the uid table too.
-            return self.collection.delete_mbox(self.mbox_name)
+            uuid = self.collection.mbox_uuid
+            d = self.collection.mbox_wrapper.delete(self.collection.store)
+            d.addCallback(
+                lambda _: self.collection.mbox_indexer.delete_table(uuid))
+            return d
 
         d = self.deleteAllDocs()
         d.addCallback(remove_mbox)
@@ -431,13 +451,14 @@ class IMAPMailbox(object):
     def _close_cb(self, result):
         self.closed = True
 
-    def close(self):
-        """
-        Expunge and mark as closed
-        """
-        d = self.expunge()
-        d.addCallback(self._close_cb)
-        return d
+    # TODO server already calls expunge for closing
+    #def close(self):
+        #"""
+        #Expunge and mark as closed
+        #"""
+        #d = self.expunge()
+        #d.addCallback(self._close_cb)
+        #return d
 
     def expunge(self):
         """
@@ -445,10 +466,7 @@ class IMAPMailbox(object):
         """
         if not self.isWriteable():
             raise imap4.ReadOnlyMailbox
-        d = defer.Deferred()
-        # FIXME actually broken.
-        # Iterate through index, and do a expunge.
-        return d
+        return self.collection.delete_all_flagged()
 
     # FIXME -- get last_uid from mbox_indexer
     def _bound_seq(self, messages_asked):
@@ -465,12 +483,12 @@ class IMAPMailbox(object):
             except TypeError:
                 # looks like we cannot iterate
                 try:
+                    # XXX fixme, does not exist
                     messages_asked.last = self.last_uid
                 except ValueError:
                     pass
         return messages_asked
 
-    # TODO -- needed? --- we can get the sequence from the indexer.
     def _filter_msg_seq(self, messages_asked):
         """
         Filter a message sequence returning only the ones that do exist in the
@@ -480,10 +498,16 @@ class IMAPMailbox(object):
         :type messages_asked: MessageSet
         :rtype: set
         """
-        set_asked = set(messages_asked)
-        set_exist = set(self.messages.all_uid_iter())
-        seq_messg = set_asked.intersection(set_exist)
-        return seq_messg
+        # TODO we could pass the asked sequence to the indexer
+        # all_uid_iter, and bound the sql query instead.
+        def filter_by_asked(sequence):
+            set_asked = set(messages_asked)
+            set_exist = set(sequence)
+            return set_asked.intersection(set_exist)
+
+        d = self.collection.all_uid_iter()
+        d.addCallback(filter_by_asked)
+        return d
 
     def fetch(self, messages_asked, uid):
         """
@@ -509,26 +533,41 @@ class IMAPMailbox(object):
 
         sequence = False
         # sequence = True if uid == 0 else False
+        getmsg = self.collection.get_message_by_uid
 
         messages_asked = self._bound_seq(messages_asked)
-        seq_messg = self._filter_msg_seq(messages_asked)
-        getmsg = self.collection.get_msg_by_uid
+        d_sequence = self._filter_msg_seq(messages_asked)
+
+        def get_imap_messages_for_sequence(sequence):
+            def _zip_msgid(messages):
+                return zip(
+                    list(sequence),
+                    map(self.get_imap_message, messages))
+
+            def _unset_recent(sequence):
+                reactor.callLater(0, self.unset_recent_flags, sequence)
+                return sequence
+
+            d_msg = []
+            for msgid in sequence:
+                d_msg.append(getmsg(msgid))
+
+            d = defer.gatherResults(d_msg)
+            d.addCallback(_zip_msgid)
+            return d
 
         # for sequence numbers (uid = 0)
         if sequence:
             logger.debug("Getting msg by index: INEFFICIENT call!")
             # TODO --- implement sequences in mailbox indexer
             raise NotImplementedError
+
         else:
-            got_msg = ((msgid, getmsg(msgid)) for msgid in seq_messg)
-            result = ((msgid, msg) for msgid, msg in got_msg
-                      if msg is not None)
-            reactor.callLater(0, self.unset_recent_flags, seq_messg)
+            d_sequence.addCallback(get_imap_messages_for_sequence)
 
         # TODO -- call signal_to_ui
         # d.addCallback(self.cb_signal_unread_to_ui)
-
-        return result
+        return d_sequence
 
     def fetch_flags(self, messages_asked, uid):
         """
@@ -755,6 +794,7 @@ class IMAPMailbox(object):
         # :raise IllegalQueryError: Raised when query is not valid.
         # example query:
         #  ['UNDELETED', 'HEADER', 'Message-ID',
+        # XXX fixme, does not exist
         #   '52D44F11.9060107@dev.bitmask.net']
 
         # TODO hardcoding for now! -- we'll support generic queries later on
@@ -821,7 +861,7 @@ class IMAPMailbox(object):
         Representation string for this mailbox.
         """
         return u"<IMAPMailbox: mbox '%s' (%s)>" % (
-            self.mbox_name, self.messages.count())
+            self.mbox_name, self.collection.count())
 
 
 _INBOX_RE = re.compile(INBOX_NAME, re.IGNORECASE)

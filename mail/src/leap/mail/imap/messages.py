@@ -18,18 +18,12 @@
 IMAPMessage and IMAPMessageCollection.
 """
 import logging
-# import StringIO
 from twisted.mail import imap4
 from zope.interface import implements
 
 from leap.common.check import leap_assert, leap_assert_type
-from leap.common.decorators import memoized_method
-from leap.common.mail import get_email_charset
-
 from leap.mail.utils import find_charset
 
-from leap.mail.imap.messageparts import MessagePart
-# from leap.mail.imap.messagepargs import MessagePartDoc
 
 logger = logging.getLogger(__name__)
 
@@ -116,13 +110,17 @@ class IMAPMessage(object):
     # IMessagePart
     #
 
-    def getBodyFile(self):
+    def getBodyFile(self, store=None):
         """
         Retrieve a file object containing only the body of this message.
 
         :return: file-like object opened for reading
         :rtype: StringIO
         """
+        if store is None:
+            store = self.store
+        return self.message.get_body_file(store)
+
         # TODO refactor with getBodyFile in MessagePart
 
         #body = bdoc_content.get(self.RAW_KEY, "")
@@ -141,7 +139,6 @@ class IMAPMessage(object):
         #finally:
             #return write_fd(body)
 
-        return self.message.get_body_file()
 
     def getSize(self):
         """

@@ -25,6 +25,7 @@ Soledad Indexes for Mail Documents.
 
 TYPE = "type"
 MBOX = "mbox"
+MBOX_UUID = "mbox_uuid"
 FLAGS = "flags"
 HEADERS = "head"
 CONTENT = "cnt"
@@ -46,7 +47,7 @@ UID = "uid"
 
 TYPE_IDX = 'by-type'
 TYPE_MBOX_IDX = 'by-type-and-mbox'
-#TYPE_MBOX_UID_IDX = 'by-type-and-mbox-and-uid'
+TYPE_MBOX_UUID_IDX = 'by-type-and-mbox-uuid'
 TYPE_SUBS_IDX = 'by-type-and-subscribed'
 TYPE_MSGID_IDX = 'by-type-and-message-id'
 TYPE_MBOX_SEEN_IDX = 'by-type-and-mbox-and-seen'
@@ -62,9 +63,6 @@ TYPE_P_HASH_IDX = 'by-type-and-payloadhash'
 JUST_MAIL_IDX = "just-mail"
 JUST_MAIL_COMPAT_IDX = "just-mail-compat"
 
-# Tomas created the `recent and seen index`, but the semantic is not too
-# correct since the recent flag is volatile --- XXX review and delete.
-#TYPE_MBOX_RECT_SEEN_IDX = 'by-type-and-mbox-and-recent-and-seen'
 
 # TODO
 # it would be nice to measure the cost of indexing
@@ -77,6 +75,7 @@ MAIL_INDEXES = {
     # generic
     TYPE_IDX: [TYPE],
     TYPE_MBOX_IDX: [TYPE, MBOX],
+    TYPE_MBOX_UUID_IDX: [TYPE, MBOX_UUID],
 
     # XXX deprecate 0.4.0
     # TYPE_MBOX_UID_IDX: [TYPE, MBOX, UID],
@@ -97,11 +96,9 @@ MAIL_INDEXES = {
     TYPE_P_HASH_IDX: [TYPE, PAYLOAD_HASH],
 
     # messages
-    TYPE_MBOX_SEEN_IDX: [TYPE, MBOX, 'bool(seen)'],
-    TYPE_MBOX_RECT_IDX: [TYPE, MBOX, 'bool(recent)'],
-    TYPE_MBOX_DEL_IDX: [TYPE, MBOX, 'bool(deleted)'],
-    #TYPE_MBOX_RECT_SEEN_IDX: [TYPE, MBOX,
-                              #'bool(recent)', 'bool(seen)'],
+    TYPE_MBOX_SEEN_IDX: [TYPE, MBOX_UUID, 'bool(seen)'],
+    TYPE_MBOX_RECT_IDX: [TYPE, MBOX_UUID, 'bool(recent)'],
+    TYPE_MBOX_DEL_IDX: [TYPE, MBOX_UUID, 'bool(deleted)'],
 
     # incoming queue
     JUST_MAIL_IDX: [INCOMING_KEY,

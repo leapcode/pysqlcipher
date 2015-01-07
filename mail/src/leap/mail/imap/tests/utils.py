@@ -1,30 +1,44 @@
-import os
-import tempfile
-import shutil
-
+# -*- coding: utf-8 -*-
+# utils.py
+# Copyright (C) 2014, 2015 LEAP
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+Common utilities for testing Soledad IMAP Server.
+"""
 from email import parser
 
 from mock import Mock
 from twisted.mail import imap4
 from twisted.internet import defer
 from twisted.protocols import loopback
+from twisted.python import log
 
-from leap.common.testing.basetest import BaseLeapTest
-from leap.mail.imap.account import SoledadBackedAccount
-from leap.mail.imap.memorystore import MemoryStore
-from leap.mail.imap.server import LeapIMAPServer
-from leap.soledad.client import Soledad
+from leap.mail.adaptors import soledad as soledad_adaptor
+from leap.mail.imap.account import IMAPAccount
+from leap.mail.imap.server import LEAPIMAPServer
+from leap.mail.tests.common import SoledadTestMixin
 
 TEST_USER = "testuser@leap.se"
 TEST_PASSWD = "1234"
+
 
 #
 # Simple IMAP4 Client for testing
 #
 
-
 class SimpleClient(imap4.IMAP4Client):
-
     """
     A Simple IMAP4 Client to test our
     Soledad-LEAPServer
@@ -51,160 +65,57 @@ class SimpleClient(imap4.IMAP4Client):
         self.transport.loseConnection()
 
 
-# XXX move to common helper
-def initialize_soledad(email, gnupg_home, tempdir):
-    """
-    Initializes soledad by hand
-
-    :param email: ID for the user
-    :param gnupg_home: path to home used by gnupg
-    :param tempdir: path to temporal dir
-    :rtype: Soledad instance
-    """
-
-    uuid = "foobar-uuid"
-    passphrase = u"verysecretpassphrase"
-    secret_path = os.path.join(tempdir, "secret.gpg")
-    local_db_path = os.path.join(tempdir, "soledad.u1db")
-    server_url = "https://provider"
-    cert_file = ""
-
-    class MockSharedDB(object):
-
-        get_doc = Mock(return_value=None)
-        put_doc = Mock()
-        lock = Mock(return_value=('atoken', 300))
-        unlock = Mock(return_value=True)
-
-        def __call__(self):
-            return self
-
-    Soledad._shared_db = MockSharedDB()
-
-    _soledad = Soledad(
-        uuid,
-        passphrase,
-        secret_path,
-        local_db_path,
-        server_url,
-        cert_file,
-        syncable=False)
-
-    return _soledad
-
-
-# XXX this is not properly a mixin, since helper already inherits from
-# uniittest.Testcase
-class IMAP4HelperMixin(BaseLeapTest):
+class IMAP4HelperMixin(SoledadTestMixin):
     """
     MixIn containing several utilities to be shared across
     different TestCases
     """
-
     serverCTX = None
     clientCTX = None
 
-    # setUpClass cannot be a classmethod in trial, see:
-    # https://twistedmatrix.com/trac/ticket/1870
-
     def setUp(self):
-        """
-        Setup method for each test.
 
-        Initializes and run a LEAP IMAP4 Server.
-        """
-        self.old_path = os.environ['PATH']
-        self.old_home = os.environ['HOME']
-        self.tempdir = tempfile.mkdtemp(prefix="leap_tests-")
-        self.home = self.tempdir
-        bin_tdir = os.path.join(
-            self.tempdir,
-            'bin')
-        os.environ["PATH"] = bin_tdir
-        os.environ["HOME"] = self.tempdir
+        soledad_adaptor.cleanup_deferred_locks()
 
-        # Soledad: config info
-        self.gnupg_home = "%s/gnupg" % self.tempdir
-        self.email = 'leap@leap.se'
-
-        # initialize soledad by hand so we can control keys
-        self._soledad = initialize_soledad(
-            self.email,
-            self.gnupg_home,
-            self.tempdir)
         UUID = 'deadbeef',
         USERID = TEST_USER
-        memstore = MemoryStore()
 
-        ###########
+        def setup_server(account):
+            self.server = LEAPIMAPServer(
+                uuid=UUID, userid=USERID,
+                contextFactory=self.serverCTX,
+                soledad=self._soledad)
+            self.server.theAccount = account
 
-        d_server_ready = defer.Deferred()
+            d_server_ready = defer.Deferred()
+            self.client = SimpleClient(
+                d_server_ready, contextFactory=self.clientCTX)
+            self.connected = d_server_ready
 
-        self.server = LeapIMAPServer(
-            uuid=UUID, userid=USERID,
-            contextFactory=self.serverCTX,
-            soledad=self._soledad)
+        def setup_account(_):
+            self.parser = parser.Parser()
 
-        self.client = SimpleClient(
-            d_server_ready, contextFactory=self.clientCTX)
+            # XXX this should be fixed in soledad.
+            # Soledad sync makes trial block forever. The sync it's mocked to
+            # fix this problem. _mock_soledad_get_from_index can be used from
+            # the tests to provide documents.
+            self._soledad.sync = Mock()
 
-        theAccount = SoledadBackedAccount(
-            USERID,
-            soledad=self._soledad,
-            memstore=memstore)
-        d_account_ready = theAccount.callWhenReady(lambda r: None)
-        LeapIMAPServer.theAccount = theAccount
+            d = defer.Deferred()
+            self.acc = IMAPAccount(USERID, self._soledad, d=d)
+            return d
 
-        self.connected = defer.gatherResults(
-            [d_server_ready, d_account_ready])
-
-        # XXX FIXME --------------------------------------------
-        # XXX this needs to be done differently,
-        # have to be hooked on initialization callback instead.
-        # in case we get something from previous tests...
-        #for mb in self.server.theAccount.mailboxes:
-            #self.server.theAccount.delete(mb)
-
-        # email parser
-        self.parser = parser.Parser()
+        d = super(IMAP4HelperMixin, self).setUp()
+        d.addCallback(setup_account)
+        d.addCallback(setup_server)
+        return d
 
     def tearDown(self):
-        """
-        tearDown method called after each test.
-        """
-        try:
-            self._soledad.close()
-        except Exception:
-            print "ERROR WHILE CLOSING SOLEDAD"
-        finally:
-            os.environ["PATH"] = self.old_path
-            os.environ["HOME"] = self.old_home
-            # safety check
-            assert 'leap_tests-' in self.tempdir
-            shutil.rmtree(self.tempdir)
-
-    def populateMessages(self):
-        """
-        Populates soledad instance with several simple messages
-        """
-        # XXX we should encapsulate this thru SoledadBackedAccount
-        # instead.
-
-        # XXX we also should put this in a mailbox!
-
-        self._soledad.messages.add_msg('', subject="test1")
-        self._soledad.messages.add_msg('', subject="test2")
-        self._soledad.messages.add_msg('', subject="test3")
-        # XXX should change Flags too
-        self._soledad.messages.add_msg('', subject="test4")
-
-    def delete_all_docs(self):
-        """
-        Deletes all the docs in the testing instance of the
-        SoledadBackedAccount.
-        """
-        self.server.theAccount.deleteAllMessages(
-            iknowhatiamdoing=True)
+        SoledadTestMixin.tearDown(self)
+        del self._soledad
+        del self.client
+        del self.server
+        del self.connected
 
     def _cbStopClient(self, ignore):
         self.client.transport.loseConnection()
@@ -212,11 +123,8 @@ class IMAP4HelperMixin(BaseLeapTest):
     def _ebGeneral(self, failure):
         self.client.transport.loseConnection()
         self.server.transport.loseConnection()
-        # can we do something similar?
-        # I guess this was ok with trial, but not in noseland...
-        # log.err(failure, "Problem with %r" % (self.function,))
-        raise failure.value
-        # failure.trap(Exception)
+        if hasattr(self, 'function'):
+            log.err(failure, "Problem with %r" % (self.function,))
 
     def loopback(self):
         return loopback.loopbackAsync(self.server, self.client)

@@ -276,8 +276,9 @@ HERE = os.path.split(os.path.abspath(__file__))[0]
 
 
 class TestMessageClass(object):
-    def __init__(self, wrapper):
+    def __init__(self, wrapper, uid):
         self.wrapper = wrapper
+        self.uid = uid
 
     def get_wrapper(self):
         return self.wrapper
@@ -322,9 +323,9 @@ class SoledadMailAdaptorTestCase(SoledadTestMixin):
         self.assertTrue(msg.wrapper.cdocs is not None)
         self.assertEquals(len(msg.wrapper.cdocs), 1)
         self.assertEquals(msg.wrapper.fdoc.chash, chash)
-        self.assertEquals(msg.wrapper.fdoc.size, 3834)
+        self.assertEquals(msg.wrapper.fdoc.size, 3837)
         self.assertEquals(msg.wrapper.hdoc.chash, chash)
-        self.assertEqual(msg.wrapper.hdoc.headers['subject'],
+        self.assertEqual(dict(msg.wrapper.hdoc.headers)['Subject'],
                          subject)
         self.assertEqual(msg.wrapper.hdoc.subject, subject)
         self.assertEqual(msg.wrapper.cdocs[1].phash, phash)

@@ -17,7 +17,7 @@
 """
 Test case for leap.email.imap.server
 TestCases taken from twisted tests and modified to make them work
-against SoledadBackedAccount.
+against our implementation of the IMAPAccount.
 
 @authors: Kali Kaneko, <kali@leap.se>
 XXX add authors from the original twisted tests.
@@ -32,19 +32,13 @@ import types
 
 from twisted.mail import imap4
 from twisted.internet import defer
-from twisted.trial import unittest
 from twisted.python import util
 from twisted.python import failure
 
 from twisted import cred
 
-
-# import u1db
-
-from leap.mail.imap.mailbox import SoledadMailbox
-from leap.mail.imap.memorystore import MemoryStore
-from leap.mail.imap.messages import MessageCollection
-from leap.mail.imap.server import LeapIMAPServer
+from leap.mail.imap.mailbox import IMAPMailbox
+from leap.mail.imap.messages import IMAPMessageCollection
 from leap.mail.imap.tests.utils import IMAP4HelperMixin
 
 
@@ -81,7 +75,7 @@ class TestRealm:
 # TestCases
 #
 
-class MessageCollectionTestCase(IMAP4HelperMixin, unittest.TestCase):
+class MessageCollectionTestCase(IMAP4HelperMixin):
     """
     Tests for the MessageCollection class
     """
@@ -95,10 +89,9 @@ class MessageCollectionTestCase(IMAP4HelperMixin, unittest.TestCase):
         """
         super(MessageCollectionTestCase, self).setUp()
 
-        # TODO deprecate memstore
-        memstore = MemoryStore()
-        self.messages = MessageCollection("testmbox%s" % (self.count,),
-                                          self._soledad, memstore=memstore)
+        # FIXME --- update initialization
+        self.messages = IMAPMessageCollection(
+            "testmbox%s" % (self.count,), self._soledad)
         MessageCollectionTestCase.count += 1
 
     def tearDown(self):
@@ -207,23 +200,18 @@ class MessageCollectionTestCase(IMAP4HelperMixin, unittest.TestCase):
         add_1().addCallback(lambda ignored: self.assertEqual(
                             mc.count(), 3))
 
-        # XXX this has to be redone to fit memstore ------------#
-        #newmsg = mc._get_empty_doc()
-        #newmsg['mailbox'] = "mailbox/foo"
-        #mc._soledad.create_doc(newmsg)
-        #self.assertEqual(mc.count(), 3)
-        #self.assertEqual(
-        #len(mc._soledad.get_from_index(mc.TYPE_IDX, "flags")), 4)
+
+# DEBUG ---
+#from twisted.internet.base import DelayedCall
+#DelayedCall.debug = True
 
 
-class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
-    # TODO this currently will use a memory-only store.
-    # create a different one for testing soledad sync.
+class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
 
     """
-    Tests for the generic behavior of the LeapIMAP4Server
+    Tests for the generic behavior of the LEAPIMAP4Server
     which, right now, it's just implemented in this test file as
-    LeapIMAPServer. We will move the implementation, together with
+    LEAPIMAPServer. We will move the implementation, together with
     authentication bits, to leap.mail.imap.server so it can be instantiated
     from the tac file.
 
@@ -243,6 +231,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         """
         succeed = ('testbox', 'test/box', 'test/', 'test/box/box', 'foobox')
         fail = ('testbox', 'test/box')
+        acc = self.server.theAccount
 
         def cb():
             self.result.append(1)
@@ -267,24 +256,23 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         d1 = self.connected.addCallback(strip(login))
         d1.addCallback(strip(create))
         d2 = self.loopback()
-        d = defer.gatherResults([d1, d2])
+        d = defer.gatherResults([d1, d2], consumeErrors=True)
+        d.addCallback(lambda _: acc.account.list_all_mailbox_names())
         return d.addCallback(self._cbTestCreate, succeed, fail)
 
-    def _cbTestCreate(self, ignored, succeed, fail):
+    def _cbTestCreate(self, mailboxes, succeed, fail):
         self.assertEqual(self.result, [1] * len(succeed) + [0] * len(fail))
-
-        mboxes = LeapIMAPServer.theAccount.mailboxes
 
         answers = ([u'INBOX', u'testbox', u'test/box', u'test',
                     u'test/box/box', 'foobox'])
-        self.assertEqual(sorted(mboxes), sorted([a for a in answers]))
+        self.assertEqual(sorted(mailboxes), sorted([a for a in answers]))
 
     def testDelete(self):
         """
         Test whether we can delete mailboxes
         """
-        acc = LeapIMAPServer.theAccount
-        d0 = lambda: acc.addMailbox('test-delete/me')
+        def add_mailbox():
+            return self.server.theAccount.addMailbox('test-delete/me')
 
         def login():
             return self.client.login(TEST_USER, TEST_PASSWD)
@@ -292,15 +280,17 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         def delete():
             return self.client.delete('test-delete/me')
 
-        d1 = self.connected.addCallback(strip(login))
-        d1.addCallback(strip(d0))
+        acc = self.server.theAccount.account
+
+        d1 = self.connected.addCallback(add_mailbox)
+        d1.addCallback(strip(login))
         d1.addCallbacks(strip(delete), self._ebGeneral)
         d1.addCallbacks(self._cbStopClient, self._ebGeneral)
         d2 = self.loopback()
         d = defer.gatherResults([d1, d2])
-        d.addCallback(
-            lambda _: self.assertEqual(
-                LeapIMAPServer.theAccount.mailboxes, ['INBOX']))
+        d.addCallback(lambda _: acc.list_all_mailbox_names())
+        d.addCallback(lambda mboxes: self.assertEqual(
+            mboxes, ['INBOX']))
         return d
 
     def testIllegalInboxDelete(self):
@@ -359,29 +349,34 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         Try deleting a mailbox with sub-folders, and \NoSelect flag set.
         An exception is expected.
         """
-        acc = LeapIMAPServer.theAccount
-        d_del0 = lambda: acc.addMailbox('delete')
-        d_del1 = lambda: acc.addMailbox('delete/me')
-
-        def set_noselect_flag():
-            mbox = acc.getMailbox('delete')
-            mbox.setFlags((r'\Noselect',))
+        acc = self.server.theAccount
 
         def login():
             return self.client.login(TEST_USER, TEST_PASSWD)
 
-        def delete():
+        def create_mailboxes():
+            d1 = acc.addMailbox('delete')
+            d2 = acc.addMailbox('delete/me')
+            d = defer.gatherResults([d1, d2])
+            return d
+
+        def get_noselect_mailbox(mboxes):
+            mbox = mboxes[0]
+            return mbox.setFlags((r'\Noselect',))
+
+        def delete_mbox(ignored):
             return self.client.delete('delete')
 
         def deleteFailed(failure):
             self.failure = failure
 
         self.failure = None
+
         d1 = self.connected.addCallback(strip(login))
-        d1.addCallback(strip(d_del0))
-        d1.addCallback(strip(d_del1))
-        d1.addCallback(strip(set_noselect_flag))
-        d1.addCallback(strip(delete)).addErrback(deleteFailed)
+        d1.addCallback(strip(create_mailboxes))
+        d1.addCallback(get_noselect_mailbox)
+
+        d1.addCallback(delete_mbox).addErrback(deleteFailed)
         d1.addCallbacks(self._cbStopClient, self._ebGeneral)
         d2 = self.loopback()
         d = defer.gatherResults([d1, d2])
@@ -393,11 +388,15 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
                       self.assertEqual(str(self.failure.value), expected))
         return d
 
+    # FIXME --- this test sometimes FAILS (timing issue).
+    # Some of the deferreds used in the rename op is not waiting for the
+    # operations properly
     def testRename(self):
         """
         Test whether we can rename a mailbox
         """
-        d0 = lambda: LeapIMAPServer.theAccount.addMailbox('oldmbox')
+        def create_mbox():
+            return self.server.theAccount.addMailbox('oldmbox')
 
         def login():
             return self.client.login(TEST_USER, TEST_PASSWD)
@@ -405,16 +404,16 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         def rename():
             return self.client.rename('oldmbox', 'newname')
 
-        d1 = self.connected.addCallback(strip(login))
-        d1.addCallback(strip(d0))
+        d1 = self.connected.addCallback(strip(create_mbox))
+        d1.addCallback(strip(login))
         d1.addCallbacks(strip(rename), self._ebGeneral)
         d1.addCallbacks(self._cbStopClient, self._ebGeneral)
         d2 = self.loopback()
         d = defer.gatherResults([d1, d2])
         d.addCallback(lambda _:
-                      self.assertEqual(
-                          LeapIMAPServer.theAccount.mailboxes,
-                          ['INBOX', 'newname']))
+                      self.server.theAccount.account.list_all_mailbox_names())
+        d.addCallback(lambda mboxes:
+                      self.assertItemsEqual(mboxes, ['INBOX', 'newname']))
         return d
 
     def testIllegalInboxRename(self):
@@ -448,7 +447,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         """
         Try to rename hierarchical mailboxes
         """
-        acc = LeapIMAPServer.theAccount
+        acc = LEAPIMAPServer.theAccount
         dc1 = lambda: acc.create('oldmbox/m1')
         dc2 = lambda: acc.create('oldmbox/m2')
 
@@ -468,7 +467,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         return d.addCallback(self._cbTestHierarchicalRename)
 
     def _cbTestHierarchicalRename(self, ignored):
-        mboxes = LeapIMAPServer.theAccount.mailboxes
+        mboxes = LEAPIMAPServer.theAccount.mailboxes
         expected = ['INBOX', 'newname', 'newname/m1', 'newname/m2']
         self.assertEqual(sorted(mboxes), sorted([s for s in expected]))
 
@@ -476,6 +475,11 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         """
         Test whether we can mark a mailbox as subscribed to
         """
+        acc = self.server.theAccount
+
+        def add_mailbox():
+            return acc.addMailbox('this/mbox')
+
         def login():
             return self.client.login(TEST_USER, TEST_PASSWD)
 
@@ -483,9 +487,10 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
             return self.client.subscribe('this/mbox')
 
         def get_subscriptions(ignored):
-            return LeapIMAPServer.theAccount.getSubscriptions()
+            return self.server.theAccount.getSubscriptions()
 
-        d1 = self.connected.addCallback(strip(login))
+        d1 = self.connected.addCallback(strip(add_mailbox))
+        d1.addCallback(strip(login))
         d1.addCallbacks(strip(subscribe), self._ebGeneral)
         d1.addCallbacks(self._cbStopClient, self._ebGeneral)
         d2 = self.loopback()
@@ -500,7 +505,12 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         """
         Test whether we can unsubscribe from a set of mailboxes
         """
-        acc = LeapIMAPServer.theAccount
+        acc = self.server.theAccount
+
+        def add_mailboxes():
+            return defer.gatherResults([
+                acc.addMailbox('this/mbox'),
+                acc.addMailbox('that/mbox')])
 
         dc1 = lambda: acc.subscribe('this/mbox')
         dc2 = lambda: acc.subscribe('that/mbox')
@@ -512,9 +522,10 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
             return self.client.unsubscribe('this/mbox')
 
         def get_subscriptions(ignored):
-            return LeapIMAPServer.theAccount.getSubscriptions()
+            return acc.getSubscriptions()
 
-        d1 = self.connected.addCallback(strip(login))
+        d1 = self.connected.addCallback(strip(add_mailboxes))
+        d1.addCallback(strip(login))
         d1.addCallback(strip(dc1))
         d1.addCallback(strip(dc2))
         d1.addCallbacks(strip(unsubscribe), self._ebGeneral)
@@ -531,9 +542,13 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         """
         Try to select a mailbox
         """
-        acc = self.server.theAccount
-        d0 = lambda: acc.addMailbox('TESTMAILBOX-SELECT', creation_ts=42)
+        mbox_name = "TESTMAILBOXSELECT"
         self.selectedArgs = None
+
+        acc = self.server.theAccount
+
+        def add_mailbox():
+            return acc.addMailbox(mbox_name, creation_ts=42)
 
         def login():
             return self.client.login(TEST_USER, TEST_PASSWD)
@@ -542,30 +557,26 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
             def selected(args):
                 self.selectedArgs = args
                 self._cbStopClient(None)
-            d = self.client.select('TESTMAILBOX-SELECT')
+            d = self.client.select(mbox_name)
             d.addCallback(selected)
             return d
 
-        d1 = self.connected.addCallback(strip(login))
-        d1.addCallback(strip(d0))
+        d1 = self.connected.addCallback(strip(add_mailbox))
+        d1.addCallback(strip(login))
         d1.addCallback(strip(select))
-        d1.addErrback(self._ebGeneral)
+        #d1.addErrback(self._ebGeneral)
 
         d2 = self.loopback()
-        return defer.gatherResults([d1, d2]).addCallback(self._cbTestSelect)
+
+        d = defer.gatherResults([d1, d2])
+        d.addCallback(self._cbTestSelect)
+        return d
 
     def _cbTestSelect(self, ignored):
-        mbox = LeapIMAPServer.theAccount.getMailbox('TESTMAILBOX-SELECT')
-        self.assertEqual(self.server.mbox.messages.mbox, mbox.messages.mbox)
-        # XXX UIDVALIDITY should be "42" if the creation_ts is passed along
-        # to the memory store. However, the current state of the account
-        # implementation is incomplete and we're writing to soledad store
-        # directly there. We should handle the UIDVALIDITY timestamping
-        # mechanism in a separate test suite.
+        self.assertTrue(self.selectedArgs is not None)
 
         self.assertEqual(self.selectedArgs, {
-            'EXISTS': 0, 'RECENT': 0, 'UIDVALIDITY': 0,
-            # 'EXISTS': 0, 'RECENT': 0, 'UIDVALIDITY': 42,
+            'EXISTS': 0, 'RECENT': 0, 'UIDVALIDITY': 42,
             'FLAGS': ('\\Seen', '\\Answered', '\\Flagged',
                       '\\Deleted', '\\Draft', '\\Recent', 'List'),
             'READ-WRITE': True
@@ -583,13 +594,16 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
                 caps.update(c)
                 self.server.transport.loseConnection()
             return self.client.getCapabilities().addCallback(gotCaps)
-        d1 = self.connected.addCallback(
+
+        d1 = self.connected
+        d1.addCallback(
             strip(getCaps)).addErrback(self._ebGeneral)
+
         d = defer.gatherResults([self.loopback(), d1])
         expected = {'IMAP4rev1': None, 'NAMESPACE': None, 'LITERAL+': None,
                     'IDLE': None}
-
-        return d.addCallback(lambda _: self.assertEqual(expected, caps))
+        d.addCallback(lambda _: self.assertEqual(expected, caps))
+        return d
 
     def testCapabilityWithAuth(self):
         caps = {}
@@ -610,7 +624,8 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
                   'IDLE': None, 'LITERAL+': None,
                   'AUTH': ['CRAM-MD5']}
 
-        return d.addCallback(lambda _: self.assertEqual(expCap, caps))
+        d.addCallback(lambda _: self.assertEqual(expCap, caps))
+        return d
 
     #
     # authentication
@@ -658,7 +673,6 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         return d.addCallback(self._cbTestLogin)
 
     def _cbTestLogin(self, ignored):
-        self.assertEqual(self.server.account, LeapIMAPServer.theAccount)
         self.assertEqual(self.server.state, 'auth')
 
     def testFailedLogin(self):
@@ -696,7 +710,6 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         return d.addCallback(self._cbTestLoginRequiringQuoting)
 
     def _cbTestLoginRequiringQuoting(self, ignored):
-        self.assertEqual(self.server.account, LeapIMAPServer.theAccount)
         self.assertEqual(self.server.state, 'auth')
 
     #
@@ -743,10 +756,12 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         for details.
         """
         # TODO implement the IMAP4ClientExamineTests testcase.
-
-        self.server.theAccount.addMailbox('test-mailbox-e',
-                                          creation_ts=42)
+        mbox_name = "test_mailbox_e"
+        acc = self.server.theAccount
         self.examinedArgs = None
+
+        def add_mailbox():
+            return acc.addMailbox(mbox_name, creation_ts=42)
 
         def login():
             return self.client.login(TEST_USER, TEST_PASSWD)
@@ -755,11 +770,12 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
             def examined(args):
                 self.examinedArgs = args
                 self._cbStopClient(None)
-            d = self.client.examine('test-mailbox-e')
+            d = self.client.examine(mbox_name)
             d.addCallback(examined)
             return d
 
-        d1 = self.connected.addCallback(strip(login))
+        d1 = self.connected.addCallback(strip(add_mailbox))
+        d1.addCallback(strip(login))
         d1.addCallback(strip(examine))
         d1.addErrback(self._ebGeneral)
         d2 = self.loopback()
@@ -767,27 +783,19 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         return d.addCallback(self._cbTestExamine)
 
     def _cbTestExamine(self, ignored):
-        mbox = self.server.theAccount.getMailbox('test-mailbox-e')
-        self.assertEqual(self.server.mbox.messages.mbox, mbox.messages.mbox)
-
-        # XXX UIDVALIDITY should be "42" if the creation_ts is passed along
-        # to the memory store. However, the current state of the account
-        # implementation is incomplete and we're writing to soledad store
-        # directly there. We should handle the UIDVALIDITY timestamping
-        # mechanism in a separate test suite.
         self.assertEqual(self.examinedArgs, {
-            'EXISTS': 0, 'RECENT': 0, 'UIDVALIDITY': 0,
-            # 'EXISTS': 0, 'RECENT': 0, 'UIDVALIDITY': 42,
+            'EXISTS': 0, 'RECENT': 0, 'UIDVALIDITY': 42,
             'FLAGS': ('\\Seen', '\\Answered', '\\Flagged',
                       '\\Deleted', '\\Draft', '\\Recent', 'List'),
             'READ-WRITE': False})
 
     def _listSetup(self, f, f2=None):
-        acc = LeapIMAPServer.theAccount
 
-        dc1 = lambda: acc.addMailbox('root/subthing', creation_ts=42)
-        dc2 = lambda: acc.addMailbox('root/another-thing', creation_ts=42)
-        dc3 = lambda: acc.addMailbox('non-root/subthing', creation_ts=42)
+        acc = self.server.theAccount
+
+        dc1 = lambda: acc.addMailbox('root_subthing', creation_ts=42)
+        dc2 = lambda: acc.addMailbox('root_another_thing', creation_ts=42)
+        dc3 = lambda: acc.addMailbox('non_root_subthing', creation_ts=42)
 
         def login():
             return self.client.login(TEST_USER, TEST_PASSWD)
@@ -816,12 +824,13 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         """
         def list():
             return self.client.list('root', '%')
+
         d = self._listSetup(list)
         d.addCallback(lambda listed: self.assertEqual(
             sortNest(listed),
             sortNest([
-                (SoledadMailbox.INIT_FLAGS, "/", "root/subthing"),
-                (SoledadMailbox.INIT_FLAGS, "/", "root/another-thing")
+                (IMAPMailbox.init_flags, "/", "root_subthing"),
+                (IMAPMailbox.init_flags, "/", "root_another_thing")
             ])
         ))
         return d
@@ -830,28 +839,28 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         """
         Test LSub command
         """
-        acc = LeapIMAPServer.theAccount
+        acc = self.server.theAccount
 
         def subs_mailbox():
             # why not client.subscribe instead?
-            return acc.subscribe('root/subthing')
+            return acc.subscribe('root_subthing')
 
         def lsub():
             return self.client.lsub('root', '%')
 
         d = self._listSetup(lsub, strip(subs_mailbox))
         d.addCallback(self.assertEqual,
-                      [(SoledadMailbox.INIT_FLAGS, "/", "root/subthing")])
+                      [(IMAPMailbox.init_flags, "/", "root_subthing")])
         return d
 
     def testStatus(self):
         """
         Test Status command
         """
-        acc = LeapIMAPServer.theAccount
+        acc = self.server.theAccount
 
         def add_mailbox():
-            return acc.addMailbox('root/subthings')
+            return acc.addMailbox('root_subthings')
 
         # XXX FIXME ---- should populate this a little bit,
         # with unseen etc...
@@ -861,7 +870,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
 
         def status():
             return self.client.status(
-                'root/subthings', 'MESSAGES', 'UIDNEXT', 'UNSEEN')
+                'root_subthings', 'MESSAGES', 'UIDNEXT', 'UNSEEN')
 
         def statused(result):
             self.statused = result
@@ -927,7 +936,7 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         infile = util.sibpath(__file__, 'rfc822.message')
         message = open(infile)
         acc = self.server.theAccount
-        mailbox_name = "root_subthing"
+        mailbox_name = "root/subthing"
 
         def add_mailbox():
             return acc.addMailbox(mailbox_name)
@@ -948,42 +957,62 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         d1.addCallbacks(self._cbStopClient, self._ebGeneral)
         d2 = self.loopback()
         d = defer.gatherResults([d1, d2])
-        d.addCallback(lambda _: acc.getMailbox(mailbox_name))
 
-        def print_mb(mb):
-            print "MB ----", mb
-            return mb
-        d.addCallback(print_mb)
-        d.addCallback(lambda mb: mb.collection.get_message_by_uid(1))
+        d.addCallback(lambda _: acc.getMailbox(mailbox_name))
+        d.addCallback(lambda mb: mb.fetch(imap4.MessageSet(start=1), True))
         return d.addCallback(self._cbTestFullAppend, infile)
 
-    def _cbTestFullAppend(self, msg, infile):
-        # TODO --- move to deferreds
-        self.assertEqual(
-            set(('\\Recent', '\\SEEN', '\\DELETED')),
-            set(msg.getFlags()))
-
-        self.assertEqual(
-            'Tue, 17 Jun 2003 11:22:16 -0600 (MDT)',
-            msg.getInternalDate())
-
+    def _cbTestFullAppend(self, fetched, infile):
+        self.assertTrue(len(fetched) == 1)
+        self.assertTrue(len(fetched[0]) == 2)
+        uid, msg = fetched[0]
         parsed = self.parser.parse(open(infile))
-        body = parsed.get_payload()
-        headers = dict(parsed.items())
-        self.assertEqual(
-            body,
-            msg.getBodyFile().read())
-        gotheaders = msg.getHeaders(True)
+        expected_body = parsed.get_payload()
+        expected_headers = dict(parsed.items())
 
-        self.assertItemsEqual(
-            headers, gotheaders)
+        def assert_flags(flags):
+            self.assertEqual(
+                set(('\\SEEN', '\\DELETED')),
+                set(flags))
+
+        def assert_date(date):
+            self.assertEqual(
+                'Tue, 17 Jun 2003 11:22:16 -0600 (MDT)',
+                date)
+
+        def assert_body(body):
+            gotbody = body.read()
+            self.assertEqual(expected_body, gotbody)
+
+        def assert_headers(headers):
+            self.assertItemsEqual(expected_headers, headers)
+
+        d = defer.maybeDeferred(msg.getFlags)
+        d.addCallback(assert_flags)
+
+        d.addCallback(lambda _: defer.maybeDeferred(msg.getInternalDate))
+        d.addCallback(assert_date)
+
+        d.addCallback(
+            lambda _: defer.maybeDeferred(
+                msg.getBodyFile, self._soledad))
+        d.addCallback(assert_body)
+
+        d.addCallback(lambda _: defer.maybeDeferred(msg.getHeaders, True))
+        d.addCallback(assert_headers)
+
+        return d
 
     def testPartialAppend(self):
         """
         Test partially appending a message to the mailbox
         """
         infile = util.sibpath(__file__, 'rfc822.message')
-        d0 = lambda: LeapIMAPServer.theAccount.addMailbox('PARTIAL/SUBTHING')
+
+        acc = self.server.theAccount
+
+        def add_mailbox():
+            return acc.addMailbox('PARTIAL/SUBTHING')
 
         def login():
             return self.client.login(TEST_USER, TEST_PASSWD)
@@ -998,34 +1027,46 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
                     (), self.client._IMAP4Client__cbContinueAppend, message
                 )
             )
-        d1 = self.connected.addCallback(strip(login))
-        d1.addCallback(strip(d0))
+        d1 = self.connected.addCallback(strip(add_mailbox))
+        d1.addCallback(strip(login))
         d1.addCallbacks(strip(append), self._ebGeneral)
         d1.addCallbacks(self._cbStopClient, self._ebGeneral)
         d2 = self.loopback()
         d = defer.gatherResults([d1, d2])
+
+        d.addCallback(lambda _: acc.getMailbox("PARTIAL/SUBTHING"))
+        d.addCallback(lambda mb: mb.fetch(imap4.MessageSet(start=1), True))
         return d.addCallback(
             self._cbTestPartialAppend, infile)
 
-    def _cbTestPartialAppend(self, ignored, infile):
-        mb = LeapIMAPServer.theAccount.getMailbox('PARTIAL/SUBTHING')
-        self.assertEqual(1, len(mb.messages))
-        msg = mb.messages.get_msg_by_uid(1)
-        self.assertEqual(
-            set(('\\SEEN', '\\Recent')),
-            set(msg.getFlags())
-        )
+    def _cbTestPartialAppend(self, fetched, infile):
+        self.assertTrue(len(fetched) == 1)
+        self.assertTrue(len(fetched[0]) == 2)
+        uid, msg = fetched[0]
         parsed = self.parser.parse(open(infile))
-        body = parsed.get_payload()
-        self.assertEqual(
-            body,
-            msg.getBodyFile().read())
+        expected_body = parsed.get_payload()
+
+        def assert_flags(flags):
+            self.assertEqual(
+                set((['\\SEEN'])), set(flags))
+
+        def assert_body(body):
+            gotbody = body.read()
+            self.assertEqual(expected_body, gotbody)
+
+        d = defer.maybeDeferred(msg.getFlags)
+        d.addCallback(assert_flags)
+
+        d.addCallback(lambda _: defer.maybeDeferred(msg.getBodyFile))
+        d.addCallback(assert_body)
+        return d
 
     def testCheck(self):
         """
         Test check command
         """
-        LeapIMAPServer.theAccount.addMailbox('root/subthing')
+        def add_mailbox():
+            return self.server.theAccount.addMailbox('root/subthing')
 
         def login():
             return self.client.login(TEST_USER, TEST_PASSWD)
@@ -1036,98 +1077,106 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         def check():
             return self.client.check()
 
-        d = self.connected.addCallback(strip(login))
+        d = self.connected.addCallbacks(
+            strip(add_mailbox), self._ebGeneral)
+        d.addCallbacks(lambda _: login(), self._ebGeneral)
         d.addCallbacks(strip(select), self._ebGeneral)
         d.addCallbacks(strip(check), self._ebGeneral)
         d.addCallbacks(self._cbStopClient, self._ebGeneral)
-        return self.loopback()
-
-        # Okay, that was fun
-
-    def testClose(self):
-        """
-        Test closing the mailbox. We expect to get deleted all messages flagged
-        as such.
-        """
-        acc = self.server.theAccount
-        name = 'mailbox-close'
-
-        d0 = lambda: acc.addMailbox(name)
-
-        def login():
-            return self.client.login(TEST_USER, TEST_PASSWD)
-
-        def select():
-            return self.client.select(name)
-
-        def get_mailbox():
-            self.mailbox = LeapIMAPServer.theAccount.getMailbox(name)
-
-        def add_messages():
-            d1 = self.mailbox.messages.add_msg(
-                'test 1', subject="Message 1",
-                flags=('\\Deleted', 'AnotherFlag'))
-            d2 = self.mailbox.messages.add_msg(
-                'test 2', subject="Message 2",
-                flags=('AnotherFlag',))
-            d3 = self.mailbox.messages.add_msg(
-                'test 3', subject="Message 3",
-                flags=('\\Deleted',))
-            d = defer.gatherResults([d1, d2, d3])
-            return d
-
-        def close():
-            return self.client.close()
-
-        d = self.connected.addCallback(strip(login))
-        d.addCallback(strip(d0))
-        d.addCallbacks(strip(select), self._ebGeneral)
-        d.addCallback(strip(get_mailbox))
-        d.addCallbacks(strip(add_messages), self._ebGeneral)
-        d.addCallbacks(strip(close), self._ebGeneral)
-        d.addCallbacks(self._cbStopClient, self._ebGeneral)
         d2 = self.loopback()
-        return defer.gatherResults([d, d2]).addCallback(self._cbTestClose)
+        return defer.gatherResults([d, d2])
 
-    def _cbTestClose(self, ignored):
-        self.assertEqual(len(self.mailbox.messages), 1)
-        msg = self.mailbox.messages.get_msg_by_uid(2)
-        self.assertTrue(msg is not None)
+        # Okay, that was much fun indeed
 
-        self.assertEqual(
-            dict(msg.hdoc.content)['subject'],
-            'Message 2')
-        self.failUnless(self.mailbox.closed)
+    # skipping close test: we just need expunge for now.
+    #def testClose(self):
+        #"""
+        #Test closing the mailbox. We expect to get deleted all messages flagged
+        #as such.
+        #"""
+        #acc = self.server.theAccount
+        #mailbox_name = 'mailbox-close'
+#
+        #def add_mailbox():
+            #return acc.addMailbox(mailbox_name)
+#
+        #def login():
+            #return self.client.login(TEST_USER, TEST_PASSWD)
+#
+        #def select():
+            #return self.client.select(mailbox_name)
+#
+        #def get_mailbox():
+            #def _save_mbox(mailbox):
+                #self.mailbox = mailbox
+            #d = self.server.theAccount.getMailbox(mailbox_name)
+            #d.addCallback(_save_mbox)
+            #return d
+#
+        #def add_messages():
+            #d1 = self.mailbox.addMessage(
+                #'test 1', flags=('\\Deleted', 'AnotherFlag'))
+            #d2 = self.mailbox.addMessage(
+                #'test 2', flags=('AnotherFlag',))
+            #d3 = self.mailbox.addMessage(
+                #'test 3', flags=('\\Deleted',))
+            #d = defer.gatherResults([d1, d2, d3])
+            #return d
+#
+        #def close():
+            #return self.client.close()
+#
+        #d = self.connected.addCallback(strip(add_mailbox))
+        #d.addCallback(strip(login))
+        #d.addCallbacks(strip(select), self._ebGeneral)
+        #d.addCallback(strip(get_mailbox))
+        #d.addCallbacks(strip(add_messages), self._ebGeneral)
+        #d.addCallbacks(strip(close), self._ebGeneral)
+        #d.addCallbacks(self._cbStopClient, self._ebGeneral)
+        #d2 = self.loopback()
+        #d1 = defer.gatherResults([d, d2])
+        #d1.addCallback(lambda _: self.mailbox.getMessageCount())
+        #d1.addCallback(self._cbTestClose)
+        #return d1
+#
+    #def _cbTestClose(self, count):
+        # TODO is this correct? count should not take into account those
+        # flagged as deleted???
+        #self.assertEqual(count, 1)
+        # TODO --- assert flags are those of the message #2
+        #self.failUnless(self.mailbox.closed)
 
     def testExpunge(self):
         """
         Test expunge command
         """
         acc = self.server.theAccount
-        name = 'mailbox-expunge'
+        mailbox_name = 'mailboxexpunge'
 
-        d0 = lambda: acc.addMailbox(name)
+        def add_mailbox():
+            return acc.addMailbox(mailbox_name)
 
         def login():
             return self.client.login(TEST_USER, TEST_PASSWD)
 
         def select():
-            return self.client.select('mailbox-expunge')
+            return self.client.select(mailbox_name)
+
+        def save_mailbox(mailbox):
+            self.mailbox = mailbox
 
         def get_mailbox():
-            self.mailbox = LeapIMAPServer.theAccount.getMailbox(name)
+            d = acc.getMailbox(mailbox_name)
+            d.addCallback(save_mailbox)
+            return d
 
         def add_messages():
-            d1 = self.mailbox.messages.add_msg(
-                'test 1', subject="Message 1",
-                flags=('\\Deleted', 'AnotherFlag'))
-            d2 = self.mailbox.messages.add_msg(
-                'test 2', subject="Message 2",
-                flags=('AnotherFlag',))
-            d3 = self.mailbox.messages.add_msg(
-                'test 3', subject="Message 3",
-                flags=('\\Deleted',))
-            d = defer.gatherResults([d1, d2, d3])
+            d = self.mailbox.addMessage(
+                'test 1', flags=('\\Deleted', 'AnotherFlag'))
+            d.addCallback(lambda _: self.mailbox.addMessage(
+                'test 2', flags=('AnotherFlag',)))
+            d.addCallback(lambda _: self.mailbox.addMessage(
+                'test 3', flags=('\\Deleted',)))
             return d
 
         def expunge():
@@ -1138,49 +1187,53 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
             self.results = results
 
         self.results = None
-        d1 = self.connected.addCallback(strip(login))
-        d1.addCallback(strip(d0))
-        d1.addCallbacks(strip(select), self._ebGeneral)
+        d1 = self.connected.addCallback(strip(add_mailbox))
+        d1.addCallback(strip(login))
         d1.addCallback(strip(get_mailbox))
         d1.addCallbacks(strip(add_messages), self._ebGeneral)
+        d1.addCallbacks(strip(select), self._ebGeneral)
         d1.addCallbacks(strip(expunge), self._ebGeneral)
         d1.addCallbacks(expunged, self._ebGeneral)
         d1.addCallbacks(self._cbStopClient, self._ebGeneral)
         d2 = self.loopback()
         d = defer.gatherResults([d1, d2])
+        d.addCallback(lambda _: self.mailbox.getMessageCount())
         return d.addCallback(self._cbTestExpunge)
 
-    def _cbTestExpunge(self, ignored):
+    def _cbTestExpunge(self, count):
         # we only left 1 mssage with no deleted flag
-        self.assertEqual(len(self.mailbox.messages), 1)
-        msg = self.mailbox.messages.get_msg_by_uid(2)
-
-        msg = list(self.mailbox.messages)[0]
-        self.assertTrue(msg is not None)
-
-        self.assertEqual(
-            msg.hdoc.content['subject'],
-            'Message 2')
-
+        self.assertEqual(count, 1)
         # the uids of the deleted messages
         self.assertItemsEqual(self.results, [1, 3])
 
 
-class AccountTestCase(IMAP4HelperMixin, unittest.TestCase):
+class AccountTestCase(IMAP4HelperMixin):
     """
     Test the Account.
     """
     def _create_empty_mailbox(self):
-        LeapIMAPServer.theAccount.addMailbox('')
+        return self.server.theAccount.addMailbox('')
 
     def _create_one_mailbox(self):
-        LeapIMAPServer.theAccount.addMailbox('one')
+        return self.server.theAccount.addMailbox('one')
 
     def test_illegalMailboxCreate(self):
-        self.assertRaises(AssertionError, self._create_empty_mailbox)
+        # FIXME --- account.addMailbox needs to raise a failure,
+        # not the direct exception.
+        self.stashed = None
+
+        def stash(result):
+            self.stashed = result
+
+        d = self._create_empty_mailbox()
+        d.addBoth(stash)
+        d.addCallback(lambda _: self.failUnless(isinstance(self.stashed,
+                                                           failure.Failure)))
+        return d
+        #self.assertRaises(AssertionError, self._create_empty_mailbox)
 
 
-class IMAP4ServerSearchTestCase(IMAP4HelperMixin, unittest.TestCase):
+class IMAP4ServerSearchTestCase(IMAP4HelperMixin):
     """
     Tests for the behavior of the search_* functions in L{imap5.IMAP4Server}.
     """

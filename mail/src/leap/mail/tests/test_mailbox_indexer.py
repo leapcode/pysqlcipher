@@ -84,18 +84,6 @@ class MailboxIndexerTestCase(SoledadTestMixin):
         d.addCallback(assert_table_deleted)
         return d
 
-    #def test_rename_table(self):
-        #def assert_table_renamed(tables):
-            #self.assertEqual(
-                #tables, ["leapmail_uid_foomailbox"])
-#
-        #m_uid = self.get_mbox_uid()
-        #d = m_uid.create_table('inbox')
-        #d.addCallback(lambda _: m_uid.rename_table('inbox', 'foomailbox'))
-        #d.addCallback(self.list_mail_tables_cb)
-        #d.addCallback(assert_table_renamed)
-        #return d
-
     def test_insert_doc(self):
         m_uid = self.get_mbox_uid()
 
@@ -168,7 +156,6 @@ class MailboxIndexerTestCase(SoledadTestMixin):
 
     def test_get_doc_id_from_uid(self):
         m_uid = self.get_mbox_uid()
-        #mbox = 'foomailbox'
 
         h1 = fmt_hash(mbox_id, hash_test0)
 
@@ -183,7 +170,6 @@ class MailboxIndexerTestCase(SoledadTestMixin):
 
     def test_count(self):
         m_uid = self.get_mbox_uid()
-        #mbox = 'foomailbox'
 
         h1 = fmt_hash(mbox_id, hash_test0)
         h2 = fmt_hash(mbox_id, hash_test1)
@@ -216,7 +202,6 @@ class MailboxIndexerTestCase(SoledadTestMixin):
 
     def test_get_next_uid(self):
         m_uid = self.get_mbox_uid()
-        #mbox = 'foomailbox'
 
         h1 = fmt_hash(mbox_id, hash_test0)
         h2 = fmt_hash(mbox_id, hash_test1)
@@ -236,4 +221,30 @@ class MailboxIndexerTestCase(SoledadTestMixin):
 
         d.addCallback(lambda _: m_uid.get_next_uid(mbox_id))
         d.addCallback(partial(assert_next_uid, expected=6))
+        return d
+
+    def test_all_uid_iter(self):
+
+        m_uid = self.get_mbox_uid()
+
+        h1 = fmt_hash(mbox_id, hash_test0)
+        h2 = fmt_hash(mbox_id, hash_test1)
+        h3 = fmt_hash(mbox_id, hash_test2)
+        h4 = fmt_hash(mbox_id, hash_test3)
+        h5 = fmt_hash(mbox_id, hash_test4)
+
+        d = m_uid.create_table(mbox_id)
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h1))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h2))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h3))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h4))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h5))
+        d.addCallback(lambda _: m_uid.delete_doc_by_uid(mbox_id, 1))
+        d.addCallback(lambda _: m_uid.delete_doc_by_uid(mbox_id, 4))
+
+        def assert_all_uid(result, expected=[2, 3, 5]):
+            self.assertEquals(result, expected)
+
+        d.addCallback(lambda _: m_uid.all_uid_iter(mbox_id))
+        d.addCallback(partial(assert_all_uid))
         return d

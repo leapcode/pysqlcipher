@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-Leap IMAP4 Server Implementation.
+LEAP IMAP4 Server Implementation.
 """
 from copy import copy
 
@@ -36,9 +36,9 @@ from twisted.mail.imap4 import IllegalClientResponse
 from twisted.mail.imap4 import LiteralString, LiteralFile
 
 
-class LeapIMAPServer(imap4.IMAP4Server):
+class LEAPIMAPServer(imap4.IMAP4Server):
     """
-    An IMAP4 Server with mailboxes backed by soledad
+    An IMAP4 Server with a LEAP Storage Backend.
     """
     def __init__(self, *args, **kwargs):
         # pop extraneous arguments
@@ -51,7 +51,6 @@ class LeapIMAPServer(imap4.IMAP4Server):
         leap_assert(uuid, "need a user in the initialization")
 
         self._userid = userid
-        self.reactor = reactor
 
         # initialize imap server!
         imap4.IMAP4Server.__init__(self, *args, **kwargs)
@@ -146,12 +145,15 @@ class LeapIMAPServer(imap4.IMAP4Server):
         """
         Notify new messages to listeners.
         """
-        self.reactor.callFromThread(self.mbox.notify_new)
+        reactor.callFromThread(self.mbox.notify_new)
 
     def _cbSelectWork(self, mbox, cmdName, tag):
         """
-        Callback for selectWork, patched to avoid conformance errors due to
-        incomplete UIDVALIDITY line.
+        Callback for selectWork
+
+        * patched to avoid conformance errors due to incomplete UIDVALIDITY
+        line.
+        * patched to accept deferreds for messagecount and recent count
         """
         if mbox is None:
             self.sendNegativeResponse(tag, 'No such mailbox')
@@ -161,9 +163,9 @@ class LeapIMAPServer(imap4.IMAP4Server):
             return
 
         flags = mbox.getFlags()
+        self.sendUntaggedResponse('FLAGS (%s)' % ' '.join(flags))
         self.sendUntaggedResponse(str(mbox.getMessageCount()) + ' EXISTS')
         self.sendUntaggedResponse(str(mbox.getRecentCount()) + ' RECENT')
-        self.sendUntaggedResponse('FLAGS (%s)' % ' '.join(flags))
 
         # Patched -------------------------------------------------------
         # imaptest was complaining about the incomplete line, we're adding
@@ -353,12 +355,9 @@ class LeapIMAPServer(imap4.IMAP4Server):
         self.sendPositiveResponse(tag, '%s completed' % (cmdName,))
     # -------------------- end isSubscribed patch -----------
 
-    # TODO ----
-    # subscribe method had also to be changed to accomodate
-    # deferred
-    # Revert to regular methods as soon as we implement non-deferred memory
-    # cache.
+    # TODO subscribe method had also to be changed to accomodate deferred
     def do_SUBSCRIBE(self, tag, name):
+        print "DOING SUBSCRIBE"
         name = self._parseMbox(name)
 
         def _subscribeCb(_):
@@ -421,7 +420,8 @@ class LeapIMAPServer(imap4.IMAP4Server):
 
         def _renameEb(failure):
             m = failure.value
-            print "rename failure!"
+            print "SERVER rename failure!"
+            print m
             if failure.check(TypeError):
                 self.sendBadResponse(tag, 'Invalid command syntax')
             elif failure.check(imap4.MailboxException):
@@ -479,7 +479,7 @@ class LeapIMAPServer(imap4.IMAP4Server):
             if failure.check(imap4.MailboxException):
                 self.sendNegativeResponse(tag, str(m))
             else:
-                print "other error"
+                print "SERVER: other error"
                 log.err()
                 self.sendBadResponse(
                     tag,

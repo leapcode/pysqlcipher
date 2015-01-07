@@ -63,7 +63,7 @@ class IMAPAccount(object):
     selected = None
     closed = False
 
-    def __init__(self, user_id, store):
+    def __init__(self, user_id, store, d=None):
         """
         Keeps track of the mailboxes and subscriptions handled by this account.
 
@@ -72,21 +72,31 @@ class IMAPAccount(object):
 
         :param store: a Soledad instance.
         :type store: Soledad
+
+        :param d: a deferred that will be fired with this IMAPAccount instance
+                  when the account is ready to be used.
+        :type d: defer.Deferred
         """
         leap_assert(store, "Need a store instance to initialize")
         leap_assert_type(store, Soledad)
 
         # TODO assert too that the name matches the user/uuid with which
-        # soledad has been initialized.
+        # soledad has been initialized. Although afaik soledad doesn't know
+        # about user_id, only the client backend.
+
         self.user_id = user_id
-        self.account = Account(store)
+        self.account = Account(store, ready_cb=lambda: d.callback(self))
 
     def _return_mailbox_from_collection(self, collection, readwrite=1):
         if collection is None:
             return None
-        return IMAPMailbox(collection, rw=readwrite)
+        mbox = IMAPMailbox(collection, rw=readwrite)
+        return mbox
 
-    # XXX Where's this used from? -- self.delete...
+    def callWhenReady(self, cb, *args, **kw):
+        d = self.account.callWhenReady(cb, *args, **kw)
+        return d
+
     def getMailbox(self, name):
         """
         Return a Mailbox with that name, without selecting it.
@@ -102,11 +112,12 @@ class IMAPAccount(object):
         def check_it_exists(mailboxes):
             if name not in mailboxes:
                 raise imap4.MailboxException("No such mailbox: %r" % name)
+            return True
 
         d = self.account.list_all_mailbox_names()
         d.addCallback(check_it_exists)
-        d.addCallback(lambda _: self.account.get_collection_by_mailbox, name)
-        d.addCallbacK(self._return_mailbox_from_collection)
+        d.addCallback(lambda _: self.account.get_collection_by_mailbox(name))
+        d.addCallback(self._return_mailbox_from_collection)
         return d
 
     #
@@ -130,12 +141,9 @@ class IMAPAccount(object):
         """
         name = normalize_mailbox(name)
 
+        # FIXME --- return failure instead of AssertionError
+        # See AccountTestCase...
         leap_assert(name, "Need a mailbox name to create a mailbox")
-
-        def check_it_does_not_exist(mailboxes):
-            if name in mailboxes:
-                raise imap4.MailboxCollision(repr(name))
-
         if creation_ts is None:
             # by default, we pass an int value
             # taken from the current time
@@ -143,14 +151,20 @@ class IMAPAccount(object):
             # mailbox-uidvalidity.
             creation_ts = int(time.time() * 10E2)
 
+        def check_it_does_not_exist(mailboxes):
+            if name in mailboxes:
+                raise imap4.MailboxCollision, repr(name)
+            return mailboxes
+
         def set_mbox_creation_ts(collection):
-            d = collection.set_mbox_attr("created")
+            d = collection.set_mbox_attr("created", creation_ts)
             d.addCallback(lambda _: collection)
             return d
 
         d = self.account.list_all_mailbox_names()
         d.addCallback(check_it_does_not_exist)
-        d.addCallback(lambda _: self.account.get_collection_by_mailbox, name)
+        d.addCallback(lambda _: self.account.add_mailbox(name))
+        d.addCallback(lambda _: self.account.get_collection_by_mailbox(name))
         d.addCallback(set_mbox_creation_ts)
         d.addCallback(self._return_mailbox_from_collection)
         return d
@@ -172,39 +186,40 @@ class IMAPAccount(object):
 
         :raise MailboxException: Raised if this mailbox cannot be added.
         """
-        # TODO raise MailboxException
         paths = filter(None, normalize_mailbox(pathspec).split('/'))
-
         subs = []
         sep = '/'
 
+        def pass_on_collision(failure):
+            failure.trap(imap4.MailboxCollision)
+            return True
+
         for accum in range(1, len(paths)):
-            try:
-                partial_path = sep.join(paths[:accum])
-                d = self.addMailbox(partial_path)
-                subs.append(d)
-            # XXX should this be handled by the deferred?
-            except imap4.MailboxCollision:
-                pass
-        try:
-            df = self.addMailbox(sep.join(paths))
-        except imap4.MailboxCollision:
+            partial_path = sep.join(paths[:accum])
+            d = self.addMailbox(partial_path)
+            d.addErrback(pass_on_collision)
+            subs.append(d)
+
+        def handle_collision(failure):
+            failure.trap(imap4.MailboxCollision)
             if not pathspec.endswith('/'):
-                df = defer.succeed(False)
+                return defer.succeed(False)
             else:
-                df = defer.succeed(True)
-        finally:
-            subs.append(df)
+                return defer.succeed(True)
+
+        df = self.addMailbox(sep.join(paths))
+        df.addErrback(handle_collision)
+        subs.append(df)
 
         def all_good(result):
             return all(result)
 
         if subs:
-            d1 = defer.gatherResults(subs, consumeErrors=True)
+            d1 = defer.gatherResults(subs)
             d1.addCallback(all_good)
+            return d1
         else:
-            d1 = defer.succeed(False)
-        return d1
+            return defer.succeed(False)
 
     def select(self, name, readwrite=1):
         """
@@ -216,7 +231,7 @@ class IMAPAccount(object):
         :param readwrite: 1 for readwrite permissions.
         :type readwrite: int
 
-        :rtype: SoledadMailbox
+        :rtype: IMAPMailbox
         """
         name = normalize_mailbox(name)
 
@@ -245,9 +260,6 @@ class IMAPAccount(object):
         """
         Deletes a mailbox.
 
-        Right now it does not purge the messages, but just removes the mailbox
-        name from the mailboxes list!!!
-
         :param name: the mailbox to be deleted
         :type name: str
 
@@ -258,10 +270,10 @@ class IMAPAccount(object):
         :rtype: Deferred
         """
         name = normalize_mailbox(name)
-        _mboxes = []
+        _mboxes = None
 
         def check_it_exists(mailboxes):
-            # FIXME works? -- pass variable ref to outer scope
+            global _mboxes
             _mboxes = mailboxes
             if name not in mailboxes:
                 err = imap4.MailboxException("No such mailbox: %r" % name)
@@ -274,6 +286,7 @@ class IMAPAccount(object):
             return mbox.destroy()
 
         def check_can_be_deleted(mbox):
+            global _mboxes
             # See if this box is flagged \Noselect
             mbox_flags = mbox.getFlags()
             if MessageFlags.NOSELECT_FLAG in mbox_flags:
@@ -317,29 +330,27 @@ class IMAPAccount(object):
         oldname = normalize_mailbox(oldname)
         newname = normalize_mailbox(newname)
 
-        # FIXME check that scope works (test)
-        _mboxes = []
+        def rename_inferiors(inferiors_result):
+            inferiors, mailboxes = inferiors_result
+            rename_deferreds = []
+            inferiors = [
+                (o, o.replace(oldname, newname, 1)) for o in inferiors]
 
-        if oldname not in self.mailboxes:
-            raise imap4.NoSuchMailbox(repr(oldname))
+            for (old, new) in inferiors:
+                if new in mailboxes:
+                    raise imap4.MailboxCollision(repr(new))
 
-        inferiors = self._inferiorNames(oldname)
-        inferiors = [(o, o.replace(oldname, newname, 1)) for o in inferiors]
+            for (old, new) in inferiors:
+                d = self.account.rename_mailbox(old, new)
+                rename_deferreds.append(d)
 
-        for (old, new) in inferiors:
-            if new in _mboxes:
-                raise imap4.MailboxCollision(repr(new))
+            d1 = defer.gatherResults(rename_deferreds, consumeErrors=True)
+            return d1
 
-        rename_deferreds = []
+        d = self._inferiorNames(oldname)
+        d.addCallback(rename_inferiors)
+        return d
 
-        for (old, new) in inferiors:
-            d = self.account.rename_mailbox(old, new)
-            rename_deferreds.append(d)
-
-        d1 = defer.gatherResults(rename_deferreds, consumeErrors=True)
-        return d1
-
-    # FIXME use deferreds (list_all_mailbox_names, etc)
     def _inferiorNames(self, name):
         """
         Return hierarchically inferior mailboxes.
@@ -348,13 +359,17 @@ class IMAPAccount(object):
         :rtype: list
         """
         # XXX use wildcard query instead
-        inferiors = []
-        for infname in self.mailboxes:
-            if infname.startswith(name):
-                inferiors.append(infname)
-        return inferiors
+        def filter_inferiors(mailboxes):
+            inferiors = []
+            for infname in mailboxes:
+                if infname.startswith(name):
+                    inferiors.append(infname)
+            return inferiors
 
-    # TODO use mail.Account.list_mailboxes
+        d = self.account.list_all_mailbox_names()
+        d.addCallback(filter_inferiors)
+        return d
+
     def listMailboxes(self, ref, wildcard):
         """
         List the mailboxes.
@@ -371,11 +386,21 @@ class IMAPAccount(object):
         :param wildcard: mailbox name with possible wildcards
         :type wildcard: str
         """
-        # XXX use wildcard in index query
-        # TODO get deferreds
         wildcard = imap4.wildcardToRegexp(wildcard, '/')
-        ref = self._inferiorNames(normalize_mailbox(ref))
-        return [(i, self.getMailbox(i)) for i in ref if wildcard.match(i)]
+
+        def get_list(mboxes, mboxes_names):
+            return zip(mboxes_names, mboxes)
+
+        def filter_inferiors(ref):
+            mboxes = [mbox for mbox in ref if wildcard.match(mbox)]
+            mbox_d = defer.gatherResults([self.getMailbox(m) for m in mboxes])
+
+            mbox_d.addCallback(get_list, mboxes)
+            return mbox_d
+
+        d = self._inferiorNames(normalize_mailbox(ref))
+        d.addCallback(filter_inferiors)
+        return d
 
     #
     # The rest of the methods are specific for leap.mail.imap.account.Account
@@ -393,7 +418,7 @@ class IMAPAccount(object):
         name = normalize_mailbox(name)
 
         def get_subscribed(mbox):
-            return mbox.get_mbox_attr("subscribed")
+            return mbox.collection.get_mbox_attr("subscribed")
 
         d = self.getMailbox(name)
         d.addCallback(get_subscribed)
@@ -410,7 +435,7 @@ class IMAPAccount(object):
         name = normalize_mailbox(name)
 
         def set_subscribed(mbox):
-            return mbox.set_mbox_attr("subscribed", True)
+            return mbox.collection.set_mbox_attr("subscribed", True)
 
         d = self.getMailbox(name)
         d.addCallback(set_subscribed)
@@ -427,16 +452,19 @@ class IMAPAccount(object):
         name = normalize_mailbox(name)
 
         def set_unsubscribed(mbox):
-            return mbox.set_mbox_attr("subscribed", False)
+            return mbox.collection.set_mbox_attr("subscribed", False)
 
         d = self.getMailbox(name)
         d.addCallback(set_unsubscribed)
         return d
 
-    # TODO -- get__all_mboxes, return tuple
-    # with ... name? and subscribed bool...
     def getSubscriptions(self):
-        raise NotImplementedError()
+        def get_subscribed(mailboxes):
+            return [x.mbox for x in mailboxes if x.subscribed]
+
+        d = self.account.get_all_mailboxes()
+        d.addCallback(get_subscribed)
+        return d
 
     #
     # INamespacePresenter

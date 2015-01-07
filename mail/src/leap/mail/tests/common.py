@@ -21,6 +21,9 @@ import os
 import shutil
 import tempfile
 
+from twisted.internet import defer
+from twisted.trial import unittest
+
 from leap.common.testing.basetest import BaseLeapTest
 from leap.soledad.client import Soledad
 
@@ -60,7 +63,7 @@ def _initialize_soledad(email, gnupg_home, tempdir):
     return soledad
 
 
-class SoledadTestMixin(BaseLeapTest):
+class SoledadTestMixin(unittest.TestCase, BaseLeapTest):
     """
     It is **VERY** important that this base is added *AFTER* unittest.TestCase
     """
@@ -68,15 +71,7 @@ class SoledadTestMixin(BaseLeapTest):
     def setUp(self):
         self.results = []
 
-        self.old_path = os.environ['PATH']
-        self.old_home = os.environ['HOME']
-        self.tempdir = tempfile.mkdtemp(prefix="leap_tests-")
-        self.home = self.tempdir
-        bin_tdir = os.path.join(
-            self.tempdir,
-            'bin')
-        os.environ["PATH"] = bin_tdir
-        os.environ["HOME"] = self.tempdir
+        self.setUpEnv()
 
         # Soledad: config info
         self.gnupg_home = "%s/gnupg" % self.tempdir
@@ -87,6 +82,8 @@ class SoledadTestMixin(BaseLeapTest):
             self.email,
             self.gnupg_home,
             self.tempdir)
+
+        return defer.succeed(True)
 
     def tearDown(self):
         """

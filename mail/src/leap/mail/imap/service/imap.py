@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # imap.py
-# Copyright (C) 2013 LEAP
+# Copyright (C) 2013-2015 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,15 +15,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-Imap service initialization
+IMAP service initialization
 """
 import logging
 import os
-import time
 
-from twisted.internet import defer, threads
-from twisted.internet.protocol import ServerFactory
+from twisted.internet import reactor
 from twisted.internet.error import CannotListenError
+from twisted.internet.protocol import ServerFactory
 from twisted.mail import imap4
 from twisted.python import log
 
@@ -32,41 +31,13 @@ logger = logging.getLogger(__name__)
 from leap.common import events as leap_events
 from leap.common.check import leap_assert, leap_assert_type, leap_check
 from leap.keymanager import KeyManager
-from leap.mail.imap.account import SoledadBackedAccount
+from leap.mail.imap.account import IMAPAccount
 from leap.mail.imap.fetch import LeapIncomingMail
-from leap.mail.imap.memorystore import MemoryStore
-from leap.mail.imap.server import LeapIMAPServer
-from leap.mail.imap.soledadstore import SoledadStore
+from leap.mail.imap.server import LEAPIMAPServer
 from leap.soledad.client import Soledad
-
-# The default port in which imap service will run
-IMAP_PORT = 1984
-
-# The period between succesive checks of the incoming mail
-# queue (in seconds)
-INCOMING_CHECK_PERIOD = 60
 
 from leap.common.events.events_pb2 import IMAP_SERVICE_STARTED
 from leap.common.events.events_pb2 import IMAP_SERVICE_FAILED_TO_START
-
-######################################################
-# Temporary workaround for RecursionLimit when using
-# qt4reactor. Do remove when we move to poll or select
-# reactor, which do not show those problems. See #4974
-import resource
-import sys
-
-try:
-    sys.setrecursionlimit(10**7)
-except Exception:
-    print "Error setting recursion limit"
-try:
-    # Increase max stack size from 8MB to 256MB
-    resource.setrlimit(resource.RLIMIT_STACK, (2**28, -1))
-except Exception:
-    print "Error setting stack size"
-
-######################################################
 
 DO_MANHOLE = os.environ.get("LEAP_MAIL_MANHOLE", None)
 if DO_MANHOLE:
@@ -80,6 +51,13 @@ if DO_PROFILE:
     PROFILE_DAT = "/tmp/leap_mail_profile.pstats"
     pr = cProfile.Profile()
     pr.enable()
+
+# The default port in which imap service will run
+IMAP_PORT = 1984
+
+# The period between succesive checks of the incoming mail
+# queue (in seconds)
+INCOMING_CHECK_PERIOD = 60
 
 
 class IMAPAuthRealm(object):
@@ -114,12 +92,8 @@ class LeapIMAPFactory(ServerFactory):
         self._uuid = uuid
         self._userid = userid
         self._soledad = soledad
-        self._memstore = MemoryStore(
-            permanent_store=SoledadStore(soledad))
 
-        theAccount = SoledadBackedAccount(
-            uuid, soledad=soledad,
-            memstore=self._memstore)
+        theAccount = IMAPAccount(uuid, soledad)
         self.theAccount = theAccount
 
         # XXX how to pass the store along?
@@ -131,7 +105,8 @@ class LeapIMAPFactory(ServerFactory):
         :param addr: remote ip address
         :type addr:  str
         """
-        imapProtocol = LeapIMAPServer(
+        # XXX addr not used??!
+        imapProtocol = LEAPIMAPServer(
             uuid=self._uuid,
             userid=self._userid,
             soledad=self._soledad)
@@ -139,41 +114,18 @@ class LeapIMAPFactory(ServerFactory):
         imapProtocol.factory = self
         return imapProtocol
 
-    def doStop(self, cv=None):
+    def doStop(self):
         """
         Stops imap service (fetcher, factory and port).
-
-        :param cv: A condition variable to which we can signal when imap
-                   indeed stops.
-        :type cv: threading.Condition
-        :return: a Deferred that stops and flushes the in memory store data to
-                 disk in another thread.
-        :rtype: Deferred
         """
+        # TODO should wait for all the pending deferreds,
+        # the twisted way!
         if DO_PROFILE:
             log.msg("Stopping PROFILING")
             pr.disable()
             pr.dump_stats(PROFILE_DAT)
 
-        ServerFactory.doStop(self)
-
-        if cv is not None:
-            def _stop_imap_cb():
-                logger.debug('Stopping in memory store.')
-                self._memstore.stop_and_flush()
-                while not self._memstore.producer.is_queue_empty():
-                    logger.debug('Waiting for queue to be empty.')
-                    # TODO use a gatherResults over the new/dirty
-                    # deferred list,
-                    # as in memorystore's expunge() method.
-                    time.sleep(1)
-                # notify that service has stopped
-                logger.debug('Notifying that service has stopped.')
-                cv.acquire()
-                cv.notify()
-                cv.release()
-
-            return threads.deferToThread(_stop_imap_cb)
+        return ServerFactory.doStop(self)
 
 
 def run_service(*args, **kwargs):
@@ -185,11 +137,6 @@ def run_service(*args, **kwargs):
               the reactor when starts listening, and the factory for
               the protocol.
     """
-    from twisted.internet import reactor
-    # it looks like qtreactor does not honor this,
-    # but other reactors should.
-    reactor.suggestThreadPoolSize(20)
-
     leap_assert(len(args) == 2)
     soledad, keymanager = args
     leap_assert_type(soledad, Soledad)
@@ -201,13 +148,14 @@ def run_service(*args, **kwargs):
     leap_check(userid is not None, "need an user id")
     offline = kwargs.get('offline', False)
 
-    uuid = soledad._get_uuid()
+    uuid = soledad.uuid
     factory = LeapIMAPFactory(uuid, userid, soledad)
 
     try:
         tport = reactor.listenTCP(port, factory,
                                   interface="localhost")
         if not offline:
+            # FIXME --- update after meskio's work
             fetcher = LeapIncomingMail(
                 keymanager,
                 soledad,
@@ -236,6 +184,8 @@ def run_service(*args, **kwargs):
                               interface="127.0.0.1")
         logger.debug("IMAP4 Server is RUNNING in port  %s" % (port,))
         leap_events.signal(IMAP_SERVICE_STARTED, str(port))
+
+        # FIXME -- change service signature
         return fetcher, tport, factory
 
     # not ok, signal error.
