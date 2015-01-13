@@ -22,13 +22,13 @@ INBOX_NAME = "INBOX"
 
 # Regular expressions for the identifiers to be used in the Message Data Layer.
 
-METAMSGID = "M-{mbox}-{chash}"
-METAMSGID_RE = "M\-{mbox}\-[0-9a-fA-F]+"
+METAMSGID = "M-{mbox_uuid}-{chash}"
+METAMSGID_RE = "M\-{mbox_uuid}\-[0-9a-fA-F]+"
 METAMSGID_CHASH_RE = "M\-\w+\-([0-9a-fA-F]+)"
 METAMSGID_MBOX_RE = "M\-(\w+)\-[0-9a-fA-F]+"
 
-FDOCID = "F-{mbox}-{chash}"
-FDOCID_RE = "F\-{mbox}\-[0-9a-fA-F]+"
+FDOCID = "F-{mbox_uuid}-{chash}"
+FDOCID_RE = "F\-{mbox_uuid}\-[0-9a-fA-F]+"
 FDOCID_CHASH_RE = "F\-\w+\-([0-9a-fA-F]+)"
 
 HDOCID = "H-{chash}"

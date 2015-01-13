@@ -338,7 +338,7 @@ class FlagsDocWrapper(SoledadDocumentWrapper):
         type_ = "flags"
         chash = ""
 
-        mbox = "inbox"
+        mbox_uuid = ""
         seen = False
         deleted = False
         recent = False
@@ -350,11 +350,12 @@ class FlagsDocWrapper(SoledadDocumentWrapper):
         class __meta__(object):
             index = "mbox"
 
-    def set_mbox(self, mbox):
+    def set_mbox_uuid(self, mbox_uuid):
         # XXX raise error if already created, should use copy instead
-        new_id = constants.FDOCID.format(mbox=mbox, chash=self.chash)
+        mbox_uuid = mbox_uuid.replace('-', '_')
+        new_id = constants.FDOCID.format(mbox_uuid=mbox_uuid, chash=self.chash)
         self._future_doc_id = new_id
-        self.mbox = mbox
+        self.mbox_uuid = mbox_uuid
 
 
 class HeaderDocWrapper(SoledadDocumentWrapper):
@@ -401,11 +402,12 @@ class MetaMsgDocWrapper(SoledadDocumentWrapper):
         hdoc = ""
         cdocs = []
 
-    def set_mbox(self, mbox):
+    def set_mbox_uuid(self, mbox_uuid):
         # XXX raise error if already created, should use copy instead
+        mbox_uuid = mbox_uuid.replace('-', '_')
         chash = re.findall(constants.FDOCID_CHASH_RE, self.fdoc)[0]
-        new_id = constants.METAMSGID.format(mbox=mbox, chash=chash)
-        new_fdoc_id = constants.FDOCID.format(mbox=mbox, chash=chash)
+        new_id = constants.METAMSGID.format(mbox_uuid=mbox_uuid, chash=chash)
+        new_fdoc_id = constants.FDOCID.format(mbox_uuid=mbox_uuid, chash=chash)
         self._future_doc_id = new_id
         self.fdoc = new_fdoc_id
 
@@ -518,14 +520,15 @@ class MessageWrapper(object):
         # 4. return new wrapper (new meta too!)
         raise NotImplementedError()
 
-    def set_mbox(self, mbox):
+    def set_mbox_uuid(self, mbox_uuid):
         """
         Set the mailbox for this wrapper.
         This method should only be used before the Documents for the
         MessageWrapper have been created, will raise otherwise.
         """
-        self.mdoc.set_mbox(mbox)
-        self.fdoc.set_mbox(mbox)
+        mbox_uuid = mbox.uuid.replace('-', '_')
+        self.mdoc.set_mbox_uuid(mbox_uuid)
+        self.fdoc.set_mbox_uuid(mbox_uuid)
 
     def set_flags(self, flags):
         # TODO serialize the get + update
@@ -574,6 +577,7 @@ class MailboxWrapper(SoledadDocumentWrapper):
     class model(models.SerializableModel):
         type_ = "mbox"
         mbox = INBOX_NAME
+        uuid = None
         flags = []
         recent = []
         created = 1
@@ -889,7 +893,10 @@ def _parse_msg(raw):
 
 def _build_meta_doc(chash, cdocs_phashes):
     _mdoc = MetaMsgDocWrapper()
-    _mdoc.fdoc = constants.FDOCID.format(mbox=INBOX_NAME, chash=chash)
+    # FIXME passing the inbox name because we don't have the uuid at this
+    # point.
+
+    _mdoc.fdoc = constants.FDOCID.format(mbox_uuid=INBOX_NAME, chash=chash)
     _mdoc.hdoc = constants.HDOCID.format(chash=chash)
     _mdoc.cdocs = [constants.CDOCID.format(phash=p) for p in cdocs_phashes]
     return _mdoc.serialize()

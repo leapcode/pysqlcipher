@@ -17,9 +17,8 @@
 """
 Tests for the mailbox_indexer module.
 """
+import uuid
 from functools import partial
-
-from twisted.trial import unittest
 
 from leap.mail import mailbox_indexer as mi
 from leap.mail.tests.common import SoledadTestMixin
@@ -31,11 +30,13 @@ hash_test3 = 'fd61a03af4f77d870fc21e05e7e80678095c92d808cfb3b5c279ee04c74aca13'
 hash_test4 = 'a4e624d686e03ed2767c0abd85c14426b0b1157d2ce81d27bb4fe4f6f01d688a'
 
 
-def fmt_hash(mailbox, hash):
-    return "M-" + mailbox + "-" + hash
+def fmt_hash(mailbox_uuid, hash):
+    return "M-" + mailbox_uuid.replace('-', '_') + "-" + hash
+
+mbox_id = str(uuid.uuid4())
 
 
-class MailboxIndexerTestCase(unittest.TestCase, SoledadTestMixin):
+class MailboxIndexerTestCase(SoledadTestMixin):
     """
     Tests for the MailboxUID class.
     """
@@ -57,17 +58,17 @@ class MailboxIndexerTestCase(unittest.TestCase, SoledadTestMixin):
 
     def select_uid_rows(self, mailbox):
         sql = "SELECT * FROM %s%s;" % (
-            mi.MailboxIndexer.table_preffix, mailbox)
+            mi.MailboxIndexer.table_preffix, mailbox.replace('-', '_'))
         d = self._soledad.raw_sqlcipher_query(sql)
         return d
 
     def test_create_table(self):
         def assert_table_created(tables):
             self.assertEqual(
-                tables, ["leapmail_uid_inbox"])
+                tables, ["leapmail_uid_" + mbox_id.replace('-', '_')])
 
         m_uid = self.get_mbox_uid()
-        d = m_uid.create_table('inbox')
+        d = m_uid.create_table(mbox_id)
         d.addCallback(self.list_mail_tables_cb)
         d.addCallback(assert_table_created)
         return d
@@ -77,165 +78,162 @@ class MailboxIndexerTestCase(unittest.TestCase, SoledadTestMixin):
             self.assertEqual(tables, [])
 
         m_uid = self.get_mbox_uid()
-        d = m_uid.create_table('inbox')
-        d.addCallback(lambda _: m_uid.delete_table('inbox'))
+        d = m_uid.create_table(mbox_id)
+        d.addCallback(lambda _: m_uid.delete_table(mbox_id))
         d.addCallback(self.list_mail_tables_cb)
         d.addCallback(assert_table_deleted)
         return d
 
-    def test_rename_table(self):
-        def assert_table_renamed(tables):
-            self.assertEqual(
-                tables, ["leapmail_uid_foomailbox"])
-
-        m_uid = self.get_mbox_uid()
-        d = m_uid.create_table('inbox')
-        d.addCallback(lambda _: m_uid.rename_table('inbox', 'foomailbox'))
-        d.addCallback(self.list_mail_tables_cb)
-        d.addCallback(assert_table_renamed)
-        return d
+    #def test_rename_table(self):
+        #def assert_table_renamed(tables):
+            #self.assertEqual(
+                #tables, ["leapmail_uid_foomailbox"])
+#
+        #m_uid = self.get_mbox_uid()
+        #d = m_uid.create_table('inbox')
+        #d.addCallback(lambda _: m_uid.rename_table('inbox', 'foomailbox'))
+        #d.addCallback(self.list_mail_tables_cb)
+        #d.addCallback(assert_table_renamed)
+        #return d
 
     def test_insert_doc(self):
         m_uid = self.get_mbox_uid()
-        mbox = 'foomailbox'
 
-        h1 = fmt_hash(mbox, hash_test0)
-        h2 = fmt_hash(mbox, hash_test1)
-        h3 = fmt_hash(mbox, hash_test2)
-        h4 = fmt_hash(mbox, hash_test3)
-        h5 = fmt_hash(mbox, hash_test4)
+        h1 = fmt_hash(mbox_id, hash_test0)
+        h2 = fmt_hash(mbox_id, hash_test1)
+        h3 = fmt_hash(mbox_id, hash_test2)
+        h4 = fmt_hash(mbox_id, hash_test3)
+        h5 = fmt_hash(mbox_id, hash_test4)
 
         def assert_uid_rows(rows):
             expected = [(1, h1), (2, h2), (3, h3), (4, h4), (5, h5)]
             self.assertEquals(rows, expected)
 
-        d = m_uid.create_table(mbox)
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h1))
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h2))
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h3))
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h4))
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h5))
-        d.addCallback(lambda _: self.select_uid_rows(mbox))
+        d = m_uid.create_table(mbox_id)
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h1))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h2))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h3))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h4))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h5))
+        d.addCallback(lambda _: self.select_uid_rows(mbox_id))
         d.addCallback(assert_uid_rows)
         return d
 
     def test_insert_doc_return(self):
         m_uid = self.get_mbox_uid()
-        mbox = 'foomailbox'
 
         def assert_rowid(rowid, expected=None):
             self.assertEqual(rowid, expected)
 
-        h1 = fmt_hash(mbox, hash_test0)
-        h2 = fmt_hash(mbox, hash_test1)
-        h3 = fmt_hash(mbox, hash_test2)
+        h1 = fmt_hash(mbox_id, hash_test0)
+        h2 = fmt_hash(mbox_id, hash_test1)
+        h3 = fmt_hash(mbox_id, hash_test2)
 
-        d = m_uid.create_table(mbox)
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h1))
+        d = m_uid.create_table(mbox_id)
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h1))
         d.addCallback(partial(assert_rowid, expected=1))
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h2))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h2))
         d.addCallback(partial(assert_rowid, expected=2))
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h3))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h3))
         d.addCallback(partial(assert_rowid, expected=3))
         return d
 
     def test_delete_doc(self):
         m_uid = self.get_mbox_uid()
-        mbox = 'foomailbox'
 
-        h1 = fmt_hash(mbox, hash_test0)
-        h2 = fmt_hash(mbox, hash_test1)
-        h3 = fmt_hash(mbox, hash_test2)
-        h4 = fmt_hash(mbox, hash_test3)
-        h5 = fmt_hash(mbox, hash_test4)
+        h1 = fmt_hash(mbox_id, hash_test0)
+        h2 = fmt_hash(mbox_id, hash_test1)
+        h3 = fmt_hash(mbox_id, hash_test2)
+        h4 = fmt_hash(mbox_id, hash_test3)
+        h5 = fmt_hash(mbox_id, hash_test4)
 
         def assert_uid_rows(rows):
             expected = [(4, h4), (5, h5)]
             self.assertEquals(rows, expected)
 
-        d = m_uid.create_table(mbox)
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h1))
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h2))
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h3))
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h4))
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h5))
+        d = m_uid.create_table(mbox_id)
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h1))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h2))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h3))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h4))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h5))
 
-        d.addCallbacks(lambda _: m_uid.delete_doc_by_uid(mbox, 1))
-        d.addCallbacks(lambda _: m_uid.delete_doc_by_uid(mbox, 2))
-        d.addCallbacks(lambda _: m_uid.delete_doc_by_hash(mbox, h3))
+        d.addCallbacks(lambda _: m_uid.delete_doc_by_uid(mbox_id, 1))
+        d.addCallbacks(lambda _: m_uid.delete_doc_by_uid(mbox_id, 2))
+        d.addCallbacks(lambda _: m_uid.delete_doc_by_hash(mbox_id, h3))
 
-        d.addCallback(lambda _: self.select_uid_rows(mbox))
+        d.addCallback(lambda _: self.select_uid_rows(mbox_id))
         d.addCallback(assert_uid_rows)
         return d
 
     def test_get_doc_id_from_uid(self):
         m_uid = self.get_mbox_uid()
-        mbox = 'foomailbox'
+        #mbox = 'foomailbox'
 
-        h1 = fmt_hash(mbox, hash_test0)
+        h1 = fmt_hash(mbox_id, hash_test0)
 
         def assert_doc_hash(res):
             self.assertEqual(res, h1)
 
-        d = m_uid.create_table(mbox)
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h1))
-        d.addCallback(lambda _: m_uid.get_doc_id_from_uid(mbox, 1))
+        d = m_uid.create_table(mbox_id)
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h1))
+        d.addCallback(lambda _: m_uid.get_doc_id_from_uid(mbox_id, 1))
         d.addCallback(assert_doc_hash)
         return d
 
     def test_count(self):
         m_uid = self.get_mbox_uid()
-        mbox = 'foomailbox'
+        #mbox = 'foomailbox'
 
-        h1 = fmt_hash(mbox, hash_test0)
-        h2 = fmt_hash(mbox, hash_test1)
-        h3 = fmt_hash(mbox, hash_test2)
-        h4 = fmt_hash(mbox, hash_test3)
-        h5 = fmt_hash(mbox, hash_test4)
+        h1 = fmt_hash(mbox_id, hash_test0)
+        h2 = fmt_hash(mbox_id, hash_test1)
+        h3 = fmt_hash(mbox_id, hash_test2)
+        h4 = fmt_hash(mbox_id, hash_test3)
+        h5 = fmt_hash(mbox_id, hash_test4)
 
-        d = m_uid.create_table(mbox)
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h1))
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h2))
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h3))
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h4))
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h5))
+        d = m_uid.create_table(mbox_id)
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h1))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h2))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h3))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h4))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h5))
 
         def assert_count_after_inserts(count):
             self.assertEquals(count, 5)
 
-        d.addCallback(lambda _: m_uid.count(mbox))
+        d.addCallback(lambda _: m_uid.count(mbox_id))
         d.addCallback(assert_count_after_inserts)
 
-        d.addCallbacks(lambda _: m_uid.delete_doc_by_uid(mbox, 1))
-        d.addCallbacks(lambda _: m_uid.delete_doc_by_uid(mbox, 2))
+        d.addCallbacks(lambda _: m_uid.delete_doc_by_uid(mbox_id, 1))
+        d.addCallbacks(lambda _: m_uid.delete_doc_by_uid(mbox_id, 2))
 
         def assert_count_after_deletions(count):
             self.assertEquals(count, 3)
 
-        d.addCallback(lambda _: m_uid.count(mbox))
+        d.addCallback(lambda _: m_uid.count(mbox_id))
         d.addCallback(assert_count_after_deletions)
         return d
 
     def test_get_next_uid(self):
         m_uid = self.get_mbox_uid()
-        mbox = 'foomailbox'
+        #mbox = 'foomailbox'
 
-        h1 = fmt_hash(mbox, hash_test0)
-        h2 = fmt_hash(mbox, hash_test1)
-        h3 = fmt_hash(mbox, hash_test2)
-        h4 = fmt_hash(mbox, hash_test3)
-        h5 = fmt_hash(mbox, hash_test4)
+        h1 = fmt_hash(mbox_id, hash_test0)
+        h2 = fmt_hash(mbox_id, hash_test1)
+        h3 = fmt_hash(mbox_id, hash_test2)
+        h4 = fmt_hash(mbox_id, hash_test3)
+        h5 = fmt_hash(mbox_id, hash_test4)
 
-        d = m_uid.create_table(mbox)
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h1))
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h2))
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h3))
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h4))
-        d.addCallback(lambda _: m_uid.insert_doc(mbox, h5))
+        d = m_uid.create_table(mbox_id)
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h1))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h2))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h3))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h4))
+        d.addCallback(lambda _: m_uid.insert_doc(mbox_id, h5))
 
         def assert_next_uid(result, expected=1):
             self.assertEquals(result, expected)
 
-        d.addCallback(lambda _: m_uid.get_next_uid(mbox))
+        d.addCallback(lambda _: m_uid.get_next_uid(mbox_id))
         d.addCallback(partial(assert_next_uid, expected=6))
         return d

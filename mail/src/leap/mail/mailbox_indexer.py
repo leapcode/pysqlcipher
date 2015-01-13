@@ -18,6 +18,7 @@
 Local tables to store the message Unique Identifiers for a given mailbox.
 """
 import re
+import uuid
 
 from leap.mail.constants import METAMSGID_RE
 
@@ -35,6 +36,25 @@ def _maybe_first_query_item(thing):
 
 class WrongMetaDocIDError(Exception):
     pass
+
+
+def sanitize(mailbox_id):
+    return mailbox_id.replace("-", "_")
+
+
+def check_good_uuid(mailbox_id):
+    """
+    Check that the passed mailbox identifier is a valid UUID.
+    :param mailbox_id: the uuid to check
+    :type mailbox_id: str
+    :return: None
+    :raises: AssertionError if a wrong uuid was passed.
+    """
+    try:
+        uuid.UUID(str(mailbox_id))
+    except (AttributeError, ValueError):
+        raise AssertionError(
+            "the mbox_id is not a valid uuid: %s" % mailbox_id)
 
 
 class MailboxIndexer(object):
@@ -68,51 +88,33 @@ class MailboxIndexer(object):
         assert self.store is not None
         return self.store.raw_sqlcipher_query(*args, **kw)
 
-    def create_table(self, mailbox):
+    def create_table(self, mailbox_id):
         """
         Create the UID table for a given mailbox.
-        :param mailbox: the mailbox name
+        :param mailbox: the mailbox identifier.
         :type mailbox: str
         :rtype: Deferred
         """
-        assert mailbox
+        check_good_uuid(mailbox_id)
         sql = ("CREATE TABLE if not exists {preffix}{name}( "
                "uid  INTEGER PRIMARY KEY AUTOINCREMENT, "
                "hash TEXT UNIQUE NOT NULL)".format(
-                   preffix=self.table_preffix, name=mailbox))
+                   preffix=self.table_preffix, name=sanitize(mailbox_id)))
         return self._query(sql)
 
-    def delete_table(self, mailbox):
+    def delete_table(self, mailbox_id):
         """
         Delete the UID table for a given mailbox.
         :param mailbox: the mailbox name
         :type mailbox: str
         :rtype: Deferred
         """
-        assert mailbox
+        check_good_uuid(mailbox_id)
         sql = ("DROP TABLE if exists {preffix}{name}".format(
-            preffix=self.table_preffix, name=mailbox))
+            preffix=self.table_preffix, name=sanitize(mailbox_id)))
         return self._query(sql)
 
-    def rename_table(self, oldmailbox, newmailbox):
-        """
-        Delete the UID table for a given mailbox.
-        :param oldmailbox: the old mailbox name
-        :type oldmailbox: str
-        :param newmailbox: the new mailbox name
-        :type newmailbox: str
-        :rtype: Deferred
-        """
-        assert oldmailbox
-        assert newmailbox
-        assert oldmailbox != newmailbox
-        sql = ("ALTER TABLE {preffix}{old} "
-               "RENAME TO {preffix}{new}".format(
-                   preffix=self.table_preffix,
-                   old=oldmailbox, new=newmailbox))
-        return self._query(sql)
-
-    def insert_doc(self, mailbox, doc_id):
+    def insert_doc(self, mailbox_id, doc_id):
         """
         Insert the doc_id for a MetaMsg in the UID table for a given mailbox.
 
@@ -128,10 +130,11 @@ class MailboxIndexer(object):
                  document.
         :rtype: Deferred
         """
-        assert mailbox
+        check_good_uuid(mailbox_id)
         assert doc_id
+        mailbox_id = mailbox_id.replace('-', '_')
 
-        if not re.findall(METAMSGID_RE.format(mbox=mailbox), doc_id):
+        if not re.findall(METAMSGID_RE.format(mbox=mailbox_id), doc_id):
             raise WrongMetaDocIDError("Wrong format for the MetaMsg doc_id")
 
         def get_rowid(result):
@@ -139,44 +142,44 @@ class MailboxIndexer(object):
 
         sql = ("INSERT INTO {preffix}{name} VALUES ("
                "NULL, ?)".format(
-                   preffix=self.table_preffix, name=mailbox))
+                   preffix=self.table_preffix, name=sanitize(mailbox_id)))
         values = (doc_id,)
 
         sql_last = ("SELECT MAX(rowid) FROM {preffix}{name} "
                     "LIMIT 1;").format(
-            preffix=self.table_preffix, name=mailbox)
+            preffix=self.table_preffix, name=sanitize(mailbox_id))
         d = self._query(sql, values)
         d.addCallback(lambda _: self._query(sql_last))
         d.addCallback(get_rowid)
         return d
 
-    def delete_doc_by_uid(self, mailbox, uid):
+    def delete_doc_by_uid(self, mailbox_id, uid):
         """
         Delete the entry for a MetaMsg in the UID table for a given mailbox.
 
-        :param mailbox: the mailbox name
+        :param mailbox_id: the mailbox uuid
         :type mailbox: str
         :param uid: the UID of the message.
         :type uid: int
         :rtype: Deferred
         """
-        assert mailbox
+        check_good_uuid(mailbox_id)
         assert uid
         sql = ("DELETE FROM {preffix}{name} "
                "WHERE uid=?".format(
-                   preffix=self.table_preffix, name=mailbox))
+                   preffix=self.table_preffix, name=sanitize(mailbox_id)))
         values = (uid,)
         return self._query(sql, values)
 
-    def delete_doc_by_hash(self, mailbox, doc_id):
+    def delete_doc_by_hash(self, mailbox_id, doc_id):
         """
         Delete the entry for a MetaMsg in the UID table for a given mailbox.
 
         The doc_id must be in the format:
 
-            M+<mailbox>+<content-hash-of-the-message>
+            M-<mailbox_uuid>-<content-hash-of-the-message>
 
-        :param mailbox: the mailbox name
+        :param mailbox_id: the mailbox uuid
         :type mailbox: str
         :param doc_id: the doc_id for the MetaMsg
         :type doc_id: str
@@ -184,30 +187,32 @@ class MailboxIndexer(object):
                  document.
         :rtype: Deferred
         """
-        assert mailbox
+        check_good_uuid(mailbox_id)
         assert doc_id
         sql = ("DELETE FROM {preffix}{name} "
                "WHERE hash=?".format(
-                   preffix=self.table_preffix, name=mailbox))
+                   preffix=self.table_preffix, name=sanitize(mailbox_id)))
         values = (doc_id,)
         return self._query(sql, values)
 
-    def get_doc_id_from_uid(self, mailbox, uid):
+    def get_doc_id_from_uid(self, mailbox_id, uid):
         """
         Get the doc_id for a MetaMsg in the UID table for a given mailbox.
 
-        :param mailbox: the mailbox name
+        :param mailbox: the mailbox uuid
         :type mailbox: str
         :param uid: the uid for the MetaMsg for this mailbox
         :type uid: int
         :rtype: Deferred
         """
+        check_good_uuid(mailbox_id)
+
         def get_hash(result):
             return _maybe_first_query_item(result)
 
         sql = ("SELECT hash from {preffix}{name} "
                "WHERE uid=?".format(
-                   preffix=self.table_preffix, name=mailbox))
+                   preffix=self.table_preffix, name=sanitize(mailbox_id)))
         values = (uid,)
         d = self._query(sql, values)
         d.addCallback(get_hash)
@@ -218,7 +223,7 @@ class MailboxIndexer(object):
         # XXX dereference the range (n,*)
         raise NotImplementedError()
 
-    def count(self, mailbox):
+    def count(self, mailbox_id):
         """
         Get the number of entries in the UID table for a given mailbox.
 
@@ -227,16 +232,18 @@ class MailboxIndexer(object):
         :return: a deferred that will fire with an integer returning the count.
         :rtype: Deferred
         """
+        check_good_uuid(mailbox_id)
+
         def get_count(result):
             return _maybe_first_query_item(result)
 
         sql = ("SELECT Count(*) FROM {preffix}{name};".format(
-            preffix=self.table_preffix, name=mailbox))
+            preffix=self.table_preffix, name=sanitize(mailbox_id)))
         d = self._query(sql)
         d.addCallback(get_count)
         return d
 
-    def get_next_uid(self, mailbox):
+    def get_next_uid(self, mailbox_id):
         """
         Get the next integer beyond the highest UID count for a given mailbox.
 
@@ -251,7 +258,7 @@ class MailboxIndexer(object):
                  uid.
         :rtype: Deferred
         """
-        assert mailbox
+        check_good_uuid(mailbox_id)
 
         def increment(result):
             uid = _maybe_first_query_item(result)
@@ -261,7 +268,7 @@ class MailboxIndexer(object):
 
         sql = ("SELECT MAX(rowid) FROM {preffix}{name} "
                "LIMIT 1;").format(
-            preffix=self.table_preffix, name=mailbox)
+            preffix=self.table_preffix, name=sanitize(mailbox_id))
 
         d = self._query(sql)
         d.addCallback(increment)

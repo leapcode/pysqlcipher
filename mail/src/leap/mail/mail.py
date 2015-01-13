@@ -17,6 +17,7 @@
 """
 Generic Access to Mail objects: Public LEAP Mail API.
 """
+import uuid
 import logging
 import StringIO
 
@@ -283,6 +284,20 @@ class MessageCollection(object):
         self.mbox_indexer = mbox_indexer
         self.mbox_wrapper = mbox_wrapper
 
+        # TODO need to initialize count here because imap server does not
+        # expect a defered for the count. caller should return the deferred for
+        # prime_count (ie, initialize) when returning the collection
+        # TODO should increment and decrement when adding/deleting.
+        # TODO recent count should also be static.
+
+        if not count:
+            count = 0
+        self._count = count
+
+    #def initialize(self):
+        #d = self.prime_count()
+        #return d
+
     def is_mailbox_collection(self):
         """
         Return True if this collection represents a Mailbox.
@@ -296,6 +311,13 @@ class MessageCollection(object):
         if not wrapper:
             return None
         return wrapper.mbox
+
+    @property
+    def mbox_uuid(self):
+        wrapper = getattr(self, "mbox_wrapper", None)
+        if not wrapper:
+            return None
+        return wrapper.mbox_uuid
 
     def get_mbox_attr(self, attr):
         return getattr(self.mbox_wrapper, attr)
@@ -385,16 +407,16 @@ class MessageCollection(object):
             raise NotImplementedError()
 
         else:
-            mbox = self.mbox_name
+            mbox_id = self.mbox_uuid
             wrapper.set_flags(flags)
             wrapper.set_tags(tags)
             wrapper.set_date(date)
-            wrapper.set_mbox(mbox)
+            wrapper.set_mbox_uuid(mbox_id)
 
         def insert_mdoc_id(_, wrapper):
             doc_id = wrapper.mdoc.doc_id
             return self.mbox_indexer.insert_doc(
-                self.mbox_name, doc_id)
+                self.mbox_uuid, doc_id)
 
         d = wrapper.create(self.store)
         d.addCallback(insert_mdoc_id, wrapper)
@@ -410,7 +432,7 @@ class MessageCollection(object):
 
         def insert_copied_mdoc_id(wrapper):
             return self.mbox_indexer.insert_doc(
-                newmailbox, wrapper.mdoc.doc_id)
+                newmailbox_uuid, wrapper.mdoc.doc_id)
 
         wrapper = msg.get_wrapper()
         d = wrapper.copy(self.store, newmailbox)
@@ -539,25 +561,32 @@ class Account(object):
 
     def add_mailbox(self, name):
 
-        def create_uid_table_cb(res):
-            d = self.mbox_indexer.create_table(name)
-            d.addCallback(lambda _: res)
+        def create_uuid(wrapper):
+            if not wrapper.uuid:
+                wrapper.uuid = uuid.uuid4()
+                return wrapper.update(self.store)
+
+        def create_uid_table_cb(wrapper):
+            d = self.mbox_indexer.create_table(wrapper.uuid)
+            d.addCallback(lambda _: wrapper)
             return d
 
         d = self.adaptor.get_or_create_mbox(self.store, name)
+        d.addCallback(create_uuid)
         d.addCallback(create_uid_table_cb)
         return d
 
     def delete_mailbox(self, name):
-        def delete_uid_table_cb(res):
-            d = self.mbox_indexer.delete_table(name)
-            d.addCallback(lambda _: res)
+
+        def delete_uid_table_cb(wrapper):
+            d = self.mbox_indexer.delete_table(wrapper.uuid)
+            d.addCallback(lambda _: wrapper)
             return d
 
         d = self.adaptor.get_or_create_mbox(self.store, name)
+        d.addCallback(delete_uid_table_cb)
         d.addCallback(
             lambda wrapper: self.adaptor.delete_mbox(self.store, wrapper))
-        d.addCallback(delete_uid_table_cb)
         return d
 
     def rename_mailbox(self, oldname, newname):
@@ -572,14 +601,8 @@ class Account(object):
             wrapper.mbox = newname
             return wrapper.update(self.store)
 
-        def rename_uid_table_cb(res):
-            d = self.mbox_indexer.rename_table(oldname, newname)
-            d.addCallback(lambda _: res)
-            return d
-
         d = self.adaptor.get_or_create_mbox(self.store, oldname)
         d.addCallback(_rename_mbox)
-        d.addCallback(rename_uid_table_cb)
         return d
 
     # Get Collections

@@ -21,7 +21,6 @@ import os
 from functools import partial
 
 from twisted.internet import defer
-from twisted.trial import unittest
 
 from leap.mail.adaptors import models
 from leap.mail.adaptors.soledad import SoledadDocumentWrapper
@@ -62,7 +61,7 @@ class TestAdaptor(SoledadIndexMixin):
                'by-type': ['type']}
 
 
-class SoledadDocWrapperTestCase(unittest.TestCase, SoledadTestMixin):
+class SoledadDocWrapperTestCase(SoledadTestMixin):
     """
     Tests for the SoledadDocumentWrapper.
     """
@@ -284,7 +283,7 @@ class TestMessageClass(object):
         return self.wrapper
 
 
-class SoledadMailAdaptorTestCase(unittest.TestCase, SoledadTestMixin):
+class SoledadMailAdaptorTestCase(SoledadTestMixin):
     """
     Tests for the SoledadMailAdaptor.
     """
@@ -337,7 +336,7 @@ class SoledadMailAdaptorTestCase(unittest.TestCase, SoledadTestMixin):
             hdoc="H-deadbeef",
             cdocs=["C-deadabad"])
         fdoc = dict(
-            mbox="Foobox",
+            mbox_uuid="Foobox",
             flags=('\Seen', '\Nice'),
             tags=('Personal', 'TODO'),
             seen=False, deleted=False,
@@ -355,7 +354,7 @@ class SoledadMailAdaptorTestCase(unittest.TestCase, SoledadTestMixin):
                          ('\Seen', '\Nice'))
         self.assertEqual(msg.wrapper.fdoc.tags,
                          ('Personal', 'TODO'))
-        self.assertEqual(msg.wrapper.fdoc.mbox, "Foobox")
+        self.assertEqual(msg.wrapper.fdoc.mbox_uuid, "Foobox")
         self.assertEqual(msg.wrapper.hdoc.multi, False)
         self.assertEqual(msg.wrapper.hdoc.subject,
                          "Test Msg")
@@ -363,7 +362,7 @@ class SoledadMailAdaptorTestCase(unittest.TestCase, SoledadTestMixin):
                          "This is a test message")
 
     def test_get_msg_from_metamsg_doc_id(self):
-        # XXX complete-me!
+        # TODO complete-me!
         self.fail()
 
     def test_create_msg(self):

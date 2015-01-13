@@ -926,31 +926,39 @@ class LeapIMAP4ServerTestCase(IMAP4HelperMixin, unittest.TestCase):
         """
         infile = util.sibpath(__file__, 'rfc822.message')
         message = open(infile)
-        LeapIMAPServer.theAccount.addMailbox('root/subthing')
+        acc = self.server.theAccount
+        mailbox_name = "root_subthing"
+
+        def add_mailbox():
+            return acc.addMailbox(mailbox_name)
 
         def login():
             return self.client.login(TEST_USER, TEST_PASSWD)
 
         def append():
             return self.client.append(
-                'root/subthing',
-                message,
+                mailbox_name, message,
                 ('\\SEEN', '\\DELETED'),
                 'Tue, 17 Jun 2003 11:22:16 -0600 (MDT)',
             )
 
-        d1 = self.connected.addCallback(strip(login))
+        d1 = self.connected.addCallback(strip(add_mailbox))
+        d1.addCallback(strip(login))
         d1.addCallbacks(strip(append), self._ebGeneral)
         d1.addCallbacks(self._cbStopClient, self._ebGeneral)
         d2 = self.loopback()
         d = defer.gatherResults([d1, d2])
+        d.addCallback(lambda _: acc.getMailbox(mailbox_name))
+
+        def print_mb(mb):
+            print "MB ----", mb
+            return mb
+        d.addCallback(print_mb)
+        d.addCallback(lambda mb: mb.collection.get_message_by_uid(1))
         return d.addCallback(self._cbTestFullAppend, infile)
 
-    def _cbTestFullAppend(self, ignored, infile):
-        mb = LeapIMAPServer.theAccount.getMailbox('root/subthing')
-        self.assertEqual(1, len(mb.messages))
-
-        msg = mb.messages.get_msg_by_uid(1)
+    def _cbTestFullAppend(self, msg, infile):
+        # TODO --- move to deferreds
         self.assertEqual(
             set(('\\Recent', '\\SEEN', '\\DELETED')),
             set(msg.getFlags()))

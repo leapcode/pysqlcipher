@@ -236,6 +236,7 @@ class IMAPMailbox(object):
 
         :rtype: int
         """
+        # TODO --- return the uid if it has it!!!
         d = self.collection.get_msg_by_uid(message)
         d.addCallback(lambda m: m.getUID())
         return d
@@ -357,7 +358,7 @@ class IMAPMailbox(object):
             reactor.callLater(0, self.notify_new)
             return x
 
-        d = self.collection.add_message(flags=flags, date=date)
+        d = self.collection.add_msg(message, flags=flags, date=date)
         d.addCallback(notifyCallback)
         d.addErrback(lambda f: log.msg(f.getTraceback()))
         return d
@@ -389,14 +390,15 @@ class IMAPMailbox(object):
                  messages and number of recent messages.
         :rtype: Deferred
         """
-        d_exists = self.getMessageCount()
-        d_recent = self.getRecentCount()
+        d_exists = defer.maybeDeferred(self.getMessageCount)
+        d_recent = defer.maybeDeferred(self.getRecentCount)
         d_list = [d_exists, d_recent]
 
         def log_num_msg(result):
-            exists, recent = result
+            exists, recent = tuple(result)
             logger.debug("NOTIFY (%r): there are %s messages, %s recent" % (
                          self.mbox_name, exists, recent))
+            return result
 
         d = defer.gatherResults(d_list)
         d.addCallback(log_num_msg)
@@ -654,7 +656,7 @@ class IMAPMailbox(object):
         return result
 
     def _get_unseen_deferred(self):
-        return self.getUnseenCount()
+        return defer.maybeDeferred(self.getUnseenCount)
 
     def __cb_signal_unread_to_ui(self, unseen):
         """
