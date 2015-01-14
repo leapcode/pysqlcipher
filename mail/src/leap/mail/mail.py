@@ -414,15 +414,10 @@ class MessageCollection(object):
 
     # Manipulate messages
 
-    def add_msg(self, raw_msg, flags=None, tags=None, date=None):
+    def add_msg(self, raw_msg, flags=tuple(), tags=tuple(), date=""):
         """
         Add a message to this collection.
         """
-        if not flags:
-            flags = tuple()
-        if not tags:
-            tags = tuple()
-
         leap_assert_type(flags, tuple)
         leap_assert_type(date, str)
 
@@ -582,7 +577,6 @@ class Account(object):
         self.mbox_indexer = MailboxIndexer(self.store)
 
         self.deferred_initialization = defer.Deferred()
-        self._initialized = False
         self._ready_cb = ready_cb
 
         self._init_d = self._initialize_storage()
@@ -594,7 +588,6 @@ class Account(object):
                 return self.add_mailbox(INBOX_NAME)
 
         def finish_initialization(result):
-            self._initialized = True
             self.deferred_initialization.callback(None)
             if self._ready_cb is not None:
                 self._ready_cb()
@@ -606,12 +599,8 @@ class Account(object):
         return d
 
     def callWhenReady(self, cb, *args, **kw):
-        if self._initialized:
-            cb(self, *args, **kw)
-            return defer.succeed(None)
-        else:
-            self.deferred_initialization.addCallback(cb, *args, **kw)
-            return self.deferred_initialization
+        self.deferred_initialization.addCallback(cb, *args, **kw)
+        return self.deferred_initialization
 
     #
     # Public API Starts

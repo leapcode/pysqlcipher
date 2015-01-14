@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# fetch.py
-# Copyright (C) 2013 LEAP
+# service.py
+# Copyright (C) 2015 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -31,6 +31,7 @@ from email.utils import parseaddr
 from StringIO import StringIO
 from urlparse import urlparse
 
+from twisted.application.service import Service
 from twisted.python import log
 from twisted.internet import defer, reactor
 from twisted.internet.task import LoopingCall
@@ -49,8 +50,8 @@ from leap.common.events.events_pb2 import SOLEDAD_INVALID_AUTH_TOKEN
 from leap.common.mail import get_email_charset
 from leap.keymanager import errors as keymanager_errors
 from leap.keymanager.openpgp import OpenPGPKey
+from leap.mail.adaptors import soledad_indexes as fields
 from leap.mail.decorators import deferred_to_thread
-from leap.mail.imap.fields import fields
 from leap.mail.utils import json_loads, empty, first
 from leap.soledad.client import Soledad
 from leap.soledad.common.crypto import ENC_SCHEME_KEY, ENC_JSON_KEY
@@ -64,6 +65,10 @@ MULTIPART_SIGNED = "multipart/signed"
 PGP_BEGIN = "-----BEGIN PGP MESSAGE-----"
 PGP_END = "-----END PGP MESSAGE-----"
 
+# The period between succesive checks of the incoming mail
+# queue (in seconds)
+INCOMING_CHECK_PERIOD = 60
+
 
 class MalformedMessage(Exception):
     """
@@ -72,18 +77,21 @@ class MalformedMessage(Exception):
     pass
 
 
-class LeapIncomingMail(object):
+class IncomingMail(Service):
     """
     Fetches and process mail from the incoming pool.
 
-    This object has public methods start_loop and stop that will
-    actually initiate a LoopingCall with check_period recurrency.
+    This object implements IService interface, has public methods
+    startService and stopService that will actually initiate a
+    LoopingCall with check_period recurrency.
     The LoopingCall itself will invoke the fetch method each time
     that the check_period expires.
 
     This loop will sync the soledad db with the remote server and
     process all the documents found tagged as incoming mail.
     """
+
+    name = "IncomingMail"
 
     RECENT_FLAG = "\\Recent"
     CONTENT_KEY = "content"
@@ -100,11 +108,11 @@ class LeapIncomingMail(object):
 
     fetching_lock = threading.Lock()
 
-    def __init__(self, keymanager, soledad, imap_account,
-                 check_period, userid):
+    def __init__(self, keymanager, soledad, inbox, userid,
+                 check_period=INCOMING_CHECK_PERIOD):
 
         """
-        Initialize LeapIncomingMail..
+        Initialize IncomingMail..
 
         :param keymanager: a keymanager instance
         :type keymanager: keymanager.KeyManager
@@ -112,8 +120,8 @@ class LeapIncomingMail(object):
         :param soledad: a soledad instance
         :type soledad: Soledad
 
-        :param imap_account: the account to fetch periodically
-        :type imap_account: SoledadBackedAccount
+        :param inbox: the inbox where the new emails will be stored
+        :type inbox: IMAPMailbox
 
         :param check_period: the period to fetch new mail, in seconds.
         :type check_period: int
@@ -127,8 +135,7 @@ class LeapIncomingMail(object):
 
         self._keymanager = keymanager
         self._soledad = soledad
-        self.imapAccount = imap_account
-        self._inbox = self.imapAccount.getMailbox('inbox')
+        self._inbox = inbox
         self._userid = userid
 
         self._loop = None
@@ -148,21 +155,22 @@ class LeapIncomingMail(object):
         Calls a deferred that will execute the fetch callback
         in a separate thread
         """
-        def syncSoledadCallback(result):
-            # FIXME this needs a matching change in mx!!!
-            # --> need to add ERROR_DECRYPTING_KEY = False
-            # as default.
-            try:
-                doclist = self._soledad.get_from_index(
-                    fields.JUST_MAIL_IDX, "*", "0")
-            except u1db_errors.InvalidGlobbing:
+        def mail_compat(failure):
+            if failure.check(u1db_errors.InvalidGlobbing):
                 # It looks like we are a dealing with an outdated
                 # mx. Fallback to the version of the index
                 warnings.warn("JUST_MAIL_COMPAT_IDX will be deprecated!",
                               DeprecationWarning)
-                doclist = self._soledad.get_from_index(
+                return self._soledad.get_from_index(
                     fields.JUST_MAIL_COMPAT_IDX, "*")
-            return self._process_doclist(doclist)
+            return failure
+
+        def syncSoledadCallback(_):
+            d = self._soledad.get_from_index(
+                fields.JUST_MAIL_IDX, "*", "0")
+            d.addErrback(mail_compat)
+            d.addCallback(self._process_doclist)
+            return d
 
         logger.debug("fetching mail for: %s %s" % (
             self._soledad.uuid, self._userid))
@@ -175,24 +183,25 @@ class LeapIncomingMail(object):
         else:
             logger.debug("Already fetching mail.")
 
-    def start_loop(self):
+    def startService(self):
         """
         Starts a loop to fetch mail.
         """
+        Service.startService(self)
         if self._loop is None:
             self._loop = LoopingCall(self.fetch)
             self._loop.start(self._check_period)
         else:
             logger.warning("Tried to start an already running fetching loop.")
 
-    def stop(self):
-        # XXX change the name to stop_loop, for consistency.
+    def stopService(self):
         """
         Stops the loop that fetches mail.
         """
         if self._loop and self._loop.running is True:
             self._loop.stop()
             self._loop = None
+        Service.stopService(self)
 
     #
     # Private methods.
@@ -296,7 +305,7 @@ class LeapIncomingMail(object):
     # operations on individual messages
     #
 
-    @deferred_to_thread
+    #FIXME: @deferred_to_thread
     def _decrypt_doc(self, doc):
         """
         Decrypt the contents of a document.
@@ -319,15 +328,14 @@ class LeapIncomingMail(object):
                 success = False
 
             leap_events.signal(IMAP_MSG_DECRYPTED, "1" if success else "0")
-
-            data = self._process_decrypted_doc(doc, decrdata)
-            return doc, data
+            return self._process_decrypted_doc(doc, decrdata)
 
         d = self._keymanager.decrypt(
             doc.content[ENC_JSON_KEY],
             self._userid, OpenPGPKey)
         d.addErrback(self._errback)
         d.addCallback(process_decrypted)
+        d.addCallback(lambda data: (doc, data))
         return d
 
     def _process_decrypted_doc(self, doc, data):
@@ -340,8 +348,9 @@ class LeapIncomingMail(object):
                      message
         :type data: str
 
-        :return: the processed data.
-        :rtype: str
+        :return: a Deferred that will be fired with an str of the proccessed
+                 data.
+        :rtype: Deferred
         """
         log.msg('processing decrypted doc')
 
@@ -409,8 +418,10 @@ class LeapIncomingMail(object):
 
         :param data: the text to be decrypted.
         :type data: str
-        :return: data, possibly decrypted.
-        :rtype: str
+
+        :return: a Deferred that will be fired with an str of data, possibly
+                 decrypted.
+        :rtype: Deferred
         """
         leap_assert_type(data, str)
         log.msg('maybe decrypting doc')
@@ -426,7 +437,8 @@ class LeapIncomingMail(object):
                  or msg.get_content_type() == MULTIPART_SIGNED)):
                 senderAddress = parseaddr(fromHeader)
 
-        def add_leap_header(decrmsg, signkey):
+        def add_leap_header(ret):
+            decrmsg, signkey = ret
             if (senderAddress is None or
                     isinstance(signkey, keymanager_errors.KeyNotFound)):
                 decrmsg.add_header(
@@ -596,11 +608,11 @@ class LeapIncomingMail(object):
         _, fromAddress = parseaddr(msg['from'])
 
         header = msg.get(OpenPGP_HEADER, None)
-        dh = defer.success()
+        dh = defer.succeed(None)
         if header is not None:
             dh = self._extract_openpgp_header(header, fromAddress)
 
-        da = defer.success()
+        da = defer.succeed(None)
         if msg.is_multipart():
             da = self._extract_attached_key(msg.get_payload(), fromAddress)
 
@@ -620,7 +632,7 @@ class LeapIncomingMail(object):
         :return: A Deferred that will be fired when header extraction is done
         :rtype: Deferred
         """
-        d = defer.success()
+        d = defer.succeed(None)
         fields = dict([f.strip(' ').split('=') for f in header.split(';')])
         if 'url' in fields:
             url = shlex.split(fields['url'])[0]  # remove quotations
@@ -704,8 +716,7 @@ class LeapIncomingMail(object):
                 deferLater(reactor, 0, self._delete_incoming_message, doc)
                 leap_events.signal(IMAP_MSG_DELETED_INCOMING)
 
-        d = self._inbox.addMessage(data, flags=(self.RECENT_FLAG,),
-                                   notify_on_disk=True)
+        d = self._inbox.addMessage(data, (self.RECENT_FLAG,))
         d.addCallbacks(msgSavedCallback, self._errback)
         return d
 

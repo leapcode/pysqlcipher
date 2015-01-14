@@ -30,10 +30,9 @@ logger = logging.getLogger(__name__)
 
 from leap.common import events as leap_events
 from leap.common.check import leap_assert, leap_assert_type, leap_check
-from leap.keymanager import KeyManager
 from leap.mail.imap.account import IMAPAccount
-from leap.mail.imap.fetch import LeapIncomingMail
 from leap.mail.imap.server import LEAPIMAPServer
+from leap.mail.incoming import IncomingMail
 from leap.soledad.client import Soledad
 
 from leap.common.events.events_pb2 import IMAP_SERVICE_STARTED
@@ -54,10 +53,6 @@ if DO_PROFILE:
 
 # The default port in which imap service will run
 IMAP_PORT = 1984
-
-# The period between succesive checks of the incoming mail
-# queue (in seconds)
-INCOMING_CHECK_PERIOD = 60
 
 
 class IMAPAuthRealm(object):
@@ -132,21 +127,16 @@ def run_service(*args, **kwargs):
     """
     Main entry point to run the service from the client.
 
-    :returns: the LoopingCall instance that will have to be stoppped
-              before shutting down the client, the port as returned by
-              the reactor when starts listening, and the factory for
-              the protocol.
+    :returns: the port as returned by the reactor when starts listening, and
+              the factory for the protocol.
     """
     leap_assert(len(args) == 2)
-    soledad, keymanager = args
+    soledad = args
     leap_assert_type(soledad, Soledad)
-    leap_assert_type(keymanager, KeyManager)
 
     port = kwargs.get('port', IMAP_PORT)
-    check_period = kwargs.get('check_period', INCOMING_CHECK_PERIOD)
     userid = kwargs.get('userid', None)
     leap_check(userid is not None, "need an user id")
-    offline = kwargs.get('offline', False)
 
     uuid = soledad.uuid
     factory = LeapIMAPFactory(uuid, userid, soledad)
@@ -154,16 +144,6 @@ def run_service(*args, **kwargs):
     try:
         tport = reactor.listenTCP(port, factory,
                                   interface="localhost")
-        if not offline:
-            # FIXME --- update after meskio's work
-            fetcher = LeapIncomingMail(
-                keymanager,
-                soledad,
-                factory.theAccount,
-                check_period,
-                userid)
-        else:
-            fetcher = None
     except CannotListenError:
         logger.error("IMAP Service failed to start: "
                      "cannot listen in port %s" % (port,))
@@ -186,7 +166,7 @@ def run_service(*args, **kwargs):
         leap_events.signal(IMAP_SERVICE_STARTED, str(port))
 
         # FIXME -- change service signature
-        return fetcher, tport, factory
+        return tport, factory
 
     # not ok, signal error.
     leap_events.signal(IMAP_SERVICE_FAILED_TO_START, str(port))

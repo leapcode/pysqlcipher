@@ -63,7 +63,7 @@ class IMAPAccount(object):
     selected = None
     closed = False
 
-    def __init__(self, user_id, store, d=None):
+    def __init__(self, user_id, store, d=defer.Deferred()):
         """
         Keeps track of the mailboxes and subscriptions handled by this account.
 
