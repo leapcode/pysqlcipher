@@ -162,10 +162,20 @@ class LEAPIMAPServer(imap4.IMAP4Server):
             self.sendNegativeResponse(tag, 'Mailbox cannot be selected')
             return
 
+        d1 = defer.maybeDeferred(mbox.getMessageCount)
+        d2 = defer.maybeDeferred(mbox.getRecentCount)
+        return defer.gatherResults([d1, d2]).addCallback(
+            self.__cbSelectWork, mbox, cmdName, tag)
+
+    def __cbSelectWork(self, ((msg_count, recent_count)), mbox, cmdName, tag):
         flags = mbox.getFlags()
         self.sendUntaggedResponse('FLAGS (%s)' % ' '.join(flags))
-        self.sendUntaggedResponse(str(mbox.getMessageCount()) + ' EXISTS')
-        self.sendUntaggedResponse(str(mbox.getRecentCount()) + ' RECENT')
+
+        # Patched -------------------------------------------------------
+        # accept deferreds for the count
+        self.sendUntaggedResponse(str(msg_count) + ' EXISTS')
+        self.sendUntaggedResponse(str(recent_count) + ' RECENT')
+        # ----------------------------------------------------------------
 
         # Patched -------------------------------------------------------
         # imaptest was complaining about the incomplete line, we're adding

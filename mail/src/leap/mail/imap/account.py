@@ -330,8 +330,7 @@ class IMAPAccount(object):
         oldname = normalize_mailbox(oldname)
         newname = normalize_mailbox(newname)
 
-        def rename_inferiors(inferiors_result):
-            inferiors, mailboxes = inferiors_result
+        def rename_inferiors((inferiors, mailboxes)):
             rename_deferreds = []
             inferiors = [
                 (o, o.replace(oldname, newname, 1)) for o in inferiors]
@@ -347,7 +346,10 @@ class IMAPAccount(object):
             d1 = defer.gatherResults(rename_deferreds, consumeErrors=True)
             return d1
 
-        d = self._inferiorNames(oldname)
+        d1 = self._inferiorNames(oldname)
+        d2 = self.account.list_all_mailbox_names()
+
+        d = defer.gatherResults([d1, d2])
         d.addCallback(rename_inferiors)
         return d
 

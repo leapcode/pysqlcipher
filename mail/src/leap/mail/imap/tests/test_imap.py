@@ -447,9 +447,12 @@ class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
         """
         Try to rename hierarchical mailboxes
         """
-        acc = LEAPIMAPServer.theAccount
-        dc1 = lambda: acc.create('oldmbox/m1')
-        dc2 = lambda: acc.create('oldmbox/m2')
+        acc = self.server.theAccount
+
+        def add_mailboxes():
+            return defer.gatherResults([
+                acc.addMailbox('oldmbox/m1'),
+                acc.addMailbox('oldmbox/m2')])
 
         def login():
             return self.client.login(TEST_USER, TEST_PASSWD)
@@ -457,19 +460,18 @@ class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
         def rename():
             return self.client.rename('oldmbox', 'newname')
 
-        d1 = self.connected.addCallback(strip(login))
-        d1.addCallback(strip(dc1))
-        d1.addCallback(strip(dc2))
+        d1 = self.connected.addCallback(strip(add_mailboxes))
+        d1.addCallback(strip(login))
         d1.addCallbacks(strip(rename), self._ebGeneral)
         d1.addCallbacks(self._cbStopClient, self._ebGeneral)
         d2 = self.loopback()
         d = defer.gatherResults([d1, d2])
+        d.addCallback(lambda _: acc.account.list_all_mailbox_names())
         return d.addCallback(self._cbTestHierarchicalRename)
 
-    def _cbTestHierarchicalRename(self, ignored):
-        mboxes = LEAPIMAPServer.theAccount.mailboxes
+    def _cbTestHierarchicalRename(self, mailboxes):
         expected = ['INBOX', 'newname', 'newname/m1', 'newname/m2']
-        self.assertEqual(sorted(mboxes), sorted([s for s in expected]))
+        self.assertEqual(sorted(mailboxes), sorted([s for s in expected]))
 
     def testSubscribe(self):
         """
