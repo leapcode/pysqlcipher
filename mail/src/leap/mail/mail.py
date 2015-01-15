@@ -285,6 +285,8 @@ class MessageCollection(object):
         self.mbox_indexer = mbox_indexer
         self.mbox_wrapper = mbox_wrapper
 
+        # TODO --- review this count shit. I think it's better to patch server
+        # to accept deferreds.
         # TODO need to initialize count here because imap server does not
         # expect a defered for the count. caller should return the deferred for
         # prime_count (ie, initialize) when returning the collection
@@ -294,10 +296,6 @@ class MessageCollection(object):
         if not count:
             count = 0
         self._count = count
-
-    #def initialize(self):
-        #d = self.prime_count()
-        #return d
 
     def is_mailbox_collection(self):
         """

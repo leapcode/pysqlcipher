@@ -17,8 +17,10 @@
 """
 Tests for the mail module.
 """
-import time
 import os
+import time
+import uuid
+
 from functools import partial
 from email.parser import Parser
 from email.Utils import formatdate
@@ -27,9 +29,6 @@ from leap.mail.adaptors.soledad import SoledadMailAdaptor
 from leap.mail.mail import MessageCollection, Account
 from leap.mail.mailbox_indexer import MailboxIndexer
 from leap.mail.tests.common import SoledadTestMixin
-
-# from twisted.internet import defer
-from twisted.trial import unittest
 
 HERE = os.path.split(os.path.abspath(__file__))[0]
 
@@ -67,24 +66,26 @@ class CollectionMixin(object):
         if mbox_collection:
             mbox_indexer = MailboxIndexer(store)
             mbox_name = "TestMbox"
+            mbox_uuid = str(uuid.uuid4())
         else:
             mbox_indexer = mbox_name = None
 
         def get_collection_from_mbox_wrapper(wrapper):
+            wrapper.uuid = mbox_uuid
             return MessageCollection(
                 adaptor, store,
                 mbox_indexer=mbox_indexer, mbox_wrapper=wrapper)
 
         d = adaptor.initialize_store(store)
         if mbox_collection:
-            d.addCallback(lambda _: mbox_indexer.create_table(mbox_name))
+            d.addCallback(lambda _: mbox_indexer.create_table(mbox_uuid))
         d.addCallback(lambda _: adaptor.get_or_create_mbox(store, mbox_name))
         d.addCallback(get_collection_from_mbox_wrapper)
         return d
 
 
 # TODO profile add_msg. Why are these tests so SLOW??!
-class MessageTestCase(unittest.TestCase, SoledadTestMixin, CollectionMixin):
+class MessageTestCase(SoledadTestMixin, CollectionMixin):
     """
     Tests for the Message class.
     """
@@ -204,8 +205,7 @@ class MessageTestCase(unittest.TestCase, SoledadTestMixin, CollectionMixin):
         self.assertEquals(msg.get_tags(), self.msg_tags)
 
 
-class MessageCollectionTestCase(unittest.TestCase,
-                                SoledadTestMixin, CollectionMixin):
+class MessageCollectionTestCase(SoledadTestMixin, CollectionMixin):
     """
     Tests for the MessageCollection class.
     """
@@ -294,7 +294,7 @@ class MessageCollectionTestCase(unittest.TestCase,
         pass
 
 
-class AccountTestCase(unittest.TestCase, SoledadTestMixin):
+class AccountTestCase(SoledadTestMixin):
     """
     Tests for the Account class.
     """
