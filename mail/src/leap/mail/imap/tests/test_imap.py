@@ -75,6 +75,7 @@ class TestRealm:
 # TestCases
 #
 
+# TODO rename to IMAPMessageCollection
 class MessageCollectionTestCase(IMAP4HelperMixin):
     """
     Tests for the MessageCollection class
@@ -87,6 +88,7 @@ class MessageCollectionTestCase(IMAP4HelperMixin):
         We override mixin method since we are only testing
         MessageCollection interface in this particular TestCase
         """
+        # FIXME -- return deferred
         super(MessageCollectionTestCase, self).setUp()
 
         # FIXME --- update initialization
@@ -1090,64 +1092,6 @@ class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
 
         # Okay, that was much fun indeed
 
-    # skipping close test: we just need expunge for now.
-    #def testClose(self):
-        #"""
-        #Test closing the mailbox. We expect to get deleted all messages flagged
-        #as such.
-        #"""
-        #acc = self.server.theAccount
-        #mailbox_name = 'mailbox-close'
-#
-        #def add_mailbox():
-            #return acc.addMailbox(mailbox_name)
-#
-        #def login():
-            #return self.client.login(TEST_USER, TEST_PASSWD)
-#
-        #def select():
-            #return self.client.select(mailbox_name)
-#
-        #def get_mailbox():
-            #def _save_mbox(mailbox):
-                #self.mailbox = mailbox
-            #d = self.server.theAccount.getMailbox(mailbox_name)
-            #d.addCallback(_save_mbox)
-            #return d
-#
-        #def add_messages():
-            #d1 = self.mailbox.addMessage(
-                #'test 1', flags=('\\Deleted', 'AnotherFlag'))
-            #d2 = self.mailbox.addMessage(
-                #'test 2', flags=('AnotherFlag',))
-            #d3 = self.mailbox.addMessage(
-                #'test 3', flags=('\\Deleted',))
-            #d = defer.gatherResults([d1, d2, d3])
-            #return d
-#
-        #def close():
-            #return self.client.close()
-#
-        #d = self.connected.addCallback(strip(add_mailbox))
-        #d.addCallback(strip(login))
-        #d.addCallbacks(strip(select), self._ebGeneral)
-        #d.addCallback(strip(get_mailbox))
-        #d.addCallbacks(strip(add_messages), self._ebGeneral)
-        #d.addCallbacks(strip(close), self._ebGeneral)
-        #d.addCallbacks(self._cbStopClient, self._ebGeneral)
-        #d2 = self.loopback()
-        #d1 = defer.gatherResults([d, d2])
-        #d1.addCallback(lambda _: self.mailbox.getMessageCount())
-        #d1.addCallback(self._cbTestClose)
-        #return d1
-#
-    #def _cbTestClose(self, count):
-        # TODO is this correct? count should not take into account those
-        # flagged as deleted???
-        #self.assertEqual(count, 1)
-        # TODO --- assert flags are those of the message #2
-        #self.failUnless(self.mailbox.closed)
-
     def testExpunge(self):
         """
         Test expunge command
@@ -1209,6 +1153,7 @@ class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
         self.assertItemsEqual(self.results, [1, 3])
 
 
+# TODO -------- Fix this testcase
 class AccountTestCase(IMAP4HelperMixin):
     """
     Test the Account.

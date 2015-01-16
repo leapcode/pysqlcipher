@@ -91,8 +91,9 @@ class IMAPMailbox(object):
     implements(
         imap4.IMailbox,
         imap4.IMailboxInfo,
-        #imap4.ICloseableMailbox,
         imap4.ISearchableMailbox,
+        # XXX I think we do not need to implement CloseableMailbox, do we?
+        # imap4.ICloseableMailbox
         imap4.IMessageCopier)
 
     init_flags = INIT_FLAGS
@@ -108,8 +109,6 @@ class IMAPMailbox(object):
 
     def __init__(self, collection, rw=1):
         """
-        SoledadMailbox constructor.
-
         :param collection: instance of IMAPMessageCollection
         :type collection: IMAPMessageCollection
 
@@ -117,13 +116,9 @@ class IMAPMailbox(object):
         :type rw: int
         """
         self.rw = rw
-        self.closed = False
 
         self._uidvalidity = None
         self.collection = collection
-
-        if not self.getFlags():
-            self.setFlags(self.init_flags)
 
     @property
     def mbox_name(self):
@@ -201,6 +196,7 @@ class IMAPMailbox(object):
                     "flags expected to be a tuple")
         return self.collection.set_mbox_attr("flags", flags)
 
+    # TODO -  not used?
     @property
     def is_closed(self):
         """
@@ -211,6 +207,7 @@ class IMAPMailbox(object):
         """
         return self.collection.get_mbox_attr("closed")
 
+    # TODO -  not used?
     def set_closed(self, closed):
         """
         Set the closed attribute for this mailbox.
@@ -448,9 +445,6 @@ class IMAPMailbox(object):
         d.addCallback(remove_mbox)
         return d
 
-    def _close_cb(self, result):
-        self.closed = True
-
     def expunge(self):
         """
         Remove all messages flagged \\Deleted
@@ -555,24 +549,23 @@ class IMAPMailbox(object):
 
         # for sequence numbers (uid = 0)
         if is_sequence:
-            logger.debug("Getting msg by index: INEFFICIENT call!")
             # TODO --- implement sequences in mailbox indexer
             raise NotImplementedError
 
         else:
-            d = self._get_sequence_of_messages(messages_asked)
+            d = self._get_messages_range(messages_asked)
             d.addCallback(get_imap_messages_for_sequence)
 
         # TODO -- call signal_to_ui
         # d.addCallback(self.cb_signal_unread_to_ui)
         return d
 
-    def _get_sequence_of_messages(self, messages_asked):
-        def get_sequence(messages_asked):
+    def _get_messages_range(self, messages_asked):
+        def get_range(messages_asked):
             return self._filter_msg_seq(messages_asked)
 
         d = defer.maybeDeferred(self._bound_seq, messages_asked)
-        d.addCallback(get_sequence)
+        d.addCallback(get_range)
         return d
 
     def fetch_flags(self, messages_asked, uid):
@@ -599,6 +592,10 @@ class IMAPMailbox(object):
                 MessagePart.
         :rtype: tuple
         """
+        is_sequence = True if uid == 0 else False
+        if is_sequence:
+            raise NotImplementedError
+
         d = defer.Deferred()
         reactor.callLater(0, self._do_fetch_flags, messages_asked, uid, d)
         if PROFILE_CMD:
@@ -649,7 +646,7 @@ class IMAPMailbox(object):
             generator = (item for item in result)
             d.callback(generator)
 
-        d_seq = self._get_sequence_of_messages(messages_asked)
+        d_seq = self._get_messages_range(messages_asked)
         d_seq.addCallback(get_flags_for_seq)
         return d_seq
 
@@ -677,7 +674,11 @@ class IMAPMailbox(object):
                 MessagePart.
         :rtype: tuple
         """
+        # TODO implement sequences
         # TODO how often is thunderbird doing this?
+        is_sequence = True if uid == 0 else False
+        if is_sequence:
+            raise NotImplementedError
 
         class headersPart(object):
             def __init__(self, uid, headers):
@@ -753,6 +754,12 @@ class IMAPMailbox(object):
         :raise ReadOnlyMailbox: Raised if this mailbox is not open for
                                 read-write.
         """
+        # TODO implement sequences
+        # TODO how often is thunderbird doing this?
+        is_sequence = True if uid == 0 else False
+        if is_sequence:
+            raise NotImplementedError
+
         if not self.isWriteable():
             log.msg('read only mailbox!')
             raise imap4.ReadOnlyMailbox
@@ -777,7 +784,7 @@ class IMAPMailbox(object):
                          done.
         :type observer: deferred
         """
-        # XXX implement also sequence (uid = 0)
+        # TODO implement also sequence (uid = 0)
         # TODO we should prevent client from setting Recent flag
         leap_assert(not isinstance(flags, basestring),
                     "flags cannot be a string")
@@ -800,7 +807,7 @@ class IMAPMailbox(object):
             got_flags_setted.addCallback(return_result_dict)
             return got_flags_setted
 
-        d_seq = self._get_sequence_of_messages(messages_asked)
+        d_seq = self._get_messages_range(messages_asked)
         d_seq.addCallback(set_flags_for_seq)
         return d_seq
 

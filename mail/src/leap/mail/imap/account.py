@@ -49,9 +49,6 @@ if PROFILE_CMD:
 # Soledad IMAP Account
 #######################################
 
-# XXX watchout, account needs to be ready... so we should maybe return
-# a deferred to the IMAP service when it's initialized
-
 class IMAPAccount(object):
     """
     An implementation of an imap4 Account
@@ -67,8 +64,14 @@ class IMAPAccount(object):
         """
         Keeps track of the mailboxes and subscriptions handled by this account.
 
-        :param account: The name of the account (user id).
-        :type account: str
+        The account is not ready to be used, since the store needs to be
+        initialized and we also need to do some initialization routines.
+        You can either pass a deferred to this constructor, or use
+        `callWhenReady` method.
+
+        :param user_id: The name of the account (user id, in the form
+                        user@provider).
+        :type user_id: str
 
         :param store: a Soledad instance.
         :type store: Soledad
@@ -87,11 +90,6 @@ class IMAPAccount(object):
         self.user_id = user_id
         self.account = Account(store, ready_cb=lambda: d.callback(self))
 
-    def _return_mailbox_from_collection(self, collection, readwrite=1):
-        if collection is None:
-            return None
-        mbox = IMAPMailbox(collection, rw=readwrite)
-        return mbox
     def end_session(self):
         """
         Used to mark when the session has closed, and we should not allow any
@@ -103,6 +101,12 @@ class IMAPAccount(object):
         self.session_ended = True
 
     def callWhenReady(self, cb, *args, **kw):
+        """
+        Execute callback when the account is ready to be used.
+        XXX note that this callback will be called with a first ignored
+        parameter.
+        """
+        # TODO ignore the first parameter and change tests accordingly.
         d = self.account.callWhenReady(cb, *args, **kw)
         return d
 
@@ -129,6 +133,12 @@ class IMAPAccount(object):
         d.addCallback(self._return_mailbox_from_collection)
         return d
 
+    def _return_mailbox_from_collection(self, collection, readwrite=1):
+        if collection is None:
+            return None
+        mbox = IMAPMailbox(collection, rw=readwrite)
+        return mbox
+
     #
     # IAccount
     #
@@ -146,7 +156,7 @@ class IMAPAccount(object):
         :type creation_ts: int
 
         :returns: a Deferred that will contain the document if successful.
-        :rtype: bool
+        :rtype: defer.Deferred
         """
         name = normalize_mailbox(name)
 
@@ -190,24 +200,14 @@ class IMAPAccount(object):
 
         :return:
             A deferred that will fire with a true value if the creation
-            succeeds.
+            succeeds. The deferred might fail with a MailboxException
+            if the mailbox cannot be added.
         :rtype: Deferred
 
-        :raise MailboxException: Raised if this mailbox cannot be added.
         """
-        paths = filter(None, normalize_mailbox(pathspec).split('/'))
-        subs = []
-        sep = '/'
-
         def pass_on_collision(failure):
             failure.trap(imap4.MailboxCollision)
             return True
-
-        for accum in range(1, len(paths)):
-            partial_path = sep.join(paths[:accum])
-            d = self.addMailbox(partial_path)
-            d.addErrback(pass_on_collision)
-            subs.append(d)
 
         def handle_collision(failure):
             failure.trap(imap4.MailboxCollision)
@@ -216,19 +216,26 @@ class IMAPAccount(object):
             else:
                 return defer.succeed(True)
 
+        def all_good(result):
+            return all(result)
+
+        paths = filter(None, normalize_mailbox(pathspec).split('/'))
+        subs = []
+        sep = '/'
+
+        for accum in range(1, len(paths)):
+            partial_path = sep.join(paths[:accum])
+            d = self.addMailbox(partial_path)
+            d.addErrback(pass_on_collision)
+            subs.append(d)
+
         df = self.addMailbox(sep.join(paths))
         df.addErrback(handle_collision)
         subs.append(df)
 
-        def all_good(result):
-            return all(result)
-
-        if subs:
-            d1 = defer.gatherResults(subs)
-            d1.addCallback(all_good)
-            return d1
-        else:
-            return defer.succeed(False)
+        d1 = defer.gatherResults(subs)
+        d1.addCallback(all_good)
+        return d1
 
     def select(self, name, readwrite=1):
         """
@@ -285,8 +292,7 @@ class IMAPAccount(object):
             global _mboxes
             _mboxes = mailboxes
             if name not in mailboxes:
-                err = imap4.MailboxException("No such mailbox: %r" % name)
-                return defer.fail(err)
+                raise imap4.MailboxException("No such mailbox: %r" % name)
 
         def get_mailbox(_):
             return self.getMailbox(name)
@@ -303,10 +309,9 @@ class IMAPAccount(object):
                 # as part of their root.
                 for others in _mboxes:
                     if others != name and others.startswith(name):
-                        err = imap4.MailboxException(
+                        raise imap4.MailboxException(
                             "Hierarchically inferior mailboxes "
                             "exist and \\Noselect is set")
-                        return defer.fail(err)
             return mbox
 
         d = self.account.list_all_mailbox_names()
@@ -324,8 +329,6 @@ class IMAPAccount(object):
         # if self._inferiorNames(name) > 1:
         #   self._index.removeMailbox(name)
 
-    # TODO use mail.Account.rename_mailbox
-    # TODO finish conversion to deferreds
     def rename(self, oldname, newname):
         """
         Renames a mailbox.
@@ -460,6 +463,9 @@ class IMAPAccount(object):
         :type name: str
         :rtype: Deferred
         """
+        # TODO should raise MailboxException if attempted to unsubscribe
+        # from a mailbox that is not currently subscribed.
+        # TODO factor out with subscribe method.
         name = normalize_mailbox(name)
 
         def set_unsubscribed(mbox):

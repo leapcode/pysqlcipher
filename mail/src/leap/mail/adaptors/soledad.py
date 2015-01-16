@@ -19,7 +19,6 @@ Soledadad MailAdaptor module.
 import re
 from collections import defaultdict
 from email import message_from_string
-from functools import partial
 
 from pycryptopp.hash import sha256
 from twisted.internet import defer
@@ -72,6 +71,7 @@ class SoledadDocumentWrapper(models.DocumentWrapper):
     deletion.
     """
     # TODO we could also use a _dirty flag (in models)
+    # TODO add a get_count() method ??? -- that is extended over u1db.
 
     # We keep a dictionary with DeferredLocks, that will be
     # unique to every subclass of SoledadDocumentWrapper.
@@ -86,10 +86,9 @@ class SoledadDocumentWrapper(models.DocumentWrapper):
         """
         return cls._k_locks[cls.__name__]
 
-    def __init__(self, **kwargs):
-        doc_id = kwargs.pop('doc_id', None)
+    def __init__(self, doc_id=None, future_doc_id=None, **kwargs):
         self._doc_id = doc_id
-        self._future_doc_id = kwargs.pop('future_doc_id', None)
+        self._future_doc_id = future_doc_id
         self._lock = defer.DeferredLock()
         super(SoledadDocumentWrapper, self).__init__(**kwargs)
 
@@ -123,7 +122,7 @@ class SoledadDocumentWrapper(models.DocumentWrapper):
 
         def update_doc_id(doc):
             self._doc_id = doc.doc_id
-            self._future_doc_id = None
+            self.set_future_doc_id(None)
             return doc
 
         if self.future_doc_id is None:
@@ -201,6 +200,7 @@ class SoledadDocumentWrapper(models.DocumentWrapper):
 
     @classmethod
     def _get_or_create(cls, store, index, value):
+        # TODO shorten this method.
         assert store is not None
         assert index is not None
         assert value is not None
@@ -211,6 +211,7 @@ class SoledadDocumentWrapper(models.DocumentWrapper):
             except AttributeError:
                 raise RuntimeError("The model is badly defined")
 
+        # TODO separate into another method?
         def try_to_get_doc_from_index(indexes):
             values = []
             idx_def = dict(indexes)[index]
@@ -322,9 +323,6 @@ class SoledadDocumentWrapper(models.DocumentWrapper):
         d = store.get_from_index(list_index, index_value)
         d.addCallback(wrap_docs)
         return d
-
-    # TODO
-    # [ ] get_count() ???
 
     def __repr__(self):
         try:
@@ -442,29 +440,23 @@ class MessageWrapper(object):
         integers, beginning at one, and the values are dictionaries with the
         content of the content-docs.
         """
-        if isinstance(mdoc, SoledadDocument):
-            mdoc_id = mdoc.doc_id
-            mdoc = mdoc.content
-        else:
-            mdoc_id = None
-        if not mdoc:
-            mdoc = {}
-        self.mdoc = MetaMsgDocWrapper(doc_id=mdoc_id, **mdoc)
 
-        if isinstance(fdoc, SoledadDocument):
-            fdoc_id = fdoc.doc_id
-            fdoc = fdoc.content
-        else:
-            fdoc_id = None
-        self.fdoc = FlagsDocWrapper(doc_id=fdoc_id, **fdoc)
+        def get_doc_wrapper(doc, cls):
+            if isinstance(doc, SoledadDocument):
+                doc_id = doc.doc_id
+                doc = doc.content
+            else:
+                doc_id = None
+            if not doc:
+                doc = {}
+            return cls(doc_id=doc_id, **doc)
+
+        self.mdoc = get_doc_wrapper(mdoc, MetaMsgDocWrapper)
+
+        self.fdoc = get_doc_wrapper(fdoc, FlagsDocWrapper)
         self.fdoc.set_future_doc_id(self.mdoc.fdoc)
 
-        if isinstance(hdoc, SoledadDocument):
-            hdoc_id = hdoc.doc_id
-            hdoc = hdoc.content
-        else:
-            hdoc_id = None
-        self.hdoc = HeaderDocWrapper(doc_id=hdoc_id, **hdoc)
+        self.hdoc = get_doc_wrapper(hdoc, HeaderDocWrapper)
         self.hdoc.set_future_doc_id(self.mdoc.hdoc)
 
         if cdocs is None:
@@ -489,10 +481,6 @@ class MessageWrapper(object):
                     "Cannot create: fdoc has a doc_id")
 
         # TODO check that the doc_ids in the mdoc are coherent
-        # TODO I think we need to tolerate the no hdoc.doc_id case, for when we
-        # are doing a copy to another mailbox.
-        # leap_assert(self.hdoc.doc_id is None,
-        # "Cannot create: hdoc has a doc_id")
         d = []
         d.append(self.mdoc.create(store))
         d.append(self.fdoc.create(store))
@@ -566,8 +554,9 @@ class MessageWrapper(object):
 
     def get_subpart_dict(self, index):
         """
-        :param index: index, 1-indexed
+        :param index: the part to lookup, 1-indexed
         :type index: int
+        :rtype: dict
         """
         return self.hdoc.part_map[str(index)]
 
@@ -785,16 +774,6 @@ class SoledadMailAdaptor(SoledadIndexMixin):
         assert(MessageClass is not None)
         return MessageClass(MessageWrapper(mdoc, fdoc, hdoc, cdocs), uid=uid)
 
-    def _get_msg_from_variable_doc_list(self, doc_list, msg_class, uid=None):
-        if len(doc_list) == 3:
-            mdoc, fdoc, hdoc = doc_list
-            cdocs = None
-        elif len(doc_list) > 3:
-            fdoc, hdoc = doc_list[:3]
-            cdocs = dict(enumerate(doc_list[3:], 1))
-        return self.get_msg_from_docs(
-            msg_class, mdoc, fdoc, hdoc, cdocs, uid=uid)
-
     def get_msg_from_mdoc_id(self, MessageClass, store, mdoc_id,
                              uid=None, get_cdocs=False):
 
@@ -844,9 +823,20 @@ class SoledadMailAdaptor(SoledadIndexMixin):
         else:
             d = get_parts_doc_from_mdoc_id()
 
-        d.addCallback(partial(self._get_msg_from_variable_doc_list,
-                              msg_class=MessageClass, uid=uid))
+        d.addCallback(self._get_msg_from_variable_doc_list,
+                      msg_class=MessageClass, uid=uid)
         return d
+
+    def _get_msg_from_variable_doc_list(self, doc_list, msg_class, uid=None):
+        if len(doc_list) == 3:
+            mdoc, fdoc, hdoc = doc_list
+            cdocs = None
+        elif len(doc_list) > 3:
+            # XXX is this case used?
+            mdoc, fdoc, hdoc = doc_list[:3]
+            cdocs = dict(enumerate(doc_list[3:], 1))
+        return self.get_msg_from_docs(
+            msg_class, mdoc, fdoc, hdoc, cdocs, uid=uid)
 
     def get_flags_from_mdoc_id(self, store, mdoc_id):
         """
@@ -875,7 +865,6 @@ class SoledadMailAdaptor(SoledadIndexMixin):
     def create_msg(self, store, msg):
         """
         :param store: an instance of soledad, or anything that behaves alike
-        :type store:
         :param msg: a Message object.
 
         :return: a Deferred that is fired when all the underlying documents
@@ -889,8 +878,6 @@ class SoledadMailAdaptor(SoledadIndexMixin):
         """
         :param msg: a Message object.
         :param store: an instance of soledad, or anything that behaves alike
-        :type store:
-        :param msg: a Message object.
         :return: a Deferred that is fired when all the underlying documents
                  have been updated (actually, it's only the fdoc that's allowed
                  to update).

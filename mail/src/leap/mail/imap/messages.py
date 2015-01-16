@@ -36,16 +36,38 @@ logger = logging.getLogger(__name__)
 
 class IMAPMessage(object):
     """
-    The main representation of a message.
+    The main representation of a message as seen by the IMAP Server.
+    This class implements the semantics specific to IMAP specification.
     """
-
     implements(imap4.IMessage)
 
     def __init__(self, message, prefetch_body=True,
                  store=None, d=defer.Deferred()):
         """
-        Initializes a LeapMessage.
+        Get an IMAPMessage. A mail.Message is needed, since many of the methods
+        are proxied to that object.
+
+
+        If you do not need to prefetch the body of the message, you can set
+        `prefetch_body` to False, but the current imap server implementation
+        expect the getBodyFile method to return inmediately.
+
+        When the prefetch_body option is used, a deferred is also expected as a
+        parameter, and this will fire when the deferred initialization has
+        taken place, with this instance of IMAPMessage as a parameter.
+
+        :param message: the abstract message
+        :type message: mail.Message
+        :param prefetch_body: Whether to prefetch the content doc for the body.
+        :type prefetch_body: bool
+        :param store: an instance of soledad, or anything that behaves like it.
+        :param d: an optional deferred, that will be fired with the instance of
+                  the IMAPMessage being initialized
+        :type d: defer.Deferred
         """
+        # TODO substitute the use of the deferred initialization by a factory
+        # function, maybe.
+
         self.message = message
         self.__body_fd = None
         self.store = store

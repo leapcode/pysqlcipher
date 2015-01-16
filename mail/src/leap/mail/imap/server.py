@@ -500,13 +500,18 @@ class LEAPIMAPServer(imap4.IMAP4Server):
     select_DELETE = auth_DELETE
 
     # Need to override the command table after patching
-    # arg_astring and arg_literal
+    # arg_astring and arg_literal, except on the methods that we are already
+    # overriding.
 
+    # TODO --------------------------------------------
+    # Check if we really need to override these
+    # methods, or we can monkeypatch.
     # do_DELETE = imap4.IMAP4Server.do_DELETE
     # do_CREATE = imap4.IMAP4Server.do_CREATE
     # do_RENAME = imap4.IMAP4Server.do_RENAME
     # do_SUBSCRIBE = imap4.IMAP4Server.do_SUBSCRIBE
     # do_UNSUBSCRIBE = imap4.IMAP4Server.do_UNSUBSCRIBE
+    # -------------------------------------------------
     do_LOGIN = imap4.IMAP4Server.do_LOGIN
     do_STATUS = imap4.IMAP4Server.do_STATUS
     do_APPEND = imap4.IMAP4Server.do_APPEND
@@ -530,8 +535,11 @@ class LEAPIMAPServer(imap4.IMAP4Server):
     auth_EXAMINE = (_selectWork, arg_astring, 0, 'EXAMINE')
     select_EXAMINE = auth_EXAMINE
 
+    # TODO -----------------------------------------------
+    # re-add if we stop overriding DELETE
     # auth_DELETE = (do_DELETE, arg_astring)
     # select_DELETE = auth_DELETE
+    # ----------------------------------------------------
 
     auth_RENAME = (do_RENAME, arg_astring, arg_astring)
     select_RENAME = auth_RENAME

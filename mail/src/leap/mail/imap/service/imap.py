@@ -17,6 +17,7 @@
 """
 IMAP service initialization
 """
+# TODO: leave only an implementor of IService in here
 import logging
 import os
 
@@ -29,10 +30,9 @@ from twisted.python import log
 logger = logging.getLogger(__name__)
 
 from leap.common import events as leap_events
-from leap.common.check import leap_assert, leap_assert_type, leap_check
+from leap.common.check import leap_assert_type, leap_check
 from leap.mail.imap.account import IMAPAccount
 from leap.mail.imap.server import LEAPIMAPServer
-from leap.mail.incoming import IncomingMail
 from leap.soledad.client import Soledad
 
 from leap.common.events.events_pb2 import IMAP_SERVICE_STARTED
@@ -113,6 +113,10 @@ class LeapIMAPFactory(ServerFactory):
         """
         Stops imap service (fetcher, factory and port).
         """
+        # mark account as unusable, so any imap command will fail
+        # with unauth state.
+        self.theAccount.end_session()
+
         # TODO should wait for all the pending deferreds,
         # the twisted way!
         if DO_PROFILE:
@@ -123,23 +127,23 @@ class LeapIMAPFactory(ServerFactory):
         return ServerFactory.doStop(self)
 
 
-def run_service(*args, **kwargs):
+def run_service(store, **kwargs):
     """
     Main entry point to run the service from the client.
+
+    :param store: a soledad instance
 
     :returns: the port as returned by the reactor when starts listening, and
               the factory for the protocol.
     """
-    leap_assert(len(args) == 2)
-    soledad = args
-    leap_assert_type(soledad, Soledad)
+    leap_assert_type(store, Soledad)
 
     port = kwargs.get('port', IMAP_PORT)
     userid = kwargs.get('userid', None)
     leap_check(userid is not None, "need an user id")
 
-    uuid = soledad.uuid
-    factory = LeapIMAPFactory(uuid, userid, soledad)
+    uuid = store.uuid
+    factory = LeapIMAPFactory(uuid, userid, store)
 
     try:
         tport = reactor.listenTCP(port, factory,

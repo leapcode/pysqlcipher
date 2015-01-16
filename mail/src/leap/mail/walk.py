@@ -122,7 +122,7 @@ def walk_msg_tree(parts, body_phash=None):
     documents that will be stored in Soledad.
 
     It walks down the subparts in the parsed message tree, and collapses
-    the leaf docuents into a wrapper document until no multipart submessages
+    the leaf documents into a wrapper document until no multipart submessages
     are left. To achieve this, it iteratively calculates a wrapper vector of
     all documents in the sequence that have more than one part and have unitary
     documents to their right. To collapse a multipart, take as many
@@ -171,7 +171,7 @@ def walk_msg_tree(parts, body_phash=None):
             HEADERS: dict(parts[wind][HEADERS])
         }
 
-        # remove subparts and substitue wrapper
+        # remove subparts and substitute wrapper
         map(lambda i: parts.remove(i), slic)
         parts[wind] = cwra
 

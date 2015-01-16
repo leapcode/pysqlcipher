@@ -58,9 +58,16 @@ def _write_and_rewind(payload):
 
 class MessagePart(object):
 
-    # TODO pass cdocs in init
-
     def __init__(self, part_map, cdocs={}):
+        """
+        :param part_map: a dictionary mapping the subparts for
+                         this MessagePart (1-indexed).
+        :type part_map: dict
+        :param cdoc: optional, a dict of content documents
+        """
+        # TODO document the expected keys in the part_map dict.
+        # TODO add abstraction layer between the cdocs and this class. Only
+        # adaptor should know about the format of the cdocs.
         self._pmap = part_map
         self._cdocs = cdocs
 
@@ -266,6 +273,10 @@ class MessageCollection(object):
     # [ ] To guarantee synchronicity of the documents sent together during a
     #     sync, we could get hold of a deferredLock that inhibits
     #     synchronization while we are updating (think more about this!)
+    # [ ] review the serveral count_ methods. I think it's better to patch
+    #     server to accept deferreds.
+    # [ ] Use inheritance for the mailbox-collection instead of handling the
+    #     special cases everywhere?
 
     # Account should provide an adaptor instance when creating this collection.
     adaptor = None
@@ -285,9 +296,6 @@ class MessageCollection(object):
         self.mbox_indexer = mbox_indexer
         self.mbox_wrapper = mbox_wrapper
 
-        # TODO --- review this count shit. I think it's better to patch server
-        # to accept deferreds.
-
     def is_mailbox_collection(self):
         """
         Return True if this collection represents a Mailbox.
@@ -297,22 +305,26 @@ class MessageCollection(object):
 
     @property
     def mbox_name(self):
-        wrapper = getattr(self, "mbox_wrapper", None)
-        if not wrapper:
+        # TODO raise instead?
+        if self.mbox_wrapper is None:
             return None
-        return wrapper.mbox
+        return self.mbox_wrapper.mbox
 
     @property
     def mbox_uuid(self):
-        wrapper = getattr(self, "mbox_wrapper", None)
-        if not wrapper:
+        # TODO raise instead?
+        if self.mbox_wrapper is None:
             return None
-        return wrapper.uuid
+        return self.mbox_wrapper.uuid
 
     def get_mbox_attr(self, attr):
+        if self.mbox_wrapper is None:
+            raise RuntimeError("This is not a mailbox collection")
         return getattr(self.mbox_wrapper, attr)
 
     def set_mbox_attr(self, attr, value):
+        if self.mbox_wrapper is None:
+            raise RuntimeError("This is not a mailbox collection")
         setattr(self.mbox_wrapper, attr, value)
         return self.mbox_wrapper.update(self.store)
 
@@ -323,10 +335,10 @@ class MessageCollection(object):
         Retrieve a message by its content hash.
         :rtype: Deferred
         """
-
         if not self.is_mailbox_collection():
-            # instead of getting the metamsg by chash, query by (meta) index
-            # or use the internal collection of pointers-to-docs.
+            # TODO instead of getting the metamsg by chash, in this case we
+            # should query by (meta) index or use the internal collection of
+            # pointers-to-docs.
             raise NotImplementedError()
 
         metamsg_id = _get_mdoc_id(self.mbox_name, chash)
@@ -462,6 +474,9 @@ class MessageCollection(object):
             raise NotImplementedError()
 
         def insert_copied_mdoc_id(wrapper):
+            # TODO this needs to be implemented before the copy
+            # interface works.
+            newmailbox_uuid = get_mbox_uuid_from_msg_wrapper(wrapper)
             return self.mbox_indexer.insert_doc(
                 newmailbox_uuid, wrapper.mdoc.doc_id)
 
@@ -525,15 +540,6 @@ class MessageCollection(object):
         d.addCallback(del_all_uid)
         return d
 
-    def _update_flags_or_tags(self, old, new, mode):
-        if mode == Flagsmode.APPEND:
-            final = list((set(tuple(old) + new)))
-        elif mode == Flagsmode.REMOVE:
-            final = list(set(old).difference(set(new)))
-        elif mode == Flagsmode.SET:
-            final = new
-        return final
-
     def update_flags(self, msg, flags, mode):
         """
         Update flags for a given message.
@@ -563,6 +569,15 @@ class MessageCollection(object):
         d.addCallback(newtags)
         return d
 
+    def _update_flags_or_tags(self, old, new, mode):
+        if mode == Flagsmode.APPEND:
+            final = list((set(tuple(old) + new)))
+        elif mode == Flagsmode.REMOVE:
+            final = list(set(old).difference(set(new)))
+        elif mode == Flagsmode.SET:
+            final = new
+        return final
+
 
 class Account(object):
     """
@@ -573,7 +588,7 @@ class Account(object):
     basic collection handled by traditional MUAs, but it can also handle other
     types of Collections (tag based, for instance).
 
-    leap.mail.imap.SoledadBackedAccount partially proxies methods in this
+    leap.mail.imap.IMAPAccount partially proxies methods in this
     class.
     """
 
@@ -582,7 +597,6 @@ class Account(object):
     # the Account class.
 
     adaptor_class = SoledadMailAdaptor
-    store = None
 
     def __init__(self, store, ready_cb=None):
         self.store = store
@@ -612,6 +626,12 @@ class Account(object):
         return d
 
     def callWhenReady(self, cb, *args, **kw):
+        """
+        Execute the callback when the initialization of the Account is ready.
+        Note that the callback will receive a first meaningless parameter.
+        """
+        # TODO this should ignore the first parameter explicitely
+        # lambda _: cb(*args, **kw)
         self.deferred_initialization.addCallback(cb, *args, **kw)
         return self.deferred_initialization
 
