@@ -116,7 +116,7 @@ def get_amalgamation():
     os.mkdir(AMALGAMATION_ROOT)
     print "Downloading amalgation."
 
-    amalgamation_url = ("https://downloads.leap.se/libs/pysqlcipher"
+    amalgamation_url = ("https://downloads.leap.se/libs/pysqlcipher/"
                         "amalgamation-sqlcipher-2.1.0.zip")
 
     # and download it
