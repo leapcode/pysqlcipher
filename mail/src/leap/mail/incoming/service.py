@@ -190,7 +190,7 @@ class IncomingMail(Service):
         Service.startService(self)
         if self._loop is None:
             self._loop = LoopingCall(self.fetch)
-            self._loop.start(self._check_period)
+            return self._loop.start(self._check_period)
         else:
             logger.warning("Tried to start an already running fetching loop.")
 
