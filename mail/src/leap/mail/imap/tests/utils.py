@@ -99,6 +99,7 @@ class IMAP4HelperMixin(SoledadTestMixin):
             # Soledad sync makes trial block forever. The sync it's mocked to
             # fix this problem. _mock_soledad_get_from_index can be used from
             # the tests to provide documents.
+            # TODO see here, possibly related? -- http://www.pythoneye.com/83_20424875/
             self._soledad.sync = Mock()
 
             d = defer.Deferred()
