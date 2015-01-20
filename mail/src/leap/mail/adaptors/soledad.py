@@ -364,6 +364,12 @@ class FlagsDocWrapper(SoledadDocumentWrapper):
         self._future_doc_id = new_id
         self.mbox_uuid = mbox_uuid
 
+    def get_flags(self):
+        """
+        Get the flags for this message (as a tuple of strings, not unicode).
+        """
+        return map(str, self.flags)
+
 
 class HeaderDocWrapper(SoledadDocumentWrapper):
 
@@ -730,11 +736,6 @@ class SoledadMailAdaptor(SoledadIndexMixin):
     def __init__(self):
         SoledadIndexMixin.__init__(self)
 
-    mboxwrapper_klass = MailboxWrapper
-
-    def __init__(self):
-        SoledadIndexMixin.__init__(self)
-
     # Message handling
 
     def get_msg_from_string(self, MessageClass, raw_msg):
@@ -792,7 +793,7 @@ class SoledadMailAdaptor(SoledadIndexMixin):
             fdoc, hdoc = doc_list[:3]
             cdocs = dict(enumerate(doc_list[3:], 1))
         return self.get_msg_from_docs(
-            msg_class, mdoc, fdoc, hdoc, cdocs, uid=None)
+            msg_class, mdoc, fdoc, hdoc, cdocs, uid=uid)
 
     def get_msg_from_mdoc_id(self, MessageClass, store, mdoc_id,
                              uid=None, get_cdocs=False):
@@ -847,6 +848,30 @@ class SoledadMailAdaptor(SoledadIndexMixin):
                               msg_class=MessageClass, uid=uid))
         return d
 
+    def get_flags_from_mdoc_id(self, store, mdoc_id):
+        """
+        # XXX stuff here...
+        """
+        mbox = re.findall(constants.METAMSGID_MBOX_RE, mdoc_id)[0]
+        chash = re.findall(constants.METAMSGID_CHASH_RE, mdoc_id)[0]
+
+        def _get_fdoc_id_from_mdoc_id():
+            return constants.FDOCID.format(mbox_uuid=mbox, chash=chash)
+
+        fdoc_id = _get_fdoc_id_from_mdoc_id()
+
+        def wrap_fdoc(doc):
+            cls = FlagsDocWrapper
+            return cls(doc_id=doc.doc_id, **doc.content)
+
+        def get_flags(fdoc_wrapper):
+            return fdoc_wrapper.get_flags()
+
+        d = store.get_doc(fdoc_id)
+        d.addCallback(wrap_fdoc)
+        d.addCallback(get_flags)
+        return d
+
     def create_msg(self, store, msg):
         """
         :param store: an instance of soledad, or anything that behaves alike
@@ -881,7 +906,6 @@ class SoledadMailAdaptor(SoledadIndexMixin):
         Delete all messages flagged as deleted.
         """
         def err(f):
-            print "ERROR GETTING FROM INDEX"
             f.printTraceback()
 
         def delete_fdoc_and_mdoc_flagged(fdocs):

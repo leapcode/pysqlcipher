@@ -155,7 +155,7 @@ class Message(object):
         Get flags for this message.
         :rtype: tuple
         """
-        return tuple(self._wrapper.fdoc.flags)
+        return self._wrapper.fdoc.get_flags()
 
     def get_internal_date(self):
         """
@@ -184,6 +184,7 @@ class Message(object):
 
     def get_body_file(self, store):
         """
+        Get a file descriptor with the body content.
         """
         def write_and_rewind_if_found(cdoc):
             if not cdoc:
@@ -367,13 +368,35 @@ class MessageCollection(object):
         d.addCallback(get_msg_from_mdoc_id)
         return d
 
-    # TODO deprecate ??? ---
-    def _prime_count(self):
-        def update_count(count):
-            self._count = count
-        d = self.mbox_indexer.count(self.mbox_name)
-        d.addCallback(update_count)
+    def get_flags_by_uid(self, uid, absolute=True):
+        if not absolute:
+            raise NotImplementedError("Does not support relative ids yet")
+
+        def get_flags_from_mdoc_id(doc_id):
+            if doc_id is None:  # XXX needed? or bug?
+                return None
+            return self.adaptor.get_flags_from_mdoc_id(
+                self.store, doc_id)
+
+        def wrap_in_tuple(flags):
+            return (uid, flags)
+
+        d = self.mbox_indexer.get_doc_id_from_uid(self.mbox_uuid, uid)
+        d.addCallback(get_flags_from_mdoc_id)
+        d.addCallback(wrap_in_tuple)
         return d
+
+    # TODO  ------------------------------ FIXME FIXME FIXME implement this!
+    def set_flags(self, *args, **kw):
+        pass
+
+    # TODO deprecate ??? ---
+    #def _prime_count(self):
+        #def update_count(count):
+            #self._count = count
+        #d = self.mbox_indexer.count(self.mbox_name)
+        #d.addCallback(update_count)
+        #return d
 
     def count(self):
         """
@@ -389,11 +412,13 @@ class MessageCollection(object):
 
     def count_recent(self):
         # FIXME HACK
-        return 0
+        # TODO ------------------------ implement this
+        return 3
 
     def count_unseen(self):
         # FIXME hack
-        return 0
+        # TODO ------------------------ implement this
+        return 3
 
     def get_uid_next(self):
         """
@@ -403,6 +428,12 @@ class MessageCollection(object):
         :rtype: Deferred
         """
         return self.mbox_indexer.get_next_uid(self.mbox_uuid)
+
+    def get_last_uid(self):
+        """
+        Get the last UID for this mailbox.
+        """
+        return self.mbox_indexer.get_last_uid(self.mbox_uuid)
 
     def all_uid_iter(self):
         """

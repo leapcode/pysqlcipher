@@ -19,6 +19,7 @@ IMAPMessage and IMAPMessageCollection.
 """
 import logging
 from twisted.mail import imap4
+from twisted.internet import defer
 from zope.interface import implements
 
 from leap.common.check import leap_assert, leap_assert_type
@@ -40,11 +41,17 @@ class IMAPMessage(object):
 
     implements(imap4.IMessage)
 
-    def __init__(self, message):
+    def __init__(self, message, prefetch_body=True,
+                 store=None, d=defer.Deferred()):
         """
         Initializes a LeapMessage.
         """
         self.message = message
+        self.__body_fd = None
+        self.store = store
+        if prefetch_body:
+            gotbody = self.__prefetch_body_file()
+            gotbody.addCallback(lambda _: d.callback(self))
 
     # IMessage implementation
 
@@ -109,14 +116,26 @@ class IMAPMessage(object):
     #
     # IMessagePart
     #
+    def __prefetch_body_file(self):
+        def assign_body_fd(fd):
+            self.__body_fd = fd
+            return fd
+        d = self.getBodyFile()
+        d.addCallback(assign_body_fd)
+        return d
 
     def getBodyFile(self, store=None):
         """
         Retrieve a file object containing only the body of this message.
 
         :return: file-like object opened for reading
-        :rtype: StringIO
+        :rtype: a deferred that will fire with a StringIO object.
         """
+        if self.__body_fd is not None:
+            fd = self.__body_fd
+            fd.seek(0)
+            return fd
+
         if store is None:
             store = self.store
         return self.message.get_body_file(store)

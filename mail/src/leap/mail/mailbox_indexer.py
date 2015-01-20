@@ -305,12 +305,24 @@ class MailboxIndexer(object):
                 return 1
             return uid + 1
 
+        d = self.get_last_uid(mailbox_id)
+        d.addCallback(increment)
+        return d
+
+    def get_last_uid(self, mailbox_id):
+        """
+        Get the highest UID for a given mailbox.
+        """
+        check_good_uuid(mailbox_id)
         sql = ("SELECT MAX(rowid) FROM {preffix}{name} "
                "LIMIT 1;").format(
             preffix=self.table_preffix, name=sanitize(mailbox_id))
 
+        def getit(result):
+            return _maybe_first_query_item(result)
+
         d = self._query(sql)
-        d.addCallback(increment)
+        d.addCallback(getit)
         return d
 
     def all_uid_iter(self, mailbox_id):
