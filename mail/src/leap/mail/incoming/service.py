@@ -20,7 +20,6 @@ Incoming mail fetcher.
 import copy
 import logging
 import shlex
-import threading
 import time
 import traceback
 import warnings
@@ -51,7 +50,6 @@ from leap.common.mail import get_email_charset
 from leap.keymanager import errors as keymanager_errors
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.mail.adaptors import soledad_indexes as fields
-from leap.mail.decorators import deferred_to_thread
 from leap.mail.utils import json_loads, empty, first
 from leap.soledad.client import Soledad
 from leap.soledad.common.crypto import ENC_SCHEME_KEY, ENC_JSON_KEY
@@ -90,6 +88,7 @@ class IncomingMail(Service):
     This loop will sync the soledad db with the remote server and
     process all the documents found tagged as incoming mail.
     """
+    # TODO implements IService?
 
     name = "IncomingMail"
 
@@ -105,8 +104,6 @@ class IncomingMail(Service):
     LEAP_SIGNATURE_VALID = 'valid'
     LEAP_SIGNATURE_INVALID = 'invalid'
     LEAP_SIGNATURE_COULD_NOT_VERIFY = 'could not verify'
-
-    fetching_lock = threading.Lock()
 
     def __init__(self, keymanager, soledad, inbox, userid,
                  check_period=INCOMING_CHECK_PERIOD):
@@ -174,14 +171,10 @@ class IncomingMail(Service):
 
         logger.debug("fetching mail for: %s %s" % (
             self._soledad.uuid, self._userid))
-        if not self.fetching_lock.locked():
-            d1 = self._sync_soledad()
-            d = defer.gatherResults([d1], consumeErrors=True)
-            d.addCallbacks(syncSoledadCallback, self._errback)
-            d.addCallbacks(self._signal_fetch_to_ui, self._errback)
-            return d
-        else:
-            logger.debug("Already fetching mail.")
+        d = self._sync_soledad()
+        d.addCallbacks(syncSoledadCallback, self._errback)
+        d.addCallbacks(self._signal_fetch_to_ui, self._errback)
+        return d
 
     def startService(self):
         """
@@ -213,7 +206,6 @@ class IncomingMail(Service):
         logger.exception(failure.value)
         traceback.print_exc()
 
-    @deferred_to_thread
     def _sync_soledad(self):
         """
         Synchronize with remote soledad.
@@ -221,15 +213,21 @@ class IncomingMail(Service):
         :returns: a list of LeapDocuments, or None.
         :rtype: iterable or None
         """
-        with self.fetching_lock:
-            try:
-                log.msg('FETCH: syncing soledad...')
-                self._soledad.sync()
-                log.msg('FETCH soledad SYNCED.')
-            except InvalidAuthTokenError:
-                # if the token is invalid, send an event so the GUI can
-                # disable mail and show an error message.
-                leap_events.signal(SOLEDAD_INVALID_AUTH_TOKEN)
+        def _log_synced(result):
+            log.msg('FETCH soledad SYNCED.')
+            print "Result: ", result
+            return result
+        try:
+            log.msg('FETCH: syncing soledad...')
+            d = self._soledad.sync()
+            d.addCallback(_log_synced)
+            return d
+        # TODO is this still raised? or should we do failure.trap
+        # instead?
+        except InvalidAuthTokenError:
+            # if the token is invalid, send an event so the GUI can
+            # disable mail and show an error message.
+            leap_events.signal(SOLEDAD_INVALID_AUTH_TOKEN)
 
     def _signal_fetch_to_ui(self, doclist):
         """
@@ -305,7 +303,6 @@ class IncomingMail(Service):
     # operations on individual messages
     #
 
-    #FIXME: @deferred_to_thread
     def _decrypt_doc(self, doc):
         """
         Decrypt the contents of a document.
@@ -388,7 +385,6 @@ class IncomingMail(Service):
             return ""
         return self._maybe_decrypt_msg(rawmsg)
 
-    @deferred_to_thread
     def _update_incoming_message(self, doc):
         """
         Do a put for a soledad document. This probably has been called only
@@ -398,10 +394,9 @@ class IncomingMail(Service):
         :param doc: the SoledadDocument to update
         :type doc: SoledadDocument
         """
-        log.msg("Updating SoledadDoc %s" % (doc.doc_id))
-        self._soledad.put_doc(doc)
+        log.msg("Updating Incoming MSG: SoledadDoc %s" % (doc.doc_id))
+        return self._soledad.put_doc(doc)
 
-    @deferred_to_thread
     def _delete_incoming_message(self, doc):
         """
         Delete document.
@@ -409,8 +404,9 @@ class IncomingMail(Service):
         :param doc: the SoledadDocument to delete
         :type doc: SoledadDocument
         """
+        print "DELETING INCOMING MESSAGE"
         log.msg("Deleting Incoming message: %s" % (doc.doc_id,))
-        self._soledad.delete_doc(doc)
+        return self._soledad.delete_doc(doc)
 
     def _maybe_decrypt_msg(self, data):
         """
@@ -705,16 +701,18 @@ class IncomingMail(Service):
         doc, data = msgtuple
         log.msg('adding message %s to local db' % (doc.doc_id,))
 
-        if isinstance(data, list):
-            if empty(data):
-                return False
-            data = data[0]
+        #if isinstance(data, list):
+            #if empty(data):
+                #return False
+            #data = data[0]
 
         def msgSavedCallback(result):
             if not empty(result):
                 leap_events.signal(IMAP_MSG_SAVED_LOCALLY)
-                deferLater(reactor, 0, self._delete_incoming_message, doc)
-                leap_events.signal(IMAP_MSG_DELETED_INCOMING)
+                print "DEFERRING THE DELETION ----->"
+                return self._delete_incoming_message(doc)
+                # TODO add notification as a callback
+                #leap_events.signal(IMAP_MSG_DELETED_INCOMING)
 
         d = self._inbox.addMessage(data, (self.RECENT_FLAG,))
         d.addCallbacks(msgSavedCallback, self._errback)

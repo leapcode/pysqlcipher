@@ -45,9 +45,12 @@ def first(things):
 def empty(thing):
     """
     Return True if a thing is None or its length is zero.
+    If thing is a number (int, float, long), return False.
     """
     if thing is None:
         return True
+    if isinstance(thing, (int, float, long)):
+        return False
     if isinstance(thing, SoledadDocument):
         thing = thing.content
     try:
