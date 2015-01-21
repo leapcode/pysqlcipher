@@ -231,7 +231,7 @@ class IMAPMailbox(object):
         """
         return self.collection.get_mbox_attr("created")
 
-    def getUID(self, message):
+    def getUID(self, message_number):
         """
         Return the UID of a message in the mailbox
 
@@ -239,15 +239,15 @@ class IMAPMailbox(object):
         but in the future will be useful to get absolute UIDs from
         message sequence numbers.
 
-        :param message: the message uid
+        :param message: the message sequence number.
         :type message: int
 
         :rtype: int
+        :return: the UID of the message.
         """
-        # TODO --- return the uid if it has it!!!
-        d = self.collection.get_msg_by_uid(message)
-        d.addCallback(lambda m: m.getUID())
-        return d
+        # TODO support relative sequences. The (imap) message should
+        # receive a sequence number attribute: a deferred is not expected
+        return message_number
 
     def getUIDNext(self):
         """
@@ -451,15 +451,6 @@ class IMAPMailbox(object):
     def _close_cb(self, result):
         self.closed = True
 
-    # TODO server already calls expunge for closing
-    #def close(self):
-        #"""
-        #Expunge and mark as closed
-        #"""
-        #d = self.expunge()
-        #d.addCallback(self._close_cb)
-        #return d
-
     def expunge(self):
         """
         Remove all messages flagged \\Deleted
@@ -641,9 +632,6 @@ class IMAPMailbox(object):
                 return map(str, self.flags)
 
         def pack_flags(result):
-            #if result is None:
-                #print "No result"
-                #return
             _uid, _flags = result
             return _uid, flagsPart(_uid, _flags)
 
@@ -790,14 +778,31 @@ class IMAPMailbox(object):
         :type observer: deferred
         """
         # XXX implement also sequence (uid = 0)
-        # XXX we should prevent client from setting Recent flag?
+        # TODO we should prevent client from setting Recent flag
         leap_assert(not isinstance(flags, basestring),
                     "flags cannot be a string")
         flags = tuple(flags)
-        messages_asked = self._bound_seq(messages_asked)
-        seq_messg = self._filter_msg_seq(messages_asked)
-        self.collection.set_flags(
-            self.mbox_name, seq_messg, flags, mode, observer)
+
+        def set_flags_for_seq(sequence):
+
+            def return_result_dict(list_of_flags):
+                result = dict(zip(list(sequence), list_of_flags))
+                observer.callback(result)
+                return result
+
+            d_all_set = []
+            for msgid in sequence:
+                d = self.collection.get_message_by_uid(msgid)
+                d.addCallback(lambda msg: self.collection.update_flags(
+                    msg, flags, mode))
+                d_all_set.append(d)
+            got_flags_setted = defer.gatherResults(d_all_set)
+            got_flags_setted.addCallback(return_result_dict)
+            return got_flags_setted
+
+        d_seq = self._get_sequence_of_messages(messages_asked)
+        d_seq.addCallback(set_flags_for_seq)
+        return d_seq
 
     # ISearchableMailbox
 

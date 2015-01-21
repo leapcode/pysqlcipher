@@ -272,8 +272,7 @@ class MessageCollection(object):
     store = None
     messageklass = Message
 
-    def __init__(self, adaptor, store, mbox_indexer=None, mbox_wrapper=None,
-                 count=None):
+    def __init__(self, adaptor, store, mbox_indexer=None, mbox_wrapper=None):
         """
         Constructor for a MessageCollection.
         """
@@ -288,15 +287,6 @@ class MessageCollection(object):
 
         # TODO --- review this count shit. I think it's better to patch server
         # to accept deferreds.
-        # TODO need to initialize count here because imap server does not
-        # expect a defered for the count. caller should return the deferred for
-        # prime_count (ie, initialize) when returning the collection
-        # TODO should increment and decrement when adding/deleting.
-        # TODO recent count should also be static.
-
-        if not count:
-            count = 0
-        self._count = count
 
     def is_mailbox_collection(self):
         """
@@ -386,18 +376,6 @@ class MessageCollection(object):
         d.addCallback(wrap_in_tuple)
         return d
 
-    # TODO  ------------------------------ FIXME FIXME FIXME implement this!
-    def set_flags(self, *args, **kw):
-        pass
-
-    # TODO deprecate ??? ---
-    #def _prime_count(self):
-        #def update_count(count):
-            #self._count = count
-        #d = self.mbox_indexer.count(self.mbox_name)
-        #d.addCallback(update_count)
-        #return d
-
     def count(self):
         """
         Count the messages in this collection.
@@ -479,6 +457,7 @@ class MessageCollection(object):
         Copy the message to another collection. (it only makes sense for
         mailbox collections)
         """
+        # TODO currently broken ------------------FIXME-
         if not self.is_mailbox_collection():
             raise NotImplementedError()
 
@@ -555,19 +534,21 @@ class MessageCollection(object):
             final = new
         return final
 
-    def udpate_flags(self, msg, flags, mode):
+    def update_flags(self, msg, flags, mode):
         """
         Update flags for a given message.
         """
         wrapper = msg.get_wrapper()
         current = wrapper.fdoc.flags
-        newflags = self._update_flags_or_tags(current, flags, mode)
+        newflags = map(str, self._update_flags_or_tags(current, flags, mode))
         wrapper.fdoc.flags = newflags
 
         wrapper.fdoc.seen = MessageFlags.SEEN_FLAG in newflags
         wrapper.fdoc.deleted = MessageFlags.DELETED_FLAG in newflags
 
-        return self.adaptor.update_msg(self.store, msg)
+        d = self.adaptor.update_msg(self.store, msg)
+        d.addCallback(lambda _: newflags)
+        return d
 
     def update_tags(self, msg, tags, mode):
         """
@@ -576,8 +557,11 @@ class MessageCollection(object):
         wrapper = msg.get_wrapper()
         current = wrapper.fdoc.tags
         newtags = self._update_flags_or_tags(current, tags, mode)
+
         wrapper.fdoc.tags = newtags
-        return self.adaptor.update_msg(self.store, msg)
+        d = self.adaptor.update_msg(self.store, msg)
+        d.addCallback(newtags)
+        return d
 
 
 class Account(object):

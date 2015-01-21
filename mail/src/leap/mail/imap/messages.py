@@ -73,29 +73,6 @@ class IMAPMessage(object):
         """
         return self.message.get_flags()
 
-    # setFlags not in the interface spec but we use it with store command.
-
-    # XXX if we can move it to a collection method, we don't need to pass
-    # collection to the IMAPMessage
-
-    # lookup method? IMAPMailbox?
-
-    #def setFlags(self, flags, mode):
-        #"""
-        #Sets the flags for this message
-#
-        #:param flags: the flags to update in the message.
-        #:type flags: tuple of str
-        #:param mode: the mode for setting. 1 is append, -1 is remove, 0 set.
-        #:type mode: int
-        #"""
-        #leap_assert(isinstance(flags, tuple), "flags need to be a tuple")
-        # XXX
-        # return new flags
-        # map to str
-        #self.message.set_flags(flags, mode)
-        #self.collection.update_flags(self.message, flags, mode)
-
     def getInternalDate(self):
         """
         Retrieve the date internally associated with this message

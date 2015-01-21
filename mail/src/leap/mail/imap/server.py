@@ -112,7 +112,6 @@ class LEAPIMAPServer(imap4.IMAP4Server):
         ebFetch = self._IMAP4Server__ebFetch
 
         if len(query) == 1 and str(query[0]) == "flags":
-            print ">>>>>>>>> fetching flags"
             self._oldTimeout = self.setTimeout(None)
             # no need to call iter, we get a generator
             maybeDeferred(
@@ -122,7 +121,6 @@ class LEAPIMAPServer(imap4.IMAP4Server):
             ).addErrback(ebFetch, tag)
 
         elif len(query) == 1 and str(query[0]) == "rfc822.header":
-            print ">>>>>>>> fetching headers"
             self._oldTimeout = self.setTimeout(None)
             # no need to call iter, we get a generator
             maybeDeferred(
@@ -131,7 +129,6 @@ class LEAPIMAPServer(imap4.IMAP4Server):
                 cbFetch, tag, query, uid
             ).addErrback(ebFetch, tag)
         else:
-            print ">>>>>>> Fetching other"
             self._oldTimeout = self.setTimeout(None)
             # no need to call iter, we get a generator
             maybeDeferred(
@@ -370,7 +367,6 @@ class LEAPIMAPServer(imap4.IMAP4Server):
 
     # TODO subscribe method had also to be changed to accomodate deferred
     def do_SUBSCRIBE(self, tag, name):
-        print "DOING SUBSCRIBE"
         name = self._parseMbox(name)
 
         def _subscribeCb(_):
@@ -433,8 +429,6 @@ class LEAPIMAPServer(imap4.IMAP4Server):
 
         def _renameEb(failure):
             m = failure.value
-            print "SERVER rename failure!"
-            print m
             if failure.check(TypeError):
                 self.sendBadResponse(tag, 'Invalid command syntax')
             elif failure.check(imap4.MailboxException):
