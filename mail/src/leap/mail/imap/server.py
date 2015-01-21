@@ -67,7 +67,7 @@ class LEAPIMAPServer(imap4.IMAP4Server):
         :param line: the line from the server, without the line delimiter.
         :type line: str
         """
-        if self.theAccount.closed is True and self.state != "unauth":
+        if self.theAccount.session_ended is True and self.state != "unauth":
             log.msg("Closing the session. State: unauth")
             self.state = "unauth"
 

@@ -61,7 +61,7 @@ class IMAPAccount(object):
     implements(imap4.IAccount, imap4.INamespacePresenter)
 
     selected = None
-    closed = False
+    session_ended = False
 
     def __init__(self, user_id, store, d=defer.Deferred()):
         """
@@ -92,6 +92,15 @@ class IMAPAccount(object):
             return None
         mbox = IMAPMailbox(collection, rw=readwrite)
         return mbox
+    def end_session(self):
+        """
+        Used to mark when the session has closed, and we should not allow any
+        more commands from the client.
+
+        Right now it's called from the client backend.
+        """
+        # TODO move its use to the service shutdown in leap.mail
+        self.session_ended = True
 
     def callWhenReady(self, cb, *args, **kw):
         d = self.account.callWhenReady(cb, *args, **kw)
