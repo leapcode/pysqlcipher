@@ -204,22 +204,24 @@ class SMTPDelivery(object):
             signal(proto.SMTP_RECIPIENT_ACCEPTED_ENCRYPTED, user.dest.addrstr)
 
         def not_found(failure):
-            if failure.check(KeyNotFound):
-                # if key was not found, check config to see if will send anyway
-                if self._encrypted_only:
-                    signal(proto.SMTP_RECIPIENT_REJECTED, user.dest.addrstr)
-                    raise smtp.SMTPBadRcpt(user.dest.addrstr)
-                log.msg("Warning: will send an unencrypted message (because "
-                        "encrypted_only' is set to False).")
-                signal(
-                    proto.SMTP_RECIPIENT_ACCEPTED_UNENCRYPTED,
-                    user.dest.addrstr)
-            else:
-                return failure
+            failure.trap(KeyNotFound)
 
-        d = self._km.get_key(address, OpenPGPKey)  # might raise KeyNotFound
+            # if key was not found, check config to see if will send anyway
+            if self._encrypted_only:
+                signal(proto.SMTP_RECIPIENT_REJECTED, user.dest.addrstr)
+                raise smtp.SMTPBadRcpt(user.dest.addrstr)
+            log.msg("Warning: will send an unencrypted message (because "
+                    "encrypted_only' is set to False).")
+            signal(
+                proto.SMTP_RECIPIENT_ACCEPTED_UNENCRYPTED,
+                user.dest.addrstr)
+
+        def encrypt_func(_):
+            return lambda: EncryptedMessage(user, self._outgoing_mail)
+
+        d = self._km.get_key(address, OpenPGPKey)
         d.addCallbacks(found, not_found)
-        d.addCallback(lambda _: EncryptedMessage(user, self._outgoing_mail))
+        d.addCallback(encrypt_func)
         return d
 
     def validateFrom(self, helo, origin):
