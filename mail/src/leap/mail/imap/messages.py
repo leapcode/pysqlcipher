@@ -115,13 +115,6 @@ class IMAPMessage(object):
     #
     # IMessagePart
     #
-    def __prefetch_body_file(self):
-        def assign_body_fd(fd):
-            self.__body_fd = fd
-            return fd
-        d = self.getBodyFile()
-        d.addCallback(assign_body_fd)
-        return d
 
     def getBodyFile(self, store=None):
         """
@@ -138,25 +131,6 @@ class IMAPMessage(object):
         if store is None:
             store = self.store
         return self.message.get_body_file(store)
-
-        # TODO refactor with getBodyFile in MessagePart
-
-        #body = bdoc_content.get(self.RAW_KEY, "")
-        #content_type = bdoc_content.get('content-type', "")
-        #charset = find_charset(content_type)
-        #if charset is None:
-            #charset = self._get_charset(body)
-        #try:
-            #if isinstance(body, unicode):
-                #body = body.encode(charset)
-        #except UnicodeError as exc:
-            #logger.error(
-                #"Unicode error, using 'replace'. {0!r}".format(exc))
-            #logger.debug("Attempted to encode with: %s" % charset)
-            #body = body.encode(charset, 'replace')
-        #finally:
-            #return write_fd(body)
-
 
     def getSize(self):
         """
@@ -182,48 +156,8 @@ class IMAPMessage(object):
         :return: A mapping of header field names to header field values
         :rtype: dict
         """
-        # TODO split in smaller methods -- format_headers()?
-        # XXX refactor together with MessagePart method
-
         headers = self.message.get_headers()
-
-        # XXX keep this in the imap imessage implementation,
-        # because the server impl. expects content-type to be present.
-        if not headers:
-            logger.warning("No headers found")
-            return {str('content-type'): str('')}
-
-        names = map(lambda s: s.upper(), names)
-        if negate:
-            cond = lambda key: key.upper() not in names
-        else:
-            cond = lambda key: key.upper() in names
-
-        if isinstance(headers, list):
-            headers = dict(headers)
-
-        # default to most likely standard
-        charset = find_charset(headers, "utf-8")
-        headers2 = dict()
-        for key, value in headers.items():
-            # twisted imap server expects *some* headers to be lowercase
-            # We could use a CaseInsensitiveDict here...
-            if key.lower() == "content-type":
-                key = key.lower()
-
-            if not isinstance(key, str):
-                key = key.encode(charset, 'replace')
-            if not isinstance(value, str):
-                value = value.encode(charset, 'replace')
-
-            if value.endswith(";"):
-                # bastards
-                value = value[:-1]
-
-            # filter original dict by negate-condition
-            if cond(key):
-                headers2[key] = value
-        return headers2
+        return _format_headers(headers, negate, *names)
 
     def isMultipart(self):
         """
@@ -242,7 +176,81 @@ class IMAPMessage(object):
         :rtype: Any object implementing C{IMessagePart}.
         :return: The specified sub-part.
         """
-        return self.message.get_subpart(part)
+        subpart = self.message.get_subpart(part)
+        return IMAPMessagePart(subpart)
+
+    def __prefetch_body_file(self):
+        def assign_body_fd(fd):
+            self.__body_fd = fd
+            return fd
+        d = self.getBodyFile()
+        d.addCallback(assign_body_fd)
+        return d
+
+
+class IMAPMessagePart(object):
+
+    def __init__(self, message_part):
+        self.message_part = message_part
+
+    def getBodyFile(self, store=None):
+        return self.message_part.get_body_file()
+
+    def getSize(self):
+        return self.message_part.get_size()
+
+    def getHeaders(self, negate, *names):
+        headers = self.message_part.get_headers()
+        return _format_headers(headers, negate, *names)
+
+    def isMultipart(self):
+        return self.message_part.is_multipart()
+
+    def getSubPart(self, part):
+        subpart = self.message_part.get_subpart(part)
+        return IMAPMessagePart(subpart)
+
+
+def _format_headers(headers, negate, *names):
+    # current server impl. expects content-type to be present, so if for
+    # some reason we do not have headers, we have to return at least that
+    # one
+    if not headers:
+        logger.warning("No headers found")
+        return {str('content-type'): str('')}
+
+    names = map(lambda s: s.upper(), names)
+    if negate:
+        cond = lambda key: key.upper() not in names
+    else:
+        cond = lambda key: key.upper() in names
+
+    if isinstance(headers, list):
+        headers = dict(headers)
+
+    # default to most likely standard
+    charset = find_charset(headers, "utf-8")
+
+    _headers = dict()
+    for key, value in headers.items():
+        # twisted imap server expects *some* headers to be lowercase
+        # We could use a CaseInsensitiveDict here...
+        if key.lower() == "content-type":
+            key = key.lower()
+
+        if not isinstance(key, str):
+            key = key.encode(charset, 'replace')
+        if not isinstance(value, str):
+            value = value.encode(charset, 'replace')
+
+        if value.endswith(";"):
+            # bastards
+            value = value[:-1]
+
+        # filter original dict by negate-condition
+        if cond(key):
+            _headers[key] = value
+    return _headers
 
 
 class IMAPMessageCollection(object):

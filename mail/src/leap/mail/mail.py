@@ -22,6 +22,7 @@ import logging
 import StringIO
 
 from twisted.internet import defer
+from twisted.python import log
 
 from leap.common.check import leap_assert_type
 from leap.common.mail import get_email_charset
@@ -30,7 +31,7 @@ from leap.mail.adaptors.soledad import SoledadMailAdaptor
 from leap.mail.constants import INBOX_NAME
 from leap.mail.constants import MessageFlags
 from leap.mail.mailbox_indexer import MailboxIndexer
-from leap.mail.utils import empty, find_charset
+from leap.mail.utils import empty  # find_charset
 
 logger = logging.getLogger(name=__name__)
 
@@ -57,61 +58,57 @@ def _write_and_rewind(payload):
 
 
 class MessagePart(object):
+    # TODO This class should be better abstracted from the data model.
+    # TODO support arbitrarily nested multiparts (right now we only support
+    #      the trivial case)
 
-    def __init__(self, part_map, cdocs={}):
+    def __init__(self, part_map, index=1, cdocs={}):
         """
         :param part_map: a dictionary mapping the subparts for
                          this MessagePart (1-indexed).
         :type part_map: dict
-        :param cdoc: optional, a dict of content documents
+
+        The format for the part_map is as follows:
+
+        {u'1': {u'ctype': u'text/plain',
+        u'headers': [[u'Content-Type', u'text/plain; charset="utf-8"'],
+                     [u'Content-Transfer-Encoding', u'8bit']],
+        u'multi': False,
+        u'parts': 1,
+        u'phash': u'02D82B29F6BB0C8612D1C',
+        u'size': 132}}
+
+        :param index: which index in the content-doc is this subpart
+                      representing.
+        :param cdocs: optional, a reference to the top-level dict of wrappers
+                      for content-docs (1-indexed).
         """
-        # TODO document the expected keys in the part_map dict.
-        # TODO add abstraction layer between the cdocs and this class. Only
-        # adaptor should know about the format of the cdocs.
+        # TODO: Pass only the cdoc wrapper for this part.
         self._pmap = part_map
+        self._index = index
         self._cdocs = cdocs
 
     def get_size(self):
         return self._pmap['size']
 
     def get_body_file(self):
+        payload = ""
         pmap = self._pmap
         multi = pmap.get('multi')
         if not multi:
-            phash = pmap.get("phash")
+            payload = self._get_payload(self._index)
         else:
-            pmap_ = pmap.get('part_map')
-            first_part = pmap_.get('1', None)
-            if not empty(first_part):
-                phash = first_part['phash']
-            else:
-                phash = ""
-
-        payload = self._get_payload(phash)
-
+            # XXX uh, multi also...  should recurse"
+            raise NotImplementedError
         if payload:
-            # FIXME
-            # content_type = self._get_ctype_from_document(phash)
-            # charset = find_charset(content_type)
-            charset = None
-            if charset is None:
-                charset = get_email_charset(payload)
-            try:
-                if isinstance(payload, unicode):
-                    payload = payload.encode(charset)
-            except UnicodeError as exc:
-                logger.error(
-                    "Unicode error, using 'replace'. {0!r}".format(exc))
-                payload = payload.encode(charset, 'replace')
-
+            payload = self._format_payload(payload)
         return _write_and_rewind(payload)
 
     def get_headers(self):
         return self._pmap.get("headers", [])
 
     def is_multipart(self):
-        multi = self._pmap.get("multi", False)
-        return multi
+        return self._pmap.get("multi", False)
 
     def get_subpart(self, part):
         if not self.is_multipart():
@@ -123,10 +120,30 @@ class MessagePart(object):
         except KeyError:
             logger.debug("getSubpart for %s: KeyError" % (part,))
             raise IndexError
-        return MessagePart(self._soledad, part_map)
+        return MessagePart(part_map, cdocs={1: self._cdocs.get(1, {})})
 
-    def _get_payload(self, phash):
-        return self._cdocs.get(phash, "")
+    def _get_payload(self, index):
+        cdoc_wrapper = self._cdocs.get(index, None)
+        if cdoc_wrapper:
+            return cdoc_wrapper.raw
+        return ""
+
+    def _format_payload(self, payload):
+        # FIXME -----------------------------------------------
+        # Test against unicode payloads...
+        # content_type = self._get_ctype_from_document(phash)
+        # charset = find_charset(content_type)
+        charset = None
+        if charset is None:
+            charset = get_email_charset(payload)
+        try:
+            if isinstance(payload, unicode):
+                payload = payload.encode(charset)
+        except UnicodeError as exc:
+            logger.error(
+                "Unicode error, using 'replace'. {0!r}".format(exc))
+            payload = payload.encode(charset, 'replace')
+        return payload
 
 
 class Message(object):
@@ -224,17 +241,18 @@ class Message(object):
             raise TypeError
         part_index = part + 1
         try:
-            subpart_dict = self._wrapper.get_subpart_dict(
-                part_index)
+            subpart_dict = self._wrapper.get_subpart_dict(part_index)
         except KeyError:
-            raise TypeError
-        # XXX pass cdocs
-        return MessagePart(subpart_dict)
+            raise IndexError
+
+        return MessagePart(
+            subpart_dict, index=part_index, cdocs=self._wrapper.cdocs)
 
     # Custom methods.
 
     def get_tags(self):
         """
+        Get the tags for this message.
         """
         return tuple(self._wrapper.fdoc.tags)
 
@@ -290,7 +308,7 @@ class MessageCollection(object):
         self.adaptor = adaptor
         self.store = store
 
-        # XXX I have to think about what to do when there is no mbox passed to
+        # XXX think about what to do when there is no mbox passed to
         # the initialization. We could still get the MetaMsg by index, instead
         # of by doc_id. See get_message_by_content_hash
         self.mbox_indexer = mbox_indexer

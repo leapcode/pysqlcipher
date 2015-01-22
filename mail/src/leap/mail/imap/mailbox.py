@@ -540,7 +540,11 @@ class IMAPMailbox(object):
 
             d_msg = []
             for msgid in msg_sequence:
-                d_msg.append(getmsg(msgid))
+                # XXX We want cdocs because we "probably" are asked for the
+                # body. We should be smarted at do_FETCH and pass a parameter
+                # to this method in order not to prefetch cdocs if they're not
+                # going to be used.
+                d_msg.append(getmsg(msgid, get_cdocs=True))
 
             d = defer.gatherResults(d_msg)
             d.addCallback(_get_imap_msg)

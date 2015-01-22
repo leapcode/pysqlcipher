@@ -463,8 +463,9 @@ class MessageWrapper(object):
             cdocs = {}
         cdocs_keys = cdocs.keys()
         assert sorted(cdocs_keys) == range(1, len(cdocs_keys) + 1)
-        self.cdocs = dict([(key, ContentDocWrapper(**doc)) for (key, doc) in
-                           cdocs.items()])
+        self.cdocs = dict([
+            (key, ContentDocWrapper(**doc.content))
+            for (key, doc) in cdocs.items()])
         for doc_id, cdoc in zip(self.mdoc.cdocs, self.cdocs.values()):
             cdoc.set_future_doc_id(doc_id)
 
@@ -559,6 +560,9 @@ class MessageWrapper(object):
         :rtype: dict
         """
         return self.hdoc.part_map[str(index)]
+
+    def get_subpart_indexes(self):
+        return self.hdoc.part_map.keys()
 
     def get_body(self, store):
         """
