@@ -219,7 +219,7 @@ class SMTPDelivery(object):
 
         d = self._km.get_key(address, OpenPGPKey)  # might raise KeyNotFound
         d.addCallbacks(found, not_found)
-        d.addCallbac(lambda _: EncryptedMessage(user, self._outgoing_mail))
+        d.addCallback(lambda _: EncryptedMessage(user, self._outgoing_mail))
         return d
 
     def validateFrom(self, helo, origin):
@@ -306,4 +306,6 @@ class EncryptedMessage(object):
         log.err()
         signal(proto.SMTP_CONNECTION_LOST, self._user.dest.addrstr)
         # unexpected loss of connection; don't save
+
+
         self._lines = []
