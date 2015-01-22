@@ -33,6 +33,9 @@ class IMessageWrapper(Interface):
     cdocs = Attribute('A dictionary with the content-docs, one-indexed')
 
 
+# TODO [ ] Catch up with the actual implementation!
+#          Lot of stuff added there ...
+
 class IMailAdaptor(Interface):
     """
     I know how to store the standard representation for messages and mailboxes,
