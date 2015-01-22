@@ -51,7 +51,7 @@ TYPE_MBOX_UUID_IDX = 'by-type-and-mbox-uuid'
 TYPE_SUBS_IDX = 'by-type-and-subscribed'
 TYPE_MSGID_IDX = 'by-type-and-message-id'
 TYPE_MBOX_SEEN_IDX = 'by-type-and-mbox-and-seen'
-TYPE_MBOX_RECT_IDX = 'by-type-and-mbox-and-recent'
+TYPE_MBOX_RECENT_IDX = 'by-type-and-mbox-and-recent'
 TYPE_MBOX_DEL_IDX = 'by-type-and-mbox-and-deleted'
 TYPE_MBOX_C_HASH_IDX = 'by-type-and-mbox-and-contenthash'
 TYPE_C_HASH_IDX = 'by-type-and-contenthash'
@@ -97,7 +97,7 @@ MAIL_INDEXES = {
 
     # messages
     TYPE_MBOX_SEEN_IDX: [TYPE, MBOX_UUID, 'bool(seen)'],
-    TYPE_MBOX_RECT_IDX: [TYPE, MBOX_UUID, 'bool(recent)'],
+    TYPE_MBOX_RECENT_IDX: [TYPE, MBOX_UUID, 'bool(recent)'],
     TYPE_MBOX_DEL_IDX: [TYPE, MBOX_UUID, 'bool(deleted)'],
 
     # incoming queue

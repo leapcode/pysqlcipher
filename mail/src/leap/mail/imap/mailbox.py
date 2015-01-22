@@ -714,12 +714,9 @@ class IMAPMailbox(object):
 
         :param result: ignored
         """
-        d = self._get_unseen_deferred()
+        d = defer.maybeDeferred(self.getUnseenCount)
         d.addCallback(self.__cb_signal_unread_to_ui)
         return result
-
-    def _get_unseen_deferred(self):
-        return defer.maybeDeferred(self.getUnseenCount)
 
     def __cb_signal_unread_to_ui(self, unseen):
         """

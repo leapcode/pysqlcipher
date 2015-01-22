@@ -930,6 +930,42 @@ class SoledadMailAdaptor(SoledadIndexMixin):
         d.addCallbacks(delete_fdoc_and_mdoc_flagged, err)
         return d
 
+    # count messages
+
+    def get_count_unseen(self, store, mbox_uuid):
+        """
+        Get the number of unseen messages for a given mailbox.
+
+        :param store: instance of Soledad.
+        :param mbox_uuid: the uuid for this mailbox.
+        :rtype: int
+        """
+        type_ = FlagsDocWrapper.model.type_
+        uuid = mbox_uuid.replace('-', '_')
+
+        unseen_index = indexes.TYPE_MBOX_SEEN_IDX
+
+        d = store.get_count_from_index(unseen_index, type_, uuid, "0")
+        d.addErrback(self._errback)
+        return d
+
+    def get_count_recent(self, store, mbox_uuid):
+        """
+        Get the number of recent messages for a given mailbox.
+
+        :param store: instance of Soledad.
+        :param mbox_uuid: the uuid for this mailbox.
+        :rtype: int
+        """
+        type_ = FlagsDocWrapper.model.type_
+        uuid = mbox_uuid.replace('-', '_')
+
+        recent_index = indexes.TYPE_MBOX_RECENT_IDX
+
+        d = store.get_count_from_index(recent_index, type_, uuid, "1")
+        d.addErrback(self._errback)
+        return d
+
     # Mailbox handling
 
     def get_or_create_mbox(self, store, name):
@@ -937,6 +973,7 @@ class SoledadMailAdaptor(SoledadIndexMixin):
         Get the mailbox with the given name, or create one if it does not
         exist.
 
+        :param store: instance of Soledad
         :param name: the name of the mailbox
         :type name: str
         """
@@ -969,6 +1006,9 @@ class SoledadMailAdaptor(SoledadIndexMixin):
         :rtype: defer.Deferred
         """
         return MailboxWrapper.get_all(store)
+
+    def _errback(self, f):
+        f.printTraceback()
 
 
 def _split_into_parts(raw):

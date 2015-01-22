@@ -295,6 +295,7 @@ class MessageCollection(object):
     #     server to accept deferreds.
     # [ ] Use inheritance for the mailbox-collection instead of handling the
     #     special cases everywhere?
+    # [ ] or maybe a mailbox_only decorator...
 
     # Account should provide an adaptor instance when creating this collection.
     adaptor = None
@@ -419,14 +420,24 @@ class MessageCollection(object):
         return d
 
     def count_recent(self):
-        # FIXME HACK
-        # TODO ------------------------ implement this
-        return 3
+        """
+        Count the recent messages in this collection.
+        :return: a Deferred that will fire with the integer for the count.
+        :rtype: Deferred
+        """
+        if not self.is_mailbox_collection():
+            raise NotImplementedError()
+        return self.adaptor.get_count_recent(self.store, self.mbox_uuid)
 
     def count_unseen(self):
-        # FIXME hack
-        # TODO ------------------------ implement this
-        return 3
+        """
+        Count the unseen messages in this collection.
+        :return: a Deferred that will fire with the integer for the count.
+        :rtype: Deferred
+        """
+        if not self.is_mailbox_collection():
+            raise NotImplementedError()
+        return self.adaptor.get_count_unseen(self.store, self.mbox_uuid)
 
     def get_uid_next(self):
         """
