@@ -58,9 +58,7 @@ class TestOutgoingMail(TestCaseWithKeyManager):
         self.lines = [line for line in self.EMAIL_DATA[4:12]]
         self.lines.append('')  # add a trailing newline
         self.raw = '\r\n'.join(self.lines)
-        self.expected_body = ('\r\n'.join(self.EMAIL_DATA[9:12]) +
-                              "\r\n\r\n--\r\nI prefer encrypted email - "
-                              "https://leap.se/key/anotheruser\r\n")
+        self.expected_body = '\r\n'.join(self.EMAIL_DATA[9:12]) + "\r\n"
         self.fromAddr = ADDRESS_2
 
         def init_outgoing_and_proto(_):

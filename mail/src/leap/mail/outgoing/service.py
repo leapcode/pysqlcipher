@@ -67,8 +67,6 @@ class OutgoingMail:
     A service for handling encrypted outgoing mail.
     """
 
-    FOOTER_STRING = "I prefer encrypted email"
-
     def __init__(self, from_address, keymanager, cert, key, host, port):
         """
         Initialize the mail service.
@@ -220,7 +218,6 @@ class OutgoingMail:
         :rtype: Deferred
         """
         # pass if the original message's content-type is "multipart/encrypted"
-        lines = raw.split('\r\n')
         origmsg = Parser().parsestr(raw)
 
         if origmsg.get_content_type() == 'multipart/encrypted':
@@ -229,16 +226,6 @@ class OutgoingMail:
         from_address = validate_address(self._from_address)
         username, domain = from_address.split('@')
         to_address = validate_address(recipient.dest.addrstr)
-
-        # add a nice footer to the outgoing message
-        # XXX: footer will eventually optional or be removed
-        if origmsg.get_content_type() == 'text/plain':
-            lines.append('--')
-            lines.append('%s - https://%s/key/%s' %
-                         (self.FOOTER_STRING, domain, username))
-            lines.append('')
-
-        origmsg = Parser().parsestr('\r\n'.join(lines))
 
         def signal_encrypt_sign(newmsg):
             signal(proto.SMTP_END_ENCRYPT_AND_SIGN,
