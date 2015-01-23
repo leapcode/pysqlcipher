@@ -38,6 +38,8 @@ server as another code entity that uses this lower layer.
 .. toctree::
    :maxdepth: 2
 
+   hacking
+
 ..   intro
 ..   tutorial
 
