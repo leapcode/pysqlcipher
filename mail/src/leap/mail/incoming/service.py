@@ -435,7 +435,7 @@ class IncomingMail(Service):
 
         def add_leap_header(ret):
             decrmsg, signkey = ret
-            if (senderAddress is None or
+            if (senderAddress is None or signkey is None or
                     isinstance(signkey, keymanager_errors.KeyNotFound)):
                 decrmsg.add_header(
                     self.LEAP_SIGNATURE_HEADER,

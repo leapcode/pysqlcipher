@@ -46,6 +46,8 @@ from leap.soledad.common.crypto import (
     ENC_SCHEME_KEY,
 )
 
+# TODO: add some tests for encrypted, unencrypted, signed and unsgined messages
+
 
 class IncomingMailTestCase(TestCaseWithKeyManager):
     """
