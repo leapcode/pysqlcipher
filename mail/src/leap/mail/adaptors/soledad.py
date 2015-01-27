@@ -966,6 +966,30 @@ class SoledadMailAdaptor(SoledadIndexMixin):
         d.addErrback(self._errback)
         return d
 
+    # search api
+
+    def get_mdoc_id_from_msgid(self, store, mbox_uuid, msgid):
+        """
+        Get the UID for a message with the passed msgid (the one in the headers
+        msg-id).
+        This is used by the MUA to retrieve the recently saved draft.
+        """
+        type_ = HeaderDocWrapper.model.type_
+        uuid = mbox_uuid.replace('-', '_')
+
+        msgid_index = indexes.TYPE_MSGID_IDX
+
+        def get_mdoc_id(hdoc):
+            if not hdoc:
+                return None
+            hdoc = hdoc[0]
+            mdoc_id = hdoc.doc_id.replace("H-", "M-%s-" % uuid)
+            return mdoc_id
+
+        d = store.get_from_index(msgid_index, type_, msgid)
+        d.addCallback(get_mdoc_id)
+        return d
+
     # Mailbox handling
 
     def get_or_create_mbox(self, store, name):

@@ -460,6 +460,25 @@ class MessageCollection(object):
         """
         return self.mbox_indexer.all_uid_iter(self.mbox_uuid)
 
+    def get_uid_from_msgid(self, msgid):
+        """
+        Return the UID(s) of the matching msg-ids for this mailbox collection.
+        """
+        if not self.is_mailbox_collection():
+            raise NotImplementedError()
+
+        def get_uid(mdoc_id):
+            if not mdoc_id:
+                return None
+            d = self.mbox_indexer.get_uid_from_doc_id(
+                self.mbox_uuid, mdoc_id)
+            return d
+
+        d = self.adaptor.get_mdoc_id_from_msgid(
+            self.store, self.mbox_uuid, msgid)
+        d.addCallback(get_uid)
+        return d
+
     # Manipulate messages
 
     def add_msg(self, raw_msg, flags=tuple(), tags=tuple(), date=""):

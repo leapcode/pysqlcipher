@@ -199,8 +199,7 @@ class LEAPIMAPServer(imap4.IMAP4Server):
         a deferred, the client will only be informed of success (or failure)
         when the deferred's callback (or errback) is invoked.
         """
-        # TODO return the output of _memstore.is_writing
-        # XXX and that should return a deferred!
+        # TODO implement a collection of ongoing deferreds?
         return None
 
     #############################################################
@@ -499,6 +498,50 @@ class LEAPIMAPServer(imap4.IMAP4Server):
     auth_DELETE = (do_DELETE, arg_astring)
     select_DELETE = auth_DELETE
 
+    # -----------------------------------------------------------------------
+    # Patched just to allow __cbAppend to receive a deferred from messageCount
+    # TODO format and send upstream.
+    def do_APPEND(self, tag, mailbox, flags, date, message):
+        mailbox = self._parseMbox(mailbox)
+        maybeDeferred(self.account.select, mailbox).addCallback(
+            self._cbAppendGotMailbox, tag, flags, date, message).addErrback(
+            self._ebAppendGotMailbox, tag)
+
+    def __ebAppend(self, failure, tag):
+        self.sendBadResponse(tag, 'APPEND failed: ' + str(failure.value))
+
+    def _cbAppendGotMailbox(self, mbox, tag, flags, date, message):
+        if not mbox:
+            self.sendNegativeResponse(tag, '[TRYCREATE] No such mailbox')
+            return
+
+        d = mbox.addMessage(message, flags, date)
+        d.addCallback(self.__cbAppend, tag, mbox)
+        d.addErrback(self.__ebAppend, tag)
+
+    def _ebAppendGotMailbox(self, failure, tag):
+        self.sendBadResponse(
+            tag, "Server error encountered while opening mailbox.")
+        log.err(failure)
+
+    def __cbAppend(self, result, tag, mbox):
+
+        # XXX patched ---------------------------------
+        def send_response(count):
+            self.sendUntaggedResponse('%d EXISTS' % count)
+            self.sendPositiveResponse(tag, 'APPEND complete')
+
+        d = mbox.getMessageCount()
+        d.addCallback(send_response)
+        return d
+        # XXX patched ---------------------------------
+
+    # -----------------------------------------------------------------------
+
+    auth_APPEND = (do_APPEND, arg_astring, imap4.IMAP4Server.opt_plist,
+                   imap4.IMAP4Server.opt_datetime, arg_literal)
+    select_APPEND = auth_APPEND
+
     # Need to override the command table after patching
     # arg_astring and arg_literal, except on the methods that we are already
     # overriding.
@@ -511,10 +554,10 @@ class LEAPIMAPServer(imap4.IMAP4Server):
     # do_RENAME = imap4.IMAP4Server.do_RENAME
     # do_SUBSCRIBE = imap4.IMAP4Server.do_SUBSCRIBE
     # do_UNSUBSCRIBE = imap4.IMAP4Server.do_UNSUBSCRIBE
+    # do_APPEND = imap4.IMAP4Server.do_APPEND
     # -------------------------------------------------
     do_LOGIN = imap4.IMAP4Server.do_LOGIN
     do_STATUS = imap4.IMAP4Server.do_STATUS
-    do_APPEND = imap4.IMAP4Server.do_APPEND
     do_COPY = imap4.IMAP4Server.do_COPY
 
     _selectWork = imap4.IMAP4Server._selectWork
@@ -539,6 +582,10 @@ class LEAPIMAPServer(imap4.IMAP4Server):
     # re-add if we stop overriding DELETE
     # auth_DELETE = (do_DELETE, arg_astring)
     # select_DELETE = auth_DELETE
+    # auth_APPEND = (do_APPEND, arg_astring, opt_plist, opt_datetime,
+    #                arg_literal)
+    # select_APPEND = auth_APPEND
+
     # ----------------------------------------------------
 
     auth_RENAME = (do_RENAME, arg_astring, arg_astring)
@@ -558,10 +605,6 @@ class LEAPIMAPServer(imap4.IMAP4Server):
 
     auth_STATUS = (do_STATUS, arg_astring, arg_plist)
     select_STATUS = auth_STATUS
-
-    auth_APPEND = (do_APPEND, arg_astring, opt_plist, opt_datetime,
-                   arg_literal)
-    select_APPEND = auth_APPEND
 
     select_COPY = (do_COPY, arg_seqset, arg_astring)
 

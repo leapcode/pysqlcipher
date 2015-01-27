@@ -120,7 +120,7 @@ class MailboxIndexer(object):
 
         The doc_id must be in the format:
 
-            M+<mailbox>+<content-hash-of-the-message>
+            M-<mailbox>-<content-hash-of-the-message>
 
         :param mailbox: the mailbox name
         :type mailbox: str
