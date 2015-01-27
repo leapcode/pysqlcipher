@@ -464,7 +464,7 @@ class MessageWrapper(object):
         cdocs_keys = cdocs.keys()
         assert sorted(cdocs_keys) == range(1, len(cdocs_keys) + 1)
         self.cdocs = dict([
-            (key, ContentDocWrapper(**doc.content))
+            (key, get_doc_wrapper(doc, ContentDocWrapper))
             for (key, doc) in cdocs.items()])
         for doc_id, cdoc in zip(self.mdoc.cdocs, self.cdocs.values()):
             cdoc.set_future_doc_id(doc_id)
