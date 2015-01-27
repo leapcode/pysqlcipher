@@ -521,7 +521,7 @@ class IMAPMailbox(object):
         getmsg = self.collection.get_message_by_uid
         getimapmsg = self.get_imap_message
 
-        def get_imap_messages_for_sequence(msg_sequence):
+        def get_imap_messages_for_range(msg_range):
 
             def _get_imap_msg(messages):
                 d_imapmsg = []
@@ -531,7 +531,7 @@ class IMAPMailbox(object):
 
             def _zip_msgid(imap_messages):
                 zipped = zip(
-                    list(msg_sequence), imap_messages)
+                    list(msg_range), imap_messages)
                 return (item for item in zipped)
 
             def _unset_recent(sequence):
@@ -539,7 +539,7 @@ class IMAPMailbox(object):
                 return sequence
 
             d_msg = []
-            for msgid in msg_sequence:
+            for msgid in msg_range:
                 # XXX We want cdocs because we "probably" are asked for the
                 # body. We should be smarted at do_FETCH and pass a parameter
                 # to this method in order not to prefetch cdocs if they're not
@@ -558,7 +558,7 @@ class IMAPMailbox(object):
 
         else:
             d = self._get_messages_range(messages_asked)
-            d.addCallback(get_imap_messages_for_sequence)
+            d.addCallback(get_imap_messages_for_range)
 
         # TODO -- call signal_to_ui
         # d.addCallback(self.cb_signal_unread_to_ui)
