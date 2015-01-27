@@ -62,7 +62,8 @@ def get_body_phash(msg):
     Find the body payload-hash for this message.
     """
     for part in msg.walk():
-        if part.get_content_type() == "text/plain":
+        # XXX what other ctypes should be considered body?
+        if part.get_content_type() in ("text/plain", "text/html"):
             # XXX avoid hashing again
             return get_hash(part.get_payload())
 
