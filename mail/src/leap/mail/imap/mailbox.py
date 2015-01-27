@@ -880,8 +880,8 @@ class IMAPMailbox(object):
         #deferLater(self.reactor, 0, self._do_copy, message, d)
         #return d
 
-        # FIXME not implemented !!! ---
-        return self.collection.copy_msg(message, self.mbox_name)
+        return self.collection.copy_msg(message.message,
+                                        self.collection.mbox_uuid)
 
     # convenience fun
 

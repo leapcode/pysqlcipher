@@ -509,25 +509,27 @@ class MessageCollection(object):
 
         return d
 
-    def copy_msg(self, msg, newmailbox):
+    def copy_msg(self, msg, new_mbox_uuid):
         """
         Copy the message to another collection. (it only makes sense for
         mailbox collections)
         """
-        # TODO currently broken ------------------FIXME-
         if not self.is_mailbox_collection():
             raise NotImplementedError()
 
-        def insert_copied_mdoc_id(wrapper):
-            # TODO this needs to be implemented before the copy
-            # interface works.
-            newmailbox_uuid = get_mbox_uuid_from_msg_wrapper(wrapper)
+        def insert_copied_mdoc_id(wrapper_new_msg):
             return self.mbox_indexer.insert_doc(
-                newmailbox_uuid, wrapper.mdoc.doc_id)
+                new_mbox_uuid, wrapper.mdoc.doc_id)
 
         wrapper = msg.get_wrapper()
-        d = wrapper.copy(self.store, newmailbox)
+
+        def print_result(result):
+            print "COPY CALLBACK:>>>", result
+            return result
+
+        d = wrapper.copy(self.store, new_mbox_uuid)
         d.addCallback(insert_copied_mdoc_id)
+        d.addCallback(print_result)
         return d
 
     def delete_msg(self, msg):

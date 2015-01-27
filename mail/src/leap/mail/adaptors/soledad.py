@@ -16,6 +16,7 @@
 """
 Soledadad MailAdaptor module.
 """
+import logging
 import re
 from collections import defaultdict
 from email import message_from_string
@@ -512,15 +513,30 @@ class MessageWrapper(object):
         d.append(self.fdoc.delete(store))
         return defer.gatherResults(d)
 
-    def copy(self, store, newmailbox):
+    def copy(self, store, new_mbox_uuid):
         """
         Return a copy of this MessageWrapper in a new mailbox.
+
+        :param store: an instance of Soledad, or anything that behaves alike.
+        :param new_mbox_uuid: the uuid of the mailbox where we are copying this
+               message to.
+        :type new_mbox_uuid: str
+        :rtype: MessageWrapper
         """
-        # 1. copy the fdoc, mdoc
-        # 2. remove the doc_id of that fdoc
-        # 3. create it (with new doc_id)
-        # 4. return new wrapper (new meta too!)
-        raise NotImplementedError()
+        new_mdoc = self.mdoc.serialize()
+        new_fdoc = self.fdoc.serialize()
+
+        # the future doc_ids is properly set because we modified
+        # the pointers in mdoc, which has precedence.
+        new_wrapper = MessageWrapper(new_mdoc, new_fdoc, None, None)
+        new_wrapper.hdoc = self.hdoc
+        new_wrapper.cdocs = self.cdocs
+        new_wrapper.set_mbox_uuid(new_mbox_uuid)
+
+        # XXX could flag so that it only creates mdoc/fdoc...
+        d = new_wrapper.create(store)
+        d.addCallback(lambda result: new_wrapper)
+        return d
 
     def set_mbox_uuid(self, mbox_uuid):
         """
