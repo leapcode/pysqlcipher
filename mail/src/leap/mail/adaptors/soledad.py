@@ -18,12 +18,14 @@ Soledadad MailAdaptor module.
 """
 import logging
 import re
+
 from collections import defaultdict
 from email import message_from_string
 
 from pycryptopp.hash import sha256
 from twisted.internet import defer
 from zope.interface import implements
+import u1db
 
 from leap.common.check import leap_assert, leap_assert_type
 
@@ -39,6 +41,8 @@ from leap.mail.interfaces import IMailAdaptor, IMessageWrapper
 
 from leap.soledad.common.document import SoledadDocument
 
+
+logger = logging.getLogger(__name__)
 
 # TODO
 # [ ] Convenience function to create mail specifying subject, date, etc?
@@ -151,11 +155,23 @@ class SoledadDocumentWrapper(models.DocumentWrapper):
 
         def update_and_put_doc(doc):
             doc.content.update(self.serialize())
-            return store.put_doc(doc)
+            d = store.put_doc(doc)
+            d.addErrback(self._catch_revision_conflict, doc.doc_id)
+            return d
 
         d = store.get_doc(self._doc_id)
         d.addCallback(update_and_put_doc)
         return d
+
+    def _catch_revision_conflict(self, failure, doc_id):
+        # XXX We can have some RevisionConflicts if we try
+        # to put the docs that are already there.
+        # This can happen right now when creating/saving the cdocs
+        # during a copy. Instead of catching and ignoring this
+        # error, we should mark them in the copy so there is no attempt to
+        # create/update them.
+        failure.trap(u1db.errors.RevisionConflict)
+        logger.debug("Got conflict while putting %s" % doc_id)
 
     def delete(self, store):
         """
