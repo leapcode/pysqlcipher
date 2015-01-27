@@ -22,7 +22,6 @@ import logging
 import StringIO
 
 from twisted.internet import defer
-from twisted.python import log
 
 from leap.common.check import leap_assert_type
 from leap.common.mail import get_email_charset
@@ -31,7 +30,6 @@ from leap.mail.adaptors.soledad import SoledadMailAdaptor
 from leap.mail.constants import INBOX_NAME
 from leap.mail.constants import MessageFlags
 from leap.mail.mailbox_indexer import MailboxIndexer
-from leap.mail.utils import empty  # find_charset
 
 logger = logging.getLogger(name=__name__)
 
@@ -211,9 +209,8 @@ class Message(object):
         Get a file descriptor with the body content.
         """
         def write_and_rewind_if_found(cdoc):
-            if not cdoc:
-                return None
-            return _write_and_rewind(cdoc.raw)
+            payload = cdoc.raw if cdoc else ""
+            return _write_and_rewind(payload)
 
         d = defer.maybeDeferred(self._wrapper.get_body, store)
         d.addCallback(write_and_rewind_if_found)
