@@ -21,6 +21,7 @@ SMTP gateway tests.
 """
 
 import re
+from email.parser import Parser
 from datetime import datetime
 from twisted.internet.defer import fail
 from twisted.mail.smtp import User
@@ -33,8 +34,12 @@ from leap.mail.tests import (
     TestCaseWithKeyManager,
     ADDRESS,
     ADDRESS_2,
+    PUBLIC_KEY_2,
 )
 from leap.keymanager import openpgp, errors
+
+
+BEGIN_PUBLIC_KEY = "-----BEGIN PGP PUBLIC KEY BLOCK-----"
 
 
 class TestOutgoingMail(TestCaseWithKeyManager):
@@ -71,7 +76,7 @@ class TestOutgoingMail(TestCaseWithKeyManager):
                 self._km,
                 self._config['encrypted_only'],
                 self.outgoing_mail).buildProtocol(('127.0.0.1', 0))
-            self.dest = User(ADDRESS, 'gateway.leap.se', self.proto, ADDRESS)
+            self.dest = User(ADDRESS, 'gateway.leap.se', self.proto, ADDRESS_2)
 
         d = TestCaseWithKeyManager.setUp(self)
         d.addCallback(init_outgoing_and_proto)
@@ -88,7 +93,10 @@ class TestOutgoingMail(TestCaseWithKeyManager):
                 decrypted,
                 'Decrypted text differs from plaintext.')
 
-        d = self.outgoing_mail._maybe_encrypt_and_sign(self.raw, self.dest)
+        d = self._set_sign_used(ADDRESS)
+        d.addCallback(
+            lambda _:
+            self.outgoing_mail._maybe_encrypt_and_sign(self.raw, self.dest))
         d.addCallback(self._assert_encrypted)
         d.addCallback(lambda message: self._km.decrypt(
             message.get_payload(1).get_payload(), ADDRESS, openpgp.OpenPGPKey))
@@ -109,7 +117,10 @@ class TestOutgoingMail(TestCaseWithKeyManager):
             self.assertTrue(ADDRESS_2 in signkey.address,
                             "Verification failed")
 
-        d = self.outgoing_mail._maybe_encrypt_and_sign(self.raw, self.dest)
+        d = self._set_sign_used(ADDRESS)
+        d.addCallback(
+            lambda _:
+            self.outgoing_mail._maybe_encrypt_and_sign(self.raw, self.dest))
         d.addCallback(self._assert_encrypted)
         d.addCallback(lambda message: self._km.decrypt(
             message.get_payload(1).get_payload(), ADDRESS, openpgp.OpenPGPKey,
@@ -158,7 +169,7 @@ class TestOutgoingMail(TestCaseWithKeyManager):
 
             def assert_verify(key):
                 self.assertTrue(ADDRESS_2 in key.address,
-                                 'Signature could not be verified.')
+                                'Signature could not be verified.')
 
             d = self._km.verify(
                 signed_text, ADDRESS_2, openpgp.OpenPGPKey,
@@ -169,6 +180,42 @@ class TestOutgoingMail(TestCaseWithKeyManager):
         d = self.outgoing_mail._maybe_encrypt_and_sign(self.raw, recipient)
         d.addCallback(check_signed)
         d.addCallback(verify)
+        return d
+
+    def test_attach_key(self):
+        def check_headers(message):
+            msgstr = message.as_string(unixfrom=False)
+            for header in self.EMAIL_DATA[4:8]:
+                self.assertTrue(header in msgstr,
+                                "Missing header: %s" % (header,))
+            return message
+
+        def check_attachment((decrypted, _)):
+            msg = Parser().parsestr(decrypted)
+            for payload in msg.get_payload():
+                if 'application/pgp-keys' == payload.get_content_type():
+                    keylines = PUBLIC_KEY_2.split('\n')
+                    key = BEGIN_PUBLIC_KEY + '\n\n' + '\n'.join(keylines[4:-1])
+                    self.assertTrue(key in payload.get_payload(),
+                                    "Key attachment don't match")
+                    return
+            self.fail("No public key attachment found")
+
+        d = self.outgoing_mail._maybe_encrypt_and_sign(self.raw, self.dest)
+        d.addCallback(self._assert_encrypted)
+        d.addCallback(check_headers)
+        d.addCallback(lambda message: self._km.decrypt(
+            message.get_payload(1).get_payload(), ADDRESS, openpgp.OpenPGPKey))
+        d.addCallback(check_attachment)
+        return d
+
+    def _set_sign_used(self, address):
+        def set_sign(key):
+            key.sign_used = True
+            return self._km.put_key(key, address)
+
+        d = self._km.get_key(address, openpgp.OpenPGPKey, fetch_remote=False)
+        d.addCallback(set_sign)
         return d
 
     def _assert_encrypted(self, res):

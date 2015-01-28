@@ -18,6 +18,8 @@ import re
 from StringIO import StringIO
 from email.parser import Parser
 from email.mime.application import MIMEApplication
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 from OpenSSL import SSL
 
@@ -250,8 +252,46 @@ class OutgoingMail:
                 % (to_address, from_address))
         signal(proto.SMTP_START_ENCRYPT_AND_SIGN,
                "%s,%s" % (self._from_address, to_address))
-        d = self._encrypt_and_sign(origmsg, to_address, from_address)
+        d = self._maybe_attach_key(origmsg, from_address, to_address)
+        d.addCallback(self._encrypt_and_sign, to_address, from_address)
         d.addCallbacks(signal_encrypt_sign, if_key_not_found_send_unencrypted)
+        return d
+
+    def _maybe_attach_key(self, origmsg, from_address, to_address):
+        filename = "%s-email-key.asc" % (from_address,)
+
+        def attach_if_address_hasnt_encrypted(to_key):
+            # if the sign_used flag is true that means that we got an encrypted
+            # email from this address, because we conly check signatures on
+            # encrypted emails. In this case we don't attach.
+            # XXX: this might not be true some time in the future
+            if to_key.sign_used:
+                return origmsg
+
+            d = self._keymanager.get_key(from_address, OpenPGPKey,
+                                         fetch_remote=False)
+            d.addCallback(attach_key)
+            return d
+
+        def attach_key(from_key):
+            msg = origmsg
+            if not origmsg.is_multipart():
+                msg = MIMEMultipart()
+                for h, v in origmsg.items():
+                    msg.add_header(h, v)
+                msg.attach(MIMEText(origmsg.get_payload()))
+
+            keymsg = MIMEApplication(from_key.key_data, _subtype='pgp-keys',
+                                     _encoder=lambda x: x)
+            keymsg.add_header('content-disposition', 'attachment',
+                              filename=filename)
+            msg.attach(keymsg)
+            return msg
+
+        d = self._keymanager.get_key(to_address, OpenPGPKey,
+                                     fetch_remote=False)
+        d.addCallback(attach_if_address_hasnt_encrypted)
+        d.addErrback(lambda _: origmsg)
         return d
 
     def _encrypt_and_sign(self, origmsg, encrypt_address, sign_address):

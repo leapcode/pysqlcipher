@@ -309,5 +309,4 @@ class EncryptedMessage(object):
         signal(proto.SMTP_CONNECTION_LOST, self._user.dest.addrstr)
         # unexpected loss of connection; don't save
 
-
         self._lines = []
