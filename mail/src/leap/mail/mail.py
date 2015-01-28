@@ -478,10 +478,24 @@ class MessageCollection(object):
 
     # Manipulate messages
 
-    def add_msg(self, raw_msg, flags=tuple(), tags=tuple(), date=""):
+    def add_msg(self, raw_msg, flags=tuple(), tags=tuple(), date="",
+                notify_just_mdoc=False):
         """
         Add a message to this collection.
+
+        :param notify_just_mdoc:
+            boolean passed to the wrapper.create method,
+            to indicate whether we're interested in being notified when only
+            the mdoc has been written (faster, but potentially unsafe), or we
+            want to wait untill all the parts have been written.
+            Used by the imap mailbox implementation to get faster responses.
+        :type notify_just_mdoc: bool
+
+        :returns: a deferred that will fire with the UID of the inserted
+                  message.
+        :rtype: deferred
         """
+        # XXX mdoc ref is a leaky abstraction here. generalize.
         leap_assert_type(flags, tuple)
         leap_assert_type(date, str)
 
@@ -503,10 +517,9 @@ class MessageCollection(object):
             return self.mbox_indexer.insert_doc(
                 self.mbox_uuid, doc_id)
 
-        d = wrapper.create(self.store)
+        d = wrapper.create(self.store, notify_just_mdoc=notify_just_mdoc)
         d.addCallback(insert_mdoc_id, wrapper)
         d.addErrback(lambda f: f.printTraceback())
-
         return d
 
     def copy_msg(self, msg, new_mbox_uuid):
@@ -519,17 +532,12 @@ class MessageCollection(object):
 
         def insert_copied_mdoc_id(wrapper_new_msg):
             return self.mbox_indexer.insert_doc(
-                new_mbox_uuid, wrapper.mdoc.doc_id)
+                new_mbox_uuid, wrapper_new_msg.mdoc.doc_id)
 
         wrapper = msg.get_wrapper()
 
-        def print_result(result):
-            print "COPY CALLBACK:>>>", result
-            return result
-
         d = wrapper.copy(self.store, new_mbox_uuid)
         d.addCallback(insert_copied_mdoc_id)
-        d.addCallback(print_result)
         return d
 
     def delete_msg(self, msg):

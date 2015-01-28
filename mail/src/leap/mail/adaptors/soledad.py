@@ -136,6 +136,7 @@ class SoledadDocumentWrapper(models.DocumentWrapper):
             d = store.create_doc(self.serialize(),
                                  doc_id=self.future_doc_id)
         d.addCallback(update_doc_id)
+        d.addErrback(self._catch_revision_conflict, self.future_doc_id)
         return d
 
     def update(self, store):
@@ -447,7 +448,7 @@ class MessageWrapper(object):
 
     implements(IMessageWrapper)
 
-    def __init__(self, mdoc, fdoc, hdoc, cdocs=None):
+    def __init__(self, mdoc, fdoc, hdoc, cdocs=None, is_copy=False):
         """
         Need at least a metamsg-document, a flag-document and a header-document
         to instantiate a MessageWrapper. Content-documents can be retrieved
@@ -456,7 +457,11 @@ class MessageWrapper(object):
         cdocs, if any, should be a dictionary in which the keys are ascending
         integers, beginning at one, and the values are dictionaries with the
         content of the content-docs.
+
+        is_copy, if set to True, will only attempt to create mdoc and fdoc
+        (because hdoc and cdocs are supposed to exist already)
         """
+        self._is_copy = is_copy
 
         def get_doc_wrapper(doc, cls):
             if isinstance(doc, SoledadDocument):
@@ -486,9 +491,33 @@ class MessageWrapper(object):
         for doc_id, cdoc in zip(self.mdoc.cdocs, self.cdocs.values()):
             cdoc.set_future_doc_id(doc_id)
 
-    def create(self, store):
+    def create(self, store, notify_just_mdoc=False):
         """
         Create all the parts for this message in the store.
+
+        :param store: an instance of Soledad
+
+        :param notify_just_mdoc:
+            if set to True, this method will return *only* the deferred
+            corresponding to the creation of the meta-message document.
+            Be warned that in that case there will be no record of failures
+            when creating the other part-documents.
+
+            Other-wise, this method will return a deferred that will wait for
+            the creation of all the part documents.
+
+            Setting this flag to True is mostly a convenient workaround for the
+            fact that massive serial appends will take too much time, and in
+            most of the cases the MUA will only switch to the mailbox where the
+            appends have happened after a certain time, which in most of the
+            times will be enough to have all the queued insert operations
+            finished.
+        :type notify_just_mdoc: bool
+
+        :return: a deferred whose callback will be called when either all the
+                 part documents have been written, or just the metamsg-doc,
+                 depending on the value of the notify_just_mdoc flag
+        :rtype: defer.Deferred
         """
         leap_assert(self.cdocs,
                     "Need non empty cdocs to create the "
@@ -500,17 +529,24 @@ class MessageWrapper(object):
 
         # TODO check that the doc_ids in the mdoc are coherent
         d = []
-        d.append(self.mdoc.create(store))
+        mdoc_created = self.mdoc.create(store)
+        d.append(mdoc_created)
         d.append(self.fdoc.create(store))
-        if self.hdoc.doc_id is None:
-            d.append(self.hdoc.create(store))
-        for cdoc in self.cdocs.values():
-            if cdoc.doc_id is not None:
-                # we could be just linking to an existing
-                # content-doc.
-                continue
-            d.append(cdoc.create(store))
-        return defer.gatherResults(d)
+
+        if not self._is_copy:
+            if self.hdoc.doc_id is None:
+                d.append(self.hdoc.create(store))
+            for cdoc in self.cdocs.values():
+                if cdoc.doc_id is not None:
+                    # we could be just linking to an existing
+                    # content-doc.
+                    continue
+                d.append(cdoc.create(store))
+
+        if notify_just_mdoc:
+            return mdoc_created
+        else:
+            return defer.gatherResults(d)
 
     def update(self, store):
         """
@@ -544,7 +580,8 @@ class MessageWrapper(object):
 
         # the future doc_ids is properly set because we modified
         # the pointers in mdoc, which has precedence.
-        new_wrapper = MessageWrapper(new_mdoc, new_fdoc, None, None)
+        new_wrapper = MessageWrapper(new_mdoc, new_fdoc, None, None,
+                                     is_copy=True)
         new_wrapper.hdoc = self.hdoc
         new_wrapper.cdocs = self.cdocs
         new_wrapper.set_mbox_uuid(new_mbox_uuid)

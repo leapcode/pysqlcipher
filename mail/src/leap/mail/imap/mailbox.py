@@ -158,7 +158,8 @@ class IMAPMailbox(object):
         if not NOTIFY_NEW:
             return
 
-        logger.debug('adding mailbox listener: %s' % listener)
+        logger.debug('adding mailbox listener: %s. Total: %s' % (
+            listener, len(self.listeners)))
         self.listeners.add(listener)
 
     def removeListener(self, listener):
@@ -195,29 +196,6 @@ class IMAPMailbox(object):
         leap_assert(isinstance(flags, tuple),
                     "flags expected to be a tuple")
         return self.collection.set_mbox_attr("flags", flags)
-
-    # TODO -  not used?
-    @property
-    def is_closed(self):
-        """
-        Return the closed attribute for this mailbox.
-
-        :return: True if the mailbox is closed
-        :rtype: bool
-        """
-        return self.collection.get_mbox_attr("closed")
-
-    # TODO -  not used?
-    def set_closed(self, closed):
-        """
-        Set the closed attribute for this mailbox.
-
-        :param closed: the state to be set
-        :type closed: bool
-
-        :rtype: Deferred
-        """
-        return self.collection.set_mbox_attr("closed", closed)
 
     def getUIDValidity(self):
         """
@@ -345,8 +323,10 @@ class IMAPMailbox(object):
         :param date: timestamp
         :type date: str
 
-        :return: a deferred that evals to None
+        :return: a deferred that will be triggered with the UID of the added
+                 message.
         """
+        # TODO should raise ReadOnlyMailbox if not rw.
         # TODO have a look at the cases for internal date in the rfc
         if isinstance(message, (cStringIO.OutputType, StringIO.StringIO)):
             message = message.getvalue()
@@ -362,20 +342,23 @@ class IMAPMailbox(object):
         if date is None:
             date = formatdate(time.time())
 
+        # A better place for this would be  the COPY/APPEND dispatcher
         # if PROFILE_CMD:
         # do_profile_cmd(d, "APPEND")
 
-        # XXX should review now that we're not using qtreactor.
-        # A better place for this would be  the COPY/APPEND dispatcher
-        # in server.py, but qtreactor hangs when I do that, so this seems
-        # to work fine for now.
+        # just_mdoc=True: feels HACKY, but improves a *lot* the responsiveness
+        # of the APPENDS: we just need to be notified when the mdoc
+        # is saved, and let's hope that the other parts are doing just fine.
+        # This will not catch any errors when the inserts of the other parts
+        # fail, but on the other hand allows us to return very quickly, which
+        # seems a good compromise given that we have to serialize the appends.
+        # A better solution will probably involve implementing MULTIAPPEND
+        # or patching imap server to support pipelining.
 
-        def notifyCallback(x):
-            reactor.callLater(0, self.notify_new)
-            return x
+        d = self.collection.add_msg(message, flags=flags, date=date,
+                                    notify_just_mdoc=True)
 
-        d = self.collection.add_msg(message, flags=flags, date=date)
-        d.addCallback(notifyCallback)
+        # XXX signal to UI? --- should do it only if INBOX...
         d.addErrback(lambda f: log.msg(f.getTraceback()))
         return d
 
@@ -486,9 +469,9 @@ class IMAPMailbox(object):
         """
         # TODO we could pass the asked sequence to the indexer
         # all_uid_iter, and bound the sql query instead.
-        def filter_by_asked(sequence):
+        def filter_by_asked(all_msg_uid):
             set_asked = set(messages_asked)
-            set_exist = set(sequence)
+            set_exist = set(all_msg_uid)
             return set_asked.intersection(set_exist)
 
         d = self.collection.all_uid_iter()
