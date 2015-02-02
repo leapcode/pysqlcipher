@@ -16,6 +16,7 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 import re
 from StringIO import StringIO
+from copy import deepcopy
 from email.parser import Parser
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
@@ -33,7 +34,7 @@ from leap.common.check import leap_assert_type, leap_assert
 from leap.common.events import proto, signal
 from leap.keymanager import KeyManager
 from leap.keymanager.openpgp import OpenPGPKey
-from leap.keymanager.errors import KeyNotFound
+from leap.keymanager.errors import KeyNotFound, KeyAddressMismatch
 from leap.mail import __version__
 from leap.mail.utils import validate_address
 from leap.mail.smtp.rfc3156 import MultipartEncrypted
@@ -229,32 +230,37 @@ class OutgoingMail:
         username, domain = from_address.split('@')
         to_address = validate_address(recipient.dest.addrstr)
 
+        def maybe_encrypt_and_sign(message):
+            d = self._encrypt_and_sign(message, to_address, from_address)
+            d.addCallbacks(signal_encrypt_sign,
+                           if_key_not_found_send_unencrypted,
+                           errbackArgs=(message,))
+            return d
+
         def signal_encrypt_sign(newmsg):
             signal(proto.SMTP_END_ENCRYPT_AND_SIGN,
                    "%s,%s" % (self._from_address, to_address))
             return newmsg, recipient
 
+        def if_key_not_found_send_unencrypted(failure, message):
+            failure.trap(KeyNotFound, KeyAddressMismatch)
+
+            log.msg('Will send unencrypted message to %s.' % to_address)
+            signal(proto.SMTP_START_SIGN, self._from_address)
+            d = self._sign(message, from_address)
+            d.addCallback(signal_sign)
+            return d
+
         def signal_sign(newmsg):
             signal(proto.SMTP_END_SIGN, self._from_address)
             return newmsg, recipient
-
-        def if_key_not_found_send_unencrypted(failure):
-            if failure.check(KeyNotFound):
-                log.msg('Will send unencrypted message to %s.' % to_address)
-                signal(proto.SMTP_START_SIGN, self._from_address)
-                d = self._sign(origmsg, from_address)
-                d.addCallback(signal_sign)
-                return d
-            else:
-                return failure
 
         log.msg("Will encrypt the message with %s and sign with %s."
                 % (to_address, from_address))
         signal(proto.SMTP_START_ENCRYPT_AND_SIGN,
                "%s,%s" % (self._from_address, to_address))
         d = self._maybe_attach_key(origmsg, from_address, to_address)
-        d.addCallback(self._encrypt_and_sign, to_address, from_address)
-        d.addCallbacks(signal_encrypt_sign, if_key_not_found_send_unencrypted)
+        d.addCallback(maybe_encrypt_and_sign)
         return d
 
     def _maybe_attach_key(self, origmsg, from_address, to_address):
@@ -267,7 +273,9 @@ class OutgoingMail:
             # XXX: this might not be true some time in the future
             if to_key.sign_used:
                 return origmsg
+            return get_key_and_attach(None)
 
+        def get_key_and_attach(_):
             d = self._keymanager.get_key(from_address, OpenPGPKey,
                                          fetch_remote=False)
             d.addCallback(attach_key)
@@ -290,7 +298,7 @@ class OutgoingMail:
 
         d = self._keymanager.get_key(to_address, OpenPGPKey,
                                      fetch_remote=False)
-        d.addCallback(attach_if_address_hasnt_encrypted)
+        d.addCallbacks(attach_if_address_hasnt_encrypted, get_key_and_attach)
         d.addErrback(lambda _: origmsg)
         return d
 
@@ -386,7 +394,7 @@ class OutgoingMail:
         d.addCallback(create_signed_message)
         return d
 
-    def _fix_headers(self, origmsg, newmsg, sign_address):
+    def _fix_headers(self, msg, newmsg, sign_address):
         """
         Move some headers from C{origmsg} to C{newmsg}, delete unwanted
         headers from C{origmsg} and add new headers to C{newms}.
@@ -416,8 +424,8 @@ class OutgoingMail:
 
             - User-Agent
 
-        :param origmsg: The original message.
-        :type origmsg: email.message.Message
+        :param msg: The original message.
+        :type msg: email.message.Message
         :param newmsg: The new message being created.
         :type newmsg: email.message.Message
         :param sign_address: The address used to sign C{newmsg}
@@ -428,6 +436,7 @@ class OutgoingMail:
                   original Message with headers removed)
         :rtype: Deferred
         """
+        origmsg = deepcopy(msg)
         # move headers from origmsg to newmsg
         headers = origmsg.items()
         passthrough = [
