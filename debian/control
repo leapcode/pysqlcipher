@@ -3,7 +3,7 @@ Maintainer: Ben Carrillo <ben@futeisha.org>
 Section: python
 Priority: optional
 Build-Depends: python-all-dev (>= 2.6.6-3), libsqlcipher-dev (>=2.2.1-2~), debhelper (>= 9)
-Standards-Version: 3.9.4
+Standards-Version: 3.9.6
 Uploaders: Micah Anderson <micah@debian.org>
 X-Python-Version: >= 2.5
 
@@ -17,3 +17,14 @@ Description: DB-API 2.0 interface for SQLCIPHER 3.x
  database engine. It is almost fully compliant with the Python database API
  version 2.0. At the same time, it also exposes the unique features of
  SQLCipher.
+
+Package: python-sqlcipher-dbg
+Section: debug
+Priority: extra
+Architecture: any
+Depends: python-dbg, python-sqlcipher, libsqlcipher0 (>=2.2.1-2),
+ ${misc:Depends}, ${python:Depends}, ${shlibs:Depends}
+Description: DB-API 2.0 interface for SQLCIPHER 3.x
+ Python interface to SQLCipher (debug extension)
+ .
+ This package contains the extensions built for the python debug interpreter.
