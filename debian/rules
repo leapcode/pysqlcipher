@@ -5,16 +5,31 @@
 # Prevent setuptools/distribute from accessing the internet.
 export http_proxy = http://127.0.0.1:9
 
+PACKAGE=python-sqlcipher
+
 %:
 	dh $@ --with python2 --buildsystem=python_distutils
 
 override_dh_auto_build:
-	python$* setup.py build_sqlcipher
+	python$* setup.py build_with_system_sqlcipher
 	python$* setup.py build_py
+
+	export DEBUG_MODE=1 && export DEB_CFLAGS_MAINT_APPEND=-O0 && python$*-dbg setup.py build_with_system_sqlcipher
+	export DEBUG_MODE=1 && export DEB_CFLAGS_MAINT_APPEND=-O0 && python$*-dbg setup.py build_py
 
 override_dh_auto_install:
 	python$* setup.py install --skip-build --root=debian/python-sqlcipher \
 		--install-layout=deb
+	python$*-dbg setup.py install --skip-build --root=debian/python-sqlcipher-dbg \
+		--install-layout=deb
+
+override_dh_installdocs:
+	dh_installdocs
+	rm -rf debian/$(PACKAGE)-dbg/usr/share/doc/$(PACKAGE)-dbg
+	ln -s $(PACKAGE) debian/$(PACKAGE)-dbg/usr/share/doc/$(PACKAGE)-dbg                                                                                                          
+
+override_dh_strip:
+	dh_strip --dbg-package=$(PACKAGE)-dbg
 
 override_dh_python2:
 	dh_python2 --no-guessing-versions

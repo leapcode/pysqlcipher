@@ -1,9 +1,11 @@
 amalgamation
 build
 *.pyc
+.pybuild/
 dist/
 MANIFEST
 debian/python-sqlcipher
+debian/python-sqlcipher-dbg
 debian/*.log
 debian/files
 debian/*.substvars

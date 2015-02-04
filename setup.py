@@ -141,14 +141,36 @@ class AmalgamationBuilder(build):
         build.__init__(self, *args, **kwargs)
 
 
+DEBUG_MODE = os.environ.get("DEBUG_MODE", False)
+
+
 class LibSQLCipherBuilder(build_ext):
 
     description = ("Build C extension linking against libsqlcipher library.")
 
     def build_extension(self, ext):
+        if DEBUG_MODE:
+            self.__remove_compiler_option("-O2")
+            self.__remove_compiler_option("-O1")
+
         ext.extra_compile_args.append("-I/usr/include/sqlcipher/")
         ext.extra_link_args.append("-lsqlcipher")
         build_ext.build_extension(self, ext)
+
+    def __remove_compiler_option(self, option):
+        """
+        Remove the specified compiler option.
+
+        Return true if the option was found.  Return false otherwise.
+        """
+        found = 0
+        for attrname in ('compiler', 'compiler_so'):
+            compiler = getattr(self.compiler, attrname, None)
+            if compiler is not None:
+                while option in compiler:
+                    compiler.remove(option)
+                    found += 1
+        return found
 
 
 class MyBuildExt(build_ext):
@@ -353,7 +375,7 @@ def get_setup_args():
         {"build_docs": DocBuilder,
          "build_ext": MyBuildExt,
          "build_static": AmalgamationBuilder,
-         "build_sqlcipher": LibSQLCipherBuilder,
+         "build_with_system_sqlcipher": LibSQLCipherBuilder,
          "cross_bdist_wininst": cross_bdist_wininst.bdist_wininst})
     return setup_args
 
