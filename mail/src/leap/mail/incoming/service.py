@@ -215,7 +215,6 @@ class IncomingMail(Service):
         """
         def _log_synced(result):
             log.msg('FETCH soledad SYNCED.')
-            print "Result: ", result
             return result
         try:
             log.msg('FETCH: syncing soledad...')
@@ -404,7 +403,6 @@ class IncomingMail(Service):
         :param doc: the SoledadDocument to delete
         :type doc: SoledadDocument
         """
-        print "DELETING INCOMING MESSAGE"
         log.msg("Deleting Incoming message: %s" % (doc.doc_id,))
         return self._soledad.delete_doc(doc)
 
@@ -431,7 +429,7 @@ class IncomingMail(Service):
         if (fromHeader is not None
             and (msg.get_content_type() == MULTIPART_ENCRYPTED
                  or msg.get_content_type() == MULTIPART_SIGNED)):
-                senderAddress = parseaddr(fromHeader)
+                senderAddress = parseaddr(fromHeader)[1]
 
         def add_leap_header(ret):
             decrmsg, signkey = ret
@@ -709,7 +707,6 @@ class IncomingMail(Service):
         def msgSavedCallback(result):
             if not empty(result):
                 leap_events.signal(IMAP_MSG_SAVED_LOCALLY)
-                print "DEFERRING THE DELETION ----->"
                 return self._delete_incoming_message(doc)
                 # TODO add notification as a callback
                 #leap_events.signal(IMAP_MSG_DELETED_INCOMING)

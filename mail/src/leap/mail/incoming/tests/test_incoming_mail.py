@@ -35,9 +35,11 @@ from leap.mail.adaptors import soledad_indexes as fields
 from leap.mail.constants import INBOX_NAME
 from leap.mail.imap.account import IMAPAccount
 from leap.mail.incoming.service import IncomingMail
+from leap.mail.smtp.rfc3156 import MultipartEncrypted, PGPEncrypted
 from leap.mail.tests import (
     TestCaseWithKeyManager,
     ADDRESS,
+    ADDRESS_2,
 )
 from leap.soledad.common.document import SoledadDocument
 from leap.soledad.common.crypto import (
@@ -54,7 +56,6 @@ class IncomingMailTestCase(TestCaseWithKeyManager):
     Tests for the incoming mail parser
     """
     NICKSERVER = "http://domain"
-    FROM_ADDRESS = "test@somedomain.com"
     BODY = """
 Governments of the Industrial World, you weary giants of flesh and steel, I
 come from Cyberspace, the new home of Mind. On behalf of the future, I ask
@@ -67,29 +68,34 @@ subject: independence of cyberspace
 
 %(body)s
     """ % {
-        "from": FROM_ADDRESS,
+        "from": ADDRESS_2,
         "to": ADDRESS,
         "body": BODY
     }
 
     def setUp(self):
         def getInbox(_):
-            theAccount = IMAPAccount(ADDRESS, self._soledad)
-            return theAccount.callWhenReady(
+            d = defer.Deferred()
+            theAccount = IMAPAccount(ADDRESS, self._soledad, d=d)
+            d.addCallback(
                 lambda _: theAccount.getMailbox(INBOX_NAME))
+            return d
 
         def setUpFetcher(inbox):
             # Soledad sync makes trial block forever. The sync it's mocked to
             # fix this problem. _mock_soledad_get_from_index can be used from
             # the tests to provide documents.
             # TODO ---- see here http://www.pythoneye.com/83_20424875/
-            self._soledad.sync = Mock()
+            self._soledad.sync = Mock(return_value=defer.succeed(None))
 
             self.fetcher = IncomingMail(
                 self._km,
                 self._soledad,
                 inbox,
                 ADDRESS)
+
+            # The messages don't exist on soledad will fail on deletion
+            self.fetcher._delete_incoming_message = Mock(return_value=None)
 
         d = super(IncomingMailTestCase, self).setUp()
         d.addCallback(getInbox)
@@ -104,7 +110,7 @@ subject: independence of cyberspace
         """
         Test the OpenPGP header key extraction
         """
-        KEYURL = "https://somedomain.com/key.txt"
+        KEYURL = "https://leap.se/key.txt"
         OpenPGP = "id=12345678; url=\"%s\"; preference=signencrypt" % (KEYURL,)
 
         message = Parser().parsestr(self.EMAIL)
@@ -114,7 +120,7 @@ subject: independence of cyberspace
 
         def fetch_key_called(ret):
             self.fetcher._keymanager.fetch_key.assert_called_once_with(
-                self.FROM_ADDRESS, KEYURL, OpenPGPKey)
+                ADDRESS_2, KEYURL, OpenPGPKey)
 
         d = self._create_incoming_email(message.as_string())
         d.addCallback(
@@ -153,7 +159,7 @@ subject: independence of cyberspace
         KEY = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n..."
 
         message = MIMEMultipart()
-        message.add_header("from", self.FROM_ADDRESS)
+        message.add_header("from", ADDRESS_2)
         key = MIMEApplication("", "pgp-keys")
         key.set_payload(KEY)
         message.attach(key)
@@ -162,10 +168,45 @@ subject: independence of cyberspace
 
         def put_raw_key_called(_):
             self.fetcher._keymanager.put_raw_key.assert_called_once_with(
-                KEY, OpenPGPKey, address=self.FROM_ADDRESS)
+                KEY, OpenPGPKey, address=ADDRESS_2)
 
         d = self._mock_fetch(message.as_string())
         d.addCallback(put_raw_key_called)
+        return d
+
+    def testDecryptEmail(self):
+        self.fetcher._decryption_error = Mock()
+
+        def create_encrypted_message(encstr):
+            message = Parser().parsestr(self.EMAIL)
+            newmsg = MultipartEncrypted('application/pgp-encrypted')
+            for hkey, hval in message.items():
+                newmsg.add_header(hkey, hval)
+
+            encmsg = MIMEApplication(
+                encstr, _subtype='octet-stream', _encoder=lambda x: x)
+            encmsg.add_header('content-disposition', 'attachment',
+                              filename='msg.asc')
+            # create meta message
+            metamsg = PGPEncrypted()
+            metamsg.add_header('Content-Disposition', 'attachment')
+            # attach pgp message parts to new message
+            newmsg.attach(metamsg)
+            newmsg.attach(encmsg)
+            return newmsg
+
+        def decryption_error_not_called(_):
+            self.assertFalse(self.fetcher._decyption_error.called,
+                             "There was some errors with decryption")
+
+        d = self._km.encrypt(
+            self.EMAIL,
+            ADDRESS, OpenPGPKey, sign=ADDRESS_2)
+        d.addCallback(create_encrypted_message)
+        d.addCallback(
+            lambda message:
+            self._mock_fetch(message.as_string()))
+
         return d
 
     def _mock_fetch(self, message):
