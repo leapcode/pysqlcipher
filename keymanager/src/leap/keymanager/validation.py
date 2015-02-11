@@ -24,17 +24,17 @@ See:
 
 
 from datetime import datetime
-from enum import Enum
+from enum import IntEnum
 
 
-ValidationLevel = Enum(
-    "Weak_Chain",
-    "Provider_Trust",
-    "Provider_Endorsement",
-    "Third_Party_Endorsement",
-    "Third_Party_Consensus",
-    "Historically_Auditing",
-    "Known_Key",
+ValidationLevel = IntEnum("ValidationLevel",
+    "Weak_Chain "
+    "Provider_Trust "
+    "Provider_Endorsement "
+    "Third_Party_Endorsement "
+    "Third_Party_Consensus "
+    "Historically_Auditing "
+    "Known_Key "
     "Fingerprint")
 
 
@@ -49,7 +49,7 @@ def toValidationLevel(value):
     :raises ValueError: if C{value} is not a validation level
     """
     for level in ValidationLevel:
-        if value == str(level):
+        if value == level.name:
             return level
     raise ValueError("Not valid validation level: %s" % (value,))
 
@@ -60,9 +60,6 @@ def can_upgrade(new_key, old_key):
     :type old_key: EncryptionKey
     :rtype: bool
     """
-    # XXX not succesfully used and strict high validation level (#6211)
-    # XXX implement key signature checking (#6120)
-
     # First contact
     if old_key is None:
         return True
@@ -82,7 +79,17 @@ def can_upgrade(new_key, old_key):
         return True
 
     # No expiration date and higher validation level
-    elif new_key.validation >= old_key.validation:
+    if (old_key.expiry_date is None and
+            new_key.validation > old_key.validation):
+        return True
+
+    # Not successfully used and strict high validation level
+    if (not (old_key.sign_used and old_key.encr_used) and
+            new_key.validation > old_key.validation):
+        return True
+
+    # New key signed by the old key
+    if old_key.key_id in new_key.signatures:
         return True
 
     return False

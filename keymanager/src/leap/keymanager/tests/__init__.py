@@ -18,37 +18,27 @@
 Base classes for the Key Manager tests.
 """
 
-from mock import Mock
+import distutils.spawn
+import os.path
+
+from twisted.internet.defer import gatherResults
+from twisted.trial import unittest
 
 from leap.common.testing.basetest import BaseLeapTest
 from leap.soledad.client import Soledad
 from leap.keymanager import KeyManager
+from leap.keymanager.openpgp import OpenPGPKey
 
 
 ADDRESS = 'leap@leap.se'
-# XXX discover the gpg binary path
-GPG_BINARY_PATH = '/usr/bin/gpg'
+ADDRESS_2 = 'anotheruser@leap.se'
 
 
-class KeyManagerWithSoledadTestCase(BaseLeapTest):
+class KeyManagerWithSoledadTestCase(unittest.TestCase, BaseLeapTest):
 
     def setUp(self):
-        # mock key fetching and storing so Soledad doesn't fail when trying to
-        # reach the server.
-        Soledad._get_secrets_from_shared_db = Mock(return_value=None)
-        Soledad._put_secrets_in_shared_db = Mock(return_value=None)
-
-        class MockSharedDB(object):
-
-            get_doc = Mock(return_value=None)
-            put_doc = Mock()
-            lock = Mock(return_value=('atoken', 300))
-            unlock = Mock(return_value=True)
-
-            def __call__(self):
-                return self
-
-        Soledad._shared_db = MockSharedDB()
+        self.setUpEnv()
+        self.gpg_binary_path = self._find_gpg()
 
         self._soledad = Soledad(
             u"leap@leap.se",
@@ -58,18 +48,43 @@ class KeyManagerWithSoledadTestCase(BaseLeapTest):
             server_url='',
             cert_file=None,
             auth_token=None,
+            syncable=False
         )
 
     def tearDown(self):
         km = self._key_manager()
-        for key in km.get_all_keys():
-            km._wrapper_map[key.__class__].delete_key(key)
-        for key in km.get_all_keys(private=True):
-            km._wrapper_map[key.__class__].delete_key(key)
+
+        def delete_keys(keys):
+            deferreds = []
+            for key in keys:
+                d = km._wrapper_map[key.__class__].delete_key(key)
+                deferreds.append(d)
+            return gatherResults(deferreds)
+
+        def get_and_delete_keys(_):
+            deferreds = []
+            for private in [True, False]:
+                d = km.get_all_keys(private=private)
+                d.addCallback(delete_keys)
+                deferreds.append(d)
+            return gatherResults(deferreds)
+
+        # wait for the indexes to be ready for the tear down
+        d = km._wrapper_map[OpenPGPKey].deferred_indexes
+        d.addCallback(get_and_delete_keys)
+        d.addCallback(lambda _: self.tearDownEnv())
+        return d
 
     def _key_manager(self, user=ADDRESS, url='', token=None):
         return KeyManager(user, url, self._soledad, token=token,
-                          gpgbinary=GPG_BINARY_PATH)
+                          gpgbinary=self.gpg_binary_path)
+
+    def _find_gpg(self):
+        gpg_path = distutils.spawn.find_executable('gpg')
+        if gpg_path is not None:
+            return os.path.realpath(gpg_path)
+        else:
+            return "/usr/bin/gpg"
 
 
 # key 24D18DDF: public key "Leap Test Key <leap@leap.se>"
@@ -232,5 +247,64 @@ GuDrwNKYj73C4MWyNnnUFyq8nDHJ/G1NpaF2hiof9RBL4PUU/f92JkceXPBXA8gL
 Mz2ig1OButwPPLFGQhWqxXAGrsS3Ny+BhTJfnfIbbkaLLphBpDZm1D9XKbAUvdd1
 RZXoH+FTg9UAW87eqU610npOkT6cRaBxaMK/mDtGNdc=
 =JTFu
+-----END PGP PRIVATE KEY BLOCK-----
+"""
+
+# key 7FEE575A: public key "anotheruser <anotheruser@leap.se>"
+PUBLIC_KEY_2 = """
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+Version: GnuPG v1.4.10 (GNU/Linux)
+
+mI0EUYwJXgEEAMbTKHuPJ5/Gk34l9Z06f+0WCXTDXdte1UBoDtZ1erAbudgC4MOR
+gquKqoj3Hhw0/ILqJ88GcOJmKK/bEoIAuKaqlzDF7UAYpOsPZZYmtRfPC2pTCnXq
+Z1vdeqLwTbUspqXflkCkFtfhGKMq5rH8GV5a3tXZkRWZhdNwhVXZagC3ABEBAAG0
+IWFub3RoZXJ1c2VyIDxhbm90aGVydXNlckBsZWFwLnNlPoi4BBMBAgAiBQJRjAle
+AhsDBgsJCAcDAgYVCAIJCgsEFgIDAQIeAQIXgAAKCRB/nfpof+5XWotuA/4tLN4E
+gUr7IfLy2HkHAxzw7A4rqfMN92DIM9mZrDGaWRrOn3aVF7VU1UG7MDkHfPvp/cFw
+ezoCw4s4IoHVc/pVlOkcHSyt4/Rfh248tYEJmFCJXGHpkK83VIKYJAithNccJ6Q4
+JE/o06Mtf4uh/cA1HUL4a4ceqUhtpLJULLeKo7iNBFGMCV4BBADsyQI7GR0wSAxz
+VayLjuPzgT+bjbFeymIhjuxKIEwnIKwYkovztW+4bbOcQs785k3Lp6RzvigTpQQt
+Z/hwcLOqZbZw8t/24+D+Pq9mMP2uUvCFFqLlVvA6D3vKSQ/XNN+YB919WQ04jh63
+yuRe94WenT1RJd6xU1aaUff4rKizuQARAQABiJ8EGAECAAkFAlGMCV4CGwwACgkQ
+f536aH/uV1rPZQQAqCzRysOlu8ez7PuiBD4SebgRqWlxa1TF1ujzfLmuPivROZ2X
+Kw5aQstxgGSjoB7tac49s0huh4X8XK+BtJBfU84JS8Jc2satlfwoyZ35LH6sDZck
+I+RS/3we6zpMfHs3vvp9xgca6ZupQxivGtxlJs294TpJorx+mFFqbV17AzQ=
+=Thdu
+-----END PGP PUBLIC KEY BLOCK-----
+"""
+
+PRIVATE_KEY_2 = """
+-----BEGIN PGP PRIVATE KEY BLOCK-----
+Version: GnuPG v1.4.10 (GNU/Linux)
+
+lQHYBFGMCV4BBADG0yh7jyefxpN+JfWdOn/tFgl0w13bXtVAaA7WdXqwG7nYAuDD
+kYKriqqI9x4cNPyC6ifPBnDiZiiv2xKCALimqpcwxe1AGKTrD2WWJrUXzwtqUwp1
+6mdb3Xqi8E21LKal35ZApBbX4RijKuax/BleWt7V2ZEVmYXTcIVV2WoAtwARAQAB
+AAP7BLuSAx7tOohnimEs74ks8l/L6dOcsFQZj2bqs4AoY3jFe7bV0tHr4llypb/8
+H3/DYvpf6DWnCjyUS1tTnXSW8JXtx01BUKaAufSmMNg9blKV6GGHlT/Whe9uVyks
+7XHk/+9mebVMNJ/kNlqq2k+uWqJohzC8WWLRK+d1tBeqDsECANZmzltPaqUsGV5X
+C3zszE3tUBgptV/mKnBtopKi+VH+t7K6fudGcG+bAcZDUoH/QVde52mIIjjIdLje
+uajJuHUCAO1mqh+vPoGv4eBLV7iBo3XrunyGXiys4a39eomhxTy3YktQanjjx+ty
+GltAGCs5PbWGO6/IRjjvd46wh53kzvsCAO0J97gsWhzLuFnkxFAJSPk7RRlyl7lI
+1XS/x0Og6j9XHCyY1OYkfBm0to3UlCfkgirzCYlTYObCofzdKFIPDmSqHbQhYW5v
+dGhlcnVzZXIgPGFub3RoZXJ1c2VyQGxlYXAuc2U+iLgEEwECACIFAlGMCV4CGwMG
+CwkIBwMCBhUIAgkKCwQWAgMBAh4BAheAAAoJEH+d+mh/7ldai24D/i0s3gSBSvsh
+8vLYeQcDHPDsDiup8w33YMgz2ZmsMZpZGs6fdpUXtVTVQbswOQd8++n9wXB7OgLD
+izgigdVz+lWU6RwdLK3j9F+Hbjy1gQmYUIlcYemQrzdUgpgkCK2E1xwnpDgkT+jT
+oy1/i6H9wDUdQvhrhx6pSG2kslQst4qjnQHYBFGMCV4BBADsyQI7GR0wSAxzVayL
+juPzgT+bjbFeymIhjuxKIEwnIKwYkovztW+4bbOcQs785k3Lp6RzvigTpQQtZ/hw
+cLOqZbZw8t/24+D+Pq9mMP2uUvCFFqLlVvA6D3vKSQ/XNN+YB919WQ04jh63yuRe
+94WenT1RJd6xU1aaUff4rKizuQARAQABAAP9EyElqJ3dq3EErXwwT4mMnbd1SrVC
+rUJrNWQZL59mm5oigS00uIyR0SvusOr+UzTtd8ysRuwHy5d/LAZsbjQStaOMBILx
+77TJveOel0a1QK0YSMF2ywZMCKvquvjli4hAtWYz/EwfuzQN3t23jc5ny+GqmqD2
+3FUxLJosFUfLNmECAO9KhVmJi+L9dswIs+2Dkjd1eiRQzNOEVffvYkGYZyKxNiXF
+UA5kvyZcB4iAN9sWCybE4WHZ9jd4myGB0MPDGxkCAP1RsXJbbuD6zS7BXe5gwunO
+2q4q7ptdSl/sJYQuTe1KNP5d/uGsvlcFfsYjpsopasPjFBIncc/2QThMKlhoEaEB
+/0mVAxpT6SrEvUbJ18z7kna24SgMPr3OnPMxPGfvNLJY/Xv/A17YfoqjmByCvsKE
+JCDjopXtmbcrZyoEZbEht9mko4ifBBgBAgAJBQJRjAleAhsMAAoJEH+d+mh/7lda
+z2UEAKgs0crDpbvHs+z7ogQ+Enm4EalpcWtUxdbo83y5rj4r0TmdlysOWkLLcYBk
+o6Ae7WnOPbNIboeF/FyvgbSQX1POCUvCXNrGrZX8KMmd+Sx+rA2XJCPkUv98Hus6
+THx7N776fcYHGumbqUMYrxrcZSbNveE6SaK8fphRam1dewM0
+=a5gs
 -----END PGP PRIVATE KEY BLOCK-----
 """

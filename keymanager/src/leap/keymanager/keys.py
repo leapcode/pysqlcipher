@@ -33,6 +33,7 @@ import time
 from abc import ABCMeta, abstractmethod
 from datetime import datetime
 from leap.common.check import leap_assert
+from twisted.internet import defer
 
 from leap.keymanager.validation import ValidationLevel, toValidationLevel
 
@@ -212,7 +213,7 @@ class EncryptionKey(object):
             KEY_EXPIRY_DATE_KEY: expiry_date,
             KEY_LAST_AUDITED_AT_KEY: last_audited_at,
             KEY_REFRESHED_AT_KEY: refreshed_at,
-            KEY_VALIDATION_KEY: str(self.validation),
+            KEY_VALIDATION_KEY: self.validation.name,
             KEY_ENCR_USED_KEY: self.encr_used,
             KEY_SIGN_USED_KEY: self.sign_used,
             KEY_TAGS_KEY: [KEYMANAGER_KEY_TAG],
@@ -277,21 +278,61 @@ class EncryptionScheme(object):
         """
         leap_assert(self._soledad is not None,
                     "Cannot init indexes with null soledad")
-        # Ask the database for currently existing indexes.
-        db_indexes = dict(self._soledad.list_indexes())
-        # Loop through the indexes we expect to find.
-        for name, expression in INDEXES.items():
-            if name not in db_indexes:
-                # The index does not yet exist.
-                self._soledad.create_index(name, *expression)
-                continue
-            if expression == db_indexes[name]:
-                # The index exists and is up to date.
-                continue
-            # The index exists but the definition is not what expected, so we
-            # delete it and add the proper index expression.
-            self._soledad.delete_index(name)
-            self._soledad.create_index(name, *expression)
+
+        def init_idexes(indexes):
+            deferreds = []
+            db_indexes = dict(indexes)
+            # Loop through the indexes we expect to find.
+            for name, expression in INDEXES.items():
+                if name not in db_indexes:
+                    # The index does not yet exist.
+                    d = self._soledad.create_index(name, *expression)
+                    deferreds.append(d)
+                elif expression != db_indexes[name]:
+                    # The index exists but the definition is not what expected,
+                    # so we delete it and add the proper index expression.
+                    d = self._soledad.delete_index(name)
+                    d.addCallback(
+                        lambda _:
+                            self._soledad.create_index(name, *expression))
+                    deferreds.append(d)
+            return defer.gatherResults(deferreds, consumeErrors=True)
+
+        self.deferred_indexes = self._soledad.list_indexes()
+        self.deferred_indexes.addCallback(init_idexes)
+
+    def _wait_indexes(self, *methods):
+        """
+        Methods that need to wait for the indexes to be ready.
+
+        Heavily based on
+        http://blogs.fluidinfo.com/terry/2009/05/11/a-mixin-class-allowing-python-__init__-methods-to-work-with-twisted-deferreds/
+
+        :param methods: methods that need to wait for the indexes to be ready
+        :type methods: tuple(str)
+        """
+        self.waiting = []
+        self.stored = {}
+
+        def restore(_):
+            for method in self.stored:
+                setattr(self, method, self.stored[method])
+            for d in self.waiting:
+                d.callback(None)
+
+        def makeWrapper(method):
+            def wrapper(*args, **kw):
+                d = defer.Deferred()
+                d.addCallback(lambda _: self.stored[method](*args, **kw))
+                self.waiting.append(d)
+                return d
+            return wrapper
+
+        for method in methods:
+            self.stored[method] = getattr(self, method)
+            setattr(self, method, makeWrapper(method))
+
+        self.deferred_indexes.addCallback(restore)
 
     @abstractmethod
     def get_key(self, address, private=False):
@@ -303,9 +344,10 @@ class EncryptionScheme(object):
         :param private: Look for a private key instead of a public one?
         :type private: bool
 
-        :return: The key bound to C{address}.
-        :rtype: EncryptionKey
-        @raise KeyNotFound: If the key was not found on local storage.
+        :return: A Deferred which fires with the EncryptionKey bound to
+                 address, or which fails with KeyNotFound if the key was not
+                 found on local storage.
+        :rtype: Deferred
         """
         pass
 
@@ -318,6 +360,9 @@ class EncryptionScheme(object):
         :type key: EncryptionKey
         :param address: address for which this key will be active.
         :type address: str
+
+        :return: A Deferred which fires when the key is in the storage.
+        :rtype: Deferred
         """
         pass
 
@@ -341,6 +386,11 @@ class EncryptionScheme(object):
 
         :param key: The key to be removed.
         :type key: EncryptionKey
+
+        :return: A Deferred which fires when the key is deleted, or which
+                 fails with KeyNotFound if the key was not found on local
+                 storage.
+        :rtype: Deferred
         """
         pass
 
@@ -373,11 +423,10 @@ class EncryptionScheme(object):
         :param verify: The key used to verify a signature.
         :type verify: OpenPGPKey
 
-        :return: The decrypted data.
-        :rtype: str
+        :return: The decrypted data and if signature verifies
+        :rtype: (unicode, bool)
 
-        @raise InvalidSignature: Raised if unable to verify the signature with
-            C{verify} key.
+        :raise DecryptError: Raised if failed decrypting for some reason.
         """
         pass
 
