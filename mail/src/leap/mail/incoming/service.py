@@ -97,7 +97,7 @@ class IncomingMail(Service):
 
     LEAP_SIGNATURE_HEADER = 'X-Leap-Signature'
     """
-    Header added to messages when they are decrypted by the IMAP fetcher,
+    Header added to messages when they are decrypted by the fetcher,
     which states the validity of an eventual signature that might be included
     in the encrypted blob.
     """
@@ -118,7 +118,7 @@ class IncomingMail(Service):
         :type soledad: Soledad
 
         :param inbox: the inbox where the new emails will be stored
-        :type inbox: IMAPMailbox
+        :type inbox: MessageCollection
 
         :param check_period: the period to fetch new mail, in seconds.
         :type check_period: int
@@ -266,7 +266,7 @@ class IncomingMail(Service):
         Sends unread event to ui.
         """
         leap_events.signal(
-            IMAP_UNREAD_MAIL, str(self._inbox.getUnseenCount()))
+            IMAP_UNREAD_MAIL, str(self._inbox.count_unseen()))
 
     # process incoming mail.
 
@@ -729,7 +729,7 @@ class IncomingMail(Service):
             d.addCallback(signal_deleted)
             return d
 
-        d = self._inbox.addMessage(data, (self.RECENT_FLAG,))
+        d = self._inbox.add_raw_message(data, (self.RECENT_FLAG,))
         d.addCallbacks(msgSavedCallback, self._errback)
         return d
 

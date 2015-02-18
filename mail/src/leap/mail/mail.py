@@ -20,7 +20,10 @@ Generic Access to Mail objects: Public LEAP Mail API.
 import uuid
 import logging
 import StringIO
+import cStringIO
+import time
 
+from email.utils import formatdate
 from twisted.internet import defer
 
 from leap.common.check import leap_assert_type
@@ -520,6 +523,56 @@ class MessageCollection(object):
         d = wrapper.create(self.store, notify_just_mdoc=notify_just_mdoc)
         d.addCallback(insert_mdoc_id, wrapper)
         d.addErrback(lambda f: f.printTraceback())
+        return d
+
+    def add_raw_message(self, message, flags, date=None):
+        """
+        Adds a message to this collection.
+
+        :param message: the raw message
+        :type message: str
+
+        :param flags: flag list
+        :type flags: list of str
+
+        :param date: timestamp
+        :type date: str
+
+        :return: a deferred that will be triggered with the UID of the added
+                 message.
+        """
+        # TODO should raise ReadOnlyMailbox if not rw.
+        # TODO have a look at the cases for internal date in the rfc
+        if isinstance(message, (cStringIO.OutputType, StringIO.StringIO)):
+            message = message.getvalue()
+
+        # XXX we could treat the message as an IMessage from here
+        leap_assert_type(message, basestring)
+
+        if flags is None:
+            flags = tuple()
+        else:
+            flags = tuple(str(flag) for flag in flags)
+
+        if date is None:
+            date = formatdate(time.time())
+
+        # A better place for this would be  the COPY/APPEND dispatcher
+        # if PROFILE_CMD:
+        # do_profile_cmd(d, "APPEND")
+
+        # just_mdoc=True: feels HACKY, but improves a *lot* the responsiveness
+        # of the APPENDS: we just need to be notified when the mdoc
+        # is saved, and let's hope that the other parts are doing just fine.
+        # This will not catch any errors when the inserts of the other parts
+        # fail, but on the other hand allows us to return very quickly, which
+        # seems a good compromise given that we have to serialize the appends.
+        # A better solution will probably involve implementing MULTIAPPEND
+        # or patching imap server to support pipelining.
+
+        d = self.add_msg(message, flags=flags, date=date,
+                         notify_just_mdoc=True)
+        d.addErrback(lambda f: logger.warning(f.getTraceback()))
         return d
 
     def copy_msg(self, msg, new_mbox_uuid):

@@ -91,7 +91,7 @@ subject: independence of cyberspace
             self.fetcher = IncomingMail(
                 self._km,
                 self._soledad,
-                inbox,
+                inbox.collection,
                 ADDRESS)
 
             # The messages don't exist on soledad will fail on deletion
