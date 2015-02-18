@@ -95,7 +95,8 @@ subject: independence of cyberspace
                 ADDRESS)
 
             # The messages don't exist on soledad will fail on deletion
-            self.fetcher._delete_incoming_message = Mock(return_value=None)
+            self.fetcher._delete_incoming_message = Mock(
+                return_value=defer.succeed(None))
 
         d = super(IncomingMailTestCase, self).setUp()
         d.addCallback(getInbox)
@@ -165,12 +166,13 @@ subject: independence of cyberspace
         message.attach(key)
         self.fetcher._keymanager.put_raw_key = Mock(
             return_value=defer.succeed(None))
+        self.fetcher._keymanager.fetch_key = Mock()
 
         def put_raw_key_called(_):
             self.fetcher._keymanager.put_raw_key.assert_called_once_with(
                 KEY, OpenPGPKey, address=ADDRESS_2)
 
-        d = self._mock_fetch(message.as_string())
+        d = self._do_fetch(message.as_string())
         d.addCallback(put_raw_key_called)
         return d
 
@@ -205,12 +207,24 @@ subject: independence of cyberspace
         d.addCallback(create_encrypted_message)
         d.addCallback(
             lambda message:
-            self._mock_fetch(message.as_string()))
-
+            self._do_fetch(message.as_string()))
         return d
 
-    def _mock_fetch(self, message):
-        self.fetcher._keymanager.fetch_key = Mock()
+    def testListener(self):
+        self.called = False
+
+        def listener(uid):
+            self.called = True
+
+        def listener_called(_):
+            self.assertTrue(self.called)
+
+        self.fetcher.add_listener(listener)
+        d = self._do_fetch(self.EMAIL)
+        d.addCallback(listener_called)
+        return d
+
+    def _do_fetch(self, message):
         d = self._create_incoming_email(message)
         d.addCallback(
             lambda email:

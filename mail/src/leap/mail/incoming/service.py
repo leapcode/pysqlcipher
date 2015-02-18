@@ -135,11 +135,25 @@ class IncomingMail(Service):
         self._inbox = inbox
         self._userid = userid
 
+        self._listeners = []
         self._loop = None
         self._check_period = check_period
 
         # initialize a mail parser only once
         self._parser = Parser()
+
+    def add_listener(self, listener):
+        """
+        Add a listener to inbox insertions.
+
+        This listener function will be called for each message added to the
+        inbox with its uid as parameter. This function should not be blocking
+        or it will block the incoming queue.
+
+        :param listener: the listener function
+        :type listener: callable
+        """
+        self._listeners.append(listener)
 
     #
     # Public API: fetch, start_loop, stop.
@@ -699,17 +713,21 @@ class IncomingMail(Service):
         doc, data = msgtuple
         log.msg('adding message %s to local db' % (doc.doc_id,))
 
-        #if isinstance(data, list):
-            #if empty(data):
-                #return False
-            #data = data[0]
-
         def msgSavedCallback(result):
-            if not empty(result):
-                leap_events.signal(IMAP_MSG_SAVED_LOCALLY)
-                return self._delete_incoming_message(doc)
-                # TODO add notification as a callback
-                #leap_events.signal(IMAP_MSG_DELETED_INCOMING)
+            if empty(result):
+                return
+
+            for listener in self._listeners:
+                listener(result)
+
+            def signal_deleted(doc_id):
+                leap_events.signal(IMAP_MSG_DELETED_INCOMING)
+                return doc_id
+
+            leap_events.signal(IMAP_MSG_SAVED_LOCALLY)
+            d = self._delete_incoming_message(doc)
+            d.addCallback(signal_deleted)
+            return d
 
         d = self._inbox.addMessage(data, (self.RECENT_FLAG,))
         d.addCallbacks(msgSavedCallback, self._errback)
