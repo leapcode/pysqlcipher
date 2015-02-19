@@ -230,11 +230,11 @@ class KeyManager(object):
             if e.response.status_code == 404:
                 d = defer.fail(KeyNotFound(address))
             else:
-                d = defer.fail(e)
+                d = defer.fail(KeyNotFound(e.message))
             logger.warning("HTTP error retrieving key: %r" % (e,))
             logger.warning("%s" % (res.content,))
         except Exception as e:
-            d = defer.fail(e)
+            d = defer.fail(KeyNotFound(e.message))
             logger.warning("Error retrieving key: %r" % (e,))
         return d
 
