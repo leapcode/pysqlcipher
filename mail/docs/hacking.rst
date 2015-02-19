@@ -33,7 +33,7 @@ Profiling
 If using ``twistd`` to launch the server, you can use twisted profiling
 capabities::
 
-  LEAP_MAIL_CONF=~/.leapmailrc twistd --profile=/tmp/mail-profiling -n -y imap-server.tac
+  LEAP_MAIL_CONFIG=~/.leapmailrc twistd --profile=/tmp/mail-profiling -n -y imap-server.tac
 
 ``--profiler`` option allows you to select different profilers (default is
 "hotshot").
@@ -63,7 +63,7 @@ need a config with this info::
   uuid = "deadbeefdeadabad"
   passwd = "foobar" # Optional
 
-In the ``LEAP_MAIL_CONF`` enviroment variable. If you do not specify a password
+In the ``LEAP_MAIL_CONFIG`` enviroment variable. If you do not specify a password
 parameter, you'll be prompted for it.
 
 In order to get the user uid (uuid), look into the
@@ -72,7 +72,7 @@ provider at least once.
 
 Run the twisted service::
 
-  LEAP_IMAP_CONFIG=~/.leapmailrc twistd -n -y imap-server.tac
+  LEAP_MAIL_CONFIG=~/.leapmailrc twistd -n -y imap-server.tac
 
 Now you can telnet into your local IMAP server and read your mail like a real
 programmer™::

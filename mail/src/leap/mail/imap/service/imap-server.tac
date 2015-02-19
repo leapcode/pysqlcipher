@@ -23,9 +23,9 @@ For now, and for debugging/testing purposes, you need
 to pass a config file with the following structure:
 
 [leap_mail]
-userid = "user@provider"
-uuid = "deadbeefdeadabad"
-passwd = "supersecret" # optional, will get prompted if not found.
+userid = 'user@provider'
+uuid = 'deadbeefdeadabad'
+passwd = 'supersecret' # optional, will get prompted if not found.
 """
 import ConfigParser
 import getpass
@@ -53,38 +53,17 @@ def initialize_soledad(uuid, email, passwd,
     :param tempdir: path to temporal dir
     :rtype: Soledad instance
     """
-    # XXX TODO unify with an authoritative source of mocks
-    # for soledad (or partial initializations).
-    # This is copied from the imap tests.
-
     server_url = "http://provider"
     cert_file = ""
 
-    class Mock(object):
-        def __init__(self, return_value=None):
-            self._return = return_value
-
-        def __call__(self, *args, **kwargs):
-            return self._return
-
-    class MockSharedDB(object):
-
-        get_doc = Mock()
-        put_doc = Mock()
-        lock = Mock(return_value=('atoken', 300))
-        unlock = Mock(return_value=True)
-
-        def __call__(self):
-            return self
-
-    Soledad._shared_db = MockSharedDB()
     soledad = Soledad(
         uuid,
         passwd,
         secrets,
         localdb,
         server_url,
-        cert_file)
+        cert_file,
+        syncable=False)
 
     return soledad
 
@@ -95,9 +74,9 @@ def initialize_soledad(uuid, email, passwd,
 print "[+] Running LEAP IMAP Service"
 
 
-bmconf = os.environ.get("LEAP_MAIL_CONF", "")
+bmconf = os.environ.get("LEAP_MAIL_CONFIG", "")
 if not bmconf:
-    print ("[-] Please set LEAP_MAIL_CONF environment variable "
+    print ("[-] Please set LEAP_MAIL_CONFIG environment variable "
            "pointing to your config.")
     sys.exit(1)
 
@@ -131,6 +110,7 @@ tempdir = "/tmp/"
 
 # Ad-hoc soledad/keymanager initialization.
 
+print "[~] user:", userid
 soledad = initialize_soledad(uuid, userid, passwd, secrets,
                              localdb, gnupg_home, tempdir)
 km_args = (userid, "https://localhost", soledad)
@@ -143,6 +123,8 @@ km_kwargs = {
     "gpgbinary": "/usr/bin/gpg"
 }
 keymanager = KeyManager(*km_args, **km_kwargs)
+
+# XXX Do we need to wait until keymanager is properly initialized?
 
 ##################################################
 
