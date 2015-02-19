@@ -1,0 +1,2 @@
+- Refactor email fetching outside IMAP to it's own independient IncomingMail class (Closes: #6361)
+- Add listener for each email added to inbox in IncomingMail (Closes: #6742)
