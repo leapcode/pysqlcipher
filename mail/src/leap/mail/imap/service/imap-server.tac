@@ -124,8 +124,6 @@ km_kwargs = {
 }
 keymanager = KeyManager(*km_args, **km_kwargs)
 
-# XXX Do we need to wait until keymanager is properly initialized?
-
 ##################################################
 
 # Ok, let's expose the application object for the twistd application

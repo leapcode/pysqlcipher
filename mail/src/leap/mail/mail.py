@@ -63,7 +63,7 @@ class MessagePart(object):
     # TODO support arbitrarily nested multiparts (right now we only support
     #      the trivial case)
 
-    def __init__(self, part_map, index=1, cdocs={}):
+    def __init__(self, part_map, cdocs={}):
         """
         :param part_map: a dictionary mapping the subparts for
                          this MessagePart (1-indexed).
@@ -71,23 +71,28 @@ class MessagePart(object):
 
         The format for the part_map is as follows:
 
-        {u'1': {u'ctype': u'text/plain',
+        {u'ctype': u'text/plain',
         u'headers': [[u'Content-Type', u'text/plain; charset="utf-8"'],
                      [u'Content-Transfer-Encoding', u'8bit']],
         u'multi': False,
         u'parts': 1,
         u'phash': u'02D82B29F6BB0C8612D1C',
-        u'size': 132}}
+        u'size': 132}
 
-        :param index: which index in the content-doc is this subpart
-                      representing.
         :param cdocs: optional, a reference to the top-level dict of wrappers
                       for content-docs (1-indexed).
         """
-        # TODO: Pass only the cdoc wrapper for this part.
         self._pmap = part_map
-        self._index = index
         self._cdocs = cdocs
+
+        index = 1
+        phash = part_map.get('phash', None)
+        if phash:
+            for i, cdoc_wrapper in self._cdocs.items():
+                if cdoc_wrapper.phash == phash:
+                    index = i
+                    break
+        self._index = index
 
     def get_size(self):
         return self._pmap['size']
@@ -121,7 +126,7 @@ class MessagePart(object):
         except KeyError:
             logger.debug("getSubpart for %s: KeyError" % (part,))
             raise IndexError
-        return MessagePart(part_map, cdocs={1: self._cdocs.get(1, {})})
+        return MessagePart(part_map, cdocs={1: self._cdocs.get(part + 1, {})})
 
     def _get_payload(self, index):
         cdoc_wrapper = self._cdocs.get(index, None)
@@ -245,8 +250,10 @@ class Message(object):
         except KeyError:
             raise IndexError
 
+        # FIXME instead of passing the index, let the MessagePart figure it out
+        # by getting the phash and iterating through the cdocs
         return MessagePart(
-            subpart_dict, index=part_index, cdocs=self._wrapper.cdocs)
+            subpart_dict, cdocs=self._wrapper.cdocs)
 
     # Custom methods.
 

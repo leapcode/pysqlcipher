@@ -463,6 +463,13 @@ class IMAPMailbox(object):
         # switch to content-hash based index + local UID table.
 
         is_sequence = True if uid == 0 else False
+
+        # XXX DEBUG ---  if you attempt to use the `getmail` utility under
+        # imap/tests, it will choke until we implement sequence numbers. This
+        # is an easy hack meanwhile.
+        # is_sequence = False
+        # -----------------------------------------------------------------
+
         getmsg = self.collection.get_message_by_uid
         getimapmsg = self.get_imap_message
 

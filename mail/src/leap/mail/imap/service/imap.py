@@ -136,7 +136,9 @@ def run_service(store, **kwargs):
     :returns: the port as returned by the reactor when starts listening, and
               the factory for the protocol.
     """
-    leap_assert_type(store, Soledad)
+    leap_check(store, "store cannot be None")
+    # XXX this can also be a ProxiedObject, FIXME
+    # leap_assert_type(store, Soledad)
 
     port = kwargs.get('port', IMAP_PORT)
     userid = kwargs.get('userid', None)
