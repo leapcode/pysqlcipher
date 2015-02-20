@@ -33,6 +33,7 @@ from leap.mail.adaptors.soledad import SoledadMailAdaptor
 from leap.mail.constants import INBOX_NAME
 from leap.mail.constants import MessageFlags
 from leap.mail.mailbox_indexer import MailboxIndexer
+from leap.mail.utils import find_charset
 
 logger = logging.getLogger(name=__name__)
 
@@ -56,6 +57,45 @@ def _write_and_rewind(payload):
     fd.write(payload)
     fd.seek(0)
     return fd
+
+
+def _encode_payload(payload, ctype=""):
+    """
+    Properly encode an unicode payload (which can be string or unicode) as a
+    string.
+
+    :param payload: the payload to encode. currently soledad returns unicode
+                    strings.
+    :type payload: basestring
+    :param ctype: optional, the content of the content-type header for this
+                  payload.
+    :type ctype: str
+    :rtype: str
+    """
+    # TODO Related, it's proposed that we're able to pass
+    # the encoding to the soledad documents. Better to store the charset there?
+    # FIXME -----------------------------------------------
+    # this need a dedicated test-suite
+    charset = find_charset(ctype)
+
+    # XXX get from mail headers if not multipart!
+    # Beware also that we should pass the proper encoding to
+    # soledad when it's creating the documents.
+    # if not charset:
+    # charset = get_email_charset(payload)
+    #------------------------------------------------------
+
+    if not charset:
+        charset = "utf-8"
+
+    try:
+        if isinstance(payload, unicode):
+            payload = payload.encode(charset)
+    except UnicodeError as exc:
+        logger.error(
+            "Unicode error, using 'replace'. {0!r}".format(exc))
+        payload = payload.encode(charset, 'replace')
+    return payload
 
 
 class MessagePart(object):
@@ -107,7 +147,7 @@ class MessagePart(object):
             # XXX uh, multi also...  should recurse"
             raise NotImplementedError
         if payload:
-            payload = self._format_payload(payload)
+            payload = _encode_payload(payload)
         return _write_and_rewind(payload)
 
     def get_headers(self):
@@ -133,23 +173,6 @@ class MessagePart(object):
         if cdoc_wrapper:
             return cdoc_wrapper.raw
         return ""
-
-    def _format_payload(self, payload):
-        # FIXME -----------------------------------------------
-        # Test against unicode payloads...
-        # content_type = self._get_ctype_from_document(phash)
-        # charset = find_charset(content_type)
-        charset = None
-        if charset is None:
-            charset = get_email_charset(payload)
-        try:
-            if isinstance(payload, unicode):
-                payload = payload.encode(charset)
-        except UnicodeError as exc:
-            logger.error(
-                "Unicode error, using 'replace'. {0!r}".format(exc))
-            payload = payload.encode(charset, 'replace')
-        return payload
 
 
 class Message(object):
@@ -218,6 +241,9 @@ class Message(object):
         """
         def write_and_rewind_if_found(cdoc):
             payload = cdoc.raw if cdoc else ""
+            # XXX pass ctype from headers if not multipart?
+            if payload:
+                payload = _encode_payload(payload, ctype=cdoc.content_type)
             return _write_and_rewind(payload)
 
         d = defer.maybeDeferred(self._wrapper.get_body, store)
