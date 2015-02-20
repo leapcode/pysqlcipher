@@ -80,6 +80,20 @@ class LEAPIMAPServer(imap4.IMAP4Server):
         log.msg('rcv (%s): %s' % (self.state, msg))
         imap4.IMAP4Server.lineReceived(self, line)
 
+    def close_server_connection(self):
+        """
+        Send a BYE command so that the MUA at least knows that we're closing
+        the connection.
+        """
+        self.sendLine(
+            '* BYE LEAP IMAP Proxy is shutting down; '
+            'so long and thanks for all the fish')
+        self.transport.loseConnection()
+        if self.mbox:
+            self.mbox.removeListener(self)
+            self.mbox = None
+        self.state = 'unauth'
+
     def authenticateLogin(self, username, password):
         """
         Lookup the account with the given parameters, and deny

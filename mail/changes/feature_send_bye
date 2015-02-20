@@ -1,0 +1,1 @@
+- Send a BYE command to all open connections, so that the MUA is notified when the server is shutted down.

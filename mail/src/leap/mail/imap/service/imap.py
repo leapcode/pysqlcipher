@@ -21,6 +21,8 @@ IMAP service initialization
 import logging
 import os
 
+from collections import defaultdict
+
 from twisted.internet import reactor
 from twisted.internet.error import CannotListenError
 from twisted.internet.protocol import ServerFactory
@@ -70,6 +72,7 @@ class LeapIMAPFactory(ServerFactory):
     Factory for a IMAP4 server with soledad remote sync and gpg-decryption
     capabilities.
     """
+    protocol = LEAPIMAPServer
 
     def __init__(self, uuid, userid, soledad):
         """
@@ -91,6 +94,7 @@ class LeapIMAPFactory(ServerFactory):
         theAccount = IMAPAccount(uuid, soledad)
         self.theAccount = theAccount
 
+        self._connections = defaultdict()
         # XXX how to pass the store along?
 
     def buildProtocol(self, addr):
@@ -100,14 +104,24 @@ class LeapIMAPFactory(ServerFactory):
         :param addr: remote ip address
         :type addr:  str
         """
-        # XXX addr not used??!
-        imapProtocol = LEAPIMAPServer(
+        # TODO should reject anything from addr != localhost,
+        # just in case.
+        log.msg("Building protocol for connection %s" % addr)
+        imapProtocol = self.protocol(
             uuid=self._uuid,
             userid=self._userid,
             soledad=self._soledad)
         imapProtocol.theAccount = self.theAccount
         imapProtocol.factory = self
+
+        self._connections[addr] = imapProtocol
         return imapProtocol
+
+    def stopFactory(self):
+        # say bye!
+        for conn, proto in self._connections.items():
+            log.msg("Closing connections for %s" % conn)
+            proto.close_server_connection()
 
     def doStop(self):
         """
@@ -157,7 +171,6 @@ def run_service(store, **kwargs):
         logger.error("Error launching IMAP service: %r" % (exc,))
     else:
         # all good.
-        # (the caller has still to call fetcher.start_loop)
 
         if DO_MANHOLE:
             # TODO get pass from env var.too.
