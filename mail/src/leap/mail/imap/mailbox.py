@@ -322,7 +322,7 @@ class IMAPMailbox(object):
         :return: a deferred that will be triggered with the UID of the added
                  message.
         """
-        return self.collection.add_raw_msg(message, flags, date)
+        return self.collection.add_raw_message(message, flags, date)
 
     def notify_new(self, *args):
         """
