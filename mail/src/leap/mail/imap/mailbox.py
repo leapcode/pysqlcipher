@@ -30,8 +30,6 @@ from twisted.python import log
 from twisted.mail import imap4
 from zope.interface import implements
 
-from leap.common import events as leap_events
-from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
 from leap.common.check import leap_assert
 from leap.mail.constants import INBOX_NAME, MessageFlags
 from leap.mail.imap.messages import IMAPMessage
@@ -340,7 +338,7 @@ class IMAPMailbox(object):
 
         d = self._get_notify_count()
         d.addCallback(cbNotifyNew)
-        d.addCallback(self.cb_signal_unread_to_ui)
+        d.addCallback(self.collection.cb_signal_unread_to_ui)
 
     def _get_notify_count(self):
         """
@@ -512,8 +510,6 @@ class IMAPMailbox(object):
             d = self._get_messages_range(messages_asked)
             d.addCallback(get_imap_messages_for_range)
 
-        # TODO -- call signal_to_ui
-        # d.addCallback(self.cb_signal_unread_to_ui)
         return d
 
     def _get_messages_range(self, messages_asked):
@@ -659,25 +655,6 @@ class IMAPMailbox(object):
             for msgid in seq_messg)
         return result
 
-    def cb_signal_unread_to_ui(self, result):
-        """
-        Sends unread event to ui.
-        Used as a callback in several commands.
-
-        :param result: ignored
-        """
-        d = defer.maybeDeferred(self.getUnseenCount)
-        d.addCallback(self.__cb_signal_unread_to_ui)
-        return result
-
-    def __cb_signal_unread_to_ui(self, unseen):
-        """
-        Send the unread signal to UI.
-        :param unseen: number of unseen messages.
-        :type unseen: int
-        """
-        leap_events.signal(IMAP_UNREAD_MAIL, str(unseen))
-
     def store(self, messages_asked, flags, mode, uid):
         """
         Sets the flags of one or more messages.
@@ -722,7 +699,7 @@ class IMAPMailbox(object):
                           mode, uid, d)
         if PROFILE_CMD:
             do_profile_cmd(d, "STORE")
-        d.addCallback(self.cb_signal_unread_to_ui)
+        d.addCallback(self.collection.cb_signal_unread_to_ui)
         d.addErrback(lambda f: log.msg(f.getTraceback()))
         return d
 

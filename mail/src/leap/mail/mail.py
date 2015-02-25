@@ -27,6 +27,8 @@ from email.utils import formatdate
 from twisted.internet import defer
 
 from leap.common.check import leap_assert_type
+from leap.common import events as leap_events
+from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
 from leap.common.mail import get_email_charset
 
 from leap.mail.adaptors.soledad import SoledadMailAdaptor
@@ -606,7 +608,29 @@ class MessageCollection(object):
         d = self.add_msg(message, flags=flags, date=date,
                          notify_just_mdoc=True)
         d.addErrback(lambda f: logger.warning(f.getTraceback()))
+        d.addCallback(self.cb_signal_unread_to_ui)
         return d
+
+    def cb_signal_unread_to_ui(self, result):
+        """
+        Sends unread event to ui.
+        Used as a callback in several commands.
+
+        :param result: ignored
+        """
+        if self.mbox_name.lower() == "inbox":
+            d = defer.maybeDeferred(self.count_unseen)
+            d.addCallback(self.__cb_signal_unread_to_ui)
+        return result
+
+    def __cb_signal_unread_to_ui(self, unseen):
+        """
+        Send the unread signal to UI.
+        :param unseen: number of unseen messages.
+        :type unseen: int
+        """
+        # TODO change name of the signal, non-imap now.
+        leap_events.signal(IMAP_UNREAD_MAIL, str(unseen))
 
     def copy_msg(self, msg, new_mbox_uuid):
         """
