@@ -30,7 +30,7 @@ def _maybe_first_query_item(thing):
     """
     try:
         return thing[0][0]
-    except IndexError:
+    except (TypeError, IndexError):
         return None
 
 
@@ -280,10 +280,7 @@ class MailboxIndexer(object):
         check_good_uuid(mailbox_uuid)
 
         def increment(result):
-            uid = _maybe_first_query_item(result)
-            if uid is None:
-                return 1
-            return uid + 1
+            return result + 1
 
         d = self.get_last_uid(mailbox_uuid)
         d.addCallback(increment)
