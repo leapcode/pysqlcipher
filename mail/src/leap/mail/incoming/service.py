@@ -27,6 +27,7 @@ import warnings
 from email.parser import Parser
 from email.generator import Generator
 from email.utils import parseaddr
+from email.utils import formatdate
 from StringIO import StringIO
 from urlparse import urlparse
 
@@ -117,7 +118,8 @@ class IncomingMail(Service):
         :param soledad: a soledad instance
         :type soledad: Soledad
 
-        :param inbox: the inbox where the new emails will be stored
+        :param inbox: the collection for the inbox where the new emails will be
+                      stored
         :type inbox: MessageCollection
 
         :param check_period: the period to fetch new mail, in seconds.
@@ -132,7 +134,7 @@ class IncomingMail(Service):
 
         self._keymanager = keymanager
         self._soledad = soledad
-        self._inbox = inbox
+        self._inbox_collection = inbox
         self._userid = userid
 
         self._listeners = []
@@ -266,7 +268,7 @@ class IncomingMail(Service):
         Sends unread event to ui.
         """
         leap_events.signal(
-            IMAP_UNREAD_MAIL, str(self._inbox.count_unseen()))
+            IMAP_UNREAD_MAIL, str(self._inbox_collection.count_unseen()))
 
     # process incoming mail.
 
@@ -710,7 +712,8 @@ class IncomingMail(Service):
         :return: A Deferred that will be fired when the messages is stored
         :rtype: Defferred
         """
-        doc, data = msgtuple
+        doc, raw_data = msgtuple
+        insertion_date = formatdate(time.time())
         log.msg('adding message %s to local db' % (doc.doc_id,))
 
         def msgSavedCallback(result):
@@ -729,7 +732,8 @@ class IncomingMail(Service):
             d.addCallback(signal_deleted)
             return d
 
-        d = self._inbox.add_raw_message(data, (self.RECENT_FLAG,))
+        d = self._inbox_collection.add_msg(
+            raw_data, (self.RECENT_FLAG,), date=insertion_date)
         d.addCallbacks(msgSavedCallback, self._errback)
         return d
 

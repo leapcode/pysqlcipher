@@ -20,10 +20,6 @@ Generic Access to Mail objects: Public LEAP Mail API.
 import uuid
 import logging
 import StringIO
-import cStringIO
-import time
-
-from email.utils import formatdate
 from twisted.internet import defer
 
 from leap.common.check import leap_assert_type
@@ -521,6 +517,15 @@ class MessageCollection(object):
         """
         Add a message to this collection.
 
+        :param raw_message: the raw message
+        :param flags: tuple of flags for this message
+        :param tags: tuple of tags for this message
+        :param date:
+            formatted date, it will be used to retrieve the internal
+            date for this message.  According to the spec, this is NOT the date
+            and time in the RFC-822 header, but rather a date and time that
+            reflects when the message was received.
+        :type date: str
         :param notify_just_mdoc:
             boolean passed to the wrapper.create method,
             to indicate whether we're interested in being notified when only
@@ -533,7 +538,11 @@ class MessageCollection(object):
                   message.
         :rtype: deferred
         """
+        # TODO watch out if the use of this method in IMAP COPY/APPEND is
+        # passing the right date.
+
         # XXX mdoc ref is a leaky abstraction here. generalize.
+
         leap_assert_type(flags, tuple)
         leap_assert_type(date, str)
 
@@ -558,66 +567,22 @@ class MessageCollection(object):
         d = wrapper.create(self.store, notify_just_mdoc=notify_just_mdoc)
         d.addCallback(insert_mdoc_id, wrapper)
         d.addErrback(lambda f: f.printTraceback())
-        return d
-
-    def add_raw_message(self, message, flags, date=None):
-        """
-        Adds a message to this collection.
-
-        :param message: the raw message
-        :type message: str
-
-        :param flags: flag list
-        :type flags: list of str
-
-        :param date: timestamp
-        :type date: str
-
-        :return: a deferred that will be triggered with the UID of the added
-                 message.
-        """
-        # TODO should raise ReadOnlyMailbox if not rw.
-        # TODO have a look at the cases for internal date in the rfc
-        if isinstance(message, (cStringIO.OutputType, StringIO.StringIO)):
-            message = message.getvalue()
-
-        # XXX we could treat the message as an IMessage from here
-        leap_assert_type(message, basestring)
-
-        if flags is None:
-            flags = tuple()
-        else:
-            flags = tuple(str(flag) for flag in flags)
-
-        if date is None:
-            date = formatdate(time.time())
-
-        # A better place for this would be  the COPY/APPEND dispatcher
-        # if PROFILE_CMD:
-        # do_profile_cmd(d, "APPEND")
-
-        # just_mdoc=True: feels HACKY, but improves a *lot* the responsiveness
-        # of the APPENDS: we just need to be notified when the mdoc
-        # is saved, and let's hope that the other parts are doing just fine.
-        # This will not catch any errors when the inserts of the other parts
-        # fail, but on the other hand allows us to return very quickly, which
-        # seems a good compromise given that we have to serialize the appends.
-        # A better solution will probably involve implementing MULTIAPPEND
-        # or patching imap server to support pipelining.
-
-        d = self.add_msg(message, flags=flags, date=date,
-                         notify_just_mdoc=True)
-        d.addErrback(lambda f: logger.warning(f.getTraceback()))
         d.addCallback(self.cb_signal_unread_to_ui)
         return d
 
     def cb_signal_unread_to_ui(self, result):
         """
-        Sends unread event to ui.
+        Sends an unread event to ui, passing *only* the number of unread
+        messages if *this* is the inbox. This event is catched, for instance,
+        in the Bitmask client that displays a message with the number of unread
+        mails in the INBOX.
+
         Used as a callback in several commands.
 
         :param result: ignored
         """
+        # TODO it might make sense to modify the event so that
+        # it receives both the mailbox name AND the number of unread messages.
         if self.mbox_name.lower() == "inbox":
             d = defer.maybeDeferred(self.count_unseen)
             d.addCallback(self.__cb_signal_unread_to_ui)
@@ -629,7 +594,7 @@ class MessageCollection(object):
         :param unseen: number of unseen messages.
         :type unseen: int
         """
-        # TODO change name of the signal, non-imap now.
+        # TODO change name of the signal, independent from imap now.
         leap_events.signal(IMAP_UNREAD_MAIL, str(unseen))
 
     def copy_msg(self, msg, new_mbox_uuid):

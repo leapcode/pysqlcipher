@@ -20,8 +20,12 @@ IMAP Mailbox.
 import re
 import logging
 import os
+import cStringIO
+import StringIO
+import time
 
 from collections import defaultdict
+from email.utils import formatdate
 
 from twisted.internet import defer
 from twisted.internet import reactor
@@ -31,6 +35,7 @@ from twisted.mail import imap4
 from zope.interface import implements
 
 from leap.common.check import leap_assert
+from leap.common.check import leap_assert_type
 from leap.mail.constants import INBOX_NAME, MessageFlags
 from leap.mail.imap.messages import IMAPMessage
 
@@ -50,7 +55,6 @@ NOTIFY_NEW = not os.environ.get('LEAP_SKIPNOTIFY', False)
 PROFILE_CMD = os.environ.get('LEAP_PROFILE_IMAPCMD', False)
 
 if PROFILE_CMD:
-    import time
 
     def _debugProfiling(result, cmdname, start):
         took = (time.time() - start) * 1000
@@ -315,12 +319,41 @@ class IMAPMailbox(object):
         :type flags: list of str
 
         :param date: timestamp
-        :type date: str
+        :type date: str, or None
 
         :return: a deferred that will be triggered with the UID of the added
                  message.
         """
-        return self.collection.add_raw_message(message, flags, date)
+        # TODO should raise ReadOnlyMailbox if not rw.
+        # TODO have a look at the cases for internal date in the rfc
+        # XXX we could treat the message as an IMessage from here
+
+        if isinstance(message, (cStringIO.OutputType, StringIO.StringIO)):
+            message = message.getvalue()
+
+        leap_assert_type(message, basestring)
+
+        if flags is None:
+            flags = tuple()
+        else:
+            flags = tuple(str(flag) for flag in flags)
+
+        if date is None:
+            date = formatdate(time.time())
+
+        # notify_just_mdoc=True: feels HACKY, but improves a *lot* the
+        # responsiveness of the APPENDS: we just need to be notified when the
+        # mdoc is saved, and let's hope that the other parts are doing just
+        # fine.  This will not catch any errors when the inserts of the other
+        # parts fail, but on the other hand allows us to return very quickly,
+        # which seems a good compromise given that we have to serialize the
+        # appends.
+        # A better solution will probably involve implementing MULTIAPPEND
+        # extension or patching imap server to support pipelining.
+
+        # TODO add notify_new as a callback here...
+        return self.collection.add_msg(message, flags, date,
+                                       notify_just_mdoc=True)
 
     def notify_new(self, *args):
         """
