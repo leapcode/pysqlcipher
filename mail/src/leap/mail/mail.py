@@ -624,7 +624,7 @@ class MessageCollection(object):
         def delete_mdoc_id(_, wrapper):
             doc_id = wrapper.mdoc.doc_id
             return self.mbox_indexer.delete_doc_by_hash(
-                self.mbox_name, doc_id)
+                self.mbox_uuid, doc_id)
         d = wrapper.delete(self.store)
         d.addCallback(delete_mdoc_id, wrapper)
         return d

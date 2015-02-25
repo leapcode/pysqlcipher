@@ -56,17 +56,19 @@ def _get_msg_time():
 
 class CollectionMixin(object):
 
-    def get_collection(self, mbox_collection=True):
+    def get_collection(self, mbox_collection=True, mbox_name=None,
+                       mbox_uuid=None):
         """
         Get a collection for tests.
         """
         adaptor = SoledadMailAdaptor()
         store = self._soledad
         adaptor.store = store
+
         if mbox_collection:
             mbox_indexer = MailboxIndexer(store)
-            mbox_name = "TestMbox"
-            mbox_uuid = str(uuid.uuid4())
+            mbox_name = mbox_name or "TestMbox"
+            mbox_uuid = mbox_uuid or str(uuid.uuid4())
         else:
             mbox_indexer = mbox_name = None
 
@@ -209,6 +211,8 @@ class MessageCollectionTestCase(SoledadTestMixin, CollectionMixin):
     """
     Tests for the MessageCollection class.
     """
+    _mbox_uuid = None
+
     def assert_collection_count(self, _, expected):
         def _assert_count(count):
             self.assertEqual(count, expected)
@@ -222,8 +226,12 @@ class MessageCollectionTestCase(SoledadTestMixin, CollectionMixin):
         raw = _get_raw_msg()
 
         def add_msg_to_collection(collection):
+            # We keep the uuid in case we need to instantiate the same
+            # collection afterwards.
+            self._mbox_uuid = collection.mbox_uuid
             d = collection.add_msg(raw, date=_get_msg_time())
             return d
+
         d = self.get_collection()
         d.addCallback(add_msg_to_collection)
         return d
@@ -253,7 +261,7 @@ class MessageCollectionTestCase(SoledadTestMixin, CollectionMixin):
     def _test_add_and_count_msg_cb(self, _):
         return partial(self.assert_collection_count, expected=1)
 
-    def test_coppy_msg(self):
+    def test_copy_msg(self):
         # TODO ---- update when implementing messagecopier
         # interface
         self.fail("Not Yet Implemented")
@@ -263,13 +271,16 @@ class MessageCollectionTestCase(SoledadTestMixin, CollectionMixin):
 
         def del_msg(collection):
             def _delete_it(msg):
+                self.assertTrue(msg is not None)
                 return collection.delete_msg(msg)
 
             d = collection.get_message_by_uid(1)
             d.addCallback(_delete_it)
             return d
 
-        d.addCallback(lambda _: self.get_collection())
+        # We need to instantiate an mbox collection with the same uuid that
+        # the one in which we inserted the doc.
+        d.addCallback(lambda _: self.get_collection(mbox_uuid=self._mbox_uuid))
         d.addCallback(del_msg)
         d.addCallback(self._test_delete_msg_cb)
         return d
