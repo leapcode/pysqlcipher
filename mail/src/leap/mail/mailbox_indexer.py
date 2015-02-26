@@ -278,12 +278,8 @@ class MailboxIndexer(object):
         :rtype: Deferred
         """
         check_good_uuid(mailbox_uuid)
-
-        def increment(result):
-            return result + 1
-
         d = self.get_last_uid(mailbox_uuid)
-        d.addCallback(increment)
+        d.addCallback(lambda uid: uid + 1)
         return d
 
     def get_last_uid(self, mailbox_uuid):
@@ -296,7 +292,10 @@ class MailboxIndexer(object):
             preffix=self.table_preffix, name=sanitize(mailbox_uuid))
 
         def getit(result):
-            return _maybe_first_query_item(result)
+            rowid = _maybe_first_query_item(result)
+            if not rowid:
+                rowid = 0
+            return rowid
 
         d = self._query(sql)
         d.addCallback(getit)
