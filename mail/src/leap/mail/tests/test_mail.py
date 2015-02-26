@@ -342,9 +342,9 @@ class AccountTestCase(SoledadTestMixin):
 
     def test_rename_mailbox(self):
         acc = self.get_account()
-        d = acc.callWhenReady(lambda _: acc.add_mailbox("TestMailbox"))
-        d = acc.callWhenReady(lambda _: acc.rename_mailbox(
-            "TestMailbox", "RenamedMailbox"))
+        d = acc.callWhenReady(lambda _: acc.add_mailbox("OriginalMailbox"))
+        d.addCallback(lambda _: acc.rename_mailbox(
+            "OriginalMailbox", "RenamedMailbox"))
         d.addCallback(lambda _: acc.list_all_mailbox_names())
         d.addCallback(self._test_rename_mailbox_cb)
         return d

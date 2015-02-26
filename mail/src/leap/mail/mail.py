@@ -816,16 +816,12 @@ class Account(object):
         return d
 
     def rename_mailbox(self, oldname, newname):
-        # TODO incomplete/wrong!!!
-        # Should rename also ALL of the document ids that are pointing
-        # to the old mailbox!!!
-
-        # TODO part-docs identifiers should have the UID_validity of the
-        # mailbox embedded, instead of the name! (so they can survive a rename)
 
         def _rename_mbox(wrapper):
             wrapper.mbox = newname
-            return wrapper, wrapper.update(self.store)
+            d = wrapper.update(self.store)
+            d.addCallback(lambda result: wrapper)
+            return d
 
         d = self.adaptor.get_or_create_mbox(self.store, oldname)
         d.addCallback(_rename_mbox)
