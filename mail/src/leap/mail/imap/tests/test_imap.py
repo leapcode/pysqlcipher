@@ -472,7 +472,7 @@ class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
         return d.addCallback(self._cbTestHierarchicalRename)
 
     def _cbTestHierarchicalRename(self, mailboxes):
-        expected = ['INBOX', 'newname', 'newname/m1', 'newname/m2']
+        expected = ['INBOX', 'newname/m1', 'newname/m2']
         self.assertEqual(sorted(mailboxes), sorted([s for s in expected]))
 
     def testSubscribe(self):
@@ -967,6 +967,7 @@ class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
         return d.addCallback(self._cbTestFullAppend, infile)
 
     def _cbTestFullAppend(self, fetched, infile):
+        fetched = list(fetched)
         self.assertTrue(len(fetched) == 1)
         self.assertTrue(len(fetched[0]) == 2)
         uid, msg = fetched[0]
