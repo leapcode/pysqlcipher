@@ -1044,6 +1044,7 @@ class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
             self._cbTestPartialAppend, infile)
 
     def _cbTestPartialAppend(self, fetched, infile):
+        fetched = list(fetched)
         self.assertTrue(len(fetched) == 1)
         self.assertTrue(len(fetched[0]) == 2)
         uid, msg = fetched[0]

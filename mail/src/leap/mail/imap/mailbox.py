@@ -352,7 +352,7 @@ class IMAPMailbox(object):
         # extension or patching imap server to support pipelining.
 
         # TODO add notify_new as a callback here...
-        return self.collection.add_msg(message, flags, date,
+        return self.collection.add_msg(message, flags, date=date,
                                        notify_just_mdoc=True)
 
     def notify_new(self, *args):

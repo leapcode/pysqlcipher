@@ -540,7 +540,6 @@ class MessageCollection(object):
         """
         # TODO watch out if the use of this method in IMAP COPY/APPEND is
         # passing the right date.
-
         # XXX mdoc ref is a leaky abstraction here. generalize.
 
         leap_assert_type(flags, tuple)
