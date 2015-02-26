@@ -101,16 +101,21 @@ class MessageTestCase(SoledadTestMixin, CollectionMixin):
         """
         Inserts and return a regular message, for tests.
         """
+        def insert_message(collection):
+            self._mbox_uuid = collection.mbox_uuid
+            return collection.add_msg(
+                raw, flags=self.msg_flags, tags=self.msg_tags,
+                date=self.internal_date)
+
         raw = _get_raw_msg(multi=multi)
+
         d = self.get_collection()
-        d.addCallback(lambda col: col.add_msg(
-            raw, flags=self.msg_flags, tags=self.msg_tags,
-            date=self.internal_date))
+        d.addCallback(insert_message)
         return d
 
     def get_inserted_msg(self, multi=False):
         d = self._do_insert_msg(multi=multi)
-        d.addCallback(lambda _: self.get_collection())
+        d.addCallback(lambda _: self.get_collection(mbox_uuid=self._mbox_uuid))
         d.addCallback(lambda col: col.get_message_by_uid(1))
         return d
 
@@ -121,7 +126,7 @@ class MessageTestCase(SoledadTestMixin, CollectionMixin):
 
     def _test_get_flags_cb(self, msg):
         self.assertTrue(msg is not None)
-        self.assertEquals(msg.get_flags(), self.msg_flags)
+        self.assertEquals(tuple(msg.get_flags()), self.msg_flags)
 
     def test_get_internal_date(self):
         d = self.get_inserted_msg()
