@@ -1,0 +1,8 @@
+[bug|feature|docs|pkg]
+
+...
+
+Resolves: #XXX
+Related: #XXX
+Documentation: #XXX
+Releases: XXX 
