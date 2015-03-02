@@ -882,6 +882,7 @@ class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
         """
         Test partially appending a message to the mailbox
         """
+        # TODO this test sometimes will fail because of the notify_just_mdoc
         infile = util.sibpath(__file__, 'rfc822.message')
 
         acc = self.server.theAccount
@@ -990,11 +991,14 @@ class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
 
         def add_messages():
             d = self.mailbox.addMessage(
-                'test 1', flags=('\\Deleted', 'AnotherFlag'))
+                'test 1', flags=('\\Deleted', 'AnotherFlag'),
+                notify_just_mdoc=False)
             d.addCallback(lambda _: self.mailbox.addMessage(
-                'test 2', flags=('AnotherFlag',)))
+                'test 2', flags=('AnotherFlag',),
+                notify_just_mdoc=False))
             d.addCallback(lambda _: self.mailbox.addMessage(
-                'test 3', flags=('\\Deleted',)))
+                'test 3', flags=('\\Deleted',),
+                notify_just_mdoc=False))
             return d
 
         def expunge():

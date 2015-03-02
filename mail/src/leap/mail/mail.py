@@ -645,8 +645,13 @@ class MessageCollection(object):
             for h in hashes:
                 d.append(self.mbox_indexer.delete_doc_by_hash(
                          self.mbox_uuid, h))
-            return defer.gatherResults(d).addCallback(
-                lambda _: uids)
+
+            def return_uids_when_deleted(ignored):
+                return uids
+
+            all_deleted = defer.gatherResults(d).addCallback(
+                return_uids_when_deleted)
+            return all_deleted
 
         mdocs_deleted = self.adaptor.del_all_flagged_messages(
             self.store, self.mbox_uuid)

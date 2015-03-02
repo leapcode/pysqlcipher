@@ -307,7 +307,7 @@ class IMAPMailbox(object):
         d.addCallback(as_a_dict)
         return d
 
-    def addMessage(self, message, flags, date=None):
+    def addMessage(self, message, flags, date=None, notify_just_mdoc=True):
         """
         Adds a message to this mailbox.
 
@@ -327,6 +327,21 @@ class IMAPMailbox(object):
         # TODO have a look at the cases for internal date in the rfc
         # XXX we could treat the message as an IMessage from here
 
+        # TODO  notify_just_mdoc *sometimes* make the append tests fail.
+        # have to find a better solution for this. A workaround could probably
+        # be to have a list of the ongoing deferreds related to append, so that
+        # we queue for later all the requests having to do with these.
+
+        # notify_just_mdoc=True: feels HACKY, but improves a *lot* the
+        # responsiveness of the APPENDS: we just need to be notified when the
+        # mdoc is saved, and let's hope that the other parts are doing just
+        # fine.  This will not catch any errors when the inserts of the other
+        # parts fail, but on the other hand allows us to return very quickly,
+        # which seems a good compromise given that we have to serialize the
+        # appends.
+        # A better solution will probably involve implementing MULTIAPPEND
+        # extension or patching imap server to support pipelining.
+
         if isinstance(message, (cStringIO.OutputType, StringIO.StringIO)):
             message = message.getvalue()
 
@@ -340,19 +355,9 @@ class IMAPMailbox(object):
         if date is None:
             date = formatdate(time.time())
 
-        # notify_just_mdoc=True: feels HACKY, but improves a *lot* the
-        # responsiveness of the APPENDS: we just need to be notified when the
-        # mdoc is saved, and let's hope that the other parts are doing just
-        # fine.  This will not catch any errors when the inserts of the other
-        # parts fail, but on the other hand allows us to return very quickly,
-        # which seems a good compromise given that we have to serialize the
-        # appends.
-        # A better solution will probably involve implementing MULTIAPPEND
-        # extension or patching imap server to support pipelining.
-
         # TODO add notify_new as a callback here...
         return self.collection.add_msg(message, flags, date=date,
-                                       notify_just_mdoc=True)
+                                       notify_just_mdoc=notify_just_mdoc)
 
     def notify_new(self, *args):
         """
