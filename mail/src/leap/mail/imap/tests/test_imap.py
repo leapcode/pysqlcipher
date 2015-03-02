@@ -1025,7 +1025,6 @@ class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
         self.assertItemsEqual(self.results, [1, 3])
 
 
-# TODO -------- Fix this testcase
 class AccountTestCase(IMAP4HelperMixin):
     """
     Test the Account.
@@ -1037,19 +1036,7 @@ class AccountTestCase(IMAP4HelperMixin):
         return self.server.theAccount.addMailbox('one')
 
     def test_illegalMailboxCreate(self):
-        # FIXME --- account.addMailbox needs to raise a failure,
-        # not the direct exception.
-        self.stashed = None
-
-        def stash(result):
-            self.stashed = result
-
-        d = self._create_empty_mailbox()
-        d.addBoth(stash)
-        d.addCallback(lambda _: self.failUnless(isinstance(self.stashed,
-                                                           failure.Failure)))
-        return d
-        #self.assertRaises(AssertionError, self._create_empty_mailbox)
+        self.assertRaises(AssertionError, self._create_empty_mailbox)
 
 
 class IMAP4ServerSearchTestCase(IMAP4HelperMixin):
