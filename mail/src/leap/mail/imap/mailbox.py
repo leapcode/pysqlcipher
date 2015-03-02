@@ -82,9 +82,9 @@ class IMAPMailbox(object):
     A Soledad-backed IMAP mailbox.
 
     Implements the high-level method needed for the Mailbox interfaces.
-    The low-level database methods are contained in IMAPMessageCollection
-    class, which we instantiate and make accessible in the `messages`
-    attribute.
+    The low-level database methods are contained in the generic
+    MessageCollection class. We receive an instance of it and it is made
+    accessible in the `collection` attribute.
     """
     implements(
         imap4.IMailbox,
@@ -107,14 +107,13 @@ class IMAPMailbox(object):
 
     def __init__(self, collection, rw=1):
         """
-        :param collection: instance of IMAPMessageCollection
-        :type collection: IMAPMessageCollection
+        :param collection: instance of MessageCollection
+        :type collection: MessageCollection
 
         :param rw: read-and-write flag for this mailbox
         :type rw: int
         """
         self.rw = rw
-
         self._uidvalidity = None
         self.collection = collection
 

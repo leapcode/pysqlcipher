@@ -38,7 +38,6 @@ from twisted.python import failure
 from twisted import cred
 
 from leap.mail.imap.mailbox import IMAPMailbox
-from leap.mail.imap.messages import IMAPMessageCollection
 from leap.mail.imap.tests.utils import IMAP4HelperMixin
 
 
@@ -70,138 +69,9 @@ class TestRealm:
     def requestAvatar(self, avatarId, mind, *interfaces):
         return imap4.IAccount, self.theAccount, lambda: None
 
-
 #
 # TestCases
 #
-
-# TODO rename to IMAPMessageCollection
-class MessageCollectionTestCase(IMAP4HelperMixin):
-    """
-    Tests for the MessageCollection class
-    """
-    count = 0
-
-    def setUp(self):
-        """
-        setUp method for each test
-        We override mixin method since we are only testing
-        MessageCollection interface in this particular TestCase
-        """
-        # FIXME -- return deferred
-        super(MessageCollectionTestCase, self).setUp()
-
-        # FIXME --- update initialization
-        self.messages = IMAPMessageCollection(
-            "testmbox%s" % (self.count,), self._soledad)
-        MessageCollectionTestCase.count += 1
-
-    def tearDown(self):
-        """
-        tearDown method for each test
-        """
-        del self.messages
-
-    def testEmptyMessage(self):
-        """
-        Test empty message and collection
-        """
-        em = self.messages._get_empty_doc()
-        self.assertEqual(
-            em,
-            {
-                "chash": '',
-                "deleted": False,
-                "flags": [],
-                "mbox": "inbox",
-                "seen": False,
-                "multi": False,
-                "size": 0,
-                "type": "flags",
-                "uid": 1,
-            })
-        self.assertEqual(self.messages.count(), 0)
-
-    def testMultipleAdd(self):
-        """
-        Add multiple messages
-        """
-        mc = self.messages
-        self.assertEqual(self.messages.count(), 0)
-
-        def add_first():
-            d = defer.gatherResults([
-                mc.add_msg('Stuff 1', subject="test1"),
-                mc.add_msg('Stuff 2', subject="test2"),
-                mc.add_msg('Stuff 3', subject="test3"),
-                mc.add_msg('Stuff 4', subject="test4")])
-            return d
-
-        def add_second(result):
-            d = defer.gatherResults([
-                mc.add_msg('Stuff 5', subject="test5"),
-                mc.add_msg('Stuff 6', subject="test6"),
-                mc.add_msg('Stuff 7', subject="test7")])
-            return d
-
-        def check_second(result):
-            return self.assertEqual(mc.count(), 7)
-
-        d1 = add_first()
-        d1.addCallback(add_second)
-        d1.addCallback(check_second)
-
-    def testRecentCount(self):
-        """
-        Test the recent count
-        """
-        mc = self.messages
-        countrecent = mc.count_recent
-        eq = self.assertEqual
-
-        self.assertEqual(countrecent(), 0)
-
-        d = mc.add_msg('Stuff', subject="test1")
-        # For the semantics defined in the RFC, we auto-add the
-        # recent flag by default.
-
-        def add2(_):
-            return mc.add_msg('Stuff', subject="test2",
-                              flags=('\\Deleted',))
-
-        def add3(_):
-            return mc.add_msg('Stuff', subject="test3",
-                              flags=('\\Recent',))
-
-        def add4(_):
-            return mc.add_msg('Stuff', subject="test4",
-                              flags=('\\Deleted', '\\Recent'))
-
-        d.addCallback(lambda r: eq(countrecent(), 1))
-        d.addCallback(add2)
-        d.addCallback(lambda r: eq(countrecent(), 2))
-        d.addCallback(add3)
-        d.addCallback(lambda r: eq(countrecent(), 3))
-        d.addCallback(add4)
-        d.addCallback(lambda r: eq(countrecent(), 4))
-
-    def testFilterByMailbox(self):
-        """
-        Test that queries filter by selected mailbox
-        """
-        mc = self.messages
-        self.assertEqual(self.messages.count(), 0)
-
-        def add_1():
-            d1 = mc.add_msg('msg 1', subject="test1")
-            d2 = mc.add_msg('msg 2', subject="test2")
-            d3 = mc.add_msg('msg 3', subject="test3")
-            d = defer.gatherResults([d1, d2, d3])
-            return d
-
-        add_1().addCallback(lambda ignored: self.assertEqual(
-                            mc.count(), 3))
-
 
 # DEBUG ---
 #from twisted.internet.base import DelayedCall
