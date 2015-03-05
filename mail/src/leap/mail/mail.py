@@ -20,6 +20,8 @@ Generic Access to Mail objects: Public LEAP Mail API.
 import uuid
 import logging
 import StringIO
+import weakref
+
 from twisted.internet import defer
 
 from leap.common.check import leap_assert_type
@@ -732,6 +734,14 @@ class Account(object):
 
     adaptor_class = SoledadMailAdaptor
 
+    # This is a mapping to collection instances so that we always
+    # return a reference to them instead of creating new ones. However, being a
+    # dictionary of weakrefs values, they automagically vanish from the dict
+    # when no hard refs is left to them (so they can be garbage collected)
+    # This is important because the different wrappers rely on several
+    # kinds of deferredLocks that are kept as class or instance variables
+    _collection_mapping = weakref.WeakValueDictionary()
+
     def __init__(self, store, ready_cb=None):
         self.store = store
         self.adaptor = self.adaptor_class()
@@ -835,12 +845,19 @@ class Account(object):
 
     def get_collection_by_mailbox(self, name):
         """
-        :rtype: MessageCollection
+        :rtype: deferred
+        :return: a deferred that will fire with a MessageCollection
         """
+        collection = self._collection_mapping.get(name, None)
+        if collection:
+            return defer.succeed(collection)
+
         # imap select will use this, passing the collection to SoledadMailbox
         def get_collection_for_mailbox(mbox_wrapper):
-            return MessageCollection(
+            collection = MessageCollection(
                 self.adaptor, self.store, self.mbox_indexer, mbox_wrapper)
+            self._collection_mapping[name] = collection
+            return collection
 
         d = self.adaptor.get_or_create_mbox(self.store, name)
         d.addCallback(get_collection_for_mailbox)
