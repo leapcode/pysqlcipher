@@ -562,6 +562,15 @@ class MessageCollection(object):
 
         def insert_mdoc_id(_, wrapper):
             doc_id = wrapper.mdoc.doc_id
+            if not doc_id:
+                # --- BUG -----------------------------------------
+                # XXX why from time to time mdoc doesn't have doc_id
+                # here???
+                logger.error("BUG: (please report) Null doc_id for "
+                             "document %s" %
+                             (wrapper.mdoc.serialize(),))
+                return defer.succeed("mdoc_id not inserted")
+                # XXX BUG -----------------------------------------
             return self.mbox_indexer.insert_doc(
                 self.mbox_uuid, doc_id)
 
