@@ -1114,6 +1114,7 @@ def _split_into_parts(raw):
 
     msg, parts, chash, multi = _parse_msg(raw)
     size = len(msg.as_string())
+
     body_phash = walk.get_body_phash(msg)
 
     parts_map = walk.walk_msg_tree(parts, body_phash=body_phash)
@@ -1161,16 +1162,13 @@ def _build_headers_doc(msg, chash, body_phash, parts_map):
 
     It takes into account possibly repeated headers.
     """
-    headers = msg.items()
-
-    # TODO move this manipulation to IMAP
-    #headers = defaultdict(list)
-    #for k, v in msg.items():
-        #headers[k].append(v)
-    ## "fix" for repeated headers.
-    #for k, v in headers.items():
-        #newline = "\n%s: " % (k,)
-        #headers[k] = newline.join(v)
+    headers = defaultdict(list)
+    for k, v in msg.items():
+        headers[k].append(v)
+    # "fix" for repeated headers (as in "Received:"
+    for k, v in headers.items():
+        newline = "\n%s: " % (k.lower(),)
+        headers[k] = newline.join(v)
 
     lower_headers = lowerdict(dict(headers))
     msgid = first(_MSGID_RE.findall(

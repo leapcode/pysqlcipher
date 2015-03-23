@@ -208,6 +208,18 @@ class IMAPMessagePart(object):
         return IMAPMessagePart(subpart)
 
 
+class CaseInsensitiveDict(dict):
+    """
+    A dictionary subclass that will allow case-insenstive key lookups.
+    """
+
+    def __setitem__(self, key, value):
+        super(CaseInsensitiveDict, self).__setitem__(key.lower(), value)
+
+    def __getitem__(self, key):
+        return super(CaseInsensitiveDict, self).__getitem__(key.lower())
+
+
 def _format_headers(headers, negate, *names):
     # current server impl. expects content-type to be present, so if for
     # some reason we do not have headers, we have to return at least that
@@ -228,13 +240,13 @@ def _format_headers(headers, negate, *names):
     # default to most likely standard
     charset = find_charset(headers, "utf-8")
 
-    _headers = dict()
-    for key, value in headers.items():
-        # twisted imap server expects *some* headers to be lowercase
-        # We could use a CaseInsensitiveDict here...
-        if key.lower() == "content-type":
-            key = key.lower()
+    # We will return a copy of the headers dictionary that
+    # will allow case-insensitive lookups. In some parts of the twisted imap
+    # server code the keys are expected to be in lower case, and in this way
+    # we avoid having to convert them.
 
+    _headers = CaseInsensitiveDict()
+    for key, value in headers.items():
         if not isinstance(key, str):
             key = key.encode(charset, 'replace')
         if not isinstance(value, str):
@@ -247,4 +259,5 @@ def _format_headers(headers, negate, *names):
         # filter original dict by negate-condition
         if cond(key):
             _headers[key] = value
+
     return _headers

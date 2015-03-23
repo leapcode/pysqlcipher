@@ -17,6 +17,7 @@
 """
 Generic Access to Mail objects: Public LEAP Mail API.
 """
+import itertools
 import uuid
 import logging
 import StringIO
@@ -96,6 +97,23 @@ def _encode_payload(payload, ctype=""):
             "Unicode error, using 'replace'. {0!r}".format(exc))
         payload = payload.encode(charset, 'replace')
     return payload
+
+
+def _unpack_headers(headers_dict):
+    """
+    Take a "packed" dict containing headers (with repeated keys represented as
+    line breaks inside each value, preceded by the header key) and return a
+    list of tuples in which each repeated key has a different tuple.
+    """
+    headers_l = headers_dict.items()
+    for i, (k, v) in enumerate(headers_l):
+        splitted = v.split(k.lower() + ": ")
+        if len(splitted) != 1:
+            inner = zip(
+                itertools.cycle([k]),
+                map(lambda l: l.rstrip('\n'), splitted))
+            headers_l = headers_l[:i] + inner + headers_l[i+1:]
+    return headers_l
 
 
 class MessagePart(object):
@@ -242,7 +260,7 @@ class Message(object):
         """
         Get the raw headers document.
         """
-        return [tuple(item) for item in self._wrapper.hdoc.headers]
+        return self._wrapper.hdoc.headers
 
     def get_body_file(self, store):
         """

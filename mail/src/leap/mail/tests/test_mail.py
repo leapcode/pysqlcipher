@@ -26,7 +26,7 @@ from email.parser import Parser
 from email.Utils import formatdate
 
 from leap.mail.adaptors.soledad import SoledadMailAdaptor
-from leap.mail.mail import MessageCollection, Account
+from leap.mail.mail import MessageCollection, Account, _unpack_headers
 from leap.mail.mailbox_indexer import MailboxIndexer
 from leap.mail.tests.common import SoledadTestMixin
 
@@ -144,8 +144,10 @@ class MessageTestCase(SoledadTestMixin, CollectionMixin):
 
     def _test_get_headers_cb(self, msg):
         self.assertTrue(msg is not None)
-        expected = _get_parsed_msg().items()
-        self.assertEqual(msg.get_headers(), expected)
+        expected = [
+            (str(key.lower()), str(value))
+            for (key, value) in _get_parsed_msg().items()]
+        self.assertItemsEqual(_unpack_headers(msg.get_headers()), expected)
 
     def test_get_body_file(self):
         d = self.get_inserted_msg(multi=True)
