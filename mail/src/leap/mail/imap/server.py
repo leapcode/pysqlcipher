@@ -36,6 +36,38 @@ from twisted.mail.imap4 import IllegalClientResponse
 from twisted.mail.imap4 import LiteralString, LiteralFile
 
 
+def _getContentType(msg):
+    """
+    Return a two-tuple of the main and subtype of the given message.
+    """
+    attrs = None
+    mm = msg.getHeaders(False, 'content-type').get('content-type', None)
+    if mm:
+        mm = ''.join(mm.splitlines())
+        mimetype = mm.split(';')
+        if mimetype:
+            type = mimetype[0].split('/', 1)
+            if len(type) == 1:
+                major = type[0]
+                minor = None
+            elif len(type) == 2:
+                major, minor = type
+            else:
+                major = minor = None
+            # XXX patched ---------------------------------------------
+            attrs = dict(x.strip().split('=', 1) for x in mimetype[1:])
+            # XXX patched ---------------------------------------------
+        else:
+            major = minor = None
+    else:
+        major = minor = None
+    return major, minor, attrs
+
+# Monkey-patch _getContentType to avoid bug that passes lower-case boundary in
+# BODYSTRUCTURE response.
+imap4._getContentType = _getContentType
+
+
 class LEAPIMAPServer(imap4.IMAP4Server):
     """
     An IMAP4 Server with a LEAP Storage Backend.
@@ -84,7 +116,9 @@ class LEAPIMAPServer(imap4.IMAP4Server):
         if part.header:
             hdrs = msg.getHeaders(part.header.negate, *part.header.fields)
             hdrs = imap4._formatHeaders(hdrs)
-            _w(str(part) + ' ' + imap4._literal(hdrs))
+            # PATCHED ##########################################
+            _w(str(part) + ' ' + imap4._literal(hdrs + "\r\n"))
+            # PATCHED ##########################################
         elif part.text:
             _w(str(part) + ' ')
             _f()
@@ -94,9 +128,9 @@ class LEAPIMAPServer(imap4.IMAP4Server):
         elif part.mime:
             hdrs = imap4._formatHeaders(msg.getHeaders(True))
 
-            ###### PATCHED #####################################
+            # PATCHED ##########################################
             _w(str(part) + ' ' + imap4._literal(hdrs + "\r\n"))
-            ###### END PATCHED #################################
+            # END PATCHED ######################################
 
         elif part.empty:
             _w(str(part) + ' ')
