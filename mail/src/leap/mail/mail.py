@@ -21,6 +21,7 @@ import itertools
 import uuid
 import logging
 import StringIO
+import time
 import weakref
 
 from twisted.internet import defer
@@ -833,7 +834,20 @@ class Account(object):
         d = self.adaptor.get_all_mboxes(self.store)
         return d
 
-    def add_mailbox(self, name):
+    def add_mailbox(self, name, creation_ts=None):
+
+        if creation_ts is None:
+            # by default, we pass an int value
+            # taken from the current time
+            # we make sure to take enough decimals to get a unique
+            # mailbox-uidvalidity.
+            creation_ts = int(time.time() * 10E2)
+
+        def set_creation_ts(wrapper):
+            wrapper.created = creation_ts
+            d = wrapper.update(self.store)
+            d.addCallback(lambda _: wrapper)
+            return d
 
         def create_uuid(wrapper):
             if not wrapper.uuid:
@@ -849,6 +863,7 @@ class Account(object):
             return d
 
         d = self.adaptor.get_or_create_mbox(self.store, name)
+        d.addCallback(set_creation_ts)
         d.addCallback(create_uuid)
         d.addCallback(create_uid_table_cb)
         return d
