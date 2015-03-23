@@ -500,9 +500,9 @@ class IMAPMailbox(object):
         is_sequence = True if uid == 0 else False
 
         # XXX DEBUG ---  if you attempt to use the `getmail` utility under
-        # imap/tests, it will choke until we implement sequence numbers. This
-        # is an easy hack meanwhile.
-        # is_sequence = False
+        # imap/tests, or muas like mutt, it will choke until we implement
+        # sequence numbers. This is an easy hack meanwhile.
+        is_sequence = False
         # -----------------------------------------------------------------
 
         getmsg = self.collection.get_message_by_uid
@@ -581,7 +581,14 @@ class IMAPMailbox(object):
                 MessagePart.
         :rtype: tuple
         """
-        is_sequence = True if uid == 0 else False
+        # is_sequence = True if uid == 0 else False
+
+        # XXX FIXME -----------------------------------------------------
+        # imap/tests, or muas like mutt, it will choke until we implement
+        # sequence numbers. This is an easy hack meanwhile.
+        is_sequence = False
+        # ---------------------------------------------------------------
+
         if is_sequence:
             raise NotImplementedError
 
