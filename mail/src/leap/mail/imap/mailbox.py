@@ -514,13 +514,14 @@ class IMAPMailbox(object):
                 d_imapmsg = []
                 for msg in messages:
                     d_imapmsg.append(getimapmsg(msg))
-                return defer.gatherResults(d_imapmsg)
+                return defer.gatherResults(d_imapmsg, consumeErrors=True)
 
             def _zip_msgid(imap_messages):
                 zipped = zip(
                     list(msg_range), imap_messages)
                 return (item for item in zipped)
 
+            # XXX not called??
             def _unset_recent(sequence):
                 reactor.callLater(0, self.unset_recent_flags, sequence)
                 return sequence
@@ -528,12 +529,12 @@ class IMAPMailbox(object):
             d_msg = []
             for msgid in msg_range:
                 # XXX We want cdocs because we "probably" are asked for the
-                # body. We should be smarted at do_FETCH and pass a parameter
+                # body. We should be smarter at do_FETCH and pass a parameter
                 # to this method in order not to prefetch cdocs if they're not
                 # going to be used.
                 d_msg.append(getmsg(msgid, get_cdocs=True))
 
-            d = defer.gatherResults(d_msg)
+            d = defer.gatherResults(d_msg, consumeErrors=True)
             d.addCallback(_get_imap_msg)
             d.addCallback(_zip_msgid)
             return d
