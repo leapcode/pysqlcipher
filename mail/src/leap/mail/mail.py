@@ -135,7 +135,15 @@ class MessagePart(object):
         self._index = index
 
     def get_size(self):
-        return self._pmap['size']
+        """
+        Size of the body, in octets.
+        """
+        total = self._pmap['size']
+        _h = self.get_headers()
+        headers = len(
+            '\n'.join(["%s: %s" % (k, v) for k, v in dict(_h).items()]))
+        # have to subtract 2 blank lines
+        return total - headers - 2
 
     def get_body_file(self):
         payload = ""
@@ -148,6 +156,7 @@ class MessagePart(object):
             raise NotImplementedError
         if payload:
             payload = _encode_payload(payload)
+
         return _write_and_rewind(payload)
 
     def get_headers(self):
@@ -252,9 +261,10 @@ class Message(object):
 
     def get_size(self):
         """
-        Size, in octets.
+        Size of the whole message, in octets (including headers).
         """
-        return self._wrapper.fdoc.size
+        total = self._wrapper.fdoc.size
+        return total
 
     def is_multipart(self):
         """
