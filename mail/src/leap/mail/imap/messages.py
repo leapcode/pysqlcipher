@@ -22,7 +22,7 @@ from twisted.mail import imap4
 from twisted.internet import defer
 from zope.interface import implements
 
-from leap.mail.utils import find_charset
+from leap.mail.utils import find_charset, CaseInsensitiveDict
 
 
 logger = logging.getLogger(__name__)
@@ -206,18 +206,6 @@ class IMAPMessagePart(object):
     def getSubPart(self, part):
         subpart = self.message_part.get_subpart(part)
         return IMAPMessagePart(subpart)
-
-
-class CaseInsensitiveDict(dict):
-    """
-    A dictionary subclass that will allow case-insenstive key lookups.
-    """
-
-    def __setitem__(self, key, value):
-        super(CaseInsensitiveDict, self).__setitem__(key.lower(), value)
-
-    def __getitem__(self, key):
-        return super(CaseInsensitiveDict, self).__getitem__(key.lower())
 
 
 def _format_headers(headers, negate, *names):

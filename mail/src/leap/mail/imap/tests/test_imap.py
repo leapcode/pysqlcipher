@@ -25,8 +25,8 @@ XXX add authors from the original twisted tests.
 @license: GPLv3, see included LICENSE file
 """
 # XXX review license of the original tests!!!
-
 import os
+import string
 import types
 
 
@@ -38,6 +38,7 @@ from twisted.python import failure
 from twisted import cred
 
 from leap.mail.imap.mailbox import IMAPMailbox
+from leap.mail.imap.messages import CaseInsensitiveDict
 from leap.mail.imap.tests.utils import IMAP4HelperMixin
 
 
@@ -74,8 +75,8 @@ class TestRealm:
 #
 
 # DEBUG ---
-#from twisted.internet.base import DelayedCall
-#DelayedCall.debug = True
+# from twisted.internet.base import DelayedCall
+# DelayedCall.debug = True
 
 
 class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
@@ -810,7 +811,7 @@ class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
         infile = util.sibpath(__file__, 'rfc822.message')
         message = open(infile)
         acc = self.server.theAccount
-        mailbox_name = "root/subthing"
+        mailbox_name = "appendmbox/subthing"
 
         def add_mailbox():
             return acc.addMailbox(mailbox_name)
@@ -843,7 +844,7 @@ class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
         uid, msg = fetched[0]
         parsed = self.parser.parse(open(infile))
         expected_body = parsed.get_payload()
-        expected_headers = dict(parsed.items())
+        expected_headers = CaseInsensitiveDict(parsed.items())
 
         def assert_flags(flags):
             self.assertEqual(
@@ -860,7 +861,7 @@ class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
             self.assertEqual(expected_body, gotbody)
 
         def assert_headers(headers):
-            self.assertItemsEqual(expected_headers, headers)
+            self.assertItemsEqual(map(string.lower, expected_headers), headers)
 
         d = defer.maybeDeferred(msg.getFlags)
         d.addCallback(assert_flags)

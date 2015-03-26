@@ -492,13 +492,8 @@ class IMAPMailbox(object):
 
         :rtype: deferred with a generator that yields...
         """
-        # For the moment our UID is sequential, so we
-        # can treat them all the same.
-        # Change this to the flag that twisted expects when we
-        # switch to content-hash based index + local UID table.
-
-        is_sequence = True if uid == 0 else False
-
+        # TODO implement sequence
+        # is_sequence = True if uid == 0 else False
         # XXX DEBUG ---  if you attempt to use the `getmail` utility under
         # imap/tests, or muas like mutt, it will choke until we implement
         # sequence numbers. This is an easy hack meanwhile.
@@ -583,7 +578,6 @@ class IMAPMailbox(object):
         :rtype: tuple
         """
         # is_sequence = True if uid == 0 else False
-
         # XXX FIXME -----------------------------------------------------
         # imap/tests, or muas like mutt, it will choke until we implement
         # sequence numbers. This is an easy hack meanwhile.
@@ -672,7 +666,6 @@ class IMAPMailbox(object):
         :rtype: tuple
         """
         # TODO implement sequences
-        # TODO how often is thunderbird doing this?
         is_sequence = True if uid == 0 else False
         if is_sequence:
             raise NotImplementedError
@@ -730,7 +723,6 @@ class IMAPMailbox(object):
                                 read-write.
         """
         # TODO implement sequences
-        # TODO how often is thunderbird doing this?
         is_sequence = True if uid == 0 else False
         if is_sequence:
             raise NotImplementedError

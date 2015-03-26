@@ -35,7 +35,7 @@ from leap.mail.adaptors.soledad import SoledadMailAdaptor
 from leap.mail.constants import INBOX_NAME
 from leap.mail.constants import MessageFlags
 from leap.mail.mailbox_indexer import MailboxIndexer
-from leap.mail.utils import find_charset
+from leap.mail.utils import find_charset, CaseInsensitiveDict
 
 logger = logging.getLogger(name=__name__)
 
@@ -179,7 +179,7 @@ class MessagePart(object):
         return _write_and_rewind(payload)
 
     def get_headers(self):
-        return self._pmap.get("headers", [])
+        return CaseInsensitiveDict(self._pmap.get("headers", []))
 
     def is_multipart(self):
         return self._pmap.get("multi", False)
@@ -261,7 +261,7 @@ class Message(object):
         """
         Get the raw headers document.
         """
-        return self._wrapper.hdoc.headers
+        return CaseInsensitiveDict(self._wrapper.hdoc.headers)
 
     def get_body_file(self, store):
         """
@@ -364,6 +364,8 @@ class MessageCollection(object):
     store = None
     messageklass = Message
 
+    _pending_inserts = dict()
+
     def __init__(self, adaptor, store, mbox_indexer=None, mbox_wrapper=None):
         """
         Constructor for a MessageCollection.
@@ -440,6 +442,8 @@ class MessageCollection(object):
         if not absolute:
             raise NotImplementedError("Does not support relative ids yet")
 
+        get_doc_fun = self.mbox_indexer.get_doc_id_from_uid
+
         def get_msg_from_mdoc_id(doc_id):
             if doc_id is None:
                 return None
@@ -447,7 +451,16 @@ class MessageCollection(object):
                 self.messageklass, self.store,
                 doc_id, uid=uid, get_cdocs=get_cdocs)
 
-        d = self.mbox_indexer.get_doc_id_from_uid(self.mbox_uuid, uid)
+        def cleanup_and_get_doc_after_pending_insert(result):
+            for key in result:
+                self._pending_inserts.pop(key)
+            return get_doc_fun(self.mbox_uuid, uid)
+
+        if not self._pending_inserts:
+            d = get_doc_fun(self.mbox_uuid, uid)
+        else:
+            d = defer.gatherResults(self._pending_inserts.values())
+            d.addCallback(cleanup_and_get_doc_after_pending_insert)
         d.addCallback(get_msg_from_mdoc_id)
         return d
 
@@ -572,12 +585,15 @@ class MessageCollection(object):
         # TODO watch out if the use of this method in IMAP COPY/APPEND is
         # passing the right date.
         # XXX mdoc ref is a leaky abstraction here. generalize.
-
         leap_assert_type(flags, tuple)
         leap_assert_type(date, str)
 
         msg = self.adaptor.get_msg_from_string(Message, raw_msg)
         wrapper = msg.get_wrapper()
+
+        if notify_just_mdoc:
+            msgid = msg.get_headers()['message-id']
+            self._pending_inserts[msgid] = defer.Deferred()
 
         if not self.is_mailbox_collection():
             raise NotImplementedError()
@@ -600,10 +616,14 @@ class MessageCollection(object):
                              (wrapper.mdoc.serialize(),))
                 return defer.succeed("mdoc_id not inserted")
                 # XXX BUG -----------------------------------------
+
             return self.mbox_indexer.insert_doc(
                 self.mbox_uuid, doc_id)
 
-        d = wrapper.create(self.store, notify_just_mdoc=notify_just_mdoc)
+        d = wrapper.create(
+            self.store,
+            notify_just_mdoc=notify_just_mdoc,
+            pending_inserts_dict=self._pending_inserts)
         d.addCallback(insert_mdoc_id, wrapper)
         d.addErrback(lambda f: f.printTraceback())
         d.addCallback(self.cb_signal_unread_to_ui)

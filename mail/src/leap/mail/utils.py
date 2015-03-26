@@ -351,3 +351,24 @@ def json_loads(data):
         obj = json.loads(data, cls=json.JSONDecoder)
 
     return obj
+
+
+class CaseInsensitiveDict(dict):
+    """
+    A dictionary subclass that will allow case-insenstive key lookups.
+    """
+    def __init__(self, d=None):
+        if d is None:
+            d = []
+        if isinstance(d, dict):
+            for key, value in d.items():
+                self[key] = value
+        else:
+            for key, value in d:
+                self[key] = value
+
+    def __setitem__(self, key, value):
+        super(CaseInsensitiveDict, self).__setitem__(key.lower(), value)
+
+    def __getitem__(self, key):
+        return super(CaseInsensitiveDict, self).__getitem__(key.lower())
