@@ -44,6 +44,7 @@ import logging
 import requests
 
 from twisted.internet import defer
+from urlparse import urlparse
 
 from leap.common.check import leap_assert
 from leap.common.events import signal
@@ -219,13 +220,21 @@ class KeyManager(object):
             res = self._get(self._nickserver_uri, {'address': address})
             res.raise_for_status()
             server_keys = res.json()
+
             # insert keys in local database
             if self.OPENPGP_KEY in server_keys:
+                # nicknym server is authoritative for its own domain,
+                # for other domains the key might come from key servers.
+                validation_level = ValidationLevel.Weak_Chain
+                _, domain = _split_email(address)
+                if (domain == _get_domain(self._nickserver_uri)):
+                    validation_level = ValidationLevel.Provider_Trust
+
                 d = self.put_raw_key(
                     server_keys['openpgp'],
                     OpenPGPKey,
                     address=address,
-                    validation=ValidationLevel.Provider_Trust)
+                    validation=validation_level)
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
                 d = defer.fail(KeyNotFound(address))
@@ -785,6 +794,35 @@ class KeyManager(object):
         """
         if ktype not in self._wrapper_map:
             raise UnsupportedKeyTypeError(str(ktype))
+
+
+def _split_email(address):
+    """
+    Split username and domain from an email address
+
+    :param address: an email address
+    :type address: str
+
+    :return: username and domain from the email address
+    :rtype: (str, str)
+    """
+    if address.count("@") != 1:
+        return None
+    return address.split("@")
+
+
+def _get_domain(url):
+    """
+    Get the domain from an url
+
+    :param url: an url
+    :type url: str
+
+    :return: the domain part of the url
+    :rtype: str
+    """
+    return urlparse(url).hostname
+
 
 from ._version import get_versions
 __version__ = get_versions()['version']
