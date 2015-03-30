@@ -491,7 +491,7 @@ class MessageWrapper(object):
         for doc_id, cdoc in zip(self.mdoc.cdocs, self.cdocs.values()):
             cdoc.set_future_doc_id(doc_id)
 
-    def create(self, store, notify_just_mdoc=False):
+    def create(self, store, notify_just_mdoc=False, pending_inserts_dict=None):
         """
         Create all the parts for this message in the store.
 
@@ -503,7 +503,7 @@ class MessageWrapper(object):
             Be warned that in that case there will be no record of failures
             when creating the other part-documents.
 
-            Other-wise, this method will return a deferred that will wait for
+            Otherwise, this method will return a deferred that will wait for
             the creation of all the part documents.
 
             Setting this flag to True is mostly a convenient workaround for the
@@ -513,6 +513,9 @@ class MessageWrapper(object):
             times will be enough to have all the queued insert operations
             finished.
         :type notify_just_mdoc: bool
+        :param pending_inserts_dict:
+            a dictionary with the pending inserts ids.
+        :type pending_inserts_dict: dict
 
         :return: a deferred whose callback will be called when either all the
                  part documents have been written, or just the metamsg-doc,
@@ -527,26 +530,41 @@ class MessageWrapper(object):
         leap_assert(self.fdoc.doc_id is None,
                     "Cannot create: fdoc has a doc_id")
 
+        def unblock_pending_insert(result):
+            msgid = self.hdoc.headers.get('Message-Id', None)
+            try:
+                d = pending_inserts_dict[msgid]
+                d.callback(msgid)
+            except KeyError:
+                pass
+            return result
+
         # TODO check that the doc_ids in the mdoc are coherent
-        d = []
+        self.d = []
+
         mdoc_created = self.mdoc.create(store)
-        d.append(mdoc_created)
-        d.append(self.fdoc.create(store))
+        fdoc_created = self.fdoc.create(store)
+
+        self.d.append(mdoc_created)
+        self.d.append(fdoc_created)
 
         if not self._is_copy:
             if self.hdoc.doc_id is None:
-                d.append(self.hdoc.create(store))
+                self.d.append(self.hdoc.create(store))
             for cdoc in self.cdocs.values():
                 if cdoc.doc_id is not None:
                     # we could be just linking to an existing
                     # content-doc.
                     continue
-                d.append(cdoc.create(store))
+                self.d.append(cdoc.create(store))
+
+        self.all_inserted_d = defer.gatherResults(self.d)
 
         if notify_just_mdoc:
+            self.all_inserted_d.addCallback(unblock_pending_insert)
             return mdoc_created
         else:
-            return defer.gatherResults(d)
+            return self.all_inserted_d
 
     def update(self, store):
         """
@@ -1114,6 +1132,7 @@ def _split_into_parts(raw):
 
     msg, parts, chash, multi = _parse_msg(raw)
     size = len(msg.as_string())
+
     body_phash = walk.get_body_phash(msg)
 
     parts_map = walk.walk_msg_tree(parts, body_phash=body_phash)
@@ -1161,16 +1180,13 @@ def _build_headers_doc(msg, chash, body_phash, parts_map):
 
     It takes into account possibly repeated headers.
     """
-    headers = msg.items()
-
-    # TODO move this manipulation to IMAP
-    #headers = defaultdict(list)
-    #for k, v in msg.items():
-        #headers[k].append(v)
-    ## "fix" for repeated headers.
-    #for k, v in headers.items():
-        #newline = "\n%s: " % (k,)
-        #headers[k] = newline.join(v)
+    headers = defaultdict(list)
+    for k, v in msg.items():
+        headers[k].append(v)
+    # "fix" for repeated headers (as in "Received:"
+    for k, v in headers.items():
+        newline = "\n%s: " % (k.lower(),)
+        headers[k] = newline.join(v)
 
     lower_headers = lowerdict(dict(headers))
     msgid = first(_MSGID_RE.findall(

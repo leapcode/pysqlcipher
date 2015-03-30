@@ -163,28 +163,17 @@ class IMAPAccount(object):
         # FIXME --- return failure instead of AssertionError
         # See AccountTestCase...
         leap_assert(name, "Need a mailbox name to create a mailbox")
-        if creation_ts is None:
-            # by default, we pass an int value
-            # taken from the current time
-            # we make sure to take enough decimals to get a unique
-            # mailbox-uidvalidity.
-            creation_ts = int(time.time() * 10E2)
 
         def check_it_does_not_exist(mailboxes):
             if name in mailboxes:
                 raise imap4.MailboxCollision, repr(name)
             return mailboxes
 
-        def set_mbox_creation_ts(collection):
-            d = collection.set_mbox_attr("created", creation_ts)
-            d.addCallback(lambda _: collection)
-            return d
-
         d = self.account.list_all_mailbox_names()
         d.addCallback(check_it_does_not_exist)
-        d.addCallback(lambda _: self.account.add_mailbox(name))
+        d.addCallback(lambda _: self.account.add_mailbox(
+            name, creation_ts=creation_ts))
         d.addCallback(lambda _: self.account.get_collection_by_mailbox(name))
-        d.addCallback(set_mbox_creation_ts)
         d.addCallback(self._return_mailbox_from_collection)
         return d
 

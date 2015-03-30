@@ -492,17 +492,12 @@ class IMAPMailbox(object):
 
         :rtype: deferred with a generator that yields...
         """
-        # For the moment our UID is sequential, so we
-        # can treat them all the same.
-        # Change this to the flag that twisted expects when we
-        # switch to content-hash based index + local UID table.
-
-        is_sequence = True if uid == 0 else False
-
+        # TODO implement sequence
+        # is_sequence = True if uid == 0 else False
         # XXX DEBUG ---  if you attempt to use the `getmail` utility under
-        # imap/tests, it will choke until we implement sequence numbers. This
-        # is an easy hack meanwhile.
-        # is_sequence = False
+        # imap/tests, or muas like mutt, it will choke until we implement
+        # sequence numbers. This is an easy hack meanwhile.
+        is_sequence = False
         # -----------------------------------------------------------------
 
         getmsg = self.collection.get_message_by_uid
@@ -514,13 +509,14 @@ class IMAPMailbox(object):
                 d_imapmsg = []
                 for msg in messages:
                     d_imapmsg.append(getimapmsg(msg))
-                return defer.gatherResults(d_imapmsg)
+                return defer.gatherResults(d_imapmsg, consumeErrors=True)
 
             def _zip_msgid(imap_messages):
                 zipped = zip(
                     list(msg_range), imap_messages)
                 return (item for item in zipped)
 
+            # XXX not called??
             def _unset_recent(sequence):
                 reactor.callLater(0, self.unset_recent_flags, sequence)
                 return sequence
@@ -528,12 +524,12 @@ class IMAPMailbox(object):
             d_msg = []
             for msgid in msg_range:
                 # XXX We want cdocs because we "probably" are asked for the
-                # body. We should be smarted at do_FETCH and pass a parameter
+                # body. We should be smarter at do_FETCH and pass a parameter
                 # to this method in order not to prefetch cdocs if they're not
                 # going to be used.
                 d_msg.append(getmsg(msgid, get_cdocs=True))
 
-            d = defer.gatherResults(d_msg)
+            d = defer.gatherResults(d_msg, consumeErrors=True)
             d.addCallback(_get_imap_msg)
             d.addCallback(_zip_msgid)
             return d
@@ -581,7 +577,13 @@ class IMAPMailbox(object):
                 MessagePart.
         :rtype: tuple
         """
-        is_sequence = True if uid == 0 else False
+        # is_sequence = True if uid == 0 else False
+        # XXX FIXME -----------------------------------------------------
+        # imap/tests, or muas like mutt, it will choke until we implement
+        # sequence numbers. This is an easy hack meanwhile.
+        is_sequence = False
+        # ---------------------------------------------------------------
+
         if is_sequence:
             raise NotImplementedError
 
@@ -664,7 +666,6 @@ class IMAPMailbox(object):
         :rtype: tuple
         """
         # TODO implement sequences
-        # TODO how often is thunderbird doing this?
         is_sequence = True if uid == 0 else False
         if is_sequence:
             raise NotImplementedError
@@ -722,7 +723,6 @@ class IMAPMailbox(object):
                                 read-write.
         """
         # TODO implement sequences
-        # TODO how often is thunderbird doing this?
         is_sequence = True if uid == 0 else False
         if is_sequence:
             raise NotImplementedError

@@ -36,6 +36,38 @@ from twisted.mail.imap4 import IllegalClientResponse
 from twisted.mail.imap4 import LiteralString, LiteralFile
 
 
+def _getContentType(msg):
+    """
+    Return a two-tuple of the main and subtype of the given message.
+    """
+    attrs = None
+    mm = msg.getHeaders(False, 'content-type').get('content-type', None)
+    if mm:
+        mm = ''.join(mm.splitlines())
+        mimetype = mm.split(';')
+        if mimetype:
+            type = mimetype[0].split('/', 1)
+            if len(type) == 1:
+                major = type[0]
+                minor = None
+            elif len(type) == 2:
+                major, minor = type
+            else:
+                major = minor = None
+            # XXX patched ---------------------------------------------
+            attrs = dict(x.strip().split('=', 1) for x in mimetype[1:])
+            # XXX patched ---------------------------------------------
+        else:
+            major = minor = None
+    else:
+        major = minor = None
+    return major, minor, attrs
+
+# Monkey-patch _getContentType to avoid bug that passes lower-case boundary in
+# BODYSTRUCTURE response.
+imap4._getContentType = _getContentType
+
+
 class LEAPIMAPServer(imap4.IMAP4Server):
     """
     An IMAP4 Server with a LEAP Storage Backend.
@@ -59,6 +91,69 @@ class LEAPIMAPServer(imap4.IMAP4Server):
         # but we move it to the factory so we can
         # populate the test account properly (and only once
         # per session)
+
+    #############################################################
+    #
+    # Twisted imap4 patch to workaround bad mime rendering  in TB.
+    # See https://leap.se/code/issues/6773
+    # and https://bugzilla.mozilla.org/show_bug.cgi?id=149771
+    # Still unclear if this is a thunderbird bug.
+    # TODO send this patch upstream
+    #
+    #############################################################
+
+    def spew_body(self, part, id, msg, _w=None, _f=None):
+        if _w is None:
+            _w = self.transport.write
+        for p in part.part:
+            if msg.isMultipart():
+                msg = msg.getSubPart(p)
+            elif p > 0:
+                # Non-multipart messages have an implicit first part but no
+                # other parts - reject any request for any other part.
+                raise TypeError("Requested subpart of non-multipart message")
+
+        if part.header:
+            hdrs = msg.getHeaders(part.header.negate, *part.header.fields)
+            hdrs = imap4._formatHeaders(hdrs)
+            # PATCHED ##########################################
+            _w(str(part) + ' ' + imap4._literal(hdrs + "\r\n"))
+            # PATCHED ##########################################
+        elif part.text:
+            _w(str(part) + ' ')
+            _f()
+            return imap4.FileProducer(msg.getBodyFile()
+                ).beginProducing(self.transport
+                )
+        elif part.mime:
+            hdrs = imap4._formatHeaders(msg.getHeaders(True))
+
+            # PATCHED ##########################################
+            _w(str(part) + ' ' + imap4._literal(hdrs + "\r\n"))
+            # END PATCHED ######################################
+
+        elif part.empty:
+            _w(str(part) + ' ')
+            _f()
+            if part.part:
+                return imap4.FileProducer(msg.getBodyFile()
+                    ).beginProducing(self.transport
+                    )
+            else:
+                mf = imap4.IMessageFile(msg, None)
+                if mf is not None:
+                    return imap4.FileProducer(mf.open()).beginProducing(self.transport)
+                return imap4.MessageProducer(msg, None, self._scheduler).beginProducing(self.transport)
+
+        else:
+            _w('BODY ' + imap4.collapseNestedLists([imap4.getBodyStructure(msg)]))
+
+    ##################################################################
+    #
+    # END Twisted imap4 patch to workaround bad mime rendering  in TB.
+    # #6773
+    #
+    ##################################################################
 
     def lineReceived(self, line):
         """

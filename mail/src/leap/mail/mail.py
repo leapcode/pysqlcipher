@@ -17,9 +17,11 @@
 """
 Generic Access to Mail objects: Public LEAP Mail API.
 """
+import itertools
 import uuid
 import logging
 import StringIO
+import time
 import weakref
 
 from twisted.internet import defer
@@ -33,7 +35,7 @@ from leap.mail.adaptors.soledad import SoledadMailAdaptor
 from leap.mail.constants import INBOX_NAME
 from leap.mail.constants import MessageFlags
 from leap.mail.mailbox_indexer import MailboxIndexer
-from leap.mail.utils import find_charset
+from leap.mail.utils import find_charset, CaseInsensitiveDict
 
 logger = logging.getLogger(name=__name__)
 
@@ -98,6 +100,23 @@ def _encode_payload(payload, ctype=""):
     return payload
 
 
+def _unpack_headers(headers_dict):
+    """
+    Take a "packed" dict containing headers (with repeated keys represented as
+    line breaks inside each value, preceded by the header key) and return a
+    list of tuples in which each repeated key has a different tuple.
+    """
+    headers_l = headers_dict.items()
+    for i, (k, v) in enumerate(headers_l):
+        splitted = v.split(k.lower() + ": ")
+        if len(splitted) != 1:
+            inner = zip(
+                itertools.cycle([k]),
+                map(lambda l: l.rstrip('\n'), splitted))
+            headers_l = headers_l[:i] + inner + headers_l[i+1:]
+    return headers_l
+
+
 class MessagePart(object):
     # TODO This class should be better abstracted from the data model.
     # TODO support arbitrarily nested multiparts (right now we only support
@@ -135,7 +154,15 @@ class MessagePart(object):
         self._index = index
 
     def get_size(self):
-        return self._pmap['size']
+        """
+        Size of the body, in octets.
+        """
+        total = self._pmap['size']
+        _h = self.get_headers()
+        headers = len(
+            '\n'.join(["%s: %s" % (k, v) for k, v in dict(_h).items()]))
+        # have to subtract 2 blank lines
+        return total - headers - 2
 
     def get_body_file(self):
         payload = ""
@@ -148,10 +175,11 @@ class MessagePart(object):
             raise NotImplementedError
         if payload:
             payload = _encode_payload(payload)
+
         return _write_and_rewind(payload)
 
     def get_headers(self):
-        return self._pmap.get("headers", [])
+        return CaseInsensitiveDict(self._pmap.get("headers", []))
 
     def is_multipart(self):
         return self._pmap.get("multi", False)
@@ -233,7 +261,7 @@ class Message(object):
         """
         Get the raw headers document.
         """
-        return [tuple(item) for item in self._wrapper.hdoc.headers]
+        return CaseInsensitiveDict(self._wrapper.hdoc.headers)
 
     def get_body_file(self, store):
         """
@@ -252,9 +280,10 @@ class Message(object):
 
     def get_size(self):
         """
-        Size, in octets.
+        Size of the whole message, in octets (including headers).
         """
-        return self._wrapper.fdoc.size
+        total = self._wrapper.fdoc.size
+        return total
 
     def is_multipart(self):
         """
@@ -335,6 +364,8 @@ class MessageCollection(object):
     store = None
     messageklass = Message
 
+    _pending_inserts = dict()
+
     def __init__(self, adaptor, store, mbox_indexer=None, mbox_wrapper=None):
         """
         Constructor for a MessageCollection.
@@ -411,6 +442,8 @@ class MessageCollection(object):
         if not absolute:
             raise NotImplementedError("Does not support relative ids yet")
 
+        get_doc_fun = self.mbox_indexer.get_doc_id_from_uid
+
         def get_msg_from_mdoc_id(doc_id):
             if doc_id is None:
                 return None
@@ -418,7 +451,16 @@ class MessageCollection(object):
                 self.messageklass, self.store,
                 doc_id, uid=uid, get_cdocs=get_cdocs)
 
-        d = self.mbox_indexer.get_doc_id_from_uid(self.mbox_uuid, uid)
+        def cleanup_and_get_doc_after_pending_insert(result):
+            for key in result:
+                self._pending_inserts.pop(key)
+            return get_doc_fun(self.mbox_uuid, uid)
+
+        if not self._pending_inserts:
+            d = get_doc_fun(self.mbox_uuid, uid)
+        else:
+            d = defer.gatherResults(self._pending_inserts.values())
+            d.addCallback(cleanup_and_get_doc_after_pending_insert)
         d.addCallback(get_msg_from_mdoc_id)
         return d
 
@@ -543,12 +585,15 @@ class MessageCollection(object):
         # TODO watch out if the use of this method in IMAP COPY/APPEND is
         # passing the right date.
         # XXX mdoc ref is a leaky abstraction here. generalize.
-
         leap_assert_type(flags, tuple)
         leap_assert_type(date, str)
 
         msg = self.adaptor.get_msg_from_string(Message, raw_msg)
         wrapper = msg.get_wrapper()
+
+        if notify_just_mdoc:
+            msgid = msg.get_headers()['message-id']
+            self._pending_inserts[msgid] = defer.Deferred()
 
         if not self.is_mailbox_collection():
             raise NotImplementedError()
@@ -571,10 +616,14 @@ class MessageCollection(object):
                              (wrapper.mdoc.serialize(),))
                 return defer.succeed("mdoc_id not inserted")
                 # XXX BUG -----------------------------------------
+
             return self.mbox_indexer.insert_doc(
                 self.mbox_uuid, doc_id)
 
-        d = wrapper.create(self.store, notify_just_mdoc=notify_just_mdoc)
+        d = wrapper.create(
+            self.store,
+            notify_just_mdoc=notify_just_mdoc,
+            pending_inserts_dict=self._pending_inserts)
         d.addCallback(insert_mdoc_id, wrapper)
         d.addErrback(lambda f: f.printTraceback())
         d.addCallback(self.cb_signal_unread_to_ui)
@@ -805,7 +854,20 @@ class Account(object):
         d = self.adaptor.get_all_mboxes(self.store)
         return d
 
-    def add_mailbox(self, name):
+    def add_mailbox(self, name, creation_ts=None):
+
+        if creation_ts is None:
+            # by default, we pass an int value
+            # taken from the current time
+            # we make sure to take enough decimals to get a unique
+            # mailbox-uidvalidity.
+            creation_ts = int(time.time() * 10E2)
+
+        def set_creation_ts(wrapper):
+            wrapper.created = creation_ts
+            d = wrapper.update(self.store)
+            d.addCallback(lambda _: wrapper)
+            return d
 
         def create_uuid(wrapper):
             if not wrapper.uuid:
@@ -821,6 +883,7 @@ class Account(object):
             return d
 
         d = self.adaptor.get_or_create_mbox(self.store, name)
+        d.addCallback(set_creation_ts)
         d.addCallback(create_uuid)
         d.addCallback(create_uid_table_cb)
         return d
