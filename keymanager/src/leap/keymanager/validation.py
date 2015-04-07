@@ -19,7 +19,7 @@
 Validation levels implementation for key managment.
 
 See:
-    https://lists.riseup.net/www/arc/leap-discuss/2014-09/msg00000.html
+    https://leap.se/en/docs/design/transitional-key-validation
 """
 
 
