@@ -17,6 +17,7 @@
 """
 LEAP IMAP4 Server Implementation.
 """
+import StringIO
 from copy import copy
 
 from twisted import cred
@@ -136,7 +137,23 @@ class LEAPIMAPServer(imap4.IMAP4Server):
             _w(str(part) + ' ')
             _f()
             if part.part:
-                return imap4.FileProducer(msg.getBodyFile()
+                # PATCHED #############################################
+                # implement partial FETCH
+                # TODO implement boundary checks
+                # TODO see if there's a more efficient way, without
+                # copying the original content into a new buffer.
+                fd = msg.getBodyFile()
+                begin = getattr(part, "partialBegin", None)
+                _len = getattr(part, "partialLength", None)
+                if begin is not None and _len is not None:
+                    _fd = StringIO.StringIO()
+                    fd.seek(part.partialBegin)
+                    _fd.write(fd.read(part.partialLength))
+                    _fd.seek(0)
+                else:
+                    _fd = fd
+                return imap4.FileProducer(_fd
+                # END PATCHED #########################3
                     ).beginProducing(self.transport
                     )
             else:
