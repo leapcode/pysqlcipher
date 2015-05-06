@@ -47,8 +47,7 @@ from twisted.internet import defer
 from urlparse import urlparse
 
 from leap.common.check import leap_assert
-from leap.common.events import signal
-from leap.common.events import events_pb2 as proto
+from leap.common.events import emit, catalog
 from leap.common.decorators import memoized_method
 
 from leap.keymanager.errors import (
@@ -278,7 +277,7 @@ class KeyManager(object):
                 self._api_version,
                 self._uid)
             self._put(uri, data)
-            signal(proto.KEYMANAGER_DONE_UPLOADING_KEYS, self._address)
+            emit(catalog.KEYMANAGER_DONE_UPLOADING_KEYS, self._address)
 
         d = self.get_key(
             self._address, ktype, private=False, fetch_remote=False)
@@ -314,24 +313,24 @@ class KeyManager(object):
         leap_assert(
             ktype in self._wrapper_map,
             'Unkown key type: %s.' % str(ktype))
-        signal(proto.KEYMANAGER_LOOKING_FOR_KEY, address)
+        emit(catalog.KEYMANAGER_LOOKING_FOR_KEY, address)
 
         def key_found(key):
-            signal(proto.KEYMANAGER_KEY_FOUND, address)
+            emit(catalog.KEYMANAGER_KEY_FOUND, address)
             return key
 
         def key_not_found(failure):
             if not failure.check(KeyNotFound):
                 return failure
 
-            signal(proto.KEYMANAGER_KEY_NOT_FOUND, address)
+            emit(catalog.KEYMANAGER_KEY_NOT_FOUND, address)
 
             # we will only try to fetch a key from nickserver if fetch_remote
             # is True and the key is not private.
             if fetch_remote is False or private is True:
                 return failure
 
-            signal(proto.KEYMANAGER_LOOKING_FOR_KEY, address)
+            emit(catalog.KEYMANAGER_LOOKING_FOR_KEY, address)
             d = self._fetch_keys_from_server(address)
             d.addCallback(
                 lambda _:
@@ -388,10 +387,10 @@ class KeyManager(object):
         self._assert_supported_key_type(ktype)
 
         def signal_finished(key):
-            signal(proto.KEYMANAGER_FINISHED_KEY_GENERATION, self._address)
+            emit(catalog.KEYMANAGER_FINISHED_KEY_GENERATION, self._address)
             return key
 
-        signal(proto.KEYMANAGER_STARTED_KEY_GENERATION, self._address)
+        emit(catalog.KEYMANAGER_STARTED_KEY_GENERATION, self._address)
         d = self._wrapper_map[ktype].gen_key(self._address)
         d.addCallback(signal_finished)
         return d
