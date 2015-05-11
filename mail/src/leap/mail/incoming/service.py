@@ -38,15 +38,8 @@ from twisted.internet.task import LoopingCall
 from twisted.internet.task import deferLater
 from u1db import errors as u1db_errors
 
-from leap.common import events as leap_events
+from leap.common.events import emit, catalog
 from leap.common.check import leap_assert, leap_assert_type
-from leap.common.events.events_pb2 import IMAP_FETCHED_INCOMING
-from leap.common.events.events_pb2 import IMAP_MSG_PROCESSING
-from leap.common.events.events_pb2 import IMAP_MSG_DECRYPTED
-from leap.common.events.events_pb2 import IMAP_MSG_SAVED_LOCALLY
-from leap.common.events.events_pb2 import IMAP_MSG_DELETED_INCOMING
-from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
-from leap.common.events.events_pb2 import SOLEDAD_INVALID_AUTH_TOKEN
 from leap.common.mail import get_email_charset
 from leap.keymanager import errors as keymanager_errors
 from leap.keymanager.openpgp import OpenPGPKey
@@ -242,7 +235,7 @@ class IncomingMail(Service):
         except InvalidAuthTokenError:
             # if the token is invalid, send an event so the GUI can
             # disable mail and show an error message.
-            leap_events.signal(SOLEDAD_INVALID_AUTH_TOKEN)
+            emit(catalog.SOLEDAD_INVALID_AUTH_TOKEN)
 
     def _signal_fetch_to_ui(self, doclist):
         """
@@ -259,16 +252,16 @@ class IncomingMail(Service):
             num_mails = len(doclist) if doclist is not None else 0
             if num_mails != 0:
                 log.msg("there are %s mails" % (num_mails,))
-            leap_events.signal(
-                IMAP_FETCHED_INCOMING, str(num_mails), str(fetched_ts))
+            emit(catalog.MAIL_FETCHED_INCOMING,
+                 str(num_mails), str(fetched_ts))
             return doclist
 
     def _signal_unread_to_ui(self, *args):
         """
         Sends unread event to ui.
         """
-        leap_events.signal(
-            IMAP_UNREAD_MAIL, str(self._inbox_collection.count_unseen()))
+        emit(catalog.MAIL_UNREAD_MESSAGES,
+             str(self._inbox_collection.count_unseen()))
 
     # process incoming mail.
 
@@ -291,8 +284,8 @@ class IncomingMail(Service):
         deferreds = []
         for index, doc in enumerate(doclist):
             logger.debug("processing doc %d of %d" % (index + 1, num_mails))
-            leap_events.signal(
-                IMAP_MSG_PROCESSING, str(index), str(num_mails))
+            emit(catalog.MAIL_MSG_PROCESSING,
+                 str(index), str(num_mails))
 
             keys = doc.content.keys()
 
@@ -339,7 +332,7 @@ class IncomingMail(Service):
                 decrdata = ""
                 success = False
 
-            leap_events.signal(IMAP_MSG_DECRYPTED, "1" if success else "0")
+            emit(catalog.MAIL_MSG_DECRYPTED, "1" if success else "0")
             return self._process_decrypted_doc(doc, decrdata)
 
         d = self._keymanager.decrypt(
@@ -724,10 +717,10 @@ class IncomingMail(Service):
                 listener(result)
 
             def signal_deleted(doc_id):
-                leap_events.signal(IMAP_MSG_DELETED_INCOMING)
+                emit(catalog.MAIL_MSG_DELETED_INCOMING)
                 return doc_id
 
-            leap_events.signal(IMAP_MSG_SAVED_LOCALLY)
+            emit(catalog.MAIL_MSG_SAVED_LOCALLY)
             d = self._delete_incoming_message(doc)
             d.addCallback(signal_deleted)
             return d

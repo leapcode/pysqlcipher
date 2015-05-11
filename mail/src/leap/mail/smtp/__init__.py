@@ -26,7 +26,7 @@ from leap.mail.outgoing.service import OutgoingMail
 
 logger = logging.getLogger(__name__)
 
-from leap.common.events import proto, signal
+from leap.common.events import emit, catalog
 from leap.mail.smtp.gateway import SMTPFactory
 
 
@@ -65,12 +65,12 @@ def setup_smtp_gateway(port, userid, keymanager, smtp_host, smtp_port,
     factory = SMTPFactory(userid, keymanager, encrypted_only, outgoing_mail)
     try:
         tport = reactor.listenTCP(port, factory, interface="localhost")
-        signal(proto.SMTP_SERVICE_STARTED, str(port))
+        emit(catalog.SMTP_SERVICE_STARTED, str(port))
         return factory, tport
     except CannotListenError:
         logger.error("STMP Service failed to start: "
                      "cannot listen in port %s" % port)
-        signal(proto.SMTP_SERVICE_FAILED_TO_START, str(port))
+        emit(catalog.SMTP_SERVICE_FAILED_TO_START, str(port))
     except Exception as exc:
         logger.error("Unhandled error while launching smtp gateway service")
         logger.exception(exc)

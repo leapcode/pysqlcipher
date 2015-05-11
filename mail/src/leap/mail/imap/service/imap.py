@@ -31,14 +31,12 @@ from twisted.python import log
 
 logger = logging.getLogger(__name__)
 
-from leap.common import events as leap_events
+from leap.common.events import emit, catalog
 from leap.common.check import leap_assert_type, leap_check
 from leap.mail.imap.account import IMAPAccount
 from leap.mail.imap.server import LEAPIMAPServer
 from leap.soledad.client import Soledad
 
-from leap.common.events.events_pb2 import IMAP_SERVICE_STARTED
-from leap.common.events.events_pb2 import IMAP_SERVICE_FAILED_TO_START
 
 DO_MANHOLE = os.environ.get("LEAP_MAIL_MANHOLE", None)
 if DO_MANHOLE:
@@ -182,10 +180,10 @@ def run_service(store, **kwargs):
             reactor.listenTCP(manhole.MANHOLE_PORT, manhole_factory,
                               interface="127.0.0.1")
         logger.debug("IMAP4 Server is RUNNING in port  %s" % (port,))
-        leap_events.signal(IMAP_SERVICE_STARTED, str(port))
+        emit(catalog.IMAP_SERVICE_STARTED, str(port))
 
         # FIXME -- change service signature
         return tport, factory
 
     # not ok, signal error.
-    leap_events.signal(IMAP_SERVICE_FAILED_TO_START, str(port))
+    emit(catalog.IMAP_SERVICE_FAILED_TO_START, str(port))

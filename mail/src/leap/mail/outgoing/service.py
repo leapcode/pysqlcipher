@@ -31,7 +31,7 @@ from twisted.protocols.amp import ssl
 from twisted.python import log
 
 from leap.common.check import leap_assert_type, leap_assert
-from leap.common.events import proto, signal
+from leap.common.events import emit, catalog
 from leap.keymanager import KeyManager
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.keymanager.errors import KeyNotFound, KeyAddressMismatch
@@ -136,7 +136,7 @@ class OutgoingMail:
         """
         dest_addrstr = smtp_sender_result[1][0][0]
         log.msg('Message sent to %s' % dest_addrstr)
-        signal(proto.SMTP_SEND_MESSAGE_SUCCESS, dest_addrstr)
+        emit(catalog.SMTP_SEND_MESSAGE_SUCCESS, dest_addrstr)
 
     def sendError(self, failure):
         """
@@ -146,7 +146,7 @@ class OutgoingMail:
         :type e: anything
         """
         # XXX: need to get the address from the exception to send signal
-        # signal(proto.SMTP_SEND_MESSAGE_ERROR, self._user.dest.addrstr)
+        # emit(catalog.SMTP_SEND_MESSAGE_ERROR, self._user.dest.addrstr)
         err = failure.value
         log.err(err)
         raise err
@@ -179,7 +179,7 @@ class OutgoingMail:
             requireAuthentication=False,
             requireTransportSecurity=True)
         factory.domain = __version__
-        signal(proto.SMTP_SEND_MESSAGE_START, recipient.dest.addrstr)
+        emit(catalog.SMTP_SEND_MESSAGE_START, recipient.dest.addrstr)
         reactor.connectSSL(
             self._host, self._port, factory,
             contextFactory=SSLContextFactory(self._cert, self._key))
@@ -241,7 +241,7 @@ class OutgoingMail:
             return d
 
         def signal_encrypt_sign(newmsg):
-            signal(proto.SMTP_END_ENCRYPT_AND_SIGN,
+            emit(catalog.SMTP_END_ENCRYPT_AND_SIGN,
                    "%s,%s" % (self._from_address, to_address))
             return newmsg, recipient
 
@@ -249,18 +249,18 @@ class OutgoingMail:
             failure.trap(KeyNotFound, KeyAddressMismatch)
 
             log.msg('Will send unencrypted message to %s.' % to_address)
-            signal(proto.SMTP_START_SIGN, self._from_address)
+            emit(catalog.SMTP_START_SIGN, self._from_address)
             d = self._sign(message, from_address)
             d.addCallback(signal_sign)
             return d
 
         def signal_sign(newmsg):
-            signal(proto.SMTP_END_SIGN, self._from_address)
+            emit(catalog.SMTP_END_SIGN, self._from_address)
             return newmsg, recipient
 
         log.msg("Will encrypt the message with %s and sign with %s."
                 % (to_address, from_address))
-        signal(proto.SMTP_START_ENCRYPT_AND_SIGN,
+        emit(catalog.SMTP_START_ENCRYPT_AND_SIGN,
                "%s,%s" % (self._from_address, to_address))
         d = self._maybe_attach_key(origmsg, from_address, to_address)
         d.addCallback(maybe_encrypt_and_sign)

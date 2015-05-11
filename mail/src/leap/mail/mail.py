@@ -27,8 +27,7 @@ import weakref
 from twisted.internet import defer
 
 from leap.common.check import leap_assert_type
-from leap.common import events as leap_events
-from leap.common.events.events_pb2 import IMAP_UNREAD_MAIL
+from leap.common.events import emit, catalog
 from leap.common.mail import get_email_charset
 
 from leap.mail.adaptors.soledad import SoledadMailAdaptor
@@ -654,7 +653,7 @@ class MessageCollection(object):
         :type unseen: int
         """
         # TODO change name of the signal, independent from imap now.
-        leap_events.signal(IMAP_UNREAD_MAIL, str(unseen))
+        emit(catalog.MAIL_UNREAD_MESSAGES, str(unseen))
 
     def copy_msg(self, msg, new_mbox_uuid):
         """
