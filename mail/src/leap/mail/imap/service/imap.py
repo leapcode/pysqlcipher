@@ -35,6 +35,7 @@ from leap.common.events import emit, catalog
 from leap.common.check import leap_assert_type, leap_check
 from leap.mail.imap.account import IMAPAccount
 from leap.mail.imap.server import LEAPIMAPServer
+from leap.mail.plugins import soledad_sync_hooks
 from leap.soledad.client import Soledad
 
 
@@ -91,9 +92,16 @@ class LeapIMAPFactory(ServerFactory):
 
         theAccount = IMAPAccount(uuid, soledad)
         self.theAccount = theAccount
+        self._initialize_sync_hooks()
 
         self._connections = defaultdict()
         # XXX how to pass the store along?
+
+    def _initialize_sync_hooks(self):
+        soledad_sync_hooks.post_sync_uid_reindexer.set_account(self.theAccount)
+
+    def _teardown_sync_hooks(self):
+        soledad_sync_hooks.post_sync_uid_reindexer.set_account(None)
 
     def buildProtocol(self, addr):
         """
@@ -128,6 +136,7 @@ class LeapIMAPFactory(ServerFactory):
         # mark account as unusable, so any imap command will fail
         # with unauth state.
         self.theAccount.end_session()
+        self._teardown_sync_hooks()
 
         # TODO should wait for all the pending deferreds,
         # the twisted way!

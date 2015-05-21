@@ -42,8 +42,6 @@ logger = logging.getLogger(name=__name__)
 # TODO LIST
 # [ ] Probably change the name of this module to "api" or "account", mail is
 #     too generic (there's also IncomingMail, and OutgoingMail
-# [ ] Change the doc_ids scheme for part-docs: use mailbox UID validity
-#     identifier, instead of name! (renames are broken!)
 # [ ] Profile add_msg.
 
 def _get_mdoc_id(mbox, chash):
