@@ -75,7 +75,7 @@ class MailProcessingPostSyncHook(object):
         self._pending_docs.append(doc_id)
 
     def _make_uid_index(self, mdoc_id):
-        indexer = self._account.account.mbox_indexer
+        indexer = self._account.mbox_indexer
         mbox_uuid = _get_mbox_uuid(mdoc_id)
         if mbox_uuid:
             chash = _get_chash_from_mdoc(mdoc_id)

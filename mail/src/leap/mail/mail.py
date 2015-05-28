@@ -34,6 +34,7 @@ from leap.mail.adaptors.soledad import SoledadMailAdaptor
 from leap.mail.constants import INBOX_NAME
 from leap.mail.constants import MessageFlags
 from leap.mail.mailbox_indexer import MailboxIndexer
+from leap.mail.plugins import soledad_sync_hooks
 from leap.mail.utils import find_charset, CaseInsensitiveDict
 
 logger = logging.getLogger(name=__name__)
@@ -802,10 +803,17 @@ class Account(object):
         self.adaptor = self.adaptor_class()
         self.mbox_indexer = MailboxIndexer(self.store)
 
+        # This flag is only used from the imap service for the moment.
+        # In the future, we should prevent any public method to continue if
+        # this is set to True. Also, it would be good to plug to the
+        # authentication layer.
+        self.session_ended = False
+
         self.deferred_initialization = defer.Deferred()
         self._ready_cb = ready_cb
 
         self._init_d = self._initialize_storage()
+        self._initialize_sync_hooks()
 
     def _initialize_storage(self):
 
@@ -833,6 +841,14 @@ class Account(object):
         # lambda _: cb(*args, **kw)
         self.deferred_initialization.addCallback(cb, *args, **kw)
         return self.deferred_initialization
+
+    # Sync hooks
+
+    def _initialize_sync_hooks(self):
+        soledad_sync_hooks.post_sync_uid_reindexer.set_account(self)
+
+    def _teardown_sync_hooks(self):
+        soledad_sync_hooks.post_sync_uid_reindexer.set_account(None)
 
     #
     # Public API Starts
@@ -946,3 +962,9 @@ class Account(object):
         :rtype: MessageCollection
         """
         raise NotImplementedError()
+
+    # Session handling
+
+    def end_session(self):
+        self._teardown_sync_hooks()
+        self.session_ended = True

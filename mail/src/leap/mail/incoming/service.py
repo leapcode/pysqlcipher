@@ -246,6 +246,7 @@ class IncomingMail(Service):
         :returns: doclist
         :rtype: iterable
         """
+        # FIXME WTF len(doclist) is 69?
         doclist = first(doclist)  # gatherResults pass us a list
         if doclist:
             fetched_ts = time.mktime(time.gmtime())
