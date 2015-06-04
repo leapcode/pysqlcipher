@@ -615,8 +615,13 @@ class MessageCollection(object):
                 return defer.succeed("mdoc_id not inserted")
                 # XXX BUG -----------------------------------------
 
-            return self.mbox_indexer.insert_doc(
-                self.mbox_uuid, doc_id)
+            # XXX BUG sometimes the table is not yet created,
+            # so workaround is to make sure we always check for it before
+            # inserting the doc. I should debug into the real cause.
+            d = self.mbox_indexer.create_table(self.mbox_uuid)
+            d.addCallback(lambda _: self.mbox_indexer.insert_doc(
+                self.mbox_uuid, doc_id))
+            return d
 
         d = wrapper.create(
             self.store,
