@@ -161,21 +161,15 @@ class IncomingMail(Service):
         Calls a deferred that will execute the fetch callback
         in a separate thread
         """
-        def mail_compat(failure):
-            if failure.check(u1db_errors.InvalidGlobbing):
-                # It looks like we are a dealing with an outdated
-                # mx. Fallback to the version of the index
-                warnings.warn("JUST_MAIL_COMPAT_IDX will be deprecated!",
-                              DeprecationWarning)
-                return self._soledad.get_from_index(
-                    fields.JUST_MAIL_COMPAT_IDX, "*")
-            return failure
+        def _sync_errback(failure):
+            failure.printTraceback()
 
         def syncSoledadCallback(_):
+            # XXX this should be moved to adaptors
             d = self._soledad.get_from_index(
-                fields.JUST_MAIL_IDX, "*", "0")
-            d.addErrback(mail_compat)
+                fields.JUST_MAIL_IDX, "1", "0")
             d.addCallback(self._process_doclist)
+            d.addErrback(_sync_errback)
             return d
 
         logger.debug("fetching mail for: %s %s" % (
