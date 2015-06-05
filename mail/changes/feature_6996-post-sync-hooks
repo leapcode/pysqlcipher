@@ -1,0 +1,1 @@
+- Ability to reindex local UIDs after a soledad sync. Closes: #6996
