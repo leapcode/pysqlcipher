@@ -1,3 +1,23 @@
+0.4.0 Jun 8, 2015:
+  o Adapt to new events api on leap.common. Related to #5359.
+  o Add 'fetch_key' method to fetch keys from a URI. Closes #5932.
+  o Clean up API.
+  o Fix call to python-gnupg's verify_file() method. Closes #6022.
+  o KeyManager.put_key now accepts also ascii keys.
+  o Multi uid support. Closes #6212.
+  o Port keymanager to the new soledad async API. Closes #6368.
+  o Return always KeyNotFound failure if fetch keys fails on an unknown error.
+  o Upgrade keys if not successfully used and strict high validation level.
+    Closes #6211.
+  o Use addresses instead of keys for encrypt, decrypt, sign & verify.
+    Closes #6346.
+  o Expose info about the signing key. Closes #6366.
+  o Fetched keys from other domain than its provider are set as 'Weak Chain'
+    validation level. Closes #6815.
+  o Keep old key after upgrade. Closes #6262.
+  o New soledad doc struct for encryption-keys. Closes #6299.
+  o Upgrade key when signed by old key. Closes #6240.
+
 0.3.8 Apr 4, 2014:
   o Properly raise KeyNotFound exception when looking for keys on
     nickserver. Fixes #5415.

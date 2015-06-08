@@ -1,1 +1,0 @@
-- Port keymanager to the new soledad async API (Closes 6368)

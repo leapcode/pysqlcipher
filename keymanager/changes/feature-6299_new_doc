@@ -1,2 +1,0 @@
-- new soledad doc struct for encryption-keys (closes #6299)
-- keep old key after upgrade (closes #6262)

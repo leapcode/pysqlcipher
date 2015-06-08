@@ -1,1 +1,0 @@
-- Return always KeyNotFound failure if fetch keys fails on an unknown error

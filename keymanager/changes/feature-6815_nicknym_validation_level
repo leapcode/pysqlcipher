@@ -1,1 +1,0 @@
--  fetched keys from other domain than its provider are set as 'Weak Chain' validation level (Closes: #6815)
