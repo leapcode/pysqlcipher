@@ -239,8 +239,6 @@ class IncomingMail(Service):
         :returns: doclist
         :rtype: iterable
         """
-        # FIXME WTF len(doclist) is 69?
-        doclist = first(doclist)  # gatherResults pass us a list
         if doclist:
             fetched_ts = time.mktime(time.gmtime())
             num_mails = len(doclist) if doclist is not None else 0
@@ -299,7 +297,9 @@ class IncomingMail(Service):
                 d.addCallback(self._extract_keys)
                 d.addCallbacks(self._add_message_locally, self._errback)
                 deferreds.append(d)
-        return defer.gatherResults(deferreds, consumeErrors=True)
+        d = defer.gatherResults(deferreds, consumeErrors=True)
+        d.addCallback(lambda _: doclist)
+        return d
 
     #
     # operations on individual messages
