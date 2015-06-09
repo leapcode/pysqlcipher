@@ -162,7 +162,7 @@ class IncomingMail(Service):
         in a separate thread
         """
         def _sync_errback(failure):
-            failure.printTraceback()
+            log.err(failure)
 
         def syncSoledadCallback(_):
             # XXX this should be moved to adaptors
@@ -206,8 +206,7 @@ class IncomingMail(Service):
     # synchronize incoming mail
 
     def _errback(self, failure):
-        logger.exception(failure.value)
-        traceback.print_exc()
+        log.err(failure)
 
     def _sync_soledad(self):
         """
