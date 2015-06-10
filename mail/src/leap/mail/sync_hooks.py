@@ -60,8 +60,7 @@ class MailProcessingPostSyncHook(object):
                 log.msg("Mail post-sync hook: processing %s" % doc_id)
                 process_fun(doc_id)
 
-        if self._processing_deferreds:
-            return defer.gatherResults(self._processing_deferreds)
+        return defer.gatherResults(self._processing_deferreds)
 
     def set_account(self, account):
         self._account = account
@@ -100,9 +99,8 @@ class MailProcessingPostSyncHook(object):
             return res
 
         d = self.process_received_docs(pending)
-        if d:
-            d.addCallback(remove_pending_docs)
-            return d
+        d.addCallback(remove_pending_docs)
+        return d
 
 
 _mbox_uuid_regex = regex_compile(constants.METAMSGID_MBOX_RE)
