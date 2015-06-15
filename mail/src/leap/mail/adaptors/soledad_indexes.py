@@ -101,9 +101,6 @@ MAIL_INDEXES = {
     TYPE_MBOX_DEL_IDX: [TYPE, MBOX_UUID, 'bool(deleted)'],
 
     # incoming queue
-    JUST_MAIL_IDX: [INCOMING_KEY,
+    JUST_MAIL_IDX: ["bool(%s)" % (INCOMING_KEY,),
                     "bool(%s)" % (ERROR_DECRYPTING_KEY,)],
-
-    # the backward-compatible index, will be deprecated at 0.7
-    JUST_MAIL_COMPAT_IDX: [INCOMING_KEY],
 }

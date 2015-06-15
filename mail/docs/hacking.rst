@@ -52,6 +52,19 @@ currently) not try to sync with remote replicas. Very useful during development,
 although you need to login with the remote server at least once before being
 able to use it.
 
+Mutt config
+===========
+
+You cannot live without mutt? You're lucky! Use the following minimal config
+with the imap service::
+
+ set folder="imap://user@provider@localhost:1984"
+ set spoolfile="imap://user@provider@localhost:1984/INBOX"
+ set ssl_starttls = no
+ set ssl_force_tls = no
+ set imap_pass=MAHSIKRET
+
+
 Running the service with twistd
 ===============================
 

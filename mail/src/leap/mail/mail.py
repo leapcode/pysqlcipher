@@ -34,6 +34,7 @@ from leap.mail.adaptors.soledad import SoledadMailAdaptor
 from leap.mail.constants import INBOX_NAME
 from leap.mail.constants import MessageFlags
 from leap.mail.mailbox_indexer import MailboxIndexer
+from leap.mail.plugins import soledad_sync_hooks
 from leap.mail.utils import find_charset, CaseInsensitiveDict
 
 logger = logging.getLogger(name=__name__)
@@ -42,8 +43,6 @@ logger = logging.getLogger(name=__name__)
 # TODO LIST
 # [ ] Probably change the name of this module to "api" or "account", mail is
 #     too generic (there's also IncomingMail, and OutgoingMail
-# [ ] Change the doc_ids scheme for part-docs: use mailbox UID validity
-#     identifier, instead of name! (renames are broken!)
 # [ ] Profile add_msg.
 
 def _get_mdoc_id(mbox, chash):
@@ -616,8 +615,13 @@ class MessageCollection(object):
                 return defer.succeed("mdoc_id not inserted")
                 # XXX BUG -----------------------------------------
 
-            return self.mbox_indexer.insert_doc(
-                self.mbox_uuid, doc_id)
+            # XXX BUG sometimes the table is not yet created,
+            # so workaround is to make sure we always check for it before
+            # inserting the doc. I should debug into the real cause.
+            d = self.mbox_indexer.create_table(self.mbox_uuid)
+            d.addCallback(lambda _: self.mbox_indexer.insert_doc(
+                self.mbox_uuid, doc_id))
+            return d
 
         d = wrapper.create(
             self.store,
@@ -804,10 +808,17 @@ class Account(object):
         self.adaptor = self.adaptor_class()
         self.mbox_indexer = MailboxIndexer(self.store)
 
+        # This flag is only used from the imap service for the moment.
+        # In the future, we should prevent any public method to continue if
+        # this is set to True. Also, it would be good to plug to the
+        # authentication layer.
+        self.session_ended = False
+
         self.deferred_initialization = defer.Deferred()
         self._ready_cb = ready_cb
 
         self._init_d = self._initialize_storage()
+        self._initialize_sync_hooks()
 
     def _initialize_storage(self):
 
@@ -835,6 +846,14 @@ class Account(object):
         # lambda _: cb(*args, **kw)
         self.deferred_initialization.addCallback(cb, *args, **kw)
         return self.deferred_initialization
+
+    # Sync hooks
+
+    def _initialize_sync_hooks(self):
+        soledad_sync_hooks.post_sync_uid_reindexer.set_account(self)
+
+    def _teardown_sync_hooks(self):
+        soledad_sync_hooks.post_sync_uid_reindexer.set_account(None)
 
     #
     # Public API Starts
@@ -948,3 +967,9 @@ class Account(object):
         :rtype: MessageCollection
         """
         raise NotImplementedError()
+
+    # Session handling
+
+    def end_session(self):
+        self._teardown_sync_hooks()
+        self.session_ended = True

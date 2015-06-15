@@ -32,10 +32,9 @@ from twisted.python import log
 logger = logging.getLogger(__name__)
 
 from leap.common.events import emit, catalog
-from leap.common.check import leap_assert_type, leap_check
+from leap.common.check import leap_check
 from leap.mail.imap.account import IMAPAccount
 from leap.mail.imap.server import LEAPIMAPServer
-from leap.soledad.client import Soledad
 
 
 DO_MANHOLE = os.environ.get("LEAP_MAIL_MANHOLE", None)
@@ -91,7 +90,6 @@ class LeapIMAPFactory(ServerFactory):
 
         theAccount = IMAPAccount(uuid, soledad)
         self.theAccount = theAccount
-
         self._connections = defaultdict()
         # XXX how to pass the store along?
 

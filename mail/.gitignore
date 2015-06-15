@@ -1,4 +1,5 @@
 *.pyc
+dropin.cache
 build/
 dist/
 *.egg

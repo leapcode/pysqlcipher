@@ -88,6 +88,10 @@ class MailboxIndexer(object):
         assert self.store is not None
         return self.store.raw_sqlcipher_query(*args, **kw)
 
+    def _operation(self, *args, **kw):
+        assert self.store is not None
+        return self.store.raw_sqlcipher_operation(*args, **kw)
+
     def create_table(self, mailbox_uuid):
         """
         Create the UID table for a given mailbox.
@@ -100,7 +104,8 @@ class MailboxIndexer(object):
                "uid  INTEGER PRIMARY KEY AUTOINCREMENT, "
                "hash TEXT UNIQUE NOT NULL)".format(
                    preffix=self.table_preffix, name=sanitize(mailbox_uuid)))
-        return self._query(sql)
+        print "CREATING TABLE..."
+        return self._operation(sql)
 
     def delete_table(self, mailbox_uuid):
         """
@@ -112,7 +117,7 @@ class MailboxIndexer(object):
         check_good_uuid(mailbox_uuid)
         sql = ("DROP TABLE if exists {preffix}{name}".format(
             preffix=self.table_preffix, name=sanitize(mailbox_uuid)))
-        return self._query(sql)
+        return self._operation(sql)
 
     def insert_doc(self, mailbox_uuid, doc_id):
         """
@@ -149,7 +154,7 @@ class MailboxIndexer(object):
                     "LIMIT 1;").format(
             preffix=self.table_preffix, name=sanitize(mailbox_uuid))
 
-        d = self._query(sql, values)
+        d = self._operation(sql, values)
         d.addCallback(lambda _: self._query(sql_last))
         d.addCallback(get_rowid)
         d.addErrback(lambda f: f.printTraceback())

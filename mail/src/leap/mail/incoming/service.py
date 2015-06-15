@@ -161,21 +161,15 @@ class IncomingMail(Service):
         Calls a deferred that will execute the fetch callback
         in a separate thread
         """
-        def mail_compat(failure):
-            if failure.check(u1db_errors.InvalidGlobbing):
-                # It looks like we are a dealing with an outdated
-                # mx. Fallback to the version of the index
-                warnings.warn("JUST_MAIL_COMPAT_IDX will be deprecated!",
-                              DeprecationWarning)
-                return self._soledad.get_from_index(
-                    fields.JUST_MAIL_COMPAT_IDX, "*")
-            return failure
+        def _sync_errback(failure):
+            log.err(failure)
 
         def syncSoledadCallback(_):
+            # XXX this should be moved to adaptors
             d = self._soledad.get_from_index(
-                fields.JUST_MAIL_IDX, "*", "0")
-            d.addErrback(mail_compat)
+                fields.JUST_MAIL_IDX, "1", "0")
             d.addCallback(self._process_doclist)
+            d.addErrback(_sync_errback)
             return d
 
         logger.debug("fetching mail for: %s %s" % (
@@ -212,8 +206,7 @@ class IncomingMail(Service):
     # synchronize incoming mail
 
     def _errback(self, failure):
-        logger.exception(failure.value)
-        traceback.print_exc()
+        log.err(failure)
 
     def _sync_soledad(self):
         """
@@ -246,7 +239,6 @@ class IncomingMail(Service):
         :returns: doclist
         :rtype: iterable
         """
-        doclist = first(doclist)  # gatherResults pass us a list
         if doclist:
             fetched_ts = time.mktime(time.gmtime())
             num_mails = len(doclist) if doclist is not None else 0
@@ -305,7 +297,9 @@ class IncomingMail(Service):
                 d.addCallback(self._extract_keys)
                 d.addCallbacks(self._add_message_locally, self._errback)
                 deferreds.append(d)
-        return defer.gatherResults(deferreds, consumeErrors=True)
+        d = defer.gatherResults(deferreds, consumeErrors=True)
+        d.addCallback(lambda _: doclist)
+        return d
 
     #
     # operations on individual messages

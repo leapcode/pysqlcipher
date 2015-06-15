@@ -58,7 +58,6 @@ class IMAPAccount(object):
     implements(imap4.IAccount, imap4.INamespacePresenter)
 
     selected = None
-    session_ended = False
 
     def __init__(self, user_id, store, d=defer.Deferred()):
         """
@@ -98,7 +97,11 @@ class IMAPAccount(object):
         Right now it's called from the client backend.
         """
         # TODO move its use to the service shutdown in leap.mail
-        self.session_ended = True
+        self.account.end_session()
+
+    @property
+    def session_ended(self):
+        return self.account.session_ended
 
     def callWhenReady(self, cb, *args, **kw):
         """
