@@ -21,15 +21,13 @@ The following classes comprise the SMTP gateway service:
 
     * SMTPFactory - A twisted.internet.protocol.ServerFactory that provides
       the SMTPDelivery protocol.
+
     * SMTPDelivery - A twisted.mail.smtp.IMessageDelivery implementation. It
       knows how to validate sender and receiver of messages and it generates
       an EncryptedMessage for each recipient.
-    * SSLContextFactory - Contains the relevant ssl information for the
-      connection.
+
     * EncryptedMessage - An implementation of twisted.mail.smtp.IMessage that
       knows how to encrypt/sign itself before sending.
-
-
 """
 
 from zope.interface import implements
@@ -173,27 +171,29 @@ class SMTPDelivery(object):
 
     def validateTo(self, user):
         """
-        Validate the address of C{user}, a recipient of the message.
+        Validate the address of a recipient of the message, possibly
+        rejecting it if the recipient key is not available.
 
-        This method is called once for each recipient and validates the
-        C{user}'s address against the RFC 2822 definition. If the
-        configuration option ENCRYPTED_ONLY_KEY is True, it also asserts the
-        existence of the user's key.
+        This method is called once for each recipient, i.e. for each SMTP
+        protocol line beginning with "RCPT TO:", which includes all addresses
+        in "To", "Cc" and "Bcc" MUA fields.
 
-        In the end, it returns an encrypted message object that is able to
-        send itself to the C{user}'s address.
+        The recipient's address is validated against the RFC 2822 definition.
+        If self._encrypted_only is True and no key is found for a recipient,
+        then that recipient is rejected.
+
+        The method returns an encrypted message object that is able to send
+        itself to the user's address.
 
         :param user: The user whose address we wish to validate.
         :type: twisted.mail.smtp.User
 
-        @return: A Deferred which becomes, or a callable which takes no
-            arguments and returns an object implementing IMessage. This will
-            be called and the returned object used to deliver the message when
-            it arrives.
+        @return: A callable which takes no arguments and returns an
+                 encryptedMessage.
         @rtype: no-argument callable
 
         @raise SMTPBadRcpt: Raised if messages to the address are not to be
-            accepted.
+                            accepted.
         """
         # try to find recipient's public key
         address = validate_address(user.dest.addrstr)

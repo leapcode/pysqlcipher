@@ -1,18 +1,39 @@
 Leap SMTP Gateway
 =================
 
+The Bitmask Client runs a thin SMTP gateway on the user's device, which
+intends to encrypt and sign outgoing messages to achieve point to point
+encryption.
+
+The gateway is bound to localhost and the user's MUA should be configured to
+send messages to it. After doing its thing, the gateway will relay the
+messages to the remote SMTP server.
+
 Outgoing mail workflow:
 
-    * LEAP client runs a thin SMTP proxy on the user's device, bound to
-      localhost.
-    * User's MUA is configured outgoing SMTP to localhost.
-    * When SMTP proxy receives an email from MUA:
-        * SMTP proxy queries Key Manager for the user's private key and public
-          keys of all recipients.
-        * Message is signed by sender and encrypted to recipients.
-        * If recipient's key is missing, email goes out in cleartext (unless
-          user has configured option to send only encrypted email).
-        * Finally, message is gatewayed to provider's SMTP server.
+  * SMTP gateway receives a message from the MUA.
+
+  * SMTP gateway queries Key Manager for the user's private key.
+
+  * For each recipient (including addresses in "To", "Cc" anc "Bcc" fields),
+    the following happens:
+
+    - The recipient's address is validated against RFC2822.
+
+    - An attempt is made to fetch the recipient's public PGP key.
+
+    - If key is not found:
+
+      - If the gateway is configured to only send encrypted messages the
+        recipient is rejected.
+
+      - Otherwise, the message is signed and sent as plain text.
+
+    - If the key is found, the message is encrypted to the recipient and
+      signed with the sender's private PGP key.
+
+  * Finally, one message for each recipient is gatewayed to provider's SMTP
+    server.
 
 
 Running tests
