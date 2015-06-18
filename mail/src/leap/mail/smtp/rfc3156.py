@@ -19,9 +19,7 @@
 Implements RFC 3156: MIME Security with OpenPGP.
 """
 
-import re
 import base64
-from abc import ABCMeta, abstractmethod
 from StringIO import StringIO
 
 from twisted.python import log

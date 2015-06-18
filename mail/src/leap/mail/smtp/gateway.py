@@ -111,7 +111,10 @@ class SMTPFactory(ServerFactory):
         @return: The protocol.
         @rtype: SMTPDelivery
         """
-        smtpProtocol = SMTPHeloLocalhost(SMTPDelivery(self._userid, self._km, self._encrypted_only, self._outgoing_mail))
+        smtpProtocol = SMTPHeloLocalhost(
+            SMTPDelivery(
+                self._userid, self._km, self._encrypted_only,
+                self._outgoing_mail))
         smtpProtocol.factory = self
         return smtpProtocol
 

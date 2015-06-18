@@ -32,7 +32,6 @@ from twisted.python import log
 
 from leap.common.check import leap_assert_type, leap_assert
 from leap.common.events import emit, catalog
-from leap.keymanager import KeyManager
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.keymanager.errors import KeyNotFound, KeyAddressMismatch
 from leap.mail import __version__
@@ -169,8 +168,8 @@ class OutgoingMail:
         # we don't pass an ssl context factory to the ESMTPSenderFactory
         # because ssl will be handled by reactor.connectSSL() below.
         factory = smtp.ESMTPSenderFactory(
-            "",  # username is blank because client auth is done on SSL protocol level
-            "",  # password is blank because client auth is done on SSL protocol level
+            "",  # username is blank, no client auth here
+            "",  # password is blank, no client auth here
             self._from_address,
             recipient.dest.addrstr,
             StringIO(msg),
@@ -242,7 +241,7 @@ class OutgoingMail:
 
         def signal_encrypt_sign(newmsg):
             emit(catalog.SMTP_END_ENCRYPT_AND_SIGN,
-                   "%s,%s" % (self._from_address, to_address))
+                 "%s,%s" % (self._from_address, to_address))
             return newmsg, recipient
 
         def if_key_not_found_send_unencrypted(failure, message):
@@ -261,7 +260,7 @@ class OutgoingMail:
         log.msg("Will encrypt the message with %s and sign with %s."
                 % (to_address, from_address))
         emit(catalog.SMTP_START_ENCRYPT_AND_SIGN,
-               "%s,%s" % (self._from_address, to_address))
+             "%s,%s" % (self._from_address, to_address))
         d = self._maybe_attach_key(origmsg, from_address, to_address)
         d.addCallback(maybe_encrypt_and_sign)
         return d
