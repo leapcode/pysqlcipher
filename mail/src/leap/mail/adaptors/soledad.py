@@ -24,6 +24,7 @@ from email import message_from_string
 
 from pycryptopp.hash import sha256
 from twisted.internet import defer
+from twisted.python import log
 from zope.interface import implements
 import u1db
 
@@ -108,7 +109,7 @@ class SoledadDocumentWrapper(models.DocumentWrapper):
     def set_future_doc_id(self, doc_id):
         self._future_doc_id = doc_id
 
-    def create(self, store):
+    def create(self, store, is_copy=False):
         """
         Create the documents for this wrapper.
         Since this method will not check for duplication, the
@@ -130,13 +131,28 @@ class SoledadDocumentWrapper(models.DocumentWrapper):
             self.set_future_doc_id(None)
             return doc
 
+        def update_wrapper(failure):
+            # In the case of some copies (for instance, from one folder to
+            # another and back to the original folder), the document that we
+            # want to insert already exists. In this  case, putting it
+            # and overwriting the document with that doc_id is the right thing
+            # to do.
+            failure.trap(u1db.errors.RevisionConflict)
+            self._doc_id = self.future_doc_id
+            self._future_doc_id = None
+            return self.update(store)
+
         if self.future_doc_id is None:
             d = store.create_doc(self.serialize())
         else:
             d = store.create_doc(self.serialize(),
                                  doc_id=self.future_doc_id)
         d.addCallback(update_doc_id)
-        d.addErrback(self._catch_revision_conflict, self.future_doc_id)
+
+        if is_copy:
+            d.addErrback(update_wrapper),
+        else:
+            d.addErrback(self._catch_revision_conflict, self.future_doc_id)
         return d
 
     def update(self, store):
@@ -542,8 +558,8 @@ class MessageWrapper(object):
         # TODO check that the doc_ids in the mdoc are coherent
         self.d = []
 
-        mdoc_created = self.mdoc.create(store)
-        fdoc_created = self.fdoc.create(store)
+        mdoc_created = self.mdoc.create(store, is_copy=self._is_copy)
+        fdoc_created = self.fdoc.create(store, is_copy=self._is_copy)
 
         self.d.append(mdoc_created)
         self.d.append(fdoc_created)
@@ -558,7 +574,12 @@ class MessageWrapper(object):
                     continue
                 self.d.append(cdoc.create(store))
 
-        self.all_inserted_d = defer.gatherResults(self.d)
+        def log_all_inserted(result):
+            log.msg("All parts inserted for msg!")
+            return result
+
+        self.all_inserted_d = defer.gatherResults(self.d, consumeErrors=True)
+        self.all_inserted_d.addCallback(log_all_inserted)
 
         if notify_just_mdoc:
             self.all_inserted_d.addCallback(unblock_pending_insert)
@@ -605,8 +626,10 @@ class MessageWrapper(object):
         new_wrapper.set_mbox_uuid(new_mbox_uuid)
 
         # XXX could flag so that it only creates mdoc/fdoc...
+
         d = new_wrapper.create(store)
         d.addCallback(lambda result: new_wrapper)
+        d.addErrback(lambda failure: log.err(failure))
         return d
 
     def set_mbox_uuid(self, mbox_uuid):
@@ -942,10 +965,14 @@ class SoledadMailAdaptor(SoledadIndexMixin):
         fdoc_id = _get_fdoc_id_from_mdoc_id()
 
         def wrap_fdoc(doc):
+            if not doc:
+                return
             cls = FlagsDocWrapper
             return cls(doc_id=doc.doc_id, **doc.content)
 
         def get_flags(fdoc_wrapper):
+            if not fdoc_wrapper:
+                return []
             return fdoc_wrapper.get_flags()
 
         d = store.get_doc(fdoc_id)
@@ -983,8 +1010,8 @@ class SoledadMailAdaptor(SoledadIndexMixin):
         """
         Delete all messages flagged as deleted.
         """
-        def err(f):
-            f.printTraceback()
+        def err(failure):
+            log.err(failure)
 
         def delete_fdoc_and_mdoc_flagged(fdocs):
             # low level here, not using the wrappers...
@@ -1118,8 +1145,8 @@ class SoledadMailAdaptor(SoledadIndexMixin):
         """
         return MailboxWrapper.get_all(store)
 
-    def _errback(self, f):
-        f.printTraceback()
+    def _errback(self, failure):
+        log.err(failure)
 
 
 def _split_into_parts(raw):

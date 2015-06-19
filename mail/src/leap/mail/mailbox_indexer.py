@@ -104,7 +104,6 @@ class MailboxIndexer(object):
                "uid  INTEGER PRIMARY KEY AUTOINCREMENT, "
                "hash TEXT UNIQUE NOT NULL)".format(
                    preffix=self.table_preffix, name=sanitize(mailbox_uuid)))
-        print "CREATING TABLE..."
         return self._operation(sql)
 
     def delete_table(self, mailbox_uuid):
@@ -190,8 +189,7 @@ class MailboxIndexer(object):
         :type mailbox: str
         :param doc_id: the doc_id for the MetaMsg
         :type doc_id: str
-        :return: a deferred that will fire with the uid of the newly inserted
-                 document.
+        :return: a deferred that will fire when the deletion has succed.
         :rtype: Deferred
         """
         check_good_uuid(mailbox_uuid)

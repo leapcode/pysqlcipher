@@ -86,7 +86,7 @@ class MailProcessingPostSyncHook(object):
             # have seen -- but make sure *it's already created* before
             # inserting the index entry!.
             d = indexer.create_table(mbox_uuid)
-            d.addCallback(lambda _: indexer.insert_doc(mbox_uuid, index_docid))
+            d.addBoth(lambda _: indexer.insert_doc(mbox_uuid, index_docid))
             self._processing_deferreds.append(d)
 
     def _process_queued_docs(self):

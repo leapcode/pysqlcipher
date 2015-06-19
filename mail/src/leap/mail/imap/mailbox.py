@@ -846,8 +846,9 @@ class IMAPMailbox(object):
         #deferLater(self.reactor, 0, self._do_copy, message, d)
         #return d
 
-        return self.collection.copy_msg(message.message,
-                                        self.collection.mbox_uuid)
+        d = self.collection.copy_msg(message.message,
+                                     self.collection.mbox_uuid)
+        return d
 
     # convenience fun
 

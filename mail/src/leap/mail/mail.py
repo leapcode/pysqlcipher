@@ -25,6 +25,7 @@ import time
 import weakref
 
 from twisted.internet import defer
+from twisted.python import log
 
 from leap.common.check import leap_assert_type
 from leap.common.events import emit, catalog
@@ -559,7 +560,7 @@ class MessageCollection(object):
         """
         Add a message to this collection.
 
-        :param raw_message: the raw message
+        :param raw_msg: the raw message
         :param flags: tuple of flags for this message
         :param tags: tuple of tags for this message
         :param date:
@@ -619,7 +620,7 @@ class MessageCollection(object):
             # so workaround is to make sure we always check for it before
             # inserting the doc. I should debug into the real cause.
             d = self.mbox_indexer.create_table(self.mbox_uuid)
-            d.addCallback(lambda _: self.mbox_indexer.insert_doc(
+            d.addBoth(lambda _: self.mbox_indexer.insert_doc(
                 self.mbox_uuid, doc_id))
             return d
 
@@ -664,12 +665,52 @@ class MessageCollection(object):
         Copy the message to another collection. (it only makes sense for
         mailbox collections)
         """
+        # TODO should CHECK first if the mdoc is present in the mailbox
+        # WITH a Deleted flag... and just simply remove the flag...
+        # Another option is to delete the previous mdoc if it already exists
+        # (so we get a new UID)
+
         if not self.is_mailbox_collection():
             raise NotImplementedError()
 
+        def delete_mdoc_entry_and_insert(failure, mbox_uuid, doc_id):
+            d = self.mbox_indexer.delete_doc_by_hash(mbox_uuid, doc_id)
+            d.addCallback(lambda _: self.mbox_indexer.insert_doc(
+                new_mbox_uuid, doc_id))
+            return d
+
         def insert_copied_mdoc_id(wrapper_new_msg):
-            return self.mbox_indexer.insert_doc(
-                new_mbox_uuid, wrapper_new_msg.mdoc.doc_id)
+            # XXX FIXME -- since this is already saved, the future_doc_id
+            # should be already copied into the doc_id!
+            # Investigate why we are not receiving the already saved doc_id
+            doc_id = wrapper_new_msg.mdoc.doc_id
+            if not doc_id:
+                doc_id = wrapper_new_msg.mdoc._future_doc_id
+
+            def insert_conditionally(uid, mbox_uuid, doc_id):
+                indexer = self.mbox_indexer
+                if uid:
+                    d = indexer.delete_doc_by_hash(mbox_uuid, doc_id)
+                    d.addCallback(lambda _: indexer.insert_doc(
+                        new_mbox_uuid, doc_id))
+                    return d
+                else:
+                    d = indexer.insert_doc(mbox_uuid, doc_id)
+                    return d
+
+            def log_result(result):
+                return result
+
+            def insert_doc(_, mbox_uuid, doc_id):
+                d = self.mbox_indexer.get_uid_from_doc_id(mbox_uuid, doc_id)
+                d.addCallback(insert_conditionally, mbox_uuid, doc_id)
+                d.addErrback(lambda err: log.failure(err))
+                d.addCallback(log_result)
+                return d
+
+            d = self.mbox_indexer.create_table(new_mbox_uuid)
+            d.addBoth(insert_doc, new_mbox_uuid, doc_id)
+            return d
 
         wrapper = msg.get_wrapper()
 
