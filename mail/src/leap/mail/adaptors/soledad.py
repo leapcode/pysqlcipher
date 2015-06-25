@@ -547,8 +547,7 @@ class MessageWrapper(object):
                     "Cannot create: fdoc has a doc_id")
 
         def unblock_pending_insert(result):
-            h = self.hdoc.headers
-            ci_headers = dict([(k.lower(), v) for (k, v) in h.items()])
+            ci_headers = lowerdict(self.hdoc.headers)
             msgid = ci_headers.get('message-id', None)
             try:
                 d = pending_inserts_dict[msgid]
@@ -1101,6 +1100,7 @@ class SoledadMailAdaptor(SoledadIndexMixin):
 
         def get_mdoc_id(hdoc):
             if not hdoc:
+                log.msg("Could not find a HDOC with MSGID %s" % msgid)
                 return None
             hdoc = hdoc[0]
             mdoc_id = hdoc.doc_id.replace("H-", "M-%s-" % uuid)

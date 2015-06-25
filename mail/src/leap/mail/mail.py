@@ -37,6 +37,7 @@ from leap.mail.constants import MessageFlags
 from leap.mail.mailbox_indexer import MailboxIndexer
 from leap.mail.plugins import soledad_sync_hooks
 from leap.mail.utils import find_charset, CaseInsensitiveDict
+from leap.mail.utils import lowerdict
 
 logger = logging.getLogger(name=__name__)
 
@@ -570,11 +571,14 @@ class MessageCollection(object):
             reflects when the message was received.
         :type date: str
         :param notify_just_mdoc:
-            boolean passed to the wrapper.create method,
-            to indicate whether we're interested in being notified when only
-            the mdoc has been written (faster, but potentially unsafe), or we
-            want to wait untill all the parts have been written.
+            boolean passed to the wrapper.create method, to indicate whether
+            we're insterested in being notified right after the mdoc has been
+            written (as it's the first doc to be written, and quite small, this
+            is faster, though potentially unsafe), or on the contrary we want
+            to wait untill all the parts have been written.
             Used by the imap mailbox implementation to get faster responses.
+            This will be ignored (and set to False) if a heuristic for a Draft
+            message is met, which currently is a specific mozilla header.
         :type notify_just_mdoc: bool
 
         :returns: a deferred that will fire with the UID of the inserted
@@ -590,8 +594,14 @@ class MessageCollection(object):
         msg = self.adaptor.get_msg_from_string(Message, raw_msg)
         wrapper = msg.get_wrapper()
 
+        headers = lowerdict(msg.get_headers())
+        moz_draft_hdr = "X-Mozilla-Draft-Info"
+        if moz_draft_hdr.lower() in headers:
+            log.msg("Setting fast notify to False, Draft detected")
+            notify_just_mdoc = False
+
         if notify_just_mdoc:
-            msgid = msg.get_headers()['message-id']
+            msgid = headers['message-id']
             self._pending_inserts[msgid] = defer.Deferred()
 
         if not self.is_mailbox_collection():
@@ -622,12 +632,6 @@ class MessageCollection(object):
             d = self.mbox_indexer.create_table(self.mbox_uuid)
             d.addBoth(lambda _: self.mbox_indexer.insert_doc(
                 self.mbox_uuid, doc_id))
-            # XXX---------------------------------
-            def print_inserted(r):
-                print "INSERTED", r
-                return r
-            d.addCallback(print_inserted)
-            # XXX---------------------------------
             return d
 
         d = wrapper.create(
@@ -636,7 +640,7 @@ class MessageCollection(object):
             pending_inserts_dict=self._pending_inserts)
         d.addCallback(insert_mdoc_id, wrapper)
         d.addErrback(lambda failure: log.err(failure))
-        #d.addCallback(self.cb_signal_unread_to_ui)
+        d.addCallback(self.cb_signal_unread_to_ui)
 
         return d
 
