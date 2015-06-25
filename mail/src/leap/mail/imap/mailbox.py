@@ -504,8 +504,13 @@ class IMAPMailbox(object):
         getimapmsg = self.get_imap_message
 
         def get_imap_messages_for_range(msg_range):
+            print
+            print
+            print
+            print "GETTING FOR RANGE", msg_range
 
             def _get_imap_msg(messages):
+                print "GETTING IMAP MSG FOR", messages
                 d_imapmsg = []
                 for msg in messages:
                     d_imapmsg.append(getimapmsg(msg))
@@ -532,6 +537,7 @@ class IMAPMailbox(object):
             d = defer.gatherResults(d_msg, consumeErrors=True)
             d.addCallback(_get_imap_msg)
             d.addCallback(_zip_msgid)
+            d.addErrback(lambda failure: log.err(failure))
             return d
 
         # for sequence numbers (uid = 0)
@@ -542,6 +548,7 @@ class IMAPMailbox(object):
         else:
             d = self._get_messages_range(messages_asked)
             d.addCallback(get_imap_messages_for_range)
+            d.addErrback(lambda failure: log.err(failure))
 
         return d
 

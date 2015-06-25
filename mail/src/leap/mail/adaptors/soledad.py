@@ -547,7 +547,9 @@ class MessageWrapper(object):
                     "Cannot create: fdoc has a doc_id")
 
         def unblock_pending_insert(result):
-            msgid = self.hdoc.headers.get('Message-Id', None)
+            h = self.hdoc.headers
+            ci_headers = dict([(k.lower(), v) for (k, v) in h.items()])
+            msgid = ci_headers.get('message-id', None)
             try:
                 d = pending_inserts_dict[msgid]
                 d.callback(msgid)
@@ -560,6 +562,9 @@ class MessageWrapper(object):
 
         mdoc_created = self.mdoc.create(store, is_copy=self._is_copy)
         fdoc_created = self.fdoc.create(store, is_copy=self._is_copy)
+
+        mdoc_created.addErrback(lambda f: log.err(f))
+        fdoc_created.addErrback(lambda f: log.err(f))
 
         self.d.append(mdoc_created)
         self.d.append(fdoc_created)
@@ -580,9 +585,10 @@ class MessageWrapper(object):
 
         self.all_inserted_d = defer.gatherResults(self.d, consumeErrors=True)
         self.all_inserted_d.addCallback(log_all_inserted)
+        self.all_inserted_d.addCallback(unblock_pending_insert)
+        self.all_inserted_d.addErrback(lambda failure: log.err(failure))
 
         if notify_just_mdoc:
-            self.all_inserted_d.addCallback(unblock_pending_insert)
             return mdoc_created
         else:
             return self.all_inserted_d

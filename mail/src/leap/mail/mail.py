@@ -622,6 +622,12 @@ class MessageCollection(object):
             d = self.mbox_indexer.create_table(self.mbox_uuid)
             d.addBoth(lambda _: self.mbox_indexer.insert_doc(
                 self.mbox_uuid, doc_id))
+            # XXX---------------------------------
+            def print_inserted(r):
+                print "INSERTED", r
+                return r
+            d.addCallback(print_inserted)
+            # XXX---------------------------------
             return d
 
         d = wrapper.create(
@@ -629,8 +635,9 @@ class MessageCollection(object):
             notify_just_mdoc=notify_just_mdoc,
             pending_inserts_dict=self._pending_inserts)
         d.addCallback(insert_mdoc_id, wrapper)
-        d.addErrback(lambda f: f.printTraceback())
-        d.addCallback(self.cb_signal_unread_to_ui)
+        d.addErrback(lambda failure: log.err(failure))
+        #d.addCallback(self.cb_signal_unread_to_ui)
+
         return d
 
     def cb_signal_unread_to_ui(self, result):
