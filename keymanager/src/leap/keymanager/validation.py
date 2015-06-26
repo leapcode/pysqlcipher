@@ -24,34 +24,63 @@ See:
 
 
 from datetime import datetime
-from enum import IntEnum
 
 
-ValidationLevel = IntEnum("ValidationLevel",
-    "Weak_Chain "
-    "Provider_Trust "
-    "Provider_Endorsement "
-    "Third_Party_Endorsement "
-    "Third_Party_Consensus "
-    "Historically_Auditing "
-    "Known_Key "
-    "Fingerprint")
-
-
-def toValidationLevel(value):
+class ValidationLevel(object):
     """
-    Convert a string representation of a validation level into
-    C{ValidationLevel}
+    A validation level
 
-    :param value: validation level
-    :type value: str
-    :rtype: ValidationLevel
-    :raises ValueError: if C{value} is not a validation level
+    Meant to be used to compare levels or get it's string representation.
     """
-    for level in ValidationLevel:
-        if value == level.name:
-            return level
-    raise ValueError("Not valid validation level: %s" % (value,))
+    def __init__(self, name, value):
+        self.name = name
+        self.value = value
+
+    def __cmp__(self, other):
+        return cmp(self.value, other.value)
+
+    def __str__(self):
+        return self.name
+
+    def __repr__(self):
+        return "<ValidationLevel: %s (%d)>" % (self.name, self.value)
+
+
+class _ValidationLevels(object):
+    """
+    Handler class to manage validation levels. It should have only one global
+    instance 'ValidationLevels'.
+
+    The levels are attributes of the instance and can be used like:
+       ValidationLevels.Weak_Chain
+       ValidationLevels.get("Weak_Chain")
+    """
+    _level_names = ("Weak_Chain",
+                    "Provider_Trust",
+                    "Provider_Endorsement",
+                    "Third_Party_Endorsement",
+                    "Third_Party_Consensus",
+                    "Historically_Auditing",
+                    "Known_Key",
+                    "Fingerprint")
+
+    def __init__(self):
+        for name in self._level_names:
+            setattr(self, name,
+                    ValidationLevel(name, self._level_names.index(name)))
+
+    def get(self, name):
+        """
+        Get the ValidationLevel of a name
+
+        :param name: name of the level
+        :type name: str
+        :rtype: ValidationLevel
+        """
+        return getattr(self, name)
+
+
+ValidationLevels = _ValidationLevels()
 
 
 def can_upgrade(new_key, old_key):
@@ -69,7 +98,7 @@ def can_upgrade(new_key, old_key):
         return True
 
     # Manually verified fingerprint
-    if new_key.validation == ValidationLevel.Fingerprint:
+    if new_key.validation == ValidationLevels.Fingerprint:
         return True
 
     # Expired key and higher validation level

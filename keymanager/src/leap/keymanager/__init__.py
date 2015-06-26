@@ -57,7 +57,7 @@ from leap.keymanager.errors import (
     UnsupportedKeyTypeError,
     InvalidSignature
 )
-from leap.keymanager.validation import ValidationLevel, can_upgrade
+from leap.keymanager.validation import ValidationLevels, can_upgrade
 
 from leap.keymanager.keys import (
     build_key_from_dict,
@@ -224,10 +224,10 @@ class KeyManager(object):
             if self.OPENPGP_KEY in server_keys:
                 # nicknym server is authoritative for its own domain,
                 # for other domains the key might come from key servers.
-                validation_level = ValidationLevel.Weak_Chain
+                validation_level = ValidationLevels.Weak_Chain
                 _, domain = _split_email(address)
                 if (domain == _get_domain(self._nickserver_uri)):
-                    validation_level = ValidationLevel.Provider_Trust
+                    validation_level = ValidationLevels.Provider_Trust
 
                 d = self.put_raw_key(
                     server_keys['openpgp'],
@@ -712,7 +712,7 @@ class KeyManager(object):
         return d
 
     def put_raw_key(self, key, ktype, address,
-                    validation=ValidationLevel.Weak_Chain):
+                    validation=ValidationLevels.Weak_Chain):
         """
         Put raw key bound to address in local storage.
 
@@ -724,7 +724,7 @@ class KeyManager(object):
         :type address: str
         :param validation: validation level for this key
                            (default: 'Weak_Chain')
-        :type validation: ValidationLevel
+        :type validation: ValidationLevels
 
         :return: A Deferred which fires when the key is in the storage, or
                  which fails with KeyAddressMismatch if address doesn't match
@@ -744,7 +744,7 @@ class KeyManager(object):
         return d
 
     def fetch_key(self, address, uri, ktype,
-                  validation=ValidationLevel.Weak_Chain):
+                  validation=ValidationLevels.Weak_Chain):
         """
         Fetch a public key bound to address from the network and put it in
         local storage.
@@ -757,7 +757,7 @@ class KeyManager(object):
         :type ktype: subclass of EncryptionKey
         :param validation: validation level for this key
                            (default: 'Weak_Chain')
-        :type validation: ValidationLevel
+        :type validation: ValidationLevels
 
         :return: A Deferred which fires when the key is in the storage, or
                  which fails with KeyNotFound: if not valid key on uri or fails

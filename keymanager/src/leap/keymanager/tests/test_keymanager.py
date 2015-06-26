@@ -36,10 +36,7 @@ from leap.keymanager.keys import (
     is_address,
     build_key_from_dict,
 )
-from leap.keymanager.validation import (
-    ValidationLevel,
-    toValidationLevel
-)
+from leap.keymanager.validation import ValidationLevels
 from leap.keymanager.tests import (
     KeyManagerWithSoledadTestCase,
     ADDRESS,
@@ -82,7 +79,7 @@ class KeyManagerUtilTestCase(unittest.TestCase):
             'expiry_date': 0,
             'last_audited_at': 0,
             'refreshed_at': 1311239602,
-            'validation': ValidationLevel.Weak_Chain.name,
+            'validation': str(ValidationLevels.Weak_Chain),
             'encr_used': False,
             'sign_used': True,
         }
@@ -115,7 +112,7 @@ class KeyManagerUtilTestCase(unittest.TestCase):
             datetime.fromtimestamp(kdict['refreshed_at']), key.refreshed_at,
             'Wrong data in key.')
         self.assertEqual(
-            toValidationLevel(kdict['validation']), key.validation,
+            ValidationLevels.get(kdict['validation']), key.validation,
             'Wrong data in key.')
         self.assertEqual(
             kdict['encr_used'], key.encr_used,
@@ -227,7 +224,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         key = yield self._fetch_key(km, ADDRESS, PUBLIC_KEY)
         self.assertIsInstance(key, OpenPGPKey)
         self.assertTrue(ADDRESS in key.address)
-        self.assertEqual(key.validation, ValidationLevel.Provider_Trust)
+        self.assertEqual(key.validation, ValidationLevels.Provider_Trust)
 
     @inlineCallbacks
     def test_get_key_fetches_other_domain(self):
@@ -239,7 +236,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         key = yield self._fetch_key(km, ADDRESS_OTHER, PUBLIC_KEY_OTHER)
         self.assertIsInstance(key, OpenPGPKey)
         self.assertTrue(ADDRESS_OTHER in key.address)
-        self.assertEqual(key.validation, ValidationLevel.Weak_Chain)
+        self.assertEqual(key.validation, ValidationLevels.Weak_Chain)
 
     def _fetch_key(self, km, address, key):
         """

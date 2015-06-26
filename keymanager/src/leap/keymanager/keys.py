@@ -35,7 +35,7 @@ from datetime import datetime
 from leap.common.check import leap_assert
 from twisted.internet import defer
 
-from leap.keymanager.validation import ValidationLevel, toValidationLevel
+from leap.keymanager.validation import ValidationLevels
 
 logger = logging.getLogger(__name__)
 
@@ -120,11 +120,11 @@ def build_key_from_dict(kClass, kdict):
     :rtype: C{kClass}
     """
     try:
-        validation = toValidationLevel(kdict[KEY_VALIDATION_KEY])
+        validation = ValidationLevels.get(kdict[KEY_VALIDATION_KEY])
     except ValueError:
         logger.error("Not valid validation level (%s) for key %s",
                      (kdict[KEY_VALIDATION_KEY], kdict[KEY_ID_KEY]))
-        validation = ValidationLevel.Weak_Chain
+        validation = ValidationLevels.Weak_Chain
 
     expiry_date = _to_datetime(kdict[KEY_EXPIRY_DATE_KEY])
     last_audited_at = _to_datetime(kdict[KEY_LAST_AUDITED_AT_KEY])
@@ -176,7 +176,7 @@ class EncryptionKey(object):
 
     def __init__(self, address, key_id="", fingerprint="",
                  key_data="", private=False, length=0, expiry_date=None,
-                 validation=ValidationLevel.Weak_Chain, last_audited_at=None,
+                 validation=ValidationLevels.Weak_Chain, last_audited_at=None,
                  refreshed_at=None, encr_used=False, sign_used=False):
         self.address = address
         self.key_id = key_id
@@ -213,7 +213,7 @@ class EncryptionKey(object):
             KEY_EXPIRY_DATE_KEY: expiry_date,
             KEY_LAST_AUDITED_AT_KEY: last_audited_at,
             KEY_REFRESHED_AT_KEY: refreshed_at,
-            KEY_VALIDATION_KEY: self.validation.name,
+            KEY_VALIDATION_KEY: str(self.validation),
             KEY_ENCR_USED_KEY: self.encr_used,
             KEY_SIGN_USED_KEY: self.sign_used,
             KEY_TAGS_KEY: [KEYMANAGER_KEY_TAG],

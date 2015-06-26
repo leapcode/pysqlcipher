@@ -31,10 +31,10 @@ from leap.keymanager.tests import (
     PUBLIC_KEY,
     KEY_FINGERPRINT
 )
-from leap.keymanager.validation import ValidationLevel
+from leap.keymanager.validation import ValidationLevels
 
 
-class ValidationLevelTestCase(KeyManagerWithSoledadTestCase):
+class ValidationLevelsTestCase(KeyManagerWithSoledadTestCase):
 
     @inlineCallbacks
     def test_none_old_key(self):
@@ -47,7 +47,7 @@ class ValidationLevelTestCase(KeyManagerWithSoledadTestCase):
     def test_cant_upgrade(self):
         km = self._key_manager()
         yield km.put_raw_key(PUBLIC_KEY, OpenPGPKey, ADDRESS,
-                             validation=ValidationLevel.Provider_Trust)
+                             validation=ValidationLevels.Provider_Trust)
         d = km.put_raw_key(UNRELATED_KEY, OpenPGPKey, ADDRESS)
         yield self.assertFailure(d, KeyNotValidUpgrade)
 
@@ -56,7 +56,7 @@ class ValidationLevelTestCase(KeyManagerWithSoledadTestCase):
         km = self._key_manager()
         yield km.put_raw_key(PUBLIC_KEY, OpenPGPKey, ADDRESS)
         yield km.put_raw_key(UNRELATED_KEY, OpenPGPKey, ADDRESS,
-                             validation=ValidationLevel.Fingerprint)
+                             validation=ValidationLevels.Fingerprint)
         key = yield km.get_key(ADDRESS, OpenPGPKey, fetch_remote=False)
         self.assertEqual(key.fingerprint, UNRELATED_FINGERPRINT)
 
@@ -73,12 +73,12 @@ class ValidationLevelTestCase(KeyManagerWithSoledadTestCase):
         km = self._key_manager()
         yield km.put_raw_key(
             EXPIRED_KEY, OpenPGPKey, ADDRESS,
-            validation=ValidationLevel.Third_Party_Endorsement)
+            validation=ValidationLevels.Third_Party_Endorsement)
         d = km.put_raw_key(
             UNRELATED_KEY,
             OpenPGPKey,
             ADDRESS,
-            validation=ValidationLevel.Provider_Trust)
+            validation=ValidationLevels.Provider_Trust)
         yield self.assertFailure(d, KeyNotValidUpgrade)
 
     @inlineCallbacks
@@ -93,9 +93,9 @@ class ValidationLevelTestCase(KeyManagerWithSoledadTestCase):
     def test_not_used(self):
         km = self._key_manager()
         yield km.put_raw_key(UNEXPIRED_KEY, OpenPGPKey, ADDRESS,
-                             validation=ValidationLevel.Provider_Trust)
+                             validation=ValidationLevels.Provider_Trust)
         yield km.put_raw_key(UNRELATED_KEY, OpenPGPKey, ADDRESS,
-                             validation=ValidationLevel.Provider_Endorsement)
+                             validation=ValidationLevels.Provider_Endorsement)
         key = yield km.get_key(ADDRESS, OpenPGPKey, fetch_remote=False)
         self.assertEqual(key.fingerprint, UNRELATED_FINGERPRINT)
 
@@ -114,7 +114,7 @@ class ValidationLevelTestCase(KeyManagerWithSoledadTestCase):
         yield km.verify(TEXT, ADDRESS, OpenPGPKey, detached_sig=signature)
         d = km.put_raw_key(
             UNRELATED_KEY, OpenPGPKey, ADDRESS,
-            validation=ValidationLevel.Provider_Endorsement)
+            validation=ValidationLevels.Provider_Endorsement)
         yield self.assertFailure(d, KeyNotValidUpgrade)
 
     @inlineCallbacks
