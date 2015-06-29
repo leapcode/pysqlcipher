@@ -150,7 +150,7 @@ class SoledadDocumentWrapper(models.DocumentWrapper):
         d.addCallback(update_doc_id)
 
         if is_copy:
-            d.addErrback(update_wrapper),
+            d.addErrback(update_wrapper)
         else:
             d.addErrback(self._catch_revision_conflict, self.future_doc_id)
         return d
@@ -507,7 +507,7 @@ class MessageWrapper(object):
         for doc_id, cdoc in zip(self.mdoc.cdocs, self.cdocs.values()):
             cdoc.set_future_doc_id(doc_id)
 
-    def create(self, store, notify_just_mdoc=False, pending_inserts_dict=None):
+    def create(self, store, notify_just_mdoc=False, pending_inserts_dict={}):
         """
         Create all the parts for this message in the store.
 
@@ -547,13 +547,14 @@ class MessageWrapper(object):
                     "Cannot create: fdoc has a doc_id")
 
         def unblock_pending_insert(result):
-            ci_headers = lowerdict(self.hdoc.headers)
-            msgid = ci_headers.get('message-id', None)
-            try:
-                d = pending_inserts_dict[msgid]
-                d.callback(msgid)
-            except KeyError:
-                pass
+            if pending_inserts_dict:
+                ci_headers = lowerdict(self.hdoc.headers)
+                msgid = ci_headers.get('message-id', None)
+                try:
+                    d = pending_inserts_dict[msgid]
+                    d.callback(msgid)
+                except KeyError:
+                    pass
             return result
 
         # TODO check that the doc_ids in the mdoc are coherent
