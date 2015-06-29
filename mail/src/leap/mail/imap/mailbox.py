@@ -91,6 +91,8 @@ class IMAPMailbox(object):
         imap4.IMailboxInfo,
         imap4.ISearchableMailbox,
         # XXX I think we do not need to implement CloseableMailbox, do we?
+        # We could remove ourselves from the collectionListener, although I
+        # think it simply will be garbage collected.
         # imap4.ICloseableMailbox
         imap4.IMessageCopier)
 
@@ -116,6 +118,7 @@ class IMAPMailbox(object):
         self.rw = rw
         self._uidvalidity = None
         self.collection = collection
+        self.collection.addListener(self)
 
     @property
     def mbox_name(self):
@@ -155,9 +158,10 @@ class IMAPMailbox(object):
         if not NOTIFY_NEW:
             return
 
+        listeners = self.listeners
         logger.debug('adding mailbox listener: %s. Total: %s' % (
-            listener, len(self.listeners)))
-        self.listeners.add(listener)
+            listener, len(listeners)))
+        listeners.add(listener)
 
     def removeListener(self, listener):
         """
@@ -371,13 +375,16 @@ class IMAPMailbox(object):
 
         d = self.collection.add_msg(message, flags, date=date,
                                     notify_just_mdoc=notify_just_mdoc)
-        d.addCallback(self.notify_new)
         d.addErrback(lambda failure: log.err(failure))
         return d
 
     def notify_new(self, *args):
         """
         Notify of new messages to all the listeners.
+        This will be called indirectly by the underlying collection, that will
+        notify this IMAPMailbox whenever there are changes in the number of
+        messages in the collection, since we have added ourselves to the
+        collection listeners.
 
         :param args: ignored.
         """
@@ -392,6 +399,7 @@ class IMAPMailbox(object):
         d = self._get_notify_count()
         d.addCallback(cbNotifyNew)
         d.addCallback(self.collection.cb_signal_unread_to_ui)
+        d.addErrback(lambda failure: log.err(failure))
 
     def _get_notify_count(self):
         """

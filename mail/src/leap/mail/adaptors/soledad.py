@@ -505,6 +505,8 @@ class MessageWrapper(object):
             (key, get_doc_wrapper(doc, ContentDocWrapper))
             for (key, doc) in cdocs.items()])
         for doc_id, cdoc in zip(self.mdoc.cdocs, self.cdocs.values()):
+            if cdoc.raw == "":
+                log.msg("Empty raw field in cdoc %s" % doc_id)
             cdoc.set_future_doc_id(doc_id)
 
     def create(self, store, notify_just_mdoc=False, pending_inserts_dict={}):

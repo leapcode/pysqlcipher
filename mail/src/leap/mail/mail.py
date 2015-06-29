@@ -378,6 +378,7 @@ class MessageCollection(object):
         # of by doc_id. See get_message_by_content_hash
         self.mbox_indexer = mbox_indexer
         self.mbox_wrapper = mbox_wrapper
+        self._listeners = set([])
 
     def is_mailbox_collection(self):
         """
@@ -639,10 +640,23 @@ class MessageCollection(object):
             notify_just_mdoc=notify_just_mdoc,
             pending_inserts_dict=self._pending_inserts)
         d.addCallback(insert_mdoc_id, wrapper)
-        d.addErrback(lambda failure: log.err(failure))
         d.addCallback(self.cb_signal_unread_to_ui)
+        d.addCallback(self.notify_new_to_listeners)
+        d.addErrback(lambda failure: log.err(failure))
 
         return d
+
+    # Listeners
+
+    def addListener(self, listener):
+        self._listeners.add(listener)
+
+    def removeListener(self, listener):
+        self._listeners.remove(listener)
+
+    def notify_new_to_listeners(self, *args):
+        for listener in self._listeners:
+            listener.notify_new()
 
     def cb_signal_unread_to_ui(self, result):
         """
