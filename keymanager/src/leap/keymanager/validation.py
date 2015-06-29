@@ -30,7 +30,7 @@ class ValidationLevel(object):
     """
     A validation level
 
-    Meant to be used to compare levels or get it's string representation.
+    Meant to be used to compare levels or get its string representation.
     """
     def __init__(self, name, value):
         self.name = name
