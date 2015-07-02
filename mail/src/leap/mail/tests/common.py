@@ -92,12 +92,8 @@ class SoledadTestMixin(unittest.TestCase, BaseLeapTest):
         self.results = []
         try:
             self._soledad.close()
-        except Exception as exc:
+        except Exception:
             print "ERROR WHILE CLOSING SOLEDAD"
             # logging.exception(exc)
         finally:
-            os.environ["PATH"] = self.old_path
-            os.environ["HOME"] = self.old_home
-            # safety check
-            assert 'leap_tests-' in self.tempdir
-            shutil.rmtree(self.tempdir)
+            self.tearDownEnv()
