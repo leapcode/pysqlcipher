@@ -654,9 +654,10 @@ class MessageCollection(object):
     def removeListener(self, listener):
         self._listeners.remove(listener)
 
-    def notify_new_to_listeners(self, *args):
+    def notify_new_to_listeners(self, result):
         for listener in self._listeners:
             listener.notify_new()
+        return result
 
     def cb_signal_unread_to_ui(self, result):
         """
