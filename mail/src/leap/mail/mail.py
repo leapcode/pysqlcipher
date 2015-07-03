@@ -619,8 +619,8 @@ class MessageCollection(object):
             doc_id = wrapper.mdoc.doc_id
             if not doc_id:
                 # --- BUG -----------------------------------------
-                # XXX why from time to time mdoc doesn't have doc_id
-                # here???
+                # XXX watch out, sometimes mdoc doesn't have doc_id
+                # but it has future_id. Should be solved already.
                 logger.error("BUG: (please report) Null doc_id for "
                              "document %s" %
                              (wrapper.mdoc.serialize(),))
@@ -742,6 +742,7 @@ class MessageCollection(object):
 
         d = wrapper.copy(self.store, new_mbox_uuid)
         d.addCallback(insert_copied_mdoc_id)
+        d.addCallback(self.notify_new_to_listeners)
         return d
 
     def delete_msg(self, msg):
