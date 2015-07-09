@@ -490,7 +490,7 @@ class MessageCollection(object):
 
         def cleanup_and_get_doc_after_pending_insert(result):
             for key in result:
-                self._pending_inserts.pop(key)
+                self._pending_inserts.pop(key, None)
             return get_doc_fun(self.mbox_uuid, uid)
 
         if not self._pending_inserts:
