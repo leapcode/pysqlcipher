@@ -263,7 +263,7 @@ def cbSelectMbox(result, proto):
 
     if result["EXISTS"] != 0:
         # Flag as deleted, expunge, and do an examine again.
-        #print "There is mail here, will delete..."
+        print "There is mail here, will delete..."
         return cbDeleteAndExpungeTestFolder(proto)
 
     else:
@@ -276,9 +276,13 @@ def ebSelectMbox(failure, proto, folder):
 
     Creates the folder.
     """
-    print failure.getTraceback()
+    log.err(failure)
     log.msg("Folder %r does not exist. Creating..." % (folder,))
     return proto.create(folder).addCallback(cbAuthentication, proto)
+
+
+def ebExpunge(failure):
+    log.err(failure)
 
 
 def cbDeleteAndExpungeTestFolder(proto):
@@ -292,7 +296,9 @@ def cbDeleteAndExpungeTestFolder(proto):
     ).addCallback(
         lambda r: proto.expunge()
     ).addCallback(
-        cbExpunge, proto)
+        cbExpunge, proto
+    ).addErrback(
+        ebExpunge)
 
 
 def cbExpunge(result, proto):
