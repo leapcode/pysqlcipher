@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # -*- coding: utf-8 -*-
-# regressions
+# regression_mime_struct
 # Copyright (C) 2014 LEAP
 # Copyright (c) Twisted Matrix Laboratories.
 #
@@ -18,7 +18,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-Simple Regression Tests using IMAP4 client.
+Simple Regression Tests for checking MIME struct handling using IMAP4 client.
 
 Iterates trough all mails under a given folder and tries to APPEND them to
 the server being tested. After FETCHING the pushed message, it compares
