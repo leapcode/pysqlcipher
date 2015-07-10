@@ -1,3 +1,6 @@
+0.4.1 Jul 10, 2015:
+  o Remove the dependency on enum34. Closes: #7188.
+
 0.4.0 Jun 8, 2015:
   o Adapt to new events api on leap.common. Related to #5359.
   o Add 'fetch_key' method to fetch keys from a URI. Closes #5932.
