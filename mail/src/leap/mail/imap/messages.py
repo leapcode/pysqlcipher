@@ -173,7 +173,7 @@ class IMAPMessage(object):
         :rtype: Any object implementing C{IMessagePart}.
         :return: The specified sub-part.
         """
-        subpart = self.message.get_subpart(part)
+        subpart = self.message.get_subpart(part + 1)
         return IMAPMessagePart(subpart)
 
     def __prefetch_body_file(self):
@@ -204,7 +204,7 @@ class IMAPMessagePart(object):
         return self.message_part.is_multipart()
 
     def getSubPart(self, part):
-        subpart = self.message_part.get_subpart(part)
+        subpart = self.message_part.get_subpart(part + 1)
         return IMAPMessagePart(subpart)
 
 

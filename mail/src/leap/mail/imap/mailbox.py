@@ -457,7 +457,33 @@ class IMAPMailbox(object):
             raise imap4.ReadOnlyMailbox
         return self.collection.delete_all_flagged()
 
-    def _bound_seq(self, messages_asked):
+    def _get_message_fun(self, uid):
+        """
+        Return the proper method to get a message for this mailbox, depending
+        on the passed uid flag.
+
+        :param uid: If true, the IDs specified in the query are UIDs;
+                    otherwise they are message sequence IDs.
+        :type uid: bool
+        :rtype: callable
+        """
+        get_message_fun = [
+            self.collection.get_message_by_sequence_number,
+            self.collection.get_message_by_uid][uid]
+        return get_message_fun
+
+    def _get_messages_range(self, messages_asked, uid=True):
+
+        def get_range(messages_asked):
+            return self._filter_msg_seq(messages_asked)
+
+        d = defer.maybeDeferred(self._bound_seq, messages_asked, uid)
+        if uid:
+            d.addCallback(get_range)
+        d.addErrback(lambda f: log.err(f))
+        return d
+
+    def _bound_seq(self, messages_asked, uid):
         """
         Put an upper bound to a messages sequence if this is open.
 
@@ -465,8 +491,13 @@ class IMAPMailbox(object):
         :type messages_asked: MessageSet
         :rtype: MessageSet
         """
-        def set_last(last_uid):
+
+        def set_last_uid(last_uid):
             messages_asked.last = last_uid
+            return messages_asked
+
+        def set_last_seq(all_uid):
+            messages_asked.last = len(all_uid)
             return messages_asked
 
         if not messages_asked.last:
@@ -474,8 +505,12 @@ class IMAPMailbox(object):
                 iter(messages_asked)
             except TypeError:
                 # looks like we cannot iterate
-                d = self.collection.get_last_uid()
-                d.addCallback(set_last)
+                if uid:
+                    d = self.collection.get_last_uid()
+                    d.addCallback(set_last_uid)
+                else:
+                    d = self.collection.all_uid_iter()
+                    d.addCallback(set_last_seq)
                 return d
         return messages_asked
 
@@ -516,15 +551,7 @@ class IMAPMailbox(object):
 
         :rtype: deferred with a generator that yields...
         """
-        # TODO implement sequence
-        # is_sequence = True if uid == 0 else False
-        # XXX DEBUG ---  if you attempt to use the `getmail` utility under
-        # imap/tests, or muas like mutt, it will choke until we implement
-        # sequence numbers. This is an easy hack meanwhile.
-        is_sequence = False
-        # -----------------------------------------------------------------
-
-        getmsg = self.collection.get_message_by_uid
+        get_msg_fun = self._get_message_fun(uid)
         getimapmsg = self.get_imap_message
 
         def get_imap_messages_for_range(msg_range):
@@ -551,7 +578,7 @@ class IMAPMailbox(object):
                 # body. We should be smarter at do_FETCH and pass a parameter
                 # to this method in order not to prefetch cdocs if they're not
                 # going to be used.
-                d_msg.append(getmsg(msgid, get_cdocs=True))
+                d_msg.append(get_msg_fun(msgid, get_cdocs=True))
 
             d = defer.gatherResults(d_msg, consumeErrors=True)
             d.addCallback(_get_imap_msg)
@@ -559,24 +586,9 @@ class IMAPMailbox(object):
             d.addErrback(lambda failure: log.err(failure))
             return d
 
-        # for sequence numbers (uid = 0)
-        if is_sequence:
-            # TODO --- implement sequences in mailbox indexer
-            raise NotImplementedError
-
-        else:
-            d = self._get_messages_range(messages_asked)
-            d.addCallback(get_imap_messages_for_range)
-            d.addErrback(lambda failure: log.err(failure))
-
-        return d
-
-    def _get_messages_range(self, messages_asked):
-        def get_range(messages_asked):
-            return self._filter_msg_seq(messages_asked)
-
-        d = defer.maybeDeferred(self._bound_seq, messages_asked)
-        d.addCallback(get_range)
+        d = self._get_messages_range(messages_asked, uid)
+        d.addCallback(get_imap_messages_for_range)
+        d.addErrback(lambda failure: log.err(failure))
         return d
 
     def fetch_flags(self, messages_asked, uid):
@@ -611,7 +623,8 @@ class IMAPMailbox(object):
         # ---------------------------------------------------------------
 
         if is_sequence:
-            raise NotImplementedError
+            raise NotImplementedError(
+                "FETCH FLAGS NOT IMPLEMENTED FOR MESSAGE SEQUENCE NUMBERS YET")
 
         d = defer.Deferred()
         reactor.callLater(0, self._do_fetch_flags, messages_asked, uid, d)
@@ -652,6 +665,7 @@ class IMAPMailbox(object):
         def get_flags_for_seq(sequence):
             d_all_flags = []
             for msgid in sequence:
+                # TODO implement sequence numbers here too
                 d_flags_per_uid = self.collection.get_flags_by_uid(msgid)
                 d_flags_per_uid.addCallback(pack_flags)
                 d_all_flags.append(d_flags_per_uid)
@@ -663,7 +677,7 @@ class IMAPMailbox(object):
             generator = (item for item in result)
             d.callback(generator)
 
-        d_seq = self._get_messages_range(messages_asked)
+        d_seq = self._get_messages_range(messages_asked, uid)
         d_seq.addCallback(get_flags_for_seq)
         return d_seq
 
@@ -694,7 +708,8 @@ class IMAPMailbox(object):
         # TODO implement sequences
         is_sequence = True if uid == 0 else False
         if is_sequence:
-            raise NotImplementedError
+            raise NotImplementedError(
+                "FETCH HEADERS NOT IMPLEMENTED FOR SEQUENCE NUMBER YET")
 
         class headersPart(object):
             def __init__(self, uid, headers):
@@ -748,11 +763,6 @@ class IMAPMailbox(object):
         :raise ReadOnlyMailbox: Raised if this mailbox is not open for
                                 read-write.
         """
-        # TODO implement sequences
-        is_sequence = True if uid == 0 else False
-        if is_sequence:
-            raise NotImplementedError
-
         if not self.isWriteable():
             log.msg('read only mailbox!')
             raise imap4.ReadOnlyMailbox
@@ -762,8 +772,9 @@ class IMAPMailbox(object):
                           mode, uid, d)
         if PROFILE_CMD:
             do_profile_cmd(d, "STORE")
+
         d.addCallback(self.collection.cb_signal_unread_to_ui)
-        d.addErrback(lambda f: log.msg(f.getTraceback()))
+        d.addErrback(lambda f: log.err(f))
         return d
 
     def _do_store(self, messages_asked, flags, mode, uid, observer):
@@ -777,14 +788,13 @@ class IMAPMailbox(object):
                          done.
         :type observer: deferred
         """
-        # TODO implement also sequence (uid = 0)
         # TODO we should prevent client from setting Recent flag
+        get_msg_fun = self._get_message_fun(uid)
         leap_assert(not isinstance(flags, basestring),
                     "flags cannot be a string")
         flags = tuple(flags)
 
         def set_flags_for_seq(sequence):
-
             def return_result_dict(list_of_flags):
                 result = dict(zip(list(sequence), list_of_flags))
                 observer.callback(result)
@@ -792,7 +802,7 @@ class IMAPMailbox(object):
 
             d_all_set = []
             for msgid in sequence:
-                d = self.collection.get_message_by_uid(msgid)
+                d = get_msg_fun(msgid)
                 d.addCallback(lambda msg: self.collection.update_flags(
                     msg, flags, mode))
                 d_all_set.append(d)
@@ -800,7 +810,7 @@ class IMAPMailbox(object):
             got_flags_setted.addCallback(return_result_dict)
             return got_flags_setted
 
-        d_seq = self._get_messages_range(messages_asked)
+        d_seq = self._get_messages_range(messages_asked, uid)
         d_seq.addCallback(set_flags_for_seq)
         return d_seq
 

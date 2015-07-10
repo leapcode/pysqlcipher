@@ -149,7 +149,7 @@ class MessagePart(object):
     # TODO support arbitrarily nested multiparts (right now we only support
     #      the trivial case)
 
-    def __init__(self, part_map, cdocs={}):
+    def __init__(self, part_map, cdocs={}, nested=False):
         """
         :param part_map: a dictionary mapping the subparts for
                          this MessagePart (1-indexed).
@@ -170,6 +170,7 @@ class MessagePart(object):
         """
         self._pmap = part_map
         self._cdocs = cdocs
+        self._nested = nested
 
         index = _get_index_for_cdoc(part_map, self._cdocs) or 1
         self._index = index
@@ -230,7 +231,7 @@ class MessagePart(object):
         cdoc_index = _get_index_for_cdoc(part_map, self._cdocs)
         cdoc = self._cdocs.get(cdoc_index, {})
 
-        return MessagePart(part_map, cdocs={1: cdoc})
+        return MessagePart(part_map, cdocs={1: cdoc}, nested=True)
 
     def _get_payload(self, index):
         cdoc_wrapper = self._cdocs.get(index, None)
@@ -329,20 +330,17 @@ class Message(object):
 
     def get_subpart(self, part):
         """
-        :param part: The number of the part to retrieve, indexed from 0.
+        :param part: The number of the part to retrieve, indexed from 1.
         :type part: int
         :rtype: MessagePart
         """
         if not self.is_multipart():
             raise TypeError
-        part_index = part + 1
         try:
-            subpart_dict = self._wrapper.get_subpart_dict(part_index)
+            subpart_dict = self._wrapper.get_subpart_dict(part)
         except KeyError:
             raise IndexError
 
-        # FIXME instead of passing the index, let the MessagePart figure it out
-        # by getting the phash and iterating through the cdocs
         return MessagePart(
             subpart_dict, cdocs=self._wrapper.cdocs)
 
@@ -467,6 +465,21 @@ class MessageCollection(object):
             self.messageklass, self.store,
             metamsg_id, get_cdocs=get_cdocs)
 
+    def get_message_by_sequence_number(self, msn, get_cdocs=False):
+        """
+        Retrieve a message by its Message Sequence Number.
+        :rtype: Deferred
+        """
+        def get_uid_for_msn(all_uid):
+            return all_uid[msn - 1]
+        d = self.all_uid_iter()
+        d.addCallback(get_uid_for_msn)
+        d.addCallback(
+            lambda uid: self.get_message_by_uid(
+                uid, get_cdocs=get_cdocs))
+        d.addErrback(lambda f: log.err(f))
+        return d
+
     def get_message_by_uid(self, uid, absolute=True, get_cdocs=False):
         """
         Retrieve a message by its Unique Identifier.
@@ -476,6 +489,8 @@ class MessageCollection(object):
         flag. For now, only absolute identifiers are supported.
         :rtype: Deferred
         """
+        # TODO deprecate absolute flag, it doesn't make sense UID and
+        # !absolute. use _by_sequence_number instead.
         if not absolute:
             raise NotImplementedError("Does not support relative ids yet")
 
@@ -502,6 +517,7 @@ class MessageCollection(object):
         return d
 
     def get_flags_by_uid(self, uid, absolute=True):
+        # TODO use sequence numbers
         if not absolute:
             raise NotImplementedError("Does not support relative ids yet")
 
@@ -825,6 +841,7 @@ class MessageCollection(object):
             self.store, self.mbox_uuid)
         mdocs_deleted.addCallback(get_uid_list)
         mdocs_deleted.addCallback(delete_uid_entries)
+        mdocs_deleted.addErrback(lambda f: log.err(f))
         return mdocs_deleted
 
     # TODO should add a delete-by-uid to collection?
