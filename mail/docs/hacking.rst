@@ -161,6 +161,25 @@ If looking for a quick way of inspecting mailboxes, have a look at ``getmail``::
  From: Kali <kali@leap.se>
  
  (snip)
+
+IMAP Message Rendering Regressions
+----------------------------------
+
+For testing the IMAP server implementation, there is a litte regressions script
+that needs some manual work from your side.
+
+First of all, you need an already initialized account. Which for now basically
+means you have created a new account with a provider that offers the Encrypted
+Mail Service, using the Bitmask Client wizard. Then you need to log in with that
+account, and let it generate the secrets and sync with the remote for a first
+time. After this you can run the twistd server locally and offline.
+
+From the ``leap.mail.imap.tests`` folder, and with an already initialized server
+running::
+
+  ./regressions_mime_struct user@provider pass path_to_samples/
+
+You can find several message samples in the ``leap/mail/tests`` folder.
  
 
 Debugging IMAP commands

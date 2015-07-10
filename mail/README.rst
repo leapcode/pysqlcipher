@@ -24,3 +24,14 @@ fails::
   trial -u leap.mail.imap
 
 Read the *trial* manpage for more options .
+
+imap regressions
+----------------
+
+For testing the IMAP server implementation, there are a couple of utilities.
+From the ``leap.mail.imap.tests`` folder, and with an already initialized server
+running::
+
+  ./regressions_mime_struct user@provider pass path_to_samples/
+
+You can find several message samples in the ``leap/mail/tests`` folder.
