@@ -40,7 +40,9 @@ from twisted.protocols import basic
 from twisted.python import log
 
 
-REGRESSIONS_FOLDER = "regressions_test"
+REGRESSIONS_FOLDER = os.environ.get(
+    "REGRESSIONS_FOLDER", "regressions_test")
+print "[+] Using regressions folder:", REGRESSIONS_FOLDER
 
 parser = Parser()
 
