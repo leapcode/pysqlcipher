@@ -688,7 +688,8 @@ class MessageWrapper(object):
         """
         body_phash = self.hdoc.body
         if not body_phash:
-            return None
+            if self.cdocs:
+                return self.cdocs[1]
         d = store.get_doc('C-' + body_phash)
         d.addCallback(lambda doc: ContentDocWrapper(**doc.content))
         return d
