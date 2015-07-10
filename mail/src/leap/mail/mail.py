@@ -211,6 +211,16 @@ class MessagePart(object):
             raise TypeError
 
         sub_pmap = self._pmap.get("part_map", {})
+
+        # XXX BUG --- workaround. Subparts with more than 1 subparts
+        # need to get the requested index for the subpart decremented.
+        # Off-by-one error, should investigate which is the real reason and
+        # fix it, this is only a quick workaround.
+        num_parts = self._pmap.get("parts", 0)
+        if num_parts > 1:
+            part = part - 1
+        # -------------------------------------------------------------
+
         try:
             part_map = sub_pmap[str(part)]
         except KeyError:
