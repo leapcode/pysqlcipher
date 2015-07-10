@@ -638,8 +638,9 @@ class MessageCollection(object):
             notify_just_mdoc = False
 
         if notify_just_mdoc:
-            msgid = headers['message-id']
-            self._pending_inserts[msgid] = defer.Deferred()
+            msgid = headers.get('message-id')
+            if msgid:
+                self._pending_inserts[msgid] = defer.Deferred()
 
         if not self.is_mailbox_collection():
             raise NotImplementedError()
