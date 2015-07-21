@@ -1,4 +1,4 @@
-#-*- encoding: utf-8 -*-
+# -*- encoding: utf-8 -*-
 """
 leap/email/imap/tests/__init__.py
 ----------------------------------
@@ -26,10 +26,10 @@ from leap.soledad.client import Soledad
 from leap.soledad.common.document import SoledadDocument
 
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Some tests inherit from BaseSoledadTest in order to have a working Soledad
 # instance in each test.
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 class BaseSoledadIMAPTest(BaseLeapTest):
     """

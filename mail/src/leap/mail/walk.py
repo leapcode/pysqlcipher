@@ -187,7 +187,7 @@ def walk_msg_tree(parts, body_phash=None):
             last_part = max(main_pmap.keys())
             main_pmap[last_part][PART_MAP] = {}
             for partind in range(len(pv) - 1):
-                print partind+1, len(parts)
+                print partind + 1, len(parts)
                 main_pmap[last_part][PART_MAP][partind] = parts[partind + 1]
 
     outer = parts[0]

@@ -43,10 +43,14 @@ class StoreAndFetchTestCase(IMAP4HelperMixin):
 
         self.connected.addCallback(
             self._addSignedMessage).addCallback(
-            lambda uid: self.function(
-                uids, uid=uid)  # do NOT use seq numbers!
-            ).addCallback(result).addCallback(
-            self._cbStopClient).addErrback(self._ebGeneral)
+                lambda uid: self.function(
+                    uids, uid=uid
+                )  # do NOT use seq numbers!
+        ).addCallback(
+            result
+        ).addCallback(
+            self._cbStopClient
+        ).addErrback(self._ebGeneral)
 
         d = loopback.loopbackTCP(self.server, self.client, noisy=False)
         d.addCallback(lambda x: self.assertEqual(self.result, self.expected))

@@ -1,4 +1,4 @@
-#t -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 # walktree.py
 # Copyright (C) 2013 LEAP
 #

@@ -85,7 +85,7 @@ def _encode_payload(payload, ctype=""):
     # soledad when it's creating the documents.
     # if not charset:
     # charset = get_email_charset(payload)
-    #------------------------------------------------------
+    # -----------------------------------------------------
 
     if not charset:
         charset = "utf-8"
@@ -113,7 +113,7 @@ def _unpack_headers(headers_dict):
             inner = zip(
                 itertools.cycle([k]),
                 map(lambda l: l.rstrip('\n'), splitted))
-            headers_l = headers_l[:i] + inner + headers_l[i+1:]
+            headers_l = headers_l[:i] + inner + headers_l[i + 1:]
     return headers_l
 
 

@@ -439,7 +439,7 @@ class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
         d1 = self.connected.addCallback(strip(add_mailbox))
         d1.addCallback(strip(login))
         d1.addCallback(strip(select))
-        #d1.addErrback(self._ebGeneral)
+        # d1.addErrback(self._ebGeneral)
 
         d2 = self.loopback()
 

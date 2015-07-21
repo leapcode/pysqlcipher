@@ -878,9 +878,9 @@ class IMAPMailbox(object):
         # A better place for this would be  the COPY/APPEND dispatcher
         # in server.py, but qtreactor hangs when I do that, so this seems
         # to work fine for now.
-        #d.addCallback(lambda r: self.reactor.callLater(0, self.notify_new))
-        #deferLater(self.reactor, 0, self._do_copy, message, d)
-        #return d
+        # d.addCallback(lambda r: self.reactor.callLater(0, self.notify_new))
+        # deferLater(self.reactor, 0, self._do_copy, message, d)
+        # return d
 
         d = self.collection.copy_msg(message.message,
                                      self.collection.mbox_uuid)
