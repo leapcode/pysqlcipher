@@ -429,9 +429,9 @@ class IncomingMail(Service):
 
         fromHeader = msg.get('from', None)
         senderAddress = None
-        if (fromHeader is not None
-            and (msg.get_content_type() == MULTIPART_ENCRYPTED
-                 or msg.get_content_type() == MULTIPART_SIGNED)):
+        if (fromHeader is not None and
+            (msg.get_content_type() == MULTIPART_ENCRYPTED or
+             msg.get_content_type() == MULTIPART_SIGNED)):
                 senderAddress = parseaddr(fromHeader)[1]
 
         def add_leap_header(ret):
@@ -635,8 +635,10 @@ class IncomingMail(Service):
             url = shlex.split(fields['url'])[0]  # remove quotations
             urlparts = urlparse(url)
             addressHostname = address.split('@')[1]
-            if (urlparts.scheme == 'https'
-                    and urlparts.hostname == addressHostname):
+            if (
+                urlparts.scheme == 'https' and
+                urlparts.hostname == addressHostname
+            ):
                 def fetch_error(failure):
                     if failure.check(keymanager_errors.KeyNotFound):
                         logger.warning("Url from OpenPGP header %s failed"

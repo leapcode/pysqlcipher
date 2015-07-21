@@ -1,3 +1,7 @@
+import subprocess
+import sys
+import re
+import os.path
 
 IN_LONG_VERSION_PY = True
 # This file helps to compute a version number in source trees obtained from
@@ -12,10 +16,6 @@ IN_LONG_VERSION_PY = True
 # these strings will be replaced by git during git-archive
 git_refnames = "$Format:%d$"
 git_full = "$Format:%H$"
-
-
-import subprocess
-import sys
 
 
 def run_command(args, cwd=None, verbose=False):
@@ -36,11 +36,6 @@ def run_command(args, cwd=None, verbose=False):
             print("unable to run %s (error)" % args[0])
         return None
     return stdout
-
-
-import sys
-import re
-import os.path
 
 
 def get_expanded_variables(versionfile_source):
