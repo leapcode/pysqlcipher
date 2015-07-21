@@ -115,10 +115,8 @@ class DocumentWrapper(object):
 
 def _normalize_dict(_dict):
     items = _dict.items()
-    not_callable = lambda (k, v): not callable(v)
-    not_private = lambda(k, v): not k.startswith('_')
-    for cond in not_callable, not_private:
-        items = filter(cond, items)
+    items = filter(lambda k, v: not callable(v), items)
+    items = filter(lambda k, v: not k.startswith('_'))
     items = [(k, v) if not k.endswith('_') else (k[:-1], v)
              for (k, v) in items]
     items = [(k.replace('-', '_'), v) for (k, v) in items]

@@ -39,7 +39,8 @@ class SerializableModelsTestCase(unittest.TestCase):
             class IgnoreMe(object):
                 pass
 
-            killmeplease = lambda x: x
+            def killmeplease(x):
+                return x
 
         serialized = M.serialize()
         expected = {'foo': 42, 'bar': 33, 'baaz': None}
@@ -88,7 +89,9 @@ class DocumentWrapperTestCase(unittest.TestCase):
         class Wrapper(models.DocumentWrapper):
             class model(models.SerializableModel):
                 foo = 42
-        getwrapper = lambda: Wrapper(bar=1)
+
+        def getwrapper():
+            return Wrapper(bar=1)
         self.assertRaises(RuntimeError, getwrapper)
 
     def test_no_model_wrapper(self):
