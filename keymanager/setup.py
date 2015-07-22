@@ -107,6 +107,10 @@ cmdclass["freeze_debianver"] = freeze_debianver
 
 # XXX add ref to docs
 
+requirements = (
+    utils.parse_requirements() +
+    utils.parse_requirements(reqfiles=["pkg/requirements-leap.pip"]))
+
 setup(
     name='leap.keymanager',
     version=VERSION,
@@ -129,7 +133,7 @@ setup(
     packages=find_packages('src', exclude=['leap.keymanager.tests']),
     package_dir={'': 'src'},
     test_suite='leap.keymanager.tests',
-    install_requires=utils.parse_requirements(),
+    install_requires=requirements,
     tests_require=utils.parse_requirements(
         reqfiles=['pkg/requirements-testing.pip']),
 )
