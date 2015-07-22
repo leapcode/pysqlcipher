@@ -107,9 +107,21 @@ cmdclass["freeze_debianver"] = freeze_debianver
 
 # XXX add ref to docs
 
-requirements = (
-    utils.parse_requirements() +
-    utils.parse_requirements(reqfiles=["pkg/requirements-leap.pip"]))
+requirements = utils.parse_requirements()
+
+if utils.is_develop_mode():
+    print
+    print ("[WARNING] Skipping leap-specific dependencies "
+           "because development mode is detected.")
+    print ("[WARNING] You can install "
+           "the latest published versions with "
+           "'pip install -r pkg/requirements-leap.pip'")
+    print ("[WARNING] Or you can instead do 'python setup.py develop' "
+           "from the parent folder of each one of them.")
+    print
+else:
+    requirements += utils.parse_requirements(
+        reqfiles=["pkg/requirements-leap.pip"])
 
 setup(
     name='leap.keymanager',
