@@ -24,13 +24,20 @@ try:
     from gnupg.gnupg import GPGUtilities
     assert(GPGUtilities)  # pyflakes happy
     from gnupg import __version__ as _gnupg_version
+    if '-' in _gnupg_version:
+        # avoid Parsing it as LegacyVersion, get just
+        # the release numbers:
+        _gnupg_version = _gnupg_version.split('-')[0]
     from pkg_resources import parse_version
+    # We need to make sure that we're not colliding with the infamous
+    # python-gnupg
     assert(parse_version(_gnupg_version) >= parse_version('1.4.0'))
 
 except (ImportError, AssertionError):
     print "*******"
     print "Ooops! It looks like there is a conflict in the installed version "
     print "of gnupg."
+    print "GNUPG_VERSION:", _gnupg_version
     print
     print "Disclaimer: Ideally, we would need to work a patch and propose the "
     print "merge to upstream. But until then do: "
