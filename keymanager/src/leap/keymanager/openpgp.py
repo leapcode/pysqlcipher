@@ -114,8 +114,11 @@ class TempGPGWrapper(object):
         publkeys = filter(
             lambda pubkey: pubkey.key_id not in privids, publkeys)
 
-        listkeys = lambda: self._gpg.list_keys()
-        listsecretkeys = lambda: self._gpg.list_keys(secret=True)
+        def listkeys():
+            return self._gpg.list_keys()
+
+        def listsecretkeys():
+            return self._gpg.list_keys(secret=True)
 
         self._gpg = GPG(binary=self._gpgbinary,
                         homedir=tempfile.mkdtemp())

@@ -1,5 +1,3 @@
-
-IN_LONG_VERSION_PY = True
 # This file helps to compute a version number in source trees obtained from
 # git-archive tarball (such as those provided by githubs download-from-tag
 # feature). Distribution tarballs (build by setup.py sdist) and build
@@ -10,12 +8,15 @@ IN_LONG_VERSION_PY = True
 # versioneer-0.7+ (https://github.com/warner/python-versioneer)
 
 # these strings will be replaced by git during git-archive
-git_refnames = "$Format:%d$"
-git_full = "$Format:%H$"
-
-
 import subprocess
 import sys
+import re
+import os.path
+
+IN_LONG_VERSION_PY = True
+
+git_refnames = "$Format:%d$"
+git_full = "$Format:%H$"
 
 
 def run_command(args, cwd=None, verbose=False):
@@ -36,10 +37,6 @@ def run_command(args, cwd=None, verbose=False):
             print("unable to run %s (error)" % args[0])
         return None
     return stdout
-
-
-import re
-import os.path
 
 
 def get_expanded_variables(versionfile_source):
@@ -86,7 +83,7 @@ def versions_from_expanded_variables(variables, tag_prefix, verbose=False):
         # "stabilization", as well as "HEAD" and "master".
         tags = set([r for r in refs if re.search(r'\d', r)])
         if verbose:
-            print("discarding '%s', no digits" % ",".join(refs-tags))
+            print("discarding '%s', no digits" % ",".join(refs - tags))
     if verbose:
         print("likely tags: %s" % ",".join(sorted(tags)))
     for ref in sorted(tags):

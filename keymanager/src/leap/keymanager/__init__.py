@@ -19,6 +19,7 @@ Key Manager is a Nicknym agent for LEAP client.
 """
 # let's do a little sanity check to see if we're using the wrong gnupg
 import sys
+from ._version import get_versions
 
 try:
     from gnupg.gnupg import GPGUtilities
