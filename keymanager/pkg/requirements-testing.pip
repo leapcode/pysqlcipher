@@ -1,5 +1,6 @@
 mock
 setuptools-trial
+pep8
 
 #-----------------------------------------------------------------------------
 #Although it's not a package dependency, tests also depend on having
