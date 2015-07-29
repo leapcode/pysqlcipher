@@ -388,9 +388,8 @@ class KeyManagerCryptoTestCase(KeyManagerWithSoledadTestCase):
                                  sign=ADDRESS, fetch_remote=False))
         return self.assertFailure(d, KeyNotFound)
 
-
-import unittest
 if __name__ == "__main__":
+    import unittest
     unittest.main()
 
 # key 0F91B402: someone@somedomain.org

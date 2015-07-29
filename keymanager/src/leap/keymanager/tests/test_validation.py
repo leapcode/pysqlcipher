@@ -339,7 +339,6 @@ X2+l7IOSt+31KQCBFN/VmhTySJOVQC1d2A56lSH2c/DWVClji+x3suzn
 -----END PGP PUBLIC KEY BLOCK-----
 """
 
-
-import unittest
 if __name__ == "__main__":
+    import unittest
     unittest.main()

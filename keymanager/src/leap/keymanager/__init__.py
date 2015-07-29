@@ -71,10 +71,12 @@ from leap.keymanager.keys import (
     KEYMANAGER_KEY_TAG,
     TAGS_PRIVATE_INDEX,
 )
-from leap.keymanager.openpgp import (
-    OpenPGPKey,
-    OpenPGPScheme,
-)
+from leap.keymanager.openpgp import OpenPGPKey, OpenPGPScheme
+
+from ._version import get_versions
+
+__version__ = get_versions()['version']
+del get_versions
 
 logger = logging.getLogger(__name__)
 
@@ -828,8 +830,3 @@ def _get_domain(url):
     :rtype: str
     """
     return urlparse(url).hostname
-
-
-from ._version import get_versions
-__version__ = get_versions()['version']
-del get_versions
