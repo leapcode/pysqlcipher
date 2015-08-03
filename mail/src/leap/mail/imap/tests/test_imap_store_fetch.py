@@ -14,9 +14,9 @@ class StoreAndFetchTestCase(IMAP4HelperMixin):
     """
 
     def setUp(self):
-        IMAP4HelperMixin.setUp(self)
         self.received_messages = self.received_uid = None
         self.result = None
+        return IMAP4HelperMixin.setUp(self)
 
     def addListener(self, x):
         pass
