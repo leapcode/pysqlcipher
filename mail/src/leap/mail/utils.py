@@ -254,6 +254,7 @@ def validate_address(address):
 # String manipulation
 #
 
+
 class CustomJsonScanner(object):
     """
     This class is a context manager definition used to monkey patch the default
@@ -299,13 +300,13 @@ class CustomJsonScanner(object):
         end = s.find("\"", idx)
         while not found:
             try:
-                if s[end-1] != "\\":
+                if s[end - 1] != "\\":
                     found = True
                 else:
-                    end = s.find("\"", end+1)
+                    end = s.find("\"", end + 1)
             except Exception:
                 found = True
-        return s[idx:end].decode("string-escape"), end+1
+        return s[idx:end].decode("string-escape"), end + 1
 
     def __enter__(self):
         """

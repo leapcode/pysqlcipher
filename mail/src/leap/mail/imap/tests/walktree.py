@@ -1,4 +1,4 @@
-#t -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 # walktree.py
 # Copyright (C) 2013 LEAP
 #
@@ -19,6 +19,7 @@ Tests for the walktree module.
 """
 import os
 import sys
+import pprint
 from email import parser
 
 from leap.mail import walk as W
@@ -118,7 +119,6 @@ if DEBUG and DO_CHECK:
     print "Structure: OK"
 
 
-import pprint
 print
 print "RAW DOCS"
 pprint.pprint(raw_docs)

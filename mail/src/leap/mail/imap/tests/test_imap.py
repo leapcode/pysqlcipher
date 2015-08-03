@@ -387,8 +387,11 @@ class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
                 acc.addMailbox('this/mbox'),
                 acc.addMailbox('that/mbox')])
 
-        dc1 = lambda: acc.subscribe('this/mbox')
-        dc2 = lambda: acc.subscribe('that/mbox')
+        def dc1():
+            return acc.subscribe('this/mbox')
+
+        def dc2():
+            return acc.subscribe('that/mbox')
 
         def login():
             return self.client.login(TEST_USER, TEST_PASSWD)
@@ -439,7 +442,7 @@ class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
         d1 = self.connected.addCallback(strip(add_mailbox))
         d1.addCallback(strip(login))
         d1.addCallback(strip(select))
-        #d1.addErrback(self._ebGeneral)
+        # d1.addErrback(self._ebGeneral)
 
         d2 = self.loopback()
 
@@ -668,9 +671,14 @@ class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
 
         acc = self.server.theAccount
 
-        dc1 = lambda: acc.addMailbox('root_subthing', creation_ts=42)
-        dc2 = lambda: acc.addMailbox('root_another_thing', creation_ts=42)
-        dc3 = lambda: acc.addMailbox('non_root_subthing', creation_ts=42)
+        def dc1():
+            return acc.addMailbox('root_subthing', creation_ts=42)
+
+        def dc2():
+            return acc.addMailbox('root_another_thing', creation_ts=42)
+
+        def dc3():
+            return acc.addMailbox('non_root_subthing', creation_ts=42)
 
         def login():
             return self.client.login(TEST_USER, TEST_PASSWD)

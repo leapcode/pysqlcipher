@@ -1,4 +1,4 @@
-#-*- encoding: utf-8 -*-
+# -*- encoding: utf-8 -*-
 """
 leap/email/imap/tests/__init__.py
 ----------------------------------
@@ -10,13 +10,6 @@ code, using twisted.trial, for testing leap_mx.
 @copyright: © 2013 Kali Kaneko, see COPYLEFT file
 """
 
-__all__ = ['test_imap']
-
-
-def run():
-    """xxx fill me in"""
-    pass
-
 import os
 import u1db
 
@@ -25,11 +18,18 @@ from leap.common.testing.basetest import BaseLeapTest
 from leap.soledad.client import Soledad
 from leap.soledad.common.document import SoledadDocument
 
+__all__ = ['test_imap']
 
-#-----------------------------------------------------------------------------
+
+def run():
+    """xxx fill me in"""
+    pass
+
+# -----------------------------------------------------------------------------
 # Some tests inherit from BaseSoledadTest in order to have a working Soledad
 # instance in each test.
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 class BaseSoledadIMAPTest(BaseLeapTest):
     """

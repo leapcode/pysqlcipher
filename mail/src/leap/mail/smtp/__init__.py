@@ -24,10 +24,10 @@ from twisted.internet import reactor
 from twisted.internet.error import CannotListenError
 from leap.mail.outgoing.service import OutgoingMail
 
-logger = logging.getLogger(__name__)
-
 from leap.common.events import emit, catalog
 from leap.mail.smtp.gateway import SMTPFactory
+
+logger = logging.getLogger(__name__)
 
 
 def setup_smtp_gateway(port, userid, keymanager, smtp_host, smtp_port,

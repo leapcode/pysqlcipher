@@ -17,7 +17,6 @@
 """
 IMAP service initialization
 """
-# TODO: leave only an implementor of IService in here
 import logging
 import os
 
@@ -29,13 +28,14 @@ from twisted.internet.protocol import ServerFactory
 from twisted.mail import imap4
 from twisted.python import log
 
-logger = logging.getLogger(__name__)
-
 from leap.common.events import emit, catalog
 from leap.common.check import leap_check
 from leap.mail.imap.account import IMAPAccount
 from leap.mail.imap.server import LEAPIMAPServer
 
+# TODO: leave only an implementor of IService in here
+
+logger = logging.getLogger(__name__)
 
 DO_MANHOLE = os.environ.get("LEAP_MAIL_MANHOLE", None)
 if DO_MANHOLE:

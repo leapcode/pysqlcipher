@@ -26,35 +26,49 @@ from leap.mail.utils import first
 DEBUG = os.environ.get("BITMASK_MAIL_DEBUG")
 
 if DEBUG:
-    get_hash = lambda s: sha256.SHA256(s).hexdigest()[:10]
+    def get_hash(s):
+        return sha256.SHA256(s).hexdigest()[:10]
 else:
-    get_hash = lambda s: sha256.SHA256(s).hexdigest()
+    def get_hash(s):
+        return sha256.SHA256(s).hexdigest()
 
 
 """
 Get interesting message parts
 """
-get_parts = lambda msg: [
-    {'multi': part.is_multipart(),
-     'ctype': part.get_content_type(),
-     'size': len(part.as_string()),
-     'parts': len(part.get_payload())
-        if isinstance(part.get_payload(), list)
-        else 1,
-     'headers': part.items(),
-     'phash': get_hash(part.get_payload())
-        if not part.is_multipart() else None}
-    for part in msg.walk()]
+
+
+def get_parts(msg):
+    return [
+        {
+            'multi': part.is_multipart(),
+            'ctype': part.get_content_type(),
+            'size': len(part.as_string()),
+            'parts':
+                len(part.get_payload())
+                if isinstance(part.get_payload(), list)
+                else 1,
+            'headers': part.items(),
+            'phash':
+                get_hash(part.get_payload())
+                if not part.is_multipart()
+                else None
+        } for part in msg.walk()]
 
 """
 Utility lambda functions for getting the parts vector and the
 payloads from the original message.
 """
 
-get_parts_vector = lambda parts: (x.get('parts', 1) for x in parts)
-get_payloads = lambda msg: ((x.get_payload(),
-                             dict(((str.lower(k), v) for k, v in (x.items()))))
-                            for x in msg.walk())
+
+def get_parts_vector(parts):
+    return (x.get('parts', 1) for x in parts)
+
+
+def get_payloads(msg):
+    return ((x.get_payload(),
+            dict(((str.lower(k), v) for k, v in (x.items()))))
+            for x in msg.walk())
 
 
 def get_body_phash(msg):
@@ -73,18 +87,22 @@ index the content. Here we remove any mutable part, as the the filename
 in the content disposition.
 """
 
-get_raw_docs = lambda msg, parts: (
-    {"type": "cnt",  # type content they'll be
-     "raw": payload if not DEBUG else payload[:100],
-     "phash": get_hash(payload),
-     "content-disposition": first(headers.get(
-         'content-disposition', '').split(';')),
-     "content-type": headers.get(
-         'content-type', ''),
-     "content-transfer-encoding": headers.get(
-         'content-transfer-type', '')}
-    for payload, headers in get_payloads(msg)
-    if not isinstance(payload, list))
+
+def get_raw_docs(msg, parts):
+    return (
+        {
+            "type": "cnt",  # type content they'll be
+            "raw": payload if not DEBUG else payload[:100],
+            "phash": get_hash(payload),
+            "content-disposition": first(headers.get(
+                'content-disposition', '').split(';')),
+            "content-type": headers.get(
+                'content-type', ''),
+            "content-transfer-encoding": headers.get(
+                'content-transfer-type', '')
+        } for payload, headers in get_payloads(msg)
+        if not isinstance(payload, list))
+
 
 """
 Groucho Marx: Now pay particular attention to this first clause, because it's
@@ -155,8 +173,12 @@ def walk_msg_tree(parts, body_phash=None):
         print
 
     # wrappers vector
-    getwv = lambda pv: [True if pv[i] != 1 and pv[i + 1] == 1 else False
-                        for i in range(len(pv) - 1)]
+    def getwv(pv):
+        return [
+            True if pv[i] != 1 and pv[i + 1] == 1
+            else False
+            for i in range(len(pv) - 1)
+        ]
     wv = getwv(pv)
 
     # do until no wrapper document is left
@@ -187,7 +209,7 @@ def walk_msg_tree(parts, body_phash=None):
             last_part = max(main_pmap.keys())
             main_pmap[last_part][PART_MAP] = {}
             for partind in range(len(pv) - 1):
-                print partind+1, len(parts)
+                print partind + 1, len(parts)
                 main_pmap[last_part][PART_MAP][partind] = parts[partind + 1]
 
     outer = parts[0]

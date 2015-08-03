@@ -32,10 +32,11 @@ from twisted.python import log
 from leap.soledad.client.interfaces import ISoledadPostSyncPlugin
 from leap.mail import constants
 
-
 logger = logging.getLogger(__name__)
 
-_get_doc_type_preffix = lambda s: s[:2]
+
+def _get_doc_type_preffix(s):
+    return s[:2]
 
 
 class MailProcessingPostSyncHook(object):

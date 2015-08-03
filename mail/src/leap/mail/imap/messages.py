@@ -217,10 +217,13 @@ def _format_headers(headers, negate, *names):
         return {str('content-type'): str('')}
 
     names = map(lambda s: s.upper(), names)
+
     if negate:
-        cond = lambda key: key.upper() not in names
+        def cond(key):
+            return key.upper() not in names
     else:
-        cond = lambda key: key.upper() in names
+        def cond(key):
+            return key.upper() in names
 
     if isinstance(headers, list):
         headers = dict(headers)

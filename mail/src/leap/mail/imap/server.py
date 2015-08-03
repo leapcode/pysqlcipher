@@ -122,9 +122,9 @@ class LEAPIMAPServer(imap4.IMAP4Server):
         elif part.text:
             _w(str(part) + ' ')
             _f()
-            return imap4.FileProducer(msg.getBodyFile()
-                ).beginProducing(self.transport
-                )
+            return imap4.FileProducer(
+                msg.getBodyFile()
+            ).beginProducing(self.transport)
         elif part.mime:
             hdrs = imap4._formatHeaders(msg.getHeaders(True))
 
@@ -151,10 +151,10 @@ class LEAPIMAPServer(imap4.IMAP4Server):
                     _fd.seek(0)
                 else:
                     _fd = fd
-                return imap4.FileProducer(_fd
-                # END PATCHED #########################3
-                    ).beginProducing(self.transport
-                    )
+                return imap4.FileProducer(
+                    _fd
+                    # END PATCHED #########################3
+                ).beginProducing(self.transport)
             else:
                 mf = imap4.IMessageFile(msg, None)
                 if mf is not None:
@@ -459,7 +459,7 @@ class LEAPIMAPServer(imap4.IMAP4Server):
         mailboxes.addCallback(self._cbSubscribed)
         mailboxes.addCallback(
             self._cbListWork, tag, sub, cmdName,
-            ).addErrback(self._ebListWork, tag)
+        ).addErrback(self._ebListWork, tag)
 
     def _cbSubscribed(self, mailboxes):
         subscribed = [
