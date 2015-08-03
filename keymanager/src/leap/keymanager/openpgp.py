@@ -111,14 +111,10 @@ class TempGPGWrapper(object):
         # and we want to count the keys afterwards.
 
         privids = map(lambda privkey: privkey.key_id, privkeys)
-        publkeys = filter(
-            lambda pubkey: pubkey.key_id not in privids, publkeys)
+        publkeys = filter(lambda pubkey: pubkey.key_id not in privids, publkeys)
 
-        def listkeys():
-            return self._gpg.list_keys()
-
-        def listsecretkeys():
-            return self._gpg.list_keys(secret=True)
+        listkeys = lambda: self._gpg.list_keys()
+        listsecretkeys = lambda: self._gpg.list_keys(secret=True)
 
         self._gpg = GPG(binary=self._gpgbinary,
                         homedir=tempfile.mkdtemp())
