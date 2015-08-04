@@ -158,11 +158,14 @@ class LEAPIMAPServer(imap4.IMAP4Server):
             else:
                 mf = imap4.IMessageFile(msg, None)
                 if mf is not None:
-                    return imap4.FileProducer(mf.open()).beginProducing(self.transport)
-                return imap4.MessageProducer(msg, None, self._scheduler).beginProducing(self.transport)
+                    return imap4.FileProducer(
+                        mf.open()).beginProducing(self.transport)
+                return imap4.MessageProducer(
+                    msg, None, self._scheduler).beginProducing(self.transport)
 
         else:
-            _w('BODY ' + imap4.collapseNestedLists([imap4.getBodyStructure(msg)]))
+            _w('BODY ' +
+               imap4.collapseNestedLists([imap4.getBodyStructure(msg)]))
 
     ##################################################################
     #
