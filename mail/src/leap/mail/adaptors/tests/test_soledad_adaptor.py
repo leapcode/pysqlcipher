@@ -342,6 +342,7 @@ class SoledadMailAdaptorTestCase(SoledadTestMixin):
         msg = adaptor.get_msg_from_string(TestMessageClass, msg.as_string())
 
         self.assertEqual('base64', msg.wrapper.cdocs[1].content_transfer_encoding)
+        self.assertEqual('text/plain; charset="utf-8"', msg.wrapper.cdocs[1].content_type)
         self.assertEqual('YSB1dGY4IG1lc3NhZ2U=\n', msg.wrapper.cdocs[1].raw)
 
     def test_get_msg_from_docs(self):

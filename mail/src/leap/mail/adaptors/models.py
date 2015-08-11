@@ -76,7 +76,7 @@ class DocumentWrapper(object):
 
         if kwargs:
             values = copy.deepcopy(defaults)
-            values.update(kwargs)
+            values.update(_normalize_dict(kwargs))
         else:
             values = defaults
 
