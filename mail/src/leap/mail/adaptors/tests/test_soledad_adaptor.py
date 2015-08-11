@@ -28,6 +28,9 @@ from leap.mail.adaptors.soledad import SoledadIndexMixin
 from leap.mail.adaptors.soledad import SoledadMailAdaptor
 from leap.mail.tests.common import SoledadTestMixin
 
+from email.MIMEMultipart import MIMEMultipart
+from email.mime.text import MIMEText
+
 # DEBUG
 # import logging
 # logging.basicConfig(level=logging.DEBUG)
@@ -329,6 +332,17 @@ class SoledadMailAdaptorTestCase(SoledadTestMixin):
                          subject)
         self.assertEqual(msg.wrapper.hdoc.subject, subject)
         self.assertEqual(msg.wrapper.cdocs[1].phash, phash)
+
+    def test_get_msg_from_string_multipart(self):
+        msg = MIMEMultipart()
+        msg['Subject'] = 'Test multipart mail'
+        msg.attach(MIMEText(u'a utf8 message', _charset='utf-8'))
+        adaptor = self.get_adaptor()
+
+        msg = adaptor.get_msg_from_string(TestMessageClass, msg.as_string())
+
+        self.assertEqual('base64', msg.wrapper.cdocs[1].content_transfer_encoding)
+        self.assertEqual('YSB1dGY4IG1lc3NhZ2U=\n', msg.wrapper.cdocs[1].raw)
 
     def test_get_msg_from_docs(self):
         adaptor = self.get_adaptor()

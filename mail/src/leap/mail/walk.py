@@ -99,7 +99,7 @@ def get_raw_docs(msg, parts):
             "content-type": headers.get(
                 'content-type', ''),
             "content-transfer-encoding": headers.get(
-                'content-transfer-type', '')
+                'content-transfer-encoding', '')
         } for payload, headers in get_payloads(msg)
         if not isinstance(payload, list))
 
