@@ -20,6 +20,10 @@ Setup file for leap.mail
 import re
 from setuptools import setup
 from setuptools import find_packages
+from setuptools import Command
+
+from pkg import utils
+
 
 import versioneer
 versioneer.versionfile_source = 'src/leap/mail/_version.py'
@@ -27,7 +31,6 @@ versioneer.versionfile_build = 'leap/mail/_version.py'
 versioneer.tag_prefix = ''  # tags are like 1.2.0
 versioneer.parentdir_prefix = 'leap.mail-'
 
-from pkg import utils
 
 trove_classifiers = [
     'Development Status :: 4 - Beta',
@@ -61,9 +64,6 @@ if len(_version_short) > 0:
     DOWNLOAD_URL = DOWNLOAD_BASE % VERSION_SHORT
 
 cmdclass = versioneer.get_cmdclass()
-
-
-from setuptools import Command
 
 
 class freeze_debianver(Command):

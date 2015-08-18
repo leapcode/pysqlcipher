@@ -1,2 +1,0 @@
-#!/bin/sh
-pep8 src/leap/mail
