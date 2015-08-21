@@ -382,7 +382,9 @@ class SoledadMailAdaptorTestCase(SoledadTestMixin):
 
     def test_get_msg_from_metamsg_doc_id(self):
         # TODO complete-me!
-        self.skipTest("Not yet implemented")
+        pass
+
+    test_get_msg_from_metamsg_doc_id.skip = "Not yet implemented"
 
     def test_create_msg(self):
         adaptor = self.get_adaptor()

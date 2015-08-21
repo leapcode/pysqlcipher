@@ -271,7 +271,8 @@ class MessageCollectionTestCase(SoledadTestMixin, CollectionMixin):
     def test_copy_msg(self):
         # TODO ---- update when implementing messagecopier
         # interface
-        self.skipTest("Not yet implemented")
+        pass
+    test_copy_msg.skip = "Not yet implemented"
 
     def test_delete_msg(self):
         d = self.add_msg_to_collection()
@@ -387,10 +388,12 @@ class AccountTestCase(SoledadTestMixin):
         d.addCallback(assert_uid_next_empty_collection)
         return d
 
-    # XXX not yet implemented
-
     def test_get_collection_by_docs(self):
-        self.skipTest("Not Yet Implemented")
+        pass
+
+    test_get_collection_by_docs.skip = "Not yet implemented"
 
     def test_get_collection_by_tag(self):
-        self.skipTest("Not Yet Implemented")
+        pass
+
+    test_get_collection_by_tag.skip = "Not yet implemented"
