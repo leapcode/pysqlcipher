@@ -1,3 +1,8 @@
+0.4.2 Aug 26, 2015:
+  o Style changes.
+  o Tests updates.
+  o Packaging improvements.
+
 0.4.1 Jul 10, 2015:
   o Remove the dependency on enum34. Closes: #7188.
 
