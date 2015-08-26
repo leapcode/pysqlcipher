@@ -1,3 +1,11 @@
+0.4.0rc2 Aug 26, 2015:
+  o Fix nested multipart rendering. Closes: #7244
+  o Bugfix: fix keyerror when inserting msg on pending_inserts dict.
+  o Bugfix: Return the first cdoc if no body found
+  o Feature: add very basic support for message sequence numbers.
+  o Lots of style fixes and tests updates.
+  o Bugfix: fixed syntax error in models.py.
+
 0.4.0rc1 Jul 10, 2015:
   o Parse OpenPGP header and import keys from it. Closes: #3879.
   o Don't add any footer to the emails. Closes: #4692.
