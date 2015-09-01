@@ -1,3 +1,9 @@
+pysqlcipher (2.6.3.3+b1) unstable; urgency=medium
+
+  * Build against latest sqlcipher 
+
+ -- Ben Carrillo <ben@futeisha.org>  Tue, 01 Sep 2015 15:38:41 -0400
+
 pysqlcipher (2.6.3.3) unstable; urgency=medium
 
   * Need to also change the Depends for libsqlcipher0
