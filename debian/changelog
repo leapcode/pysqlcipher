@@ -1,8 +1,10 @@
-pysqlcipher (2.6.3.3+b1) unstable; urgency=medium
+pysqlcipher (2.6.3.4) unstable; urgency=medium
 
-  * Build against latest sqlcipher 
+  * remove unneeded debian watch file
+  * bump dependency on sqlcipher >= 3.2.0-1.1
+  * fix debian/copyright file to have proper dep-5 format
 
- -- Ben Carrillo <ben@futeisha.org>  Tue, 01 Sep 2015 15:38:41 -0400
+ -- Micah Anderson <micah@debian.org>  Tue, 01 Sep 2015 15:38:41 -0400
 
 pysqlcipher (2.6.3.3) unstable; urgency=medium
 
