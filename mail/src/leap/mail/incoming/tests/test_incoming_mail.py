@@ -182,7 +182,7 @@ subject: independence of cyberspace
                 self.headers = {}
 
             def add_header(self, k, v):
-                self.headers[k]=v
+                self.headers[k] = v
 
         msg = DummyMsg()
         self.fetcher._add_decrypted_header(msg)
@@ -217,10 +217,7 @@ subject: independence of cyberspace
 
         def add_decrypted_header_called(_):
             self.assertTrue(self.fetcher._add_decrypted_header.called,
-                             "There was some errors with decryption")
-
-
-
+                            "There was some errors with decryption")
 
         d = self._km.encrypt(
             self.EMAIL,

@@ -465,7 +465,8 @@ class IncomingMail(Service):
         return d
 
     def _add_decrypted_header(self, msg):
-        msg.add_header(self.LEAP_ENCRYPTION_HEADER, self.LEAP_ENCRYPTION_DECRYPTED)
+        msg.add_header(self.LEAP_ENCRYPTION_HEADER,
+                       self.LEAP_ENCRYPTION_DECRYPTED)
 
     def _decrypt_multipart_encrypted_msg(self, msg, encoding, senderAddress):
         """
