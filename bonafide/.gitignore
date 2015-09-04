@@ -1,0 +1,9 @@
+*.pyc
+*.egg
+*.egg-info
+*.swp
+*.swo
+dist/
+build/
+MANIFEST
+_trial_temp
