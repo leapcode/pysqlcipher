@@ -18,6 +18,7 @@
 """
 twisted.web utils for bonafide.
 """
+import base64
 import cookielib
 import urllib
 
@@ -39,11 +40,14 @@ def cookieAgentFactory(verify_path, connectTimeout=30):
     return CookieAgent(agent, cookiejar)
 
 
-def httpRequest(agent, url, values={}, headers={}, method='POST'):
+def httpRequest(agent, url, values={}, headers={}, method='POST', token=None):
     data = ''
     if values:
         data = urllib.urlencode(values)
         headers['Content-Type'] = ['application/x-www-form-urlencoded']
+
+    if token:
+        headers['Authorization'] = ['Token token="%s"' % (bytes(token))]
 
     def handle_response(response):
         if response.code == 204:

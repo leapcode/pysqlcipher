@@ -19,7 +19,7 @@ Decorators used in bonafide.
 """
 
 
-def needs_authentication(func):
+def auth_required(func):
     """
     Decorate a method so that it will not be called if the instance
     attribute `is_authenticated` does not evaluate to True.

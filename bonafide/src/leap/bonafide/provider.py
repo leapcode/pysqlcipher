@@ -21,8 +21,13 @@ LEAP Provider API.
 
 class LeapProviderApi(object):
     # TODO when should the provider-api object be created?
+    # TODO relate to a Provider object, with autoconf flag.
 
     # XXX separate in auth-needing actions?
+    # doing that in LeapSession right now (with a decorator)
+    # but probably it would be better if we can just gather that info in just
+    # one place and decorate the methods programatically.
+
     # XXX version this mapping !!!
 
     actions = {

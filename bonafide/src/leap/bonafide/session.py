@@ -21,7 +21,7 @@ from twisted.internet import defer, reactor
 from twisted.python import log
 
 from leap.bonafide import srp_auth
-from leap.bonafide._decorators import needs_authentication
+from leap.bonafide._decorators import auth_required
 from leap.bonafide._http import httpRequest, cookieAgentFactory
 
 
@@ -57,8 +57,8 @@ class LeapSession(object):
         log.msg("%s to %s" % (method, uri))
         params = self._srp_auth.get_handshake_params(self.username, A)
 
-        handshake = yield httpRequest(self._agent, uri, values=params,
-                                      method=method)
+        handshake = yield self._request(self._agent, uri, values=params,
+                                        method=method)
 
         M = self._srp_auth.process_handshake(srpuser, handshake)
         uri, method = self._api.get_uri_and_method(
@@ -66,25 +66,37 @@ class LeapSession(object):
         log.msg("%s to %s" % (method, uri))
         params = self._srp_auth.get_authentication_params(M, A)
 
-        auth = yield httpRequest(self._agent, uri, values=params,
-                                 method=method)
+        auth = yield self._request(self._agent, uri, values=params,
+                                   method=method)
 
         uuid, token, M2 = self._srp_auth.process_authentication(auth)
         self._srp_auth.verify_authentication(srpuser, M2)
 
         self._uuid = uuid
         self._token = token
-        defer.returnValue('[OK] Credentias Authenticated through SRP')
+        defer.returnValue('[OK] Credentials Authenticated through SRP')
 
-    @needs_authentication
+    @auth_required
     def logout(self):
         print "Should logout..."
+
+    @auth_required
+    def get_smtp_cert(self):
+        # TODO pass it to the provider object so that it can save it in the
+        # right path.
+        uri, method = self._api.get_uri_and_method('get_smtp_cert')
+        print method, "to", uri
+        return self._request(self._agent, uri, method=method)
 
     @property
     def is_authenticated(self):
         if not self._srp_user:
             return False
         return self._srp_user.authenticated()
+
+    def _request(self, *args, **kw):
+        kw['token'] = self._token
+        return httpRequest(*args, **kw)
 
 
 if __name__ == "__main__":
@@ -106,8 +118,12 @@ if __name__ == "__main__":
 
     def auth_eb(failure):
         print "[ERROR!]", failure.getErrorMessage()
+        log.err(failure)
 
     d = session.authenticate()
+    d.addCallback(print_result)
+    d.addErrback(auth_eb)
+    d.addCallback(lambda _: session.get_smtp_cert())
     d.addCallback(print_result)
     d.addErrback(auth_eb)
     d.addCallback(lambda _: session.logout())
