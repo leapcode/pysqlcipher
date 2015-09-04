@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# srp.py
-# Copyright (C) 2014 LEAP
+# srp_auth.py
+# Copyright (C) 2015 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -20,12 +20,10 @@ SRP Authentication.
 """
 
 import binascii
-import logging
 import json
 
 import srp
 
-logger = logging.getLogger(__name__)
 
 
 class SRPAuthMechanism(object):
@@ -54,11 +52,12 @@ class SRPAuthMechanism(object):
         return M
 
     def get_authentication_params(self, M, A):
-        # I think A is not used in the server side
+        # It looks A is not used server side
         return {'client_auth': binascii.hexlify(M), 'A': binascii.hexlify(A)}
 
     def process_authentication(self, authentication_response):
         auth = json.loads(authentication_response)
+        self._check_for_errors(auth)
         uuid = auth.get('id', None)
         token = auth.get('token', None)
         M2 = auth.get('M2', None)
@@ -70,9 +69,9 @@ class SRPAuthMechanism(object):
         srp_user.verify_session(unhex_M2)
         assert srp_user.authenticated()
 
-    def _check_for_errors(self, challenge):
-        if 'errors' in challenge:
-            msg = challenge['errors']['base']
+    def _check_for_errors(self, response):
+        if 'errors' in response:
+            msg = response['errors']['base']
             raise SRPAuthError(msg)
 
     def _unhex_salt_B(self, salt, B):
@@ -89,13 +88,8 @@ class SRPAuthMechanism(object):
 
     def _check_auth_params(self, uuid, token, M2):
         if not all((uuid, token, M2)):
-            msg = '%r' % (M2, uuid, token,)
+            msg = '%s' % str((M2, uuid, token))
             raise SRPAuthBadDataFromServer(msg)
-
-    #XXX move to session -----------------------
-    def get_session_id(self, cookies):
-        return cookies.get('_session_id', None)
-    #XXX move to session -----------------------
 
 
 def _safe_unhexlify(val):
@@ -115,6 +109,7 @@ class SRPAuthNoSalt(SRPAuthError):
 
 class SRPAuthNoB(SRPAuthError):
     message = 'The server didn\'t send the B parameter'
+
 
 class SRPAuthBadDataFromServer(SRPAuthError):
     pass

@@ -17,45 +17,35 @@
 """
 LEAP Session management.
 """
-import cookielib
-import urllib
-
-from twisted.internet import defer, reactor, protocol
-from twisted.internet.ssl import Certificate
-from twisted.web.client import Agent, CookieAgent, HTTPConnectionPool
-from twisted.web.client import BrowserLikePolicyForHTTPS
-from twisted.web.http_headers import Headers
-from twisted.web.iweb import IBodyProducer
+from twisted.internet import defer, reactor
 from twisted.python import log
-from twisted.python.filepath import FilePath
-from twisted.python import log
-from zope.interface import implements
 
 from leap.bonafide import srp_auth
+from leap.bonafide._decorators import needs_authentication
+from leap.bonafide._http import httpRequest, cookieAgentFactory
 
 
 class LeapSession(object):
 
     def __init__(self, credentials, api, provider_cert):
-        # TODO check if an anonymous credentials is passed
-        # TODO -- we could decorate some methods so that they
-        # complain if we're not authenticated.
+        # TODO check if an anonymous credentials is passed.
+        # TODO move provider_cert to api object.
+        # On creation, it should be able to retrieve all the info it needs
+        # (calling bootstrap).
+        # TODO could get a "provider" object instead.
+        # this provider can have an api attribute,
+        # and a "autoconfig" attribute passed on initialization.
+        # TODO get a file-descriptor for password if not in credentials
 
         self.username = credentials.username
         self.password = credentials.password
-
         self._api = api
-        customPolicy = BrowserLikePolicyForHTTPS(
-            Certificate.loadPEM(FilePath(provider_cert).getContent()))
 
-        # BUG XXX See https://twistedmatrix.com/trac/ticket/7843
-        pool = HTTPConnectionPool(reactor, persistent=False)
-        agent = Agent(reactor, customPolicy, connectTimeout=30, pool=pool)
-        cookiejar = cookielib.CookieJar()
-        self._agent = CookieAgent(agent, cookiejar)
-
+        self._agent = cookieAgentFactory(provider_cert)
         self._srp_auth = srp_auth.SRPAuthMechanism()
         self._srp_user = None
+        self._token = None
+        self._uuid = None
 
     @defer.inlineCallbacks
     def authenticate(self):
@@ -66,6 +56,7 @@ class LeapSession(object):
         uri, method = self._api.get_uri_and_method('handshake')
         log.msg("%s to %s" % (method, uri))
         params = self._srp_auth.get_handshake_params(self.username, A)
+
         handshake = yield httpRequest(self._agent, uri, values=params,
                                       method=method)
 
@@ -74,71 +65,27 @@ class LeapSession(object):
             'authenticate', login=self.username)
         log.msg("%s to %s" % (method, uri))
         params = self._srp_auth.get_authentication_params(M, A)
+
         auth = yield httpRequest(self._agent, uri, values=params,
                                  method=method)
 
         uuid, token, M2 = self._srp_auth.process_authentication(auth)
         self._srp_auth.verify_authentication(srpuser, M2)
-        defer.succeed('ok')
-        # XXX get_session_id??
-        # XXX return defer.succeed
 
+        self._uuid = uuid
+        self._token = token
+        defer.returnValue('[OK] Credentias Authenticated through SRP')
+
+    @needs_authentication
+    def logout(self):
+        print "Should logout..."
+
+    @property
     def is_authenticated(self):
         if not self._srp_user:
             return False
         return self._srp_user.authenticated()
 
-
-def httpRequest(agent, url, values={}, headers={}, method='POST'):
-    headers['Content-Type'] = ['application/x-www-form-urlencoded']
-    data = urllib.urlencode(values)
-    d = agent.request(method, url, Headers(headers),
-                      StringProducer(data) if data else None)
-
-    def handle_response(response):
-        if response.code == 204:
-            d = defer.succeed('')
-        else:
-            class SimpleReceiver(protocol.Protocol):
-                def __init__(s, d):
-                    s.buf = ''
-                    s.d = d
-
-                def dataReceived(s, data):
-                    print "----> handle response: GOT DATA"
-                    s.buf += data
-
-                def connectionLost(s, reason):
-                    print "CONNECTION LOST ---", reason
-                    # TODO: test if reason is twisted.web.client.ResponseDone,
-                    # if not, do an errback
-                    s.d.callback(s.buf)
-
-            d = defer.Deferred()
-            response.deliverBody(SimpleReceiver(d))
-        return d
-
-    d.addCallback(handle_response)
-    return d
-
-
-class StringProducer(object):
-
-    implements(IBodyProducer)
-
-    def __init__(self, body):
-        self.body = body
-        self.length = len(body)
-
-    def startProducing(self, consumer):
-        consumer.write(self.body)
-        return defer.succeed(None)
-
-    def pauseProducing(self):
-        pass
-
-    def stopProducing(self):
-        pass
 
 if __name__ == "__main__":
     from leap.bonafide import provider
@@ -151,14 +98,18 @@ if __name__ == "__main__":
     session = LeapSession(credentials, api, cdev_pem)
 
     def print_result(result):
-        print "Auth OK"
-        print "result"
+        print result
+        return result
 
     def cbShutDown(ignored):
         reactor.stop()
 
+    def auth_eb(failure):
+        print "[ERROR!]", failure.getErrorMessage()
+
     d = session.authenticate()
     d.addCallback(print_result)
-    d.addErrback(lambda f: log.err(f))
+    d.addErrback(auth_eb)
+    d.addCallback(lambda _: session.logout())
     d.addBoth(cbShutDown)
     reactor.run()
