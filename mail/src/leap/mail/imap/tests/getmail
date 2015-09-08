@@ -10,6 +10,7 @@ Simple IMAP4 client which displays the subjects of all messages in a
 particular mailbox.
 """
 
+import os
 import sys
 
 from twisted.internet import protocol
@@ -19,6 +20,9 @@ from twisted.internet import stdio
 from twisted.mail import imap4
 from twisted.protocols import basic
 from twisted.python import log
+
+# Global options stored here from main
+_opts = {}
 
 
 class TrivialPrompter(basic.LineReceiver):
@@ -70,9 +74,7 @@ class SimpleIMAP4ClientFactory(protocol.ClientFactory):
         """
         Initiate the protocol instance. Since we are building a simple IMAP
         client, we don't bother checking what capabilities the server has. We
-        just add all the authenticators twisted.mail has.  Note: Gmail no
-        longer uses any of the methods below, it's been using XOAUTH since
-        2010.
+        just add all the authenticators twisted.mail has.
         """
         assert not self.usedUp
         self.usedUp = True
@@ -159,14 +161,24 @@ def InsecureLogin(proto, username, password):
 def cbMailboxList(result, proto):
     """
     Callback invoked when a list of mailboxes has been retrieved.
+    If we have a selected mailbox in the global options, we directly pick it.
+    Otherwise, we offer a prompt to let user choose one.
     """
-    result = [e[2] for e in result]
-    s = '\n'.join(['%d. %s' % (n + 1, m) for (n, m) in zip(range(len(result)), result)])
+    all_mbox_list = [e[2] for e in result]
+    s = '\n'.join(['%d. %s' % (n + 1, m) for (n, m) in zip(range(len(all_mbox_list)), all_mbox_list)])
     if not s:
         return defer.fail(Exception("No mailboxes exist on server!"))
-    return proto.prompt(s + "\nWhich mailbox? [1] "
-        ).addCallback(cbPickMailbox, proto, result
-        )
+
+    selected_mailbox = _opts.get('mailbox')
+
+    if not selected_mailbox:
+        return proto.prompt(s + "\nWhich mailbox? [1] "
+            ).addCallback(cbPickMailbox, proto, all_mbox_list
+            )
+    else:
+        mboxes_lower = map(lambda s: s.lower(), all_mbox_list)
+        index = mboxes_lower.index(selected_mailbox.lower()) + 1
+        return cbPickMailbox(index, proto, all_mbox_list)
 
 
 def cbPickMailbox(result, proto, mboxes):
@@ -194,18 +206,34 @@ def cbExamineMbox(result, proto):
 
 def cbFetch(result, proto):
     """
-    Display headers.
+    Display a listing of the messages in the mailbox, based on the collected
+    headers.
     """
+    selected_subject = _opts.get('subject', None)
+    index = None
+
     if result:
         keys = result.keys()
         keys.sort()
-        for k in keys:
-            proto.display('%s %s' % (k, result[k][0][2]))
+
+        if selected_subject:
+            for k in keys:
+                # remove 'Subject: ' preffix plus eol
+                subject = result[k][0][2][9:].rstrip('\r\n')
+                if subject.lower() == selected_subject.lower():
+                    index = k
+                    break
+        else:
+            for k in keys:
+                proto.display('%s %s' % (k, result[k][0][2]))
     else:
         print "Hey, an empty mailbox!"
 
-    return proto.prompt("\nWhich message? [1] (Q quits) "
-                        ).addCallback(cbPickMessage, proto)
+    if not index:
+        return proto.prompt("\nWhich message? [1] (Q quits) "
+                            ).addCallback(cbPickMessage, proto)
+    else:
+        return cbPickMessage(index, proto)
 
 
 def cbPickMessage(result, proto):
@@ -247,16 +275,53 @@ def cbClose(result):
 
 
 def main():
+    import argparse
+    import ConfigParser
     import sys
+    from twisted.internet import reactor
 
-    if len(sys.argv) != 3:
-        print "Usage: getmail <user> <pass>"
-        sys.exit()
+    description = (
+        'Get messages from a LEAP IMAP Proxy.\nThis is a '
+        'debugging tool, do not use this to retrieve any sensitive '
+        'information, or we will send ninjas to your house!')
+    epilog = (
+        'In case you want to automate the usage of this utility '
+        'you can place your credentials in a file pointed by '
+        'BITMASK_CREDENTIALS. You need to have a [Credentials] '
+        'section, with username=<user@provider> and password fields') 
+
+    parser = argparse.ArgumentParser(description=description, epilog=epilog)
+    credentials = os.environ.get('BITMASK_CREDENTIALS')
+
+    if credentials:
+        try:
+            config = ConfigParser.ConfigParser()
+            config.read(credentials)
+            username = config.get('Credentials', 'username')
+            password = config.get('Credentials', 'password')
+        except Exception, e:
+            print "Error reading credentials file: {0}".format(e)
+            sys.exit()
+    else:
+        parser.add_argument('username', type=str)
+        parser.add_argument('password', type=str)
+
+    parser.add_argument('--mailbox', dest='mailbox', default=None,
+        help='Which mailbox to retrieve. Empty for interactive prompt.')
+    parser.add_argument('--subject', dest='subject', default=None,
+        help='A subject for retrieve a mail that matches. Empty for interactive prompt.')
+
+    ns = parser.parse_args()
+
+    if not credentials:
+        username = ns.username
+        password = ns.password
+
+    _opts['mailbox'] = ns.mailbox
+    _opts['subject'] = ns.subject
 
     hostname = "localhost"
     port = "1984"
-    username = sys.argv[1]
-    password = sys.argv[2]
 
     onConn = defer.Deferred(
         ).addCallback(cbServerGreeting, username, password
@@ -265,7 +330,6 @@ def main():
 
     factory = SimpleIMAP4ClientFactory(username, onConn)
 
-    from twisted.internet import reactor
     if port == '993':
         reactor.connectSSL(
             hostname, int(port), factory, ssl.ClientContextFactory())
