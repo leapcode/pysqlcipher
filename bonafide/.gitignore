@@ -3,6 +3,7 @@
 *.egg-info
 *.swp
 *.swo
+.project
 dist/
 build/
 MANIFEST
