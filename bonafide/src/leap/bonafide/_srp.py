@@ -25,7 +25,6 @@ import json
 import srp
 
 
-
 class SRPAuthMechanism(object):
 
     """
@@ -92,6 +91,33 @@ class SRPAuthMechanism(object):
             raise SRPAuthBadDataFromServer(msg)
 
 
+class SRPSignupMechanism(object):
+
+    """
+    Implement a protocol-agnostic SRP Registration mechanism.
+    """
+
+    def get_signup_params(self, username, password):
+        salt, verifier = srp.create_salted_verification_key(
+            bytes(username), bytes(password),
+            srp.SHA256, srp.NG_1024)
+        user_data = {
+            'user[login]': username,
+            'user[password_salt]': binascii.hexlify(salt),
+            'user[password_verifier]': binascii.hexlify(verifier)}
+        return user_data
+
+    def process_signup(self, signup_response):
+        signup = json.loads(signup_response)
+        errors = signup.get('errors')
+        if errors:
+            msg = 'username ' + errors.get('login')[0]
+            raise SRPRegistrationError(msg)
+        else:
+            username = signup.get('login')
+            return username
+
+
 def _safe_unhexlify(val):
     return binascii.unhexlify(val) \
         if (len(val) % 2 == 0) else binascii.unhexlify('0' + val)
@@ -113,3 +139,7 @@ class SRPAuthNoB(SRPAuthError):
 
 class SRPAuthBadDataFromServer(SRPAuthError):
     pass
+
+class SRPRegistrationError(Exception):
+    pass
+
