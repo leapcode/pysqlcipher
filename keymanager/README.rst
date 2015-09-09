@@ -1,7 +1,7 @@
 LEAP's Key Manager
 ==================
-.. image:: https://pypip.in/v/leap.keymanager/badge.png
-        :target: https://crate.io/packages/leap.keymanager
+.. image:: https://badge.fury.io/py/leap.keymanager.svg
+    :target: http://badge.fury.io/py/leap.keymanager
 
 The Key Manager is a Nicknym agent for the LEAP project:
 
