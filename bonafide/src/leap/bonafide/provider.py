@@ -14,50 +14,124 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 """
 LEAP Provider API.
 """
 
+from copy import deepcopy
+import re
+from urlparse import urlparse
 
-class LeapProviderApi(object):
+
+class _MetaActionDispatcher(type):
+
+    """
+    A metaclass that will create dispatcher methods dynamically for each
+    action made available by the LEAP provider API.
+
+    The new methods will be created according to the values contained in an
+    `_actions` dictionary, with the following format::
+
+        {'action_name': (uri_template, method)}
+
+    where `uri_template` is a string that will be formatted with an arbitrary
+    number of keyword arguments.
+
+    Any class that uses this one as its metaclass needs to implement two private
+    methods::
+
+        _get_uri(self, action_name, **extra_params)
+        _get_method(self, action_name)
+    """
+
+    def __new__(meta, name, bases, dct):
+
+        def _generate_action_funs(dct):
+            _get_uri = dct['_get_uri']
+            _get_method = dct['_get_method']
+            newdct = deepcopy(dct)
+            actions = dct['_actions']
+
+            def create_uri_fun(action_name):
+                return lambda self, **kw: _get_uri(
+                    self, action_name=action_name, **kw)
+
+            def create_met_fun(action_name):
+                return lambda self: _get_method(
+                    self, action_name=action_name)
+
+            for action in actions:
+                uri, method = actions[action]
+                _action_uri = 'get_%s_uri' % action
+                _action_met = 'get_%s_method' % action
+                newdct[_action_uri] = create_uri_fun(action)
+                newdct[_action_met] = create_met_fun(action)
+            return newdct
+
+        newdct = _generate_action_funs(dct)
+        return super(_MetaActionDispatcher, meta).__new__(
+            meta, name, bases, newdct)
+
+
+class Api(object):
+    """
+    An object that has all the information that a client needs to communicate
+    with the remote methods exposed by the web API of a LEAP provider.
+
+    By using the _MetaActionDispatcher as a metaclass, the _actions dict will be
+    translated dynamically into a set of instance methods that will allow
+    getting the uri and method for each action.
+    
+    The keyword arguments specified in the format string will automatically
+    raise a KeyError if the needed keyword arguments are not passed to the
+    dynamically created methods.
+    """
+
     # TODO when should the provider-api object be created?
-    # TODO relate to a Provider object, with autoconf flag.
+    # TODO pass a Provider object to constructor, with autoconf flag.
+    # TODO make the actions attribute depend on the api version
 
-    # XXX separate in auth-needing actions?
-    # doing that in LeapSession right now (with a decorator)
-    # but probably it would be better if we can just gather that info in just
-    # one place and decorate the methods programatically.
-
-    # XXX version this mapping !!!
-
-    actions = {
+    __metaclass__ = _MetaActionDispatcher
+    _actions = {
         'signup': ('users', 'POST'),
+        'update_user': ('users/{uid}', 'PUT'),
         'handshake': ('sessions', 'POST'),
         'authenticate': ('sessions/{login}', 'PUT'),
-        'update_user': ('users/{uid}', 'PUT'),
         'logout': ('logout', 'DELETE'),
-        'get_vpn_cert': ('cert', 'POST'),
-        'get_smtp_cert': ('smtp_cert', 'POST'),
+        'vpn_cert': ('cert', 'POST'),
+        'smtp_cert': ('smtp_cert', 'POST'),
     }
 
-    def __init__(self, uri, version):
-        self.uri = uri
+    def __init__(self, netloc, version=1):
+        parsed = urlparse(netloc)
+        if parsed.scheme != 'https':
+            raise ValueError(
+                'ProviderApi needs to be passed a url with https scheme')
+        self.netloc = parsed.netloc
         self.version = version
 
-    @property
-    def base_url(self):
-        return "https://{0}/{1}".format(self.uri, self.version)
+    def get_hostname(self):
+        return urlparse(self._get_base_url()).hostname
 
-    # XXX split in two different methods?
-    def get_uri_and_method(self, action_name, **extra_params):
-        action = self.actions.get(action_name, None)
-        if not action:
-            raise ValueError("Requested a non-existent action for this API")
-        resource, method = action
+    def _get_base_url(self):
+        return "https://{0}/{1}".format(self.netloc, self.version)
 
-        uri = '{0}/{1}'.format(bytes(self.base_url), bytes(resource)).format(
-            **extra_params)
-        return uri, method
+    # Methods expected by the dispatcher metaclass
 
-    # XXX add a provider_domain property, just to check if it's the right
-    # provider domain?
+    def _get_uri(self, action_name, **extra_params):
+        resource, _ = self._actions.get(action_name)
+        uri = '{0}/{1}'.format(
+            bytes(self._get_base_url()),
+            bytes(resource)).format(**extra_params)
+        return uri
+
+    def _get_method(self, action_name):
+        _, method = self._actions.get(action_name)
+        return method
+
+
+def validate_username(username):
+    accepted_characters = '^[a-z0-9\-\_\.]*$'
+    if not re.match(accepted_characters, username):
+        raise ValueError('Only lowercase letters, digits, . - and _ allowed.')
