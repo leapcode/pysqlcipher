@@ -20,12 +20,15 @@ LEAP Session management.
 from twisted.internet import defer, reactor
 from twisted.python import log
 
-from leap.bonafide import srp_auth
+from leap.bonafide import _srp
+from leap.bonafide import provider
 from leap.bonafide._decorators import auth_required
 from leap.bonafide._http import httpRequest, cookieAgentFactory
 
+OK = 'ok'
 
-class LeapSession(object):
+
+class Session(object):
 
     def __init__(self, credentials, api, provider_cert):
         # TODO check if an anonymous credentials is passed.
@@ -39,54 +42,23 @@ class LeapSession(object):
 
         self.username = credentials.username
         self.password = credentials.password
+        self._provider_cert = provider_cert
         self._api = api
+        self._initialize_session()
 
-        self._agent = cookieAgentFactory(provider_cert)
-        self._srp_auth = srp_auth.SRPAuthMechanism()
+    def _initialize_session(self):
+        self._agent = cookieAgentFactory(self._provider_cert)
+        self._srp_auth = _srp.SRPAuthMechanism()
+        self._srp_signup = _srp.SRPSignupMechanism()
         self._srp_user = None
         self._token = None
         self._uuid = None
 
-    @defer.inlineCallbacks
-    def authenticate(self):
-        srpuser, A = self._srp_auth.initialize(
-            self.username, self.password)
-        self._srp_user = srpuser
+    # Session
 
-        uri, method = self._api.get_uri_and_method('handshake')
-        log.msg("%s to %s" % (method, uri))
-        params = self._srp_auth.get_handshake_params(self.username, A)
-
-        handshake = yield self._request(self._agent, uri, values=params,
-                                        method=method)
-
-        M = self._srp_auth.process_handshake(srpuser, handshake)
-        uri, method = self._api.get_uri_and_method(
-            'authenticate', login=self.username)
-        log.msg("%s to %s" % (method, uri))
-        params = self._srp_auth.get_authentication_params(M, A)
-
-        auth = yield self._request(self._agent, uri, values=params,
-                                   method=method)
-
-        uuid, token, M2 = self._srp_auth.process_authentication(auth)
-        self._srp_auth.verify_authentication(srpuser, M2)
-
-        self._uuid = uuid
-        self._token = token
-        defer.returnValue('[OK] Credentials Authenticated through SRP')
-
-    @auth_required
-    def logout(self):
-        print "Should logout..."
-
-    @auth_required
-    def get_smtp_cert(self):
-        # TODO pass it to the provider object so that it can save it in the
-        # right path.
-        uri, method = self._api.get_uri_and_method('get_smtp_cert')
-        print method, "to", uri
-        return self._request(self._agent, uri, method=method)
+    @property
+    def token(self):
+        return self._token
 
     @property
     def is_authenticated(self):
@@ -94,20 +66,102 @@ class LeapSession(object):
             return False
         return self._srp_user.authenticated()
 
+    @defer.inlineCallbacks
+    def authenticate(self):
+        srpuser, A = self._srp_auth.initialize(
+            self.username, self.password)
+        self._srp_user = srpuser
+
+        uri = self._api.get_handshake_uri()
+        met = self._api.get_handshake_method()
+        log.msg("%s to %s" % (met, uri))
+        params = self._srp_auth.get_handshake_params(self.username, A)
+
+        handshake = yield self._request(self._agent, uri, values=params,
+                                        method=met)
+
+        M = self._srp_auth.process_handshake(srpuser, handshake)
+        uri = self._api.get_authenticate_uri(login=self.username)
+        met = self._api.get_authenticate_method()
+
+        log.msg("%s to %s" % (met, uri))
+        params = self._srp_auth.get_authentication_params(M, A)
+
+        auth = yield self._request(self._agent, uri, values=params,
+                                   method=met)
+
+        uuid, token, M2 = self._srp_auth.process_authentication(auth)
+        self._srp_auth.verify_authentication(srpuser, M2)
+
+        self._uuid = uuid
+        self._token = token
+        defer.returnValue(OK)
+
+    @auth_required
+    def logout(self):
+        self.username = None
+        self.password = None
+        self._initialize_session()
+
+    # User certificates
+
+    def get_vpn_cert(self):
+        # TODO pass it to the provider object so that it can save it in the
+        # right path.
+        uri = self._api.get_vpn_cert_uri()
+        met = self._api.get_vpn_cert_method()
+        return self._request(self._agent, uri, method=met)
+
+    @auth_required
+    def get_smtp_cert(self):
+        # TODO pass it to the provider object so that it can save it in the
+        # right path.
+        uri = self._api.get_smtp_cert_uri()
+        met = self._api.get_smtp_cert_method()
+        print met, "to", uri
+        return self._request(self._agent, uri, method=met)
+
     def _request(self, *args, **kw):
         kw['token'] = self._token
         return httpRequest(*args, **kw)
 
+    # User management
+
+    @defer.inlineCallbacks
+    def signup(self, username, password):
+        # XXX should check that it_IS_NOT_authenticated
+        provider.validate_username(username)
+        uri = self._api.get_signup_uri()
+        met = self._api.get_signup_method()
+        params = self._srp_signup.get_signup_params(
+            username, password)
+
+        signup = yield self._request(self._agent, uri, values=params,
+                                     method=met)
+        registered_user = self._srp_signup.process_signup(signup)
+        self.username = username
+        self.password = password
+        defer.returnValue((OK, registered_user))
+
+    @auth_required
+    def update_user_record(self):
+        pass
+
 
 if __name__ == "__main__":
-    from leap.bonafide import provider
+    import os
+    import sys
     from twisted.cred.credentials import UsernamePassword
 
-    api = provider.LeapProviderApi('api.cdev.bitmask.net:4430', 1)
-    credentials = UsernamePassword('test_deb_090', 'lalalala')
-
-    cdev_pem = '/home/kali/.config/leap/providers/cdev.bitmask.net/keys/ca/cacert.pem'
-    session = LeapSession(credentials, api, cdev_pem)
+    if len(sys.argv) != 4:
+        print "Usage:", sys.argv[0], "provider", "username", "password"
+        sys.exit()
+    _provider, username, password = sys.argv[1], sys.argv[2], sys.argv[3]
+    api = provider.Api('https://api.%s:4430' % _provider)
+    credentials = UsernamePassword(username, password)
+    cdev_pem = os.path.expanduser(
+        '~/.config/leap/providers/%s/keys/ca/cacert.pem' % _provider)
+    session = Session(credentials, api, cdev_pem)
 
     def print_result(result):
         print result
@@ -123,9 +177,7 @@ if __name__ == "__main__":
     d = session.authenticate()
     d.addCallback(print_result)
     d.addErrback(auth_eb)
-    d.addCallback(lambda _: session.get_smtp_cert())
-    d.addCallback(print_result)
-    d.addErrback(auth_eb)
     d.addCallback(lambda _: session.logout())
+    d.addErrback(auth_eb)
     d.addBoth(cbShutDown)
     reactor.run()
