@@ -2,6 +2,8 @@ LEAP's Key Manager
 ==================
 .. image:: https://badge.fury.io/py/leap.keymanager.svg
     :target: http://badge.fury.io/py/leap.keymanager
+.. image:: https://img.shields.io/pypi/dm/leap.keymanager.svg
+    :target: http://badge.fury.io/py/leap.keymanager
 
 The Key Manager is a Nicknym agent for the LEAP project:
 
