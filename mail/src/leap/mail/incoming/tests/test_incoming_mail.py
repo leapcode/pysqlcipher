@@ -176,8 +176,22 @@ subject: independence of cyberspace
         d.addCallback(put_raw_key_called)
         return d
 
+    def testAddDecryptedHeader(self):
+        class DummyMsg():
+            def __init__(self):
+                self.headers = {}
+
+            def add_header(self, k, v):
+                self.headers[k] = v
+
+        msg = DummyMsg()
+        self.fetcher._add_decrypted_header(msg)
+
+        self.assertEquals(msg.headers['X-Leap-Encryption'], 'decrypted')
+
     def testDecryptEmail(self):
         self.fetcher._decryption_error = Mock()
+        self.fetcher._add_decrypted_header = Mock()
 
         def create_encrypted_message(encstr):
             message = Parser().parsestr(self.EMAIL)
@@ -198,8 +212,12 @@ subject: independence of cyberspace
             return newmsg
 
         def decryption_error_not_called(_):
-            self.assertFalse(self.fetcher._decyption_error.called,
+            self.assertFalse(self.fetcher._decryption_error.called,
                              "There was some errors with decryption")
+
+        def add_decrypted_header_called(_):
+            self.assertTrue(self.fetcher._add_decrypted_header.called,
+                            "There was some errors with decryption")
 
         d = self._km.encrypt(
             self.EMAIL,

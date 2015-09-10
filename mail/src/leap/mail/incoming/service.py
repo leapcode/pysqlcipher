@@ -90,6 +90,7 @@ class IncomingMail(Service):
     CONTENT_KEY = "content"
 
     LEAP_SIGNATURE_HEADER = 'X-Leap-Signature'
+    LEAP_ENCRYPTION_HEADER = 'X-Leap-Encryption'
     """
     Header added to messages when they are decrypted by the fetcher,
     which states the validity of an eventual signature that might be included
@@ -98,6 +99,8 @@ class IncomingMail(Service):
     LEAP_SIGNATURE_VALID = 'valid'
     LEAP_SIGNATURE_INVALID = 'invalid'
     LEAP_SIGNATURE_COULD_NOT_VERIFY = 'could not verify'
+
+    LEAP_ENCRYPTION_DECRYPTED = 'decrypted'
 
     def __init__(self, keymanager, soledad, inbox, userid,
                  check_period=INCOMING_CHECK_PERIOD):
@@ -461,6 +464,10 @@ class IncomingMail(Service):
         d.addCallback(add_leap_header)
         return d
 
+    def _add_decrypted_header(self, msg):
+        msg.add_header(self.LEAP_ENCRYPTION_HEADER,
+                       self.LEAP_ENCRYPTION_DECRYPTED)
+
     def _decrypt_multipart_encrypted_msg(self, msg, encoding, senderAddress):
         """
         Decrypt a message with content-type 'multipart/encrypted'.
@@ -503,6 +510,7 @@ class IncomingMail(Service):
 
             # all ok, replace payload by unencrypted payload
             msg.set_payload(decrmsg.get_payload())
+            self._add_decrypted_header(msg)
             return (msg, signkey)
 
         d = self._keymanager.decrypt(
@@ -537,7 +545,9 @@ class IncomingMail(Service):
 
         def decrypted_data(res):
             decrdata, signkey = res
-            return data.replace(pgp_message, decrdata), signkey
+            replaced_data = data.replace(pgp_message, decrdata)
+            self._add_decrypted_header(origmsg)
+            return replaced_data, signkey
 
         def encode_and_return(res):
             data, signkey = res
