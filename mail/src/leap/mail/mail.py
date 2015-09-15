@@ -28,7 +28,7 @@ from twisted.internet import defer
 from twisted.python import log
 
 from leap.common.check import leap_assert_type
-from leap.common.events import emit, catalog
+from leap.common.events import emit_async, catalog
 from leap.common.mail import get_email_charset
 
 from leap.mail.adaptors.soledad import SoledadMailAdaptor
@@ -736,8 +736,7 @@ class MessageCollection(object):
         :param unseen: number of unseen messages.
         :type unseen: int
         """
-        # TODO change name of the signal, independent from imap now.
-        emit(catalog.MAIL_UNREAD_MESSAGES, str(unseen))
+        emit_async(catalog.MAIL_UNREAD_MESSAGES, str(unseen))
 
     def copy_msg(self, msg, new_mbox_uuid):
         """

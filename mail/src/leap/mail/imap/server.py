@@ -27,7 +27,7 @@ from twisted.mail import imap4
 from twisted.python import log
 
 from leap.common.check import leap_assert, leap_assert_type
-from leap.common.events import emit, catalog
+from leap.common.events import emit_async, catalog
 from leap.soledad.client import Soledad
 
 # imports for LITERAL+ patch
@@ -224,7 +224,7 @@ class LEAPIMAPServer(imap4.IMAP4Server):
             # bad username, reject.
             raise cred.error.UnauthorizedLogin()
         # any dummy password is allowed so far. use realm instead!
-        emit(catalog.IMAP_CLIENT_LOGIN, "1")
+        emit_async(catalog.IMAP_CLIENT_LOGIN, "1")
         return imap4.IAccount, self.theAccount, lambda: None
 
     def do_FETCH(self, tag, messages, query, uid=0):

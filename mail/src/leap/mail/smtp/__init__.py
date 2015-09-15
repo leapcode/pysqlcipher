@@ -24,7 +24,7 @@ from twisted.internet import reactor
 from twisted.internet.error import CannotListenError
 from leap.mail.outgoing.service import OutgoingMail
 
-from leap.common.events import emit, catalog
+from leap.common.events import emit_async, catalog
 from leap.mail.smtp.gateway import SMTPFactory
 
 logger = logging.getLogger(__name__)
@@ -65,12 +65,12 @@ def setup_smtp_gateway(port, userid, keymanager, smtp_host, smtp_port,
     factory = SMTPFactory(userid, keymanager, encrypted_only, outgoing_mail)
     try:
         tport = reactor.listenTCP(port, factory, interface="localhost")
-        emit(catalog.SMTP_SERVICE_STARTED, str(port))
+        emit_async(catalog.SMTP_SERVICE_STARTED, str(port))
         return factory, tport
     except CannotListenError:
         logger.error("STMP Service failed to start: "
                      "cannot listen in port %s" % port)
-        emit(catalog.SMTP_SERVICE_FAILED_TO_START, str(port))
+        emit_async(catalog.SMTP_SERVICE_FAILED_TO_START, str(port))
     except Exception as exc:
         logger.error("Unhandled error while launching smtp gateway service")
         logger.exception(exc)

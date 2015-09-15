@@ -28,7 +28,7 @@ from twisted.internet.protocol import ServerFactory
 from twisted.mail import imap4
 from twisted.python import log
 
-from leap.common.events import emit, catalog
+from leap.common.events import emit_async, catalog
 from leap.common.check import leap_check
 from leap.mail.imap.account import IMAPAccount
 from leap.mail.imap.server import LEAPIMAPServer
@@ -178,10 +178,10 @@ def run_service(store, **kwargs):
             reactor.listenTCP(manhole.MANHOLE_PORT, manhole_factory,
                               interface="127.0.0.1")
         logger.debug("IMAP4 Server is RUNNING in port  %s" % (port,))
-        emit(catalog.IMAP_SERVICE_STARTED, str(port))
+        emit_async(catalog.IMAP_SERVICE_STARTED, str(port))
 
         # FIXME -- change service signature
         return tport, factory
 
     # not ok, signal error.
-    emit(catalog.IMAP_SERVICE_FAILED_TO_START, str(port))
+    emit_async(catalog.IMAP_SERVICE_FAILED_TO_START, str(port))
