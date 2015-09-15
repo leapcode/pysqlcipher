@@ -1,3 +1,3 @@
-leap.common>=0.4.0
+leap.common>=0.4.3
 leap.soledad.client>=0.7.0
 leap.keymanager>=0.4.0
