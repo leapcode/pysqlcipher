@@ -21,7 +21,6 @@ import copy
 import logging
 import shlex
 import time
-import traceback
 import warnings
 
 from email.parser import Parser
@@ -36,7 +35,6 @@ from twisted.python import log
 from twisted.internet import defer, reactor
 from twisted.internet.task import LoopingCall
 from twisted.internet.task import deferLater
-from u1db import errors as u1db_errors
 
 from leap.common.events import emit_async, catalog
 from leap.common.check import leap_assert, leap_assert_type
@@ -44,7 +42,7 @@ from leap.common.mail import get_email_charset
 from leap.keymanager import errors as keymanager_errors
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.mail.adaptors import soledad_indexes as fields
-from leap.mail.utils import json_loads, empty, first
+from leap.mail.utils import json_loads, empty
 from leap.soledad.client import Soledad
 from leap.soledad.common.crypto import ENC_SCHEME_KEY, ENC_JSON_KEY
 from leap.soledad.common.errors import InvalidAuthTokenError
@@ -248,7 +246,7 @@ class IncomingMail(Service):
             if num_mails != 0:
                 log.msg("there are %s mails" % (num_mails,))
             emit_async(catalog.MAIL_FETCHED_INCOMING,
-                 str(num_mails), str(fetched_ts))
+                       str(num_mails), str(fetched_ts))
             return doclist
 
     def _signal_unread_to_ui(self, *args):
@@ -256,7 +254,7 @@ class IncomingMail(Service):
         Sends unread event to ui.
         """
         emit_async(catalog.MAIL_UNREAD_MESSAGES,
-             str(self._inbox_collection.count_unseen()))
+                   str(self._inbox_collection.count_unseen()))
 
     # process incoming mail.
 
@@ -280,7 +278,7 @@ class IncomingMail(Service):
         for index, doc in enumerate(doclist):
             logger.debug("processing doc %d of %d" % (index + 1, num_mails))
             emit_async(catalog.MAIL_MSG_PROCESSING,
-                 str(index), str(num_mails))
+                       str(index), str(num_mails))
 
             keys = doc.content.keys()
 
