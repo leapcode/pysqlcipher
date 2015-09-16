@@ -74,8 +74,6 @@ from leap.keymanager.keys import (
 )
 from leap.keymanager.openpgp import OpenPGPKey, OpenPGPScheme
 
-from ._version import get_versions
-
 __version__ = get_versions()['version']
 del get_versions
 
@@ -397,7 +395,8 @@ class KeyManager(object):
         self._assert_supported_key_type(ktype)
 
         def signal_finished(key):
-            emit_async(catalog.KEYMANAGER_FINISHED_KEY_GENERATION, self._address)
+            emit_async(
+                catalog.KEYMANAGER_FINISHED_KEY_GENERATION, self._address)
             return key
 
         emit_async(catalog.KEYMANAGER_STARTED_KEY_GENERATION, self._address)
