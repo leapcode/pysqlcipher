@@ -779,6 +779,7 @@ class KeyManager(object):
         """
         self._assert_supported_key_type(ktype)
 
+        logger.info("Fetch key for %s from %s" % (address, uri))
         res = self._get(uri)
         if not res.ok:
             return defer.fail(KeyNotFound(uri))
