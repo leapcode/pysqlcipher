@@ -241,7 +241,7 @@ class OutgoingMail:
 
         def signal_encrypt_sign(newmsg):
             emit_async(catalog.SMTP_END_ENCRYPT_AND_SIGN,
-                 "%s,%s" % (self._from_address, to_address))
+                       "%s,%s" % (self._from_address, to_address))
             return newmsg, recipient
 
         def if_key_not_found_send_unencrypted(failure, message):
@@ -260,7 +260,7 @@ class OutgoingMail:
         log.msg("Will encrypt the message with %s and sign with %s."
                 % (to_address, from_address))
         emit_async(catalog.SMTP_START_ENCRYPT_AND_SIGN,
-             "%s,%s" % (self._from_address, to_address))
+                   "%s,%s" % (self._from_address, to_address))
         d = self._maybe_attach_key(origmsg, from_address, to_address)
         d.addCallback(maybe_encrypt_and_sign)
         return d
