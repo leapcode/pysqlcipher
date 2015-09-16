@@ -30,6 +30,7 @@ from email.parser import Parser
 from mock import Mock
 from twisted.internet import defer
 
+from leap.keymanager.errors import KeyAddressMismatch
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.mail.adaptors import soledad_indexes as fields
 from leap.mail.constants import INBOX_NAME
@@ -154,9 +155,6 @@ subject: independence of cyberspace
         return d
 
     def testExtractAttachedKey(self):
-        """
-        Test the OpenPGP header key extraction
-        """
         KEY = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n..."
 
         message = MIMEMultipart()
@@ -166,6 +164,26 @@ subject: independence of cyberspace
         message.attach(key)
         self.fetcher._keymanager.put_raw_key = Mock(
             return_value=defer.succeed(None))
+        self.fetcher._keymanager.fetch_key = Mock()
+
+        def put_raw_key_called(_):
+            self.fetcher._keymanager.put_raw_key.assert_called_once_with(
+                KEY, OpenPGPKey, address=ADDRESS_2)
+
+        d = self._do_fetch(message.as_string())
+        d.addCallback(put_raw_key_called)
+        return d
+
+    def testExtractInvalidAttachedKey(self):
+        KEY = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n..."
+
+        message = MIMEMultipart()
+        message.add_header("from", ADDRESS_2)
+        key = MIMEApplication("", "pgp-keys")
+        key.set_payload(KEY)
+        message.attach(key)
+        self.fetcher._keymanager.put_raw_key = Mock(
+            return_value=defer.fail(KeyAddressMismatch()))
         self.fetcher._keymanager.fetch_key = Mock()
 
         def put_raw_key_called(_):

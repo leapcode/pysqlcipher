@@ -686,6 +686,10 @@ class IncomingMail(Service):
         """
         MIME_KEY = "application/pgp-keys"
 
+        def failed_put_key(failure):
+            logger.info("An error has ocurred adding attached key for %s: %s"
+                        % (address, failure.getErrorMessage()))
+
         deferreds = []
         for attachment in attachments:
             if MIME_KEY == attachment.get_content_type():
@@ -694,6 +698,7 @@ class IncomingMail(Service):
                     attachment.get_payload(),
                     OpenPGPKey,
                     address=address)
+                d.addErrback(failed_put_key)
                 deferreds.append(d)
         return defer.gatherResults(deferreds)
 
