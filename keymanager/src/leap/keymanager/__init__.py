@@ -18,7 +18,10 @@
 Key Manager is a Nicknym agent for LEAP client.
 """
 # let's do a little sanity check to see if we're using the wrong gnupg
+import fileinput
 import sys
+import tempfile
+from leap.common import ca_bundle
 from ._version import get_versions
 
 try:
@@ -134,11 +137,29 @@ class KeyManager(object):
         }
         # the following are used to perform https requests
         self._fetcher = requests
-        self._session = self._fetcher.session()
+        self._combined_ca_bundle = self._create_combined_bundle_file()
 
     #
     # utilities
     #
+
+    def _create_combined_bundle_file(self):
+        leap_ca_bundle = ca_bundle.where()
+
+        if self._ca_cert_path == leap_ca_bundle:
+            return self._ca_cert_path   # don't merge file with itself
+        elif self._ca_cert_path is None:
+            return leap_ca_bundle
+
+        tmp_file = tempfile.NamedTemporaryFile(delete=True)  # file is auto deleted when python process ends
+
+        with open(tmp_file.name, 'w') as fout:
+            fin = fileinput.input(files=(leap_ca_bundle, self._ca_cert_path))
+            for line in fin:
+                fout.write(line)
+            fin.close()
+
+        return tmp_file.name
 
     def _key_class_from_type(self, ktype):
         """
@@ -175,6 +196,23 @@ class KeyManager(object):
         #     res.headers['content-type'].startswith('application/json'),
         #     'Content-type is not JSON.')
         return res
+
+    def _get_with_combined_ca_bundle(self, uri, data=None):
+        """
+        Send a GET request to C{uri} containing C{data}.
+
+        Instead of using the ca_cert provided on construction time, this version also uses
+        the default certificates shipped with leap.common
+
+        :param uri: The URI of the request.
+        :type uri: str
+        :param data: The body of the request.
+        :type data: dict, str or file
+
+        :return: The response to the request.
+        :rtype: requests.Response
+        """
+        return self._fetcher.get(uri, data=data, verify=self._combined_ca_bundle)
 
     def _put(self, uri, data=None):
         """
@@ -780,7 +818,7 @@ class KeyManager(object):
         self._assert_supported_key_type(ktype)
 
         logger.info("Fetch key for %s from %s" % (address, uri))
-        res = self._get(uri)
+        res = self._get_with_combined_ca_bundle(uri)
         if not res.ok:
             return defer.fail(KeyNotFound(uri))
 

@@ -73,11 +73,12 @@ class KeyManagerWithSoledadTestCase(unittest.TestCase, BaseLeapTest):
         d = km._wrapper_map[OpenPGPKey].deferred_indexes
         d.addCallback(get_and_delete_keys)
         d.addCallback(lambda _: self.tearDownEnv())
+        d.addCallback(lambda _: self._soledad.close())
         return d
 
-    def _key_manager(self, user=ADDRESS, url='', token=None):
+    def _key_manager(self, user=ADDRESS, url='', token=None, ca_cert_path=None):
         return KeyManager(user, url, self._soledad, token=token,
-                          gpgbinary=self.gpg_binary_path)
+                          gpgbinary=self.gpg_binary_path, ca_cert_path=ca_cert_path)
 
     def _find_gpg(self):
         gpg_path = distutils.spawn.find_executable('gpg')
