@@ -151,7 +151,8 @@ class KeyManager(object):
         elif self._ca_cert_path is None:
             return leap_ca_bundle
 
-        tmp_file = tempfile.NamedTemporaryFile(delete=True)  # file is auto deleted when python process ends
+        # file is auto deleted when python process ends
+        tmp_file = tempfile.NamedTemporaryFile(delete=True)
 
         with open(tmp_file.name, 'w') as fout:
             fin = fileinput.input(files=(leap_ca_bundle, self._ca_cert_path))
@@ -201,8 +202,8 @@ class KeyManager(object):
         """
         Send a GET request to C{uri} containing C{data}.
 
-        Instead of using the ca_cert provided on construction time, this version also uses
-        the default certificates shipped with leap.common
+        Instead of using the ca_cert provided on construction time, this
+        version also uses the default certificates shipped with leap.common
 
         :param uri: The URI of the request.
         :type uri: str
@@ -212,7 +213,8 @@ class KeyManager(object):
         :return: The response to the request.
         :rtype: requests.Response
         """
-        return self._fetcher.get(uri, data=data, verify=self._combined_ca_bundle)
+        return self._fetcher.get(
+            uri, data=data, verify=self._combined_ca_bundle)
 
     def _put(self, uri, data=None):
         """

@@ -342,21 +342,24 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
 
         yield km.fetch_key(ADDRESS_OTHER, REMOTE_KEY_URL, OpenPGPKey)
 
-        get_mock.assert_called_once_with(REMOTE_KEY_URL, data=None, verify=ca_bundle.where())
+        get_mock.assert_called_once_with(REMOTE_KEY_URL, data=None,
+                                         verify=ca_bundle.where())
 
     @inlineCallbacks
-    def test_fetch_key_uses_default_ca_bundle_if_also_set_as_ca_cert_path(self):
+    def test_fetch_key_uses_default_ca_bundle_if_also_set_as_ca_cert(self):
         ca_cert_path = ca_bundle.where()
         km = self._key_manager(ca_cert_path=ca_cert_path)
         get_mock = self._mock_get_response(km, PUBLIC_KEY_OTHER)
 
         yield km.fetch_key(ADDRESS_OTHER, REMOTE_KEY_URL, OpenPGPKey)
 
-        get_mock.assert_called_once_with(REMOTE_KEY_URL, data=None, verify=ca_bundle.where())
+        get_mock.assert_called_once_with(REMOTE_KEY_URL, data=None,
+                                         verify=ca_bundle.where())
 
     @inlineCallbacks
     def test_fetch_uses_combined_ca_bundle_otherwise(self):
-        with tempfile.NamedTemporaryFile() as tmp_input, tempfile.NamedTemporaryFile() as tmp_output:
+        with tempfile.NamedTemporaryFile() as tmp_input, \
+                tempfile.NamedTemporaryFile() as tmp_output:
             ca_content = 'some\ncontent\n'
             ca_cert_path = tmp_input.name
             self._dump_to_file(ca_cert_path, ca_content)
@@ -369,7 +372,8 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
                 yield km.fetch_key(ADDRESS_OTHER, REMOTE_KEY_URL, OpenPGPKey)
 
                 # assert that combined bundle file is passed to get call
-                get_mock.assert_called_once_with(REMOTE_KEY_URL, data=None, verify=tmp_output.name)
+                get_mock.assert_called_once_with(REMOTE_KEY_URL, data=None,
+                                                 verify=tmp_output.name)
 
                 # assert that files got appended
                 expected = self._slurp_file(ca_bundle.where()) + ca_content
