@@ -19,6 +19,7 @@ Key Manager is a Nicknym agent for LEAP client.
 """
 # let's do a little sanity check to see if we're using the wrong gnupg
 import fileinput
+import os
 import sys
 import tempfile
 from leap.common import ca_bundle
@@ -140,6 +141,18 @@ class KeyManager(object):
         self._combined_ca_bundle = self._create_combined_bundle_file()
 
     #
+    # destructor
+    #
+
+    def __del__(self):
+        try:
+            created_tmp_combined_ca_bundle = self._combined_ca_bundle not in [ca_bundle.where(), self._ca_cert_path]
+            if created_tmp_combined_ca_bundle:
+                os.remove(self._combined_ca_bundle)
+        except OSError:
+            pass
+
+    #
     # utilities
     #
 
@@ -151,8 +164,7 @@ class KeyManager(object):
         elif not self._ca_cert_path:
             return leap_ca_bundle
 
-        # file is auto deleted when python process ends
-        tmp_file = tempfile.NamedTemporaryFile(delete=True)
+        tmp_file = tempfile.NamedTemporaryFile(delete=False)  # delete when keymanager expires
 
         with open(tmp_file.name, 'w') as fout:
             fin = fileinput.input(files=(leap_ca_bundle, self._ca_cert_path))

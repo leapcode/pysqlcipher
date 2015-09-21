@@ -20,7 +20,7 @@
 Tests for the Key Manager.
 """
 
-
+from os import path
 from datetime import datetime
 import tempfile
 from leap.common import ca_bundle
@@ -369,8 +369,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
 
     @inlineCallbacks
     def test_fetch_uses_combined_ca_bundle_otherwise(self):
-        with tempfile.NamedTemporaryFile() as tmp_input, \
-                tempfile.NamedTemporaryFile() as tmp_output:
+        with tempfile.NamedTemporaryFile() as tmp_input, tempfile.NamedTemporaryFile(delete=False) as tmp_output:
             ca_content = 'some\ncontent\n'
             ca_cert_path = tmp_input.name
             self._dump_to_file(ca_cert_path, ca_content)
@@ -389,6 +388,9 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
                 # assert that files got appended
                 expected = self._slurp_file(ca_bundle.where()) + ca_content
                 self.assertEqual(expected, self._slurp_file(tmp_output.name))
+
+            del km  # force km out of scope
+            self.assertFalse(path.exists(tmp_output.name))
 
     def _dump_to_file(self, filename, content):
             with open(filename, 'w') as out:
