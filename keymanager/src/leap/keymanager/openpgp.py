@@ -321,7 +321,9 @@ class OpenPGPScheme(EncryptionScheme):
                 raise errors.KeyNotFound(address)
             leap_assert(
                 address in doc.content[KEY_ADDRESS_KEY],
-                'Wrong address in key data.')
+                'Wrong address in key %s. Expected %s, found %s.'
+                % (doc.content[KEY_ID_KEY], address,
+                   doc.content[KEY_ADDRESS_KEY]))
             key = build_key_from_dict(OpenPGPKey, doc.content)
             key._gpgbinary = self._gpgbinary
             return key
