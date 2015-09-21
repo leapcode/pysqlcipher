@@ -558,7 +558,8 @@ class IMAPMailbox(object):
 
             def _get_imap_msg(messages):
                 d_imapmsg = []
-                for msg in messages:
+                # just in case we got bad data in here
+                for msg in filter(None, messages):
                     d_imapmsg.append(getimapmsg(msg))
                 return defer.gatherResults(d_imapmsg, consumeErrors=True)
 
