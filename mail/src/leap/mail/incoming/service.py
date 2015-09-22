@@ -689,11 +689,15 @@ class IncomingMail(Service):
         :type address: str
 
         :return: A Deferred that will be fired when all the keys are stored
-                 with a boolean True if there was a  valid key attached or
-                 False in other case
+                 with a boolean: True if there was a valid key attached, or
+                 False otherwise.
         :rtype: Deferred
         """
         MIME_KEY = "application/pgp-keys"
+
+        def log_key_added(ignored):
+            logger.debug('Added key found in attachment for %s' % address)
+            return True
 
         def failed_put_key(failure):
             logger.info("An error has ocurred adding attached key for %s: %s"
@@ -703,12 +707,11 @@ class IncomingMail(Service):
         deferreds = []
         for attachment in attachments:
             if MIME_KEY == attachment.get_content_type():
-                logger.debug("Add key from attachment")
                 d = self._keymanager.put_raw_key(
                     attachment.get_payload(),
                     OpenPGPKey,
                     address=address)
-                d.addCallbacks(lambda _: True, failed_put_key)
+                d.addCallbacks(log_key_added, failed_put_key)
                 deferreds.append(d)
         d = defer.gatherResults(deferreds)
         d.addCallback(lambda result: any(result))
