@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # interfaces.py
-# Copyright (C) 2014 LEAP
+# Copyright (C) 2014,2015 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -24,17 +24,71 @@ class IMessageWrapper(Interface):
     """
     I know how to access the different parts into which a given message is
     splitted into.
+
+    :ivar fdoc: dict with flag document.
+    :ivar hdoc: dict with flag document.
+    :ivar cdocs: dict with content-documents, one-indexed.
     """
 
     fdoc = Attribute('A dictionaly-like containing the flags document '
                      '(mutable)')
-    hdoc = Attribute('A dictionary-like containing the headers docuemnt '
+    hdoc = Attribute('A dictionary-like containing the headers document '
                      '(immutable)')
     cdocs = Attribute('A dictionary with the content-docs, one-indexed')
 
+    def create(self, store, notify_just_mdoc=False, pending_inserts_dict={}):
+        """
+        Create the underlying wrapper.
+        """
 
-# TODO [ ] Catch up with the actual implementation!
-#          Lot of stuff added there ...
+    def update(self, store):
+        """
+        Update the only mutable parts, which are within the flags document.
+        """
+
+    def delete(self, store):
+        """
+        Delete the parts for this wrapper that are not referenced from anywhere
+        else.
+        """
+
+    def copy(self, store, new_mbox_uuid):
+        """
+        Return a copy of this IMessageWrapper in a new mailbox.
+        """
+
+    def set_mbox_uuid(self, mbox_uuid):
+        """
+        Set the mailbox for this wrapper.
+        """
+
+    def set_flags(self, flags):
+        """
+        """
+
+    def set_tags(self, tags):
+        """
+        """
+
+    def set_date(self, date):
+        """
+        """
+
+    def get_subpart_dict(self, index):
+        """
+        :param index: the part to lookup, 1-indexed
+        """
+
+    def get_subpart_indexes(self):
+        """
+        """
+
+    def get_body(self, store):
+        """
+        """
+
+
+# TODO -- split into smaller interfaces? separate mailbox interface at least?
 
 class IMailAdaptor(Interface):
     """
@@ -53,64 +107,109 @@ class IMailAdaptor(Interface):
         :rtype: deferred
         """
 
-    # TODO is staticmethod valid with an interface?
-    # @staticmethod
     def get_msg_from_string(self, MessageClass, raw_msg):
         """
-        Return IMessageWrapper implementor from a raw mail string
+        Get an instance of a MessageClass initialized with a MessageWrapper
+        that contains all the parts obtained from parsing the raw string for
+        the message.
 
         :param MessageClass: an implementor of IMessage
         :type raw_msg: str
         :rtype: implementor of leap.mail.IMessage
         """
 
-    # TODO is staticmethod valid with an interface?
-    # @staticmethod
-    def get_msg_from_docs(self, MessageClass, msg_wrapper):
+    def get_msg_from_docs(self, MessageClass, mdoc, fdoc, hdoc, cdocs=None,
+                          uid=None):
         """
-        Return an IMessage implementor from its parts.
+        Get an instance of a MessageClass initialized with a MessageWrapper
+        that contains the passed part documents.
 
-        :param MessageClass: an implementor of IMessage
-        :param msg_wrapper: an implementor of IMessageWrapper
-        :rtype: implementor of leap.mail.IMessage
-        """
-
-    # -------------------------------------------------------------------
-    # XXX unsure about the following part yet ...........................
-
-    # the idea behind these three methods is that the adaptor also offers a
-    # fixed interface to create the documents the first time (using
-    # soledad.create_docs or whatever method maps to it in a similar store, and
-    # also allows to update flags and tags, hiding the actual implementation of
-    # where the flags/tags live in behind the concrete MailWrapper in use
-    # by this particular adaptor. In our impl it will be put_doc(fdoc) after
-    # locking the getting + updating of that fdoc for atomicity.
-
-    # 'store' must be an instance of something that offers a minimal subset of
-    # the document API that Soledad currently implements (create_doc, put_doc)
-    # I *think* store should belong to Account/Collection and be passed as
-    # param here instead of relying on it being an attribute of the instance.
-
-    def create_msg_docs(self, store, msg_wrapper):
-        """
-        :param store: The documents store
-        :type store:
-        :param msg_wrapper:
-        :type msg_wrapper: IMessageWrapper implementor
+        This is not the recommended way of obtaining a message, unless you know
+        how to take care of ensuring the internal consistency between the part
+        documents, or unless you are glueing together the part documents that
+        have been previously generated by `get_msg_from_string`.
         """
 
-    def update_msg_flags(self, store, msg_wrapper):
+    def get_flags_from_mdoc_id(self, store, mdoc_id):
         """
-        :param store: The documents store
-        :type store:
-        :param msg_wrapper:
-        :type msg_wrapper: IMessageWrapper implementor
         """
 
-    def update_msg_tags(self, store, msg_wrapper):
+    def create_msg(self, store, msg):
         """
-        :param store: The documents store
-        :type store:
-        :param msg_wrapper:
-        :type msg_wrapper: IMessageWrapper implementor
+        :param store: an instance of soledad, or anything that behaves alike
+        :param msg: a Message object.
+
+        :return: a Deferred that is fired when all the underlying documents
+                 have been created.
+        :rtype: defer.Deferred
+        """
+
+    def update_msg(self, store, msg):
+        """
+        :param msg: a Message object.
+        :param store: an instance of soledad, or anything that behaves alike
+        :return: a Deferred that is fired when all the underlying documents
+                 have been updated (actually, it's only the fdoc that's allowed
+                 to update).
+        :rtype: defer.Deferred
+        """
+
+    def get_count_unseen(self, store, mbox_uuid):
+        """
+        Get the number of unseen messages for a given mailbox.
+
+        :param store: instance of Soledad.
+        :param mbox_uuid: the uuid for this mailbox.
+        :rtype: int
+        """
+
+    def get_count_recent(self, store, mbox_uuid):
+        """
+        Get the number of recent messages for a given mailbox.
+
+        :param store: instance of Soledad.
+        :param mbox_uuid: the uuid for this mailbox.
+        :rtype: int
+        """
+
+    def get_mdoc_id_from_msgid(self, store, mbox_uuid, msgid):
+        """
+        Get the UID for a message with the passed msgid (the one in the headers
+        msg-id).
+        This is used by the MUA to retrieve the recently saved draft.
+        """
+
+    # mbox handling
+
+    def get_or_create_mbox(self, store, name):
+        """
+        Get the mailbox with the given name, or create one if it does not
+        exist.
+
+        :param store: instance of Soledad
+        :param name: the name of the mailbox
+        :type name: str
+        """
+
+    def update_mbox(self, store, mbox_wrapper):
+        """
+        Update the documents for a given mailbox.
+        :param mbox_wrapper: MailboxWrapper instance
+        :type mbox_wrapper: MailboxWrapper
+        :return: a Deferred that will be fired when the mailbox documents
+                 have been updated.
+        :rtype: defer.Deferred
+        """
+
+    def delete_mbox(self, store, mbox_wrapper):
+        """
+        """
+
+    def get_all_mboxes(self, store):
+        """
+        Retrieve a list with wrappers for all the mailboxes.
+
+        :return: a deferred that will be fired with a list of all the
+                 MailboxWrappers found.
+        :rtype: defer.Deferred
         """
