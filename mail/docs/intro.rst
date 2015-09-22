@@ -1,4 +1,0 @@
-Introduction
-============
-
-leap.mail intro

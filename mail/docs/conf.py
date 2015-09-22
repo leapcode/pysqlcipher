@@ -18,9 +18,16 @@ import os
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-sys.path.insert(0, os.path.abspath('../src'))
-sys.path.insert(0, os.path.abspath('../src/leap'))
-sys.path.insert(0, os.path.abspath('../src/leap/mail'))
+#sys.path.insert(0, os.path.abspath('../src'))
+#sys.path.insert(0, os.path.abspath('../src/leap'))
+#sys.path.insert(0, os.path.abspath('../src/leap/mail'))
+#sys.path.insert(0, os.path.abspath('../../leap_common/src/leap/common'))
+#sys.path.insert(0, os.path.abspath('../../soledad/client/src/leap/soledad/client'))
+
+VENV_PATH = os.environ.get('VIRTUAL_ENV')
+if VENV_PATH:
+    sys.path.insert(0, os.path.abspath(VENV_PATH + 'lib/python2.7/site-packages'))
+
 
 # -- General configuration ------------------------------------------------
 
@@ -57,7 +64,7 @@ copyright = u'2014-2015, The LEAP Encryption Access Project'
 # built documents.
 #
 # The short X.Y version.
-version = '0.4.0alpha1'
+version = '0.4.0rc2'
 # The full version, including alpha/beta/rc tags.
 release = '0.4.0'
 
@@ -104,7 +111,7 @@ pygments_style = 'sphinx'
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'default'
+html_theme = 'alabaster'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
