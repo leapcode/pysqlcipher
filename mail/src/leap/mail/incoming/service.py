@@ -304,7 +304,7 @@ class IncomingMail(Service):
                 logger.debug("skipping msg with decrypting errors...")
             elif self._is_msg(keys):
                 d = self._decrypt_doc(doc)
-                d.addCallback(self._extract_keys)
+                d.addCallback(self._maybe_extract_keys)
                 d.addCallbacks(self._add_message_locally, self._errback)
                 deferreds.append(d)
         d = defer.gatherResults(deferreds, consumeErrors=True)
@@ -594,7 +594,8 @@ class IncomingMail(Service):
         else:
             return failure
 
-    def _extract_keys(self, msgtuple):
+    @defer.inlineCallbacks
+    def _maybe_extract_keys(self, msgtuple):
         """
         Retrieve attached keys to the mesage and parse message headers for an
         *OpenPGP* header as described on the `IETF draft
@@ -621,20 +622,19 @@ class IncomingMail(Service):
         msg = self._parser.parsestr(data)
         _, fromAddress = parseaddr(msg['from'])
 
-        header = msg.get(OpenPGP_HEADER, None)
-        dh = defer.succeed(None)
-        if header is not None:
-            dh = self._extract_openpgp_header(header, fromAddress)
-
-        da = defer.succeed(None)
+        valid_attachment = False
         if msg.is_multipart():
-            da = self._extract_attached_key(msg.get_payload(), fromAddress)
+            valid_attachment = yield self._maybe_extract_attached_key(
+                msg.get_payload(), fromAddress)
 
-        d = defer.gatherResults([dh, da])
-        d.addCallback(lambda _: msgtuple)
-        return d
+        if not valid_attachment:
+            header = msg.get(OpenPGP_HEADER, None)
+            if header is not None:
+                yield self._maybe_extract_openpgp_header(header, fromAddress)
 
-    def _extract_openpgp_header(self, header, address):
+        defer.returnValue(msgtuple)
+
+    def _maybe_extract_openpgp_header(self, header, address):
         """
         Import keys from the OpenPGP header
 
@@ -679,7 +679,7 @@ class IncomingMail(Service):
                          % (header,))
         return d
 
-    def _extract_attached_key(self, attachments, address):
+    def _maybe_extract_attached_key(self, attachments, address):
         """
         Import keys from the attachments
 
@@ -689,6 +689,8 @@ class IncomingMail(Service):
         :type address: str
 
         :return: A Deferred that will be fired when all the keys are stored
+                 with a boolean True if there was a  valid key attached or
+                 False in other case
         :rtype: Deferred
         """
         MIME_KEY = "application/pgp-keys"
@@ -696,6 +698,7 @@ class IncomingMail(Service):
         def failed_put_key(failure):
             logger.info("An error has ocurred adding attached key for %s: %s"
                         % (address, failure.getErrorMessage()))
+            return False
 
         deferreds = []
         for attachment in attachments:
@@ -705,9 +708,11 @@ class IncomingMail(Service):
                     attachment.get_payload(),
                     OpenPGPKey,
                     address=address)
-                d.addErrback(failed_put_key)
+                d.addCallbacks(lambda _: True, failed_put_key)
                 deferreds.append(d)
-        return defer.gatherResults(deferreds)
+        d = defer.gatherResults(deferreds)
+        d.addCallback(lambda result: any(result))
+        return d
 
     def _add_message_locally(self, msgtuple):
         """

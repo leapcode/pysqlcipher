@@ -1,0 +1,1 @@
+- don't extract openpgp header if valid attached key (Closes: #7480)

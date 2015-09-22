@@ -164,7 +164,6 @@ subject: independence of cyberspace
         message.attach(key)
         self.fetcher._keymanager.put_raw_key = Mock(
             return_value=defer.succeed(None))
-        self.fetcher._keymanager.fetch_key = Mock()
 
         def put_raw_key_called(_):
             self.fetcher._keymanager.put_raw_key.assert_called_once_with(
@@ -184,11 +183,61 @@ subject: independence of cyberspace
         message.attach(key)
         self.fetcher._keymanager.put_raw_key = Mock(
             return_value=defer.fail(KeyAddressMismatch()))
+
+        def put_raw_key_called(_):
+            self.fetcher._keymanager.put_raw_key.assert_called_once_with(
+                KEY, OpenPGPKey, address=ADDRESS_2)
+
+        d = self._do_fetch(message.as_string())
+        d.addCallback(put_raw_key_called)
+        return d
+
+    def testExtractAttachedKeyAndNotOpenPGPHeader(self):
+        KEY = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n..."
+        KEYURL = "https://leap.se/key.txt"
+        OpenPGP = "id=12345678; url=\"%s\"; preference=signencrypt" % (KEYURL,)
+
+        message = MIMEMultipart()
+        message.add_header("from", ADDRESS_2)
+        message.add_header("OpenPGP", OpenPGP)
+        key = MIMEApplication("", "pgp-keys")
+        key.set_payload(KEY)
+        message.attach(key)
+
+        self.fetcher._keymanager.put_raw_key = Mock(
+            return_value=defer.succeed(None))
         self.fetcher._keymanager.fetch_key = Mock()
 
         def put_raw_key_called(_):
             self.fetcher._keymanager.put_raw_key.assert_called_once_with(
                 KEY, OpenPGPKey, address=ADDRESS_2)
+            self.assertFalse(self.fetcher._keymanager.fetch_key.called)
+
+        d = self._do_fetch(message.as_string())
+        d.addCallback(put_raw_key_called)
+        return d
+
+    def testExtractOpenPGPHeaderIfInvalidAttachedKey(self):
+        KEY = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n..."
+        KEYURL = "https://leap.se/key.txt"
+        OpenPGP = "id=12345678; url=\"%s\"; preference=signencrypt" % (KEYURL,)
+
+        message = MIMEMultipart()
+        message.add_header("from", ADDRESS_2)
+        message.add_header("OpenPGP", OpenPGP)
+        key = MIMEApplication("", "pgp-keys")
+        key.set_payload(KEY)
+        message.attach(key)
+
+        self.fetcher._keymanager.put_raw_key = Mock(
+            return_value=defer.fail(KeyAddressMismatch()))
+        self.fetcher._keymanager.fetch_key = Mock()
+
+        def put_raw_key_called(_):
+            self.fetcher._keymanager.put_raw_key.assert_called_once_with(
+                KEY, OpenPGPKey, address=ADDRESS_2)
+            self.fetcher._keymanager.fetch_key.assert_called_once_with(
+                ADDRESS_2, KEYURL, OpenPGPKey)
 
         d = self._do_fetch(message.as_string())
         d.addCallback(put_raw_key_called)
