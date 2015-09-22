@@ -346,7 +346,18 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
                                          verify=ca_bundle.where())
 
     @inlineCallbacks
-    def test_fetch_key_uses_default_ca_bundle_if_also_set_as_ca_cert(self):
+    def test_fetch_key_uses_ca_bundle_if_empty_string_specified(self):
+        ca_cert_path = ''
+        km = self._key_manager(ca_cert_path=ca_cert_path)
+        get_mock = self._mock_get_response(km, PUBLIC_KEY_OTHER)
+
+        yield km.fetch_key(ADDRESS_OTHER, REMOTE_KEY_URL, OpenPGPKey)
+
+        get_mock.assert_called_once_with(REMOTE_KEY_URL, data=None,
+                                         verify=ca_bundle.where())
+
+    @inlineCallbacks
+    def test_fetch_key_uses_default_ca_bundle_if_also_set_as_ca_cert_path(self):
         ca_cert_path = ca_bundle.where()
         km = self._key_manager(ca_cert_path=ca_cert_path)
         get_mock = self._mock_get_response(km, PUBLIC_KEY_OTHER)
