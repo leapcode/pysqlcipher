@@ -820,7 +820,11 @@ class KeyManager(object):
         self._assert_supported_key_type(ktype)
 
         logger.info("Fetch key for %s from %s" % (address, uri))
-        res = self._get_with_combined_ca_bundle(uri)
+        try:
+            res = self._get_with_combined_ca_bundle(uri)
+        except Exception as e:
+            logger.warning("There was a problem fetching key: %s" % (e,))
+            return defer.fail(KeyNotFound(uri))
         if not res.ok:
             return defer.fail(KeyNotFound(uri))
 
