@@ -215,11 +215,13 @@ class IMAPMailbox(object):
         but in the future will be useful to get absolute UIDs from
         message sequence numbers.
 
+
         :param message: the message sequence number.
         :type message: int
 
         :rtype: int
         :return: the UID of the message.
+
         """
         # TODO support relative sequences. The (imap) message should
         # receive a sequence number attribute: a deferred is not expected

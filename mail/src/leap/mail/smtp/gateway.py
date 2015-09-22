@@ -41,10 +41,7 @@ from leap.common.events import emit_async, catalog
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.keymanager.errors import KeyNotFound
 from leap.mail.utils import validate_address
-
-from leap.mail.smtp.rfc3156 import (
-    RFC3156CompliantGenerator,
-)
+from leap.mail.rfc3156 import RFC3156CompliantGenerator
 
 # replace email generator with a RFC 3156 compliant one.
 from email import generator

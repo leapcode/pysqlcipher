@@ -36,7 +36,7 @@ from leap.mail.adaptors import soledad_indexes as fields
 from leap.mail.constants import INBOX_NAME
 from leap.mail.imap.account import IMAPAccount
 from leap.mail.incoming.service import IncomingMail
-from leap.mail.smtp.rfc3156 import MultipartEncrypted, PGPEncrypted
+from leap.mail.rfc3156 import MultipartEncrypted, PGPEncrypted
 from leap.mail.tests import (
     TestCaseWithKeyManager,
     ADDRESS,

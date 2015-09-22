@@ -30,7 +30,7 @@ from twisted.mail.smtp import User
 from mock import Mock
 
 from leap.mail.smtp.gateway import SMTPFactory
-from leap.mail.smtp.rfc3156 import RFC3156CompliantGenerator
+from leap.mail.rfc3156 import RFC3156CompliantGenerator
 from leap.mail.outgoing.service import OutgoingMail
 from leap.mail.tests import (
     TestCaseWithKeyManager,

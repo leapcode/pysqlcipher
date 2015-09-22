@@ -36,12 +36,12 @@ from leap.keymanager.openpgp import OpenPGPKey
 from leap.keymanager.errors import KeyNotFound, KeyAddressMismatch
 from leap.mail import __version__
 from leap.mail.utils import validate_address
-from leap.mail.smtp.rfc3156 import MultipartEncrypted
-from leap.mail.smtp.rfc3156 import MultipartSigned
-from leap.mail.smtp.rfc3156 import encode_base64_rec
-from leap.mail.smtp.rfc3156 import RFC3156CompliantGenerator
-from leap.mail.smtp.rfc3156 import PGPSignature
-from leap.mail.smtp.rfc3156 import PGPEncrypted
+from leap.mail.rfc3156 import MultipartEncrypted
+from leap.mail.rfc3156 import MultipartSigned
+from leap.mail.rfc3156 import encode_base64_rec
+from leap.mail.rfc3156 import RFC3156CompliantGenerator
+from leap.mail.rfc3156 import PGPSignature
+from leap.mail.rfc3156 import PGPEncrypted
 
 # TODO
 # [ ] rename this module to something else, service should be the implementor

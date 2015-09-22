@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # mail.py
-# Copyright (C) 2014 LEAP
+# Copyright (C) 2014,2015 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,7 +15,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-Generic Access to Mail objects: Public LEAP Mail API.
+Generic Access to Mail objects.
+
+This module holds the public LEAP Mail API, which should be viewed as the main
+entry point for message and account manipulation, in a protocol-agnostic way.
+
+In the future, pluggable transports will expose this generic API.
 """
 import itertools
 import uuid
@@ -148,6 +153,9 @@ class MessagePart(object):
     # TODO This class should be better abstracted from the data model.
     # TODO support arbitrarily nested multiparts (right now we only support
     #      the trivial case)
+    """
+    Represents a part of a multipart MIME Message.
+    """
 
     def __init__(self, part_map, cdocs={}, nested=False):
         """

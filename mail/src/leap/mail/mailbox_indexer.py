@@ -15,6 +15,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
+.. :py:module::mailbox_indexer
+
 Local tables to store the message Unique Identifiers for a given mailbox.
 """
 import re
@@ -72,10 +74,11 @@ class MailboxIndexer(object):
     These indexes are Message Attributes needed for the IMAP specification (rfc
     3501), although they can be useful for other non-imap store
     implementations.
+
     """
     # The uids are expected to be 32-bits values, but the ROWIDs in sqlite
     # are 64-bit values. I *don't* think it really matters for any
-    # practical use, but it's good to remmeber we've got that difference going
+    # practical use, but it's good to remember we've got that difference going
     # on.
 
     store = None
