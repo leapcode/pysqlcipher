@@ -590,10 +590,12 @@ class KeyManager(object):
             if pubkey is None:
                 signature = KeyNotFound(verify)
             elif signed:
-                pubkey.sign_used = True
-                d = self._wrapper_map[ktype].put_key(pubkey, address)
-                d.addCallback(lambda _: (decrypted, pubkey))
-                return d
+                signature = pubkey
+                if not pubkey.sign_used:
+                    pubkey.sign_used = True
+                    d = self._wrapper_map[ktype].put_key(pubkey, verify)
+                    d.addCallback(lambda _: (decrypted, signature))
+                    return d
             else:
                 signature = InvalidSignature(
                     'Failed to verify signature with key %s' %
@@ -685,10 +687,12 @@ class KeyManager(object):
             signed = self._wrapper_map[ktype].verify(
                 data, pubkey, detached_sig=detached_sig)
             if signed:
-                pubkey.sign_used = True
-                d = self._wrapper_map[ktype].put_key(pubkey, address)
-                d.addCallback(lambda _: pubkey)
-                return d
+                if not pubkey.sign_used:
+                    pubkey.sign_used = True
+                    d = self._wrapper_map[ktype].put_key(pubkey, address)
+                    d.addCallback(lambda _: pubkey)
+                    return d
+                return pubkey
             else:
                 raise InvalidSignature(
                     'Failed to verify signature with key %s' %

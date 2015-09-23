@@ -30,6 +30,9 @@ from leap.keymanager.tests import (
     KeyManagerWithSoledadTestCase,
     ADDRESS,
     PUBLIC_KEY,
+    ADDRESS_2,
+    PUBLIC_KEY_2,
+    PRIVATE_KEY_2,
     KEY_FINGERPRINT
 )
 from leap.keymanager.validation import ValidationLevels
@@ -101,7 +104,7 @@ class ValidationLevelsTestCase(KeyManagerWithSoledadTestCase):
         self.assertEqual(key.fingerprint, UNRELATED_FINGERPRINT)
 
     @inlineCallbacks
-    def test_used(self):
+    def test_used_with_verify(self):
         TEXT = "some text"
 
         km = self._key_manager()
@@ -113,6 +116,27 @@ class ValidationLevelsTestCase(KeyManagerWithSoledadTestCase):
         signature = yield km2.sign(TEXT, ADDRESS, OpenPGPKey)
 
         yield km.verify(TEXT, ADDRESS, OpenPGPKey, detached_sig=signature)
+        d = km.put_raw_key(
+            UNRELATED_KEY, OpenPGPKey, ADDRESS,
+            validation=ValidationLevels.Provider_Endorsement)
+        yield self.assertFailure(d, KeyNotValidUpgrade)
+
+    @inlineCallbacks
+    def test_used_with_decrypt(self):
+        TEXT = "some text"
+
+        km = self._key_manager()
+        yield km.put_raw_key(UNEXPIRED_KEY, OpenPGPKey, ADDRESS)
+        yield km.put_raw_key(PRIVATE_KEY_2, OpenPGPKey, ADDRESS_2)
+        yield km.encrypt(TEXT, ADDRESS, OpenPGPKey)
+
+        km2 = self._key_manager()
+        yield km2.put_raw_key(UNEXPIRED_PRIVATE, OpenPGPKey, ADDRESS)
+        yield km2.put_raw_key(PUBLIC_KEY_2, OpenPGPKey, ADDRESS_2)
+        encrypted = yield km2.encrypt(TEXT, ADDRESS_2, OpenPGPKey,
+                                      sign=ADDRESS)
+
+        yield km.decrypt(encrypted, ADDRESS_2, OpenPGPKey, verify=ADDRESS)
         d = km.put_raw_key(
             UNRELATED_KEY, OpenPGPKey, ADDRESS,
             validation=ValidationLevels.Provider_Endorsement)
