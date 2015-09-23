@@ -916,17 +916,19 @@ class Account(object):
 
     adaptor_class = SoledadMailAdaptor
 
-    # This is a mapping to collection instances so that we always
-    # return a reference to them instead of creating new ones. However, being a
-    # dictionary of weakrefs values, they automagically vanish from the dict
-    # when no hard refs is left to them (so they can be garbage collected)
-    # This is important because the different wrappers rely on several
-    # kinds of deferredLocks that are kept as class or instance variables
-    _collection_mapping = weakref.WeakValueDictionary()
-
     def __init__(self, store, ready_cb=None):
         self.store = store
         self.adaptor = self.adaptor_class()
+
+        # this is a mapping to collection instances so that we always
+        # return a reference to them instead of creating new ones. however,
+        # being a dictionary of weakrefs values, they automagically vanish
+        # from the dict when no hard refs is left to them (so they can be
+        # garbage collected) this is important because the different wrappers
+        # rely on several kinds of deferredlocks that are kept as class or
+        # instance variables
+        self._collection_mapping = weakref.WeakValueDictionary()
+
         self.mbox_indexer = MailboxIndexer(self.store)
 
         # This flag is only used from the imap service for the moment.

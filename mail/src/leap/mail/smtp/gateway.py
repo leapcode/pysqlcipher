@@ -204,7 +204,8 @@ class SMTPDelivery(object):
         # verify if recipient key is available in keyring
         def found(_):
             log.msg("Accepting mail for %s..." % user.dest.addrstr)
-            emit_async(catalog.SMTP_RECIPIENT_ACCEPTED_ENCRYPTED, user.dest.addrstr)
+            emit_async(catalog.SMTP_RECIPIENT_ACCEPTED_ENCRYPTED,
+                       user.dest.addrstr)
 
         def not_found(failure):
             failure.trap(KeyNotFound)
