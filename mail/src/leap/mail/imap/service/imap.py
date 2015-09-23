@@ -158,8 +158,14 @@ def run_service(store, **kwargs):
     factory = LeapIMAPFactory(uuid, userid, store)
 
     try:
+        interface = "localhost"
+        # don't bind just to localhost if we are running on docker since we
+        # won't be able to access imap from the host
+        if os.environ.get("LEAP_DOCKERIZED"):
+            interface = ''
+
         tport = reactor.listenTCP(port, factory,
-                                  interface="localhost")
+                                  interface=interface)
     except CannotListenError:
         logger.error("IMAP Service failed to start: "
                      "cannot listen in port %s" % (port,))

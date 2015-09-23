@@ -19,6 +19,7 @@
 SMTP gateway helper function.
 """
 import logging
+import os
 
 from twisted.internet import reactor
 from twisted.internet.error import CannotListenError
@@ -64,7 +65,13 @@ def setup_smtp_gateway(port, userid, keymanager, smtp_host, smtp_port,
         userid, keymanager, smtp_cert, smtp_key, smtp_host, smtp_port)
     factory = SMTPFactory(userid, keymanager, encrypted_only, outgoing_mail)
     try:
-        tport = reactor.listenTCP(port, factory, interface="localhost")
+        interface = "localhost"
+        # don't bind just to localhost if we are running on docker since we
+        # won't be able to access smtp from the host
+        if os.environ.get("LEAP_DOCKERIZED"):
+            interface = ''
+
+        tport = reactor.listenTCP(port, factory, interface=interface)
         emit_async(catalog.SMTP_SERVICE_STARTED, str(port))
         return factory, tport
     except CannotListenError:

@@ -1,0 +1,1 @@
+- disable local only tcp bind on docker containers to allow access to IMAP and SMTP. Related to #7471.
