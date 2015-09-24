@@ -376,6 +376,8 @@ class KeyManager(object):
         leap_assert(
             ktype in self._wrapper_map,
             'Unkown key type: %s.' % str(ktype))
+        _keys = self._wrapper_map[ktype]
+
         emit_async(catalog.KEYMANAGER_LOOKING_FOR_KEY, address)
 
         def key_found(key):
@@ -396,13 +398,12 @@ class KeyManager(object):
             emit_async(catalog.KEYMANAGER_LOOKING_FOR_KEY, address)
             d = self._fetch_keys_from_server(address)
             d.addCallback(
-                lambda _:
-                self._wrapper_map[ktype].get_key(address, private=False))
+                lambda _: _keys.get_key(address, private=False))
             d.addCallback(key_found)
             return d
 
         # return key if it exists in local database
-        d = self._wrapper_map[ktype].get_key(address, private=private)
+        d = _keys.get_key(address, private=private)
         d.addCallbacks(key_found, key_not_found)
         return d
 
@@ -448,6 +449,7 @@ class KeyManager(object):
         :raise UnsupportedKeyTypeError: if invalid key type
         """
         self._assert_supported_key_type(ktype)
+        _keys = self._wrapper_map[ktype]
 
         def signal_finished(key):
             emit_async(
@@ -455,7 +457,8 @@ class KeyManager(object):
             return key
 
         emit_async(catalog.KEYMANAGER_STARTED_KEY_GENERATION, self._address)
-        d = self._wrapper_map[ktype].gen_key(self._address)
+
+        d = _keys.gen_key(self._address)
         d.addCallback(signal_finished)
         return d
 
@@ -545,14 +548,15 @@ class KeyManager(object):
         :raise UnsupportedKeyTypeError: if invalid key type
         """
         self._assert_supported_key_type(ktype)
+        _keys = self._wrapper_map[ktype]
 
         def encrypt(keys):
             pubkey, signkey = keys
-            encrypted = self._wrapper_map[ktype].encrypt(
+            encrypted = _keys.encrypt(
                 data, pubkey, passphrase, sign=signkey,
                 cipher_algo=cipher_algo)
             pubkey.encr_used = True
-            d = self._wrapper_map[ktype].put_key(pubkey, address)
+            d = _keys.put_key(pubkey, address)
             d.addCallback(lambda _: encrypted)
             return d
 
@@ -597,10 +601,11 @@ class KeyManager(object):
         :raise UnsupportedKeyTypeError: if invalid key type
         """
         self._assert_supported_key_type(ktype)
+        _keys = self._wrapper_map[ktype]
 
         def decrypt(keys):
             pubkey, privkey = keys
-            decrypted, signed = self._wrapper_map[ktype].decrypt(
+            decrypted, signed = _keys.decrypt(
                 data, privkey, passphrase=passphrase, verify=pubkey)
             if pubkey is None:
                 signature = KeyNotFound(verify)
@@ -608,7 +613,7 @@ class KeyManager(object):
                 signature = pubkey
                 if not pubkey.sign_used:
                     pubkey.sign_used = True
-                    d = self._wrapper_map[ktype].put_key(pubkey, verify)
+                    d = _keys.put_key(pubkey, verify)
                     d.addCallback(lambda _: (decrypted, signature))
                     return d
             else:
@@ -659,9 +664,10 @@ class KeyManager(object):
         :raise UnsupportedKeyTypeError: if invalid key type
         """
         self._assert_supported_key_type(ktype)
+        _keys = self._wrapper_map[ktype]
 
         def sign(privkey):
-            return self._wrapper_map[ktype].sign(
+            return _keys.sign(
                 data, privkey, digest_algo=digest_algo, clearsign=clearsign,
                 detach=detach, binary=binary)
 
@@ -697,14 +703,15 @@ class KeyManager(object):
         :raise UnsupportedKeyTypeError: if invalid key type
         """
         self._assert_supported_key_type(ktype)
+        _keys = self._wrapper_map[ktype]
 
         def verify(pubkey):
-            signed = self._wrapper_map[ktype].verify(
+            signed = _keys.verify(
                 data, pubkey, detached_sig=detached_sig)
             if signed:
                 if not pubkey.sign_used:
                     pubkey.sign_used = True
-                    d = self._wrapper_map[ktype].put_key(pubkey, address)
+                    d = keys.put_key(pubkey, address)
                     d.addCallback(lambda _: pubkey)
                     return d
                 return pubkey
@@ -732,7 +739,8 @@ class KeyManager(object):
         :raise UnsupportedKeyTypeError: if invalid key type
         """
         self._assert_supported_key_type(type(key))
-        return self._wrapper_map[type(key)].delete_key(key)
+        _keys = self._wrapper_map[type(key)]
+        return _keys.delete_key(key)
 
     def put_key(self, key, address):
         """
@@ -752,7 +760,9 @@ class KeyManager(object):
 
         :raise UnsupportedKeyTypeError: if invalid key type
         """
-        self._assert_supported_key_type(type(key))
+        ktype = type(key)
+        self._assert_supported_key_type(ktype)
+        _keys = self._wrapper_map[ktype]
 
         if address not in key.address:
             return defer.fail(
@@ -767,14 +777,13 @@ class KeyManager(object):
 
         def check_upgrade(old_key):
             if key.private or can_upgrade(key, old_key):
-                return self._wrapper_map[type(key)].put_key(key, address)
+                return _keys.put_key(key, address)
             else:
                 raise KeyNotValidUpgrade(
                     "Key %s can not be upgraded by new key %s"
                     % (old_key.key_id, key.key_id))
 
-        d = self._wrapper_map[type(key)].get_key(address,
-                                                 private=key.private)
+        d = _keys.get_key(address, private=key.private)
         d.addErrback(old_key_not_found)
         d.addCallback(check_upgrade)
         return d
@@ -804,7 +813,9 @@ class KeyManager(object):
         :raise UnsupportedKeyTypeError: if invalid key type
         """
         self._assert_supported_key_type(ktype)
-        pubkey, privkey = self._wrapper_map[ktype].parse_ascii_key(key)
+        _keys = self._wrapper_map[ktype]
+
+        pubkey, privkey = _keys.parse_ascii_key(key)
         pubkey.validation = validation
         d = self.put_key(pubkey, address)
         if privkey is not None:
@@ -837,6 +848,7 @@ class KeyManager(object):
         :raise UnsupportedKeyTypeError: if invalid key type
         """
         self._assert_supported_key_type(ktype)
+        _keys = self._wrapper_map[ktype]
 
         logger.info("Fetch key for %s from %s" % (address, uri))
         try:
@@ -848,7 +860,7 @@ class KeyManager(object):
             return defer.fail(KeyNotFound(uri))
 
         # XXX parse binary keys
-        pubkey, _ = self._wrapper_map[ktype].parse_ascii_key(res.content)
+        pubkey, _ = _keys.parse_ascii_key(res.content)
         if pubkey is None:
             return defer.fail(KeyNotFound(uri))
 
