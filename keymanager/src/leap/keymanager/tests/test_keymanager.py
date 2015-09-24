@@ -411,7 +411,8 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
             PRIVATE_KEY_2, ADDRESS_2)
         encdata = yield km.encrypt('data', ADDRESS, OpenPGPKey,
                                    sign=ADDRESS_2, fetch_remote=False)
-        yield km.decrypt(encdata, ADDRESS, OpenPGPKey, verify=ADDRESS_2, fetch_remote=False)
+        yield km.decrypt(
+            encdata, ADDRESS, OpenPGPKey, verify=ADDRESS_2, fetch_remote=False)
 
         # when
         key = yield km.get_key(ADDRESS_2, OpenPGPKey, fetch_remote=False)
@@ -423,14 +424,18 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
     def test_decrypt_does_not_update_sign_used_for_recipient(self):
         # given
         km = self._key_manager()
-        yield km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
-        yield km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY_2, ADDRESS_2)
+        yield km._wrapper_map[OpenPGPKey].put_ascii_key(
+            PRIVATE_KEY, ADDRESS)
+        yield km._wrapper_map[OpenPGPKey].put_ascii_key(
+            PRIVATE_KEY_2, ADDRESS_2)
         encdata = yield km.encrypt('data', ADDRESS, OpenPGPKey,
                                    sign=ADDRESS_2, fetch_remote=False)
-        yield km.decrypt(encdata, ADDRESS, OpenPGPKey, verify=ADDRESS_2, fetch_remote=False)
+        yield km.decrypt(
+            encdata, ADDRESS, OpenPGPKey, verify=ADDRESS_2, fetch_remote=False)
 
         # when
-        key = yield km.get_key(ADDRESS, OpenPGPKey, private=False, fetch_remote=False)
+        key = yield km.get_key(
+            ADDRESS, OpenPGPKey, private=False, fetch_remote=False)
 
         # then
         self.assertEqual(False, key.sign_used)
