@@ -228,17 +228,17 @@ class IncomingMail(Service):
         def _log_synced(result):
             log.msg('FETCH soledad SYNCED.')
             return result
-        try:
-            log.msg('FETCH: syncing soledad...')
-            d = self._soledad.sync()
-            d.addCallback(_log_synced)
-            return d
-        # TODO is this still raised? or should we do failure.trap
-        # instead?
-        except InvalidAuthTokenError:
+
+        def _signal_invalid_auth(failure):
+            failure.trap(InvalidAuthTokenError)
             # if the token is invalid, send an event so the GUI can
             # disable mail and show an error message.
             emit_async(catalog.SOLEDAD_INVALID_AUTH_TOKEN)
+
+        log.msg('FETCH: syncing soledad...')
+        d = self._soledad.sync()
+        d.addCallbacks(_log_synced, _signal_invalid_auth)
+        return d
 
     def _signal_fetch_to_ui(self, doclist):
         """

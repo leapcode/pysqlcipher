@@ -1,0 +1,1 @@
+- If the auth token has expired signal the GUI to request her to log in again (Closes: #7430)
