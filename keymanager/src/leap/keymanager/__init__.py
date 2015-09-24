@@ -22,7 +22,9 @@ import fileinput
 import os
 import sys
 import tempfile
+
 from leap.common import ca_bundle
+
 from ._version import get_versions
 
 try:
@@ -146,7 +148,8 @@ class KeyManager(object):
 
     def __del__(self):
         try:
-            created_tmp_combined_ca_bundle = self._combined_ca_bundle not in [ca_bundle.where(), self._ca_cert_path]
+            created_tmp_combined_ca_bundle = self._combined_ca_bundle not in \
+                [ca_bundle.where(), self._ca_cert_path]
             if created_tmp_combined_ca_bundle:
                 os.remove(self._combined_ca_bundle)
         except OSError:
@@ -164,7 +167,7 @@ class KeyManager(object):
         elif not self._ca_cert_path:
             return leap_ca_bundle
 
-        tmp_file = tempfile.NamedTemporaryFile(delete=False)  # delete when keymanager expires
+        tmp_file = tempfile.NamedTemporaryFile(delete=False)
 
         with open(tmp_file.name, 'w') as fout:
             fin = fileinput.input(files=(leap_ca_bundle, self._ca_cert_path))

@@ -357,7 +357,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
                                          verify=ca_bundle.where())
 
     @inlineCallbacks
-    def test_fetch_key_uses_default_ca_bundle_if_also_set_as_ca_cert_path(self):
+    def test_fetch_key_use_default_ca_bundle_if_set_as_ca_cert_path(self):
         ca_cert_path = ca_bundle.where()
         km = self._key_manager(ca_cert_path=ca_cert_path)
         get_mock = self._mock_get_response(km, PUBLIC_KEY_OTHER)
@@ -369,7 +369,8 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
 
     @inlineCallbacks
     def test_fetch_uses_combined_ca_bundle_otherwise(self):
-        with tempfile.NamedTemporaryFile() as tmp_input, tempfile.NamedTemporaryFile(delete=False) as tmp_output:
+        with tempfile.NamedTemporaryFile() as tmp_input, \
+                tempfile.NamedTemporaryFile(delete=False) as tmp_output:
             ca_content = 'some\ncontent\n'
             ca_cert_path = tmp_input.name
             self._dump_to_file(ca_cert_path, ca_content)
