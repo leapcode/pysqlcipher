@@ -939,15 +939,33 @@ class SoledadMailAdaptor(SoledadIndexMixin):
             d = defer.gatherResults(d_docs)
             return d
 
+        def _err_log_failure_part_docs(failure):
+            # See https://leap.se/code/issues/7495.
+            # This avoids blocks, but the real cause still needs to be
+            # isolated (0.9.0rc3) -- kali
+            log.msg("BUG ---------------------------------------------------")
+            log.msg("BUG: Error while retrieving part docs for mdoc id %s" %
+                    mdoc_id)
+            log.err(failure)
+            log.msg("BUG (please report above info) ------------------------")
+            return []
+
+        def _err_log_cannot_find_msg(failure):
+            log.msg("BUG: Error while getting msg (uid=%s)" % uid)
+            return None
+
         if get_cdocs:
             d = store.get_doc(mdoc_id)
             d.addCallback(wrap_meta_doc)
             d.addCallback(get_part_docs_from_mdoc_wrapper)
+            d.addErrback(_err_log_failure_part_docs)
+
         else:
             d = get_parts_doc_from_mdoc_id()
 
         d.addCallback(self._get_msg_from_variable_doc_list,
                       msg_class=MessageClass, uid=uid)
+        d.addErrback(_err_log_cannot_find_msg)
         return d
 
     def _get_msg_from_variable_doc_list(self, doc_list, msg_class, uid=None):
