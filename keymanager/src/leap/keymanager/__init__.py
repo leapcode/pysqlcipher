@@ -711,7 +711,7 @@ class KeyManager(object):
             if signed:
                 if not pubkey.sign_used:
                     pubkey.sign_used = True
-                    d = keys.put_key(pubkey, address)
+                    d = _keys.put_key(pubkey, address)
                     d.addCallback(lambda _: pubkey)
                     return d
                 return pubkey
