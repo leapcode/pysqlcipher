@@ -66,8 +66,14 @@ class KeyManagerWithSoledadTestCase(unittest.TestCase, BaseLeapTest):
             for private in [True, False]:
                 d = km.get_all_keys(private=private)
                 d.addCallback(delete_keys)
+                d.addCallback(check_deleted, private)
                 deferreds.append(d)
             return gatherResults(deferreds)
+
+        def check_deleted(_, private):
+            d = km.get_all_keys(private=private)
+            d.addCallback(lambda keys: self.assertEqual(keys, []))
+            return d
 
         # wait for the indexes to be ready for the tear down
         d = km._wrapper_map[OpenPGPKey].deferred_indexes
@@ -91,6 +97,7 @@ class KeyManagerWithSoledadTestCase(unittest.TestCase, BaseLeapTest):
 
 
 # key 24D18DDF: public key "Leap Test Key <leap@leap.se>"
+KEY_ID = "2F455E2824D18DDF"
 KEY_FINGERPRINT = "E36E738D69173C13D709E44F2F455E2824D18DDF"
 PUBLIC_KEY = """
 -----BEGIN PGP PUBLIC KEY BLOCK-----

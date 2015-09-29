@@ -21,12 +21,15 @@ Tests for the OpenPGP support on Key Manager.
 """
 
 
-from twisted.internet.defer import inlineCallbacks
+from datetime import datetime
+from mock import Mock
+from twisted.internet.defer import inlineCallbacks, gatherResults, succeed
 
 from leap.keymanager import (
     KeyNotFound,
     openpgp,
 )
+from leap.keymanager.keys import TYPE_ID_PRIVATE_INDEX
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.keymanager.tests import (
     KeyManagerWithSoledadTestCase,
@@ -34,6 +37,7 @@ from leap.keymanager.tests import (
     ADDRESS_2,
     KEY_FINGERPRINT,
     PUBLIC_KEY,
+    KEY_ID,
     PUBLIC_KEY_2,
     PRIVATE_KEY,
     PRIVATE_KEY_2,
@@ -246,6 +250,104 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         pubkey = yield pgp.get_key(ADDRESS, private=False)
         validsign = pgp.verify(data, pubkey, detached_sig=signature)
         self.assertTrue(validsign)
+
+    @inlineCallbacks
+    def test_self_repair_three_keys(self):
+        pgp = openpgp.OpenPGPScheme(
+            self._soledad, gpgbinary=self.gpg_binary_path)
+        yield pgp.put_ascii_key(PUBLIC_KEY, ADDRESS)
+
+        get_from_index = self._soledad.get_from_index
+        delete_doc = self._soledad.delete_doc
+
+        def my_get_from_index(*args):
+            if (args[0] == TYPE_ID_PRIVATE_INDEX and
+                    args[2] == KEY_ID):
+                k1 = OpenPGPKey(ADDRESS, key_id="1",
+                                refreshed_at=datetime(2005, 1, 1))
+                k2 = OpenPGPKey(ADDRESS, key_id="2",
+                                refreshed_at=datetime(2007, 1, 1))
+                k3 = OpenPGPKey(ADDRESS, key_id="3",
+                                refreshed_at=datetime(2001, 1, 1))
+                d1 = self._soledad.create_doc_from_json(k1.get_json())
+                d2 = self._soledad.create_doc_from_json(k2.get_json())
+                d3 = self._soledad.create_doc_from_json(k3.get_json())
+                return gatherResults([d1, d2, d3])
+            return get_from_index(*args)
+
+        self._soledad.get_from_index = my_get_from_index
+        self._soledad.delete_doc = Mock(return_value=succeed(None))
+
+        key = yield pgp.get_key(ADDRESS, private=False)
+
+        try:
+            self.assertEqual(key.key_id, "2")
+            self.assertEqual(self._soledad.delete_doc.call_count, 2)
+        finally:
+            self._soledad.get_from_index = get_from_index
+            self._soledad.delete_doc = delete_doc
+
+    @inlineCallbacks
+    def test_self_repair_no_keys(self):
+        pgp = openpgp.OpenPGPScheme(
+            self._soledad, gpgbinary=self.gpg_binary_path)
+        yield pgp.put_ascii_key(PUBLIC_KEY, ADDRESS)
+
+        get_from_index = self._soledad.get_from_index
+        delete_doc = self._soledad.delete_doc
+
+        def my_get_from_index(*args):
+            if (args[0] == TYPE_ID_PRIVATE_INDEX and
+                    args[2] == KEY_ID):
+                return succeed([])
+            return get_from_index(*args)
+
+        self._soledad.get_from_index = my_get_from_index
+        self._soledad.delete_doc = Mock(return_value=succeed(None))
+
+        try:
+            yield self.assertFailure(pgp.get_key(ADDRESS, private=False),
+                                     KeyNotFound)
+            self.assertEqual(self._soledad.delete_doc.call_count, 1)
+        finally:
+            self._soledad.get_from_index = get_from_index
+            self._soledad.delete_doc = delete_doc
+
+    @inlineCallbacks
+    def test_self_repair_put_keys(self):
+        pgp = openpgp.OpenPGPScheme(
+            self._soledad, gpgbinary=self.gpg_binary_path)
+
+        get_from_index = self._soledad.get_from_index
+        delete_doc = self._soledad.delete_doc
+
+        def my_get_from_index(*args):
+            if (args[0] == TYPE_ID_PRIVATE_INDEX and
+                    args[2] == KEY_ID):
+                k1 = OpenPGPKey(ADDRESS, key_id="1",
+                                fingerprint=KEY_FINGERPRINT,
+                                refreshed_at=datetime(2005, 1, 1))
+                k2 = OpenPGPKey(ADDRESS, key_id="2",
+                                fingerprint=KEY_FINGERPRINT,
+                                refreshed_at=datetime(2007, 1, 1))
+                k3 = OpenPGPKey(ADDRESS, key_id="3",
+                                fingerprint=KEY_FINGERPRINT,
+                                refreshed_at=datetime(2001, 1, 1))
+                d1 = self._soledad.create_doc_from_json(k1.get_json())
+                d2 = self._soledad.create_doc_from_json(k2.get_json())
+                d3 = self._soledad.create_doc_from_json(k3.get_json())
+                return gatherResults([d1, d2, d3])
+            return get_from_index(*args)
+
+        self._soledad.get_from_index = my_get_from_index
+        self._soledad.delete_doc = Mock(return_value=succeed(None))
+
+        try:
+            yield pgp.put_ascii_key(PUBLIC_KEY, ADDRESS)
+            self.assertEqual(self._soledad.delete_doc.call_count, 2)
+        finally:
+            self._soledad.get_from_index = get_from_index
+            self._soledad.delete_doc = delete_doc
 
     def _assert_key_not_found(self, pgp, address, private=False):
         d = pgp.get_key(address, private=private)

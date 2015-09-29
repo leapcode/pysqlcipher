@@ -22,6 +22,7 @@ import os
 import re
 import shutil
 import tempfile
+import traceback
 import io
 
 
@@ -41,6 +42,8 @@ from leap.keymanager.keys import (
     TYPE_ADDRESS_PRIVATE_INDEX,
     KEY_ADDRESS_KEY,
     KEY_ID_KEY,
+    KEY_FINGERPRINT_KEY,
+    KEY_REFRESHED_AT_KEY,
     KEYMANAGER_ACTIVE_TYPE,
 )
 
@@ -422,41 +425,42 @@ class OpenPGPScheme(EncryptionScheme):
         :rtype: Deferred
         """
         def check_and_put(docs, key):
-            if len(docs) == 1:
-                doc = docs.pop()
-                oldkey = build_key_from_dict(OpenPGPKey, doc.content)
-                if key.fingerprint == oldkey.fingerprint:
-                    # in case of an update of the key merge them with gnupg
-                    with TempGPGWrapper(gpgbinary=self._gpgbinary) as gpg:
-                        gpg.import_keys(oldkey.key_data)
-                        gpg.import_keys(key.key_data)
-                        gpgkey = gpg.list_keys(secret=key.private).pop()
-                        mergedkey = self._build_key_from_gpg(
-                            gpgkey,
-                            gpg.export_keys(gpgkey['fingerprint'],
-                                            secret=key.private))
-                    mergedkey.validation = max(
-                        [key.validation, oldkey.validation])
-                    mergedkey.last_audited_at = oldkey.last_audited_at
-                    mergedkey.refreshed_at = key.refreshed_at
-                    mergedkey.encr_used = key.encr_used or oldkey.encr_used
-                    mergedkey.sign_used = key.sign_used or oldkey.sign_used
-                    doc.set_json(mergedkey.get_json())
-                    d = self._soledad.put_doc(doc)
-                else:
-                    logger.critical(
-                        "Can't put a key whith the same key_id and different "
-                        "fingerprint: %s, %s"
-                        % (key.fingerprint, oldkey.fingerprint))
-                    d = defer.fail(
-                        errors.KeyFingerprintMismatch(key.fingerprint))
+            deferred_repair = defer.succeed(None)
+            if len(docs) == 0:
+                return self._soledad.create_doc_from_json(key.get_json())
             elif len(docs) > 1:
+                deferred_repair = self._repair_key_docs(docs, key.key_id)
+
+            doc = docs[0]
+            oldkey = build_key_from_dict(OpenPGPKey, doc.content)
+            if key.fingerprint != oldkey.fingerprint:
                 logger.critical(
-                    "There is more than one key with the same key_id %s"
-                    % (key.key_id,))
-                d = defer.fail(errors.KeyAttributesDiffer(key.key_id))
-            else:
-                d = self._soledad.create_doc_from_json(key.get_json())
+                    "Can't put a key whith the same key_id and different "
+                    "fingerprint: %s, %s"
+                    % (key.fingerprint, oldkey.fingerprint))
+                return defer.fail(
+                    errors.KeyFingerprintMismatch(key.fingerprint))
+
+            # in case of an update of the key merge them with gnupg
+            with TempGPGWrapper(gpgbinary=self._gpgbinary) as gpg:
+                gpg.import_keys(oldkey.key_data)
+                gpg.import_keys(key.key_data)
+                gpgkey = gpg.list_keys(secret=key.private).pop()
+                mergedkey = self._build_key_from_gpg(
+                    gpgkey,
+                    gpg.export_keys(gpgkey['fingerprint'],
+                                    secret=key.private))
+            mergedkey.validation = max(
+                [key.validation, oldkey.validation])
+            mergedkey.last_audited_at = oldkey.last_audited_at
+            mergedkey.refreshed_at = key.refreshed_at
+            mergedkey.encr_used = key.encr_used or oldkey.encr_used
+            mergedkey.sign_used = key.sign_used or oldkey.sign_used
+            doc.set_json(mergedkey.get_json())
+            deferred_put = self._soledad.put_doc(doc)
+
+            d = defer.gatherResults([deferred_put, deferred_repair])
+            d.addCallback(lambda res: res[0])
             return d
 
         d = self._soledad.get_from_index(
@@ -533,14 +537,21 @@ class OpenPGPScheme(EncryptionScheme):
                 self.KEY_TYPE,
                 key_id,
                 '1' if private else '0')
-            d.addCallback(get_doc, key_id)
+            d.addCallback(get_doc, key_id, activedoc)
             return d
 
-        def get_doc(doclist, key_id):
-            leap_assert(
-                len(doclist) is 1,
-                'There is %d keys for id %s!' % (len(doclist), key_id))
-            return doclist.pop()
+        def get_doc(doclist, key_id, activedoc):
+            if len(doclist) == 0:
+                logger.warning('There is no key for id %s! Self-repairing it.'
+                               % (key_id))
+                d = self._soledad.delete_doc(activedoc)
+                d.addCallback(lambda _: None)
+                return d
+            elif len(doclist) > 1:
+                d = self._repair_key_docs(doclist, key_id)
+                d.addCallback(lambda _: doclist[0])
+                return d
+            return doclist[0]
 
         d = self._soledad.get_from_index(
             TYPE_ADDRESS_PRIVATE_INDEX,
@@ -598,18 +609,20 @@ class OpenPGPScheme(EncryptionScheme):
         def delete_key(docs):
             if len(docs) == 0:
                 raise errors.KeyNotFound(key)
-            if len(docs) > 1:
-                logger.critical("There is more than one key for key_id %s"
-                                % key.key_id)
+            elif len(docs) > 1:
+                logger.warning("There is more than one key for key_id %s"
+                               % key.key_id)
 
-            doc = None
-            for d in docs:
-                if d.content['fingerprint'] == key.fingerprint:
-                    doc = d
-                    break
-            if doc is None:
+            has_deleted = False
+            deferreds = []
+            for doc in docs:
+                if doc.content['fingerprint'] == key.fingerprint:
+                    d = self._soledad.delete_doc(doc)
+                    deferreds.append(d)
+                    has_deleted = True
+            if not has_deleted:
                 raise errors.KeyNotFound(key)
-            return self._soledad.delete_doc(doc)
+            return defer.gatherResults(deferreds)
 
         d = self._soledad.get_from_index(
             TYPE_ID_PRIVATE_INDEX,
@@ -620,6 +633,36 @@ class OpenPGPScheme(EncryptionScheme):
         d.addCallback(get_key_docs)
         d.addCallback(delete_key)
         return d
+
+    def _repair_key_docs(self, doclist, key_id):
+        """
+        If there is more than one key for a key id try to self-repair it
+
+        :return: a Deferred that will be fired once all the deletions are
+                 completed
+        :rtype: Deferred
+        """
+        logger.error("BUG ---------------------------------------------------")
+        logger.error("There is more than one key with the same key_id %s:"
+                     % (key_id,))
+
+        def log_key_doc(doc):
+            logger.error("\t%s: %s" % (doc.content[KEY_ADDRESS_KEY],
+                                       doc.content[KEY_FINGERPRINT_KEY]))
+
+        doclist.sort(key=lambda doc: doc.content[KEY_REFRESHED_AT_KEY],
+                     reverse=True)
+        log_key_doc(doclist[0])
+        deferreds = []
+        for doc in doclist[1:]:
+            log_key_doc(doc)
+            d = self._soledad.delete_doc(doc)
+            deferreds.append(d)
+
+        logger.error("")
+        logger.error(traceback.extract_stack())
+        logger.error("BUG (please report above info) ------------------------")
+        return defer.gatherResults(deferreds, consumeErrors=True)
 
     #
     # Data encryption, decryption, signing and verifying

@@ -1,0 +1,1 @@
+- self-repair the keyring if keys get duplicated (Closes: #7485)
