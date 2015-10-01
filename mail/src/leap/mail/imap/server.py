@@ -269,12 +269,6 @@ class LEAPIMAPServer(imap4.IMAP4Server):
     select_FETCH = (do_FETCH, imap4.IMAP4Server.arg_seqset,
                     imap4.IMAP4Server.arg_fetchatt)
 
-    def notifyNew(self, ignored=None):
-        """
-        Notify new messages to listeners.
-        """
-        reactor.callFromThread(self.mbox.notify_new)
-
     def _cbSelectWork(self, mbox, cmdName, tag):
         """
         Callback for selectWork

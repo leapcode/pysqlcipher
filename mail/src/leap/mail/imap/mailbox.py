@@ -77,6 +77,32 @@ INIT_FLAGS = (MessageFlags.SEEN_FLAG, MessageFlags.ANSWERED_FLAG,
               MessageFlags.LIST_FLAG)
 
 
+def make_collection_listener(mailbox):
+    """
+    Wrap a mailbox in a class that can be hashed according to the mailbox name.
+
+    This means that dicts or sets will use this new equality rule, so we won't
+    collect multiple instances of the same mailbox in collections like the
+    MessageCollection set where we keep track of listeners.
+    """
+
+    class HashableMailbox(object):
+
+        def __init__(self, mbox):
+            self.mbox = mbox
+
+        def __hash__(self):
+            return hash(self.mbox.mbox_name)
+
+        def __eq__(self, other):
+            return self.mbox.mbox_name == other.mbox.mbox_name
+
+        def notify_new(self):
+            self.mbox.notify_new()
+
+    return HashableMailbox(mailbox)
+
+
 class IMAPMailbox(object):
     """
     A Soledad-backed IMAP mailbox.
@@ -118,7 +144,7 @@ class IMAPMailbox(object):
         self.rw = rw
         self._uidvalidity = None
         self.collection = collection
-        self.collection.addListener(self)
+        self.collection.addListener(make_collection_listener(self))
 
     @property
     def mbox_name(self):
@@ -383,6 +409,7 @@ class IMAPMailbox(object):
     def notify_new(self, *args):
         """
         Notify of new messages to all the listeners.
+
         This will be called indirectly by the underlying collection, that will
         notify this IMAPMailbox whenever there are changes in the number of
         messages in the collection, since we have added ourselves to the
@@ -405,13 +432,15 @@ class IMAPMailbox(object):
 
     def _get_notify_count(self):
         """
-        Get message count and recent count for this mailbox
-        Executed in a separate thread. Called from notify_new.
+        Get message count and recent count for this mailbox.
 
         :return: a deferred that will fire with a tuple, with number of
                  messages and number of recent messages.
         :rtype: Deferred
         """
+        # XXX this is way too expensive in cases like multiple APPENDS.
+        # We should have a way of keep a cache or do a self-increment for that
+        # kind of calls.
         d_exists = defer.maybeDeferred(self.getMessageCount)
         d_recent = defer.maybeDeferred(self.getRecentCount)
         d_list = [d_exists, d_recent]
@@ -875,8 +904,8 @@ class IMAPMailbox(object):
                  uid when the copy succeed.
         :rtype: Deferred
         """
-        if PROFILE_CMD:
-            do_profile_cmd(d, "COPY")
+        # if PROFILE_CMD:
+        #     do_profile_cmd(d, "COPY")
 
         # A better place for this would be  the COPY/APPEND dispatcher
         # in server.py, but qtreactor hangs when I do that, so this seems
