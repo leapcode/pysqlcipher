@@ -85,7 +85,7 @@ def run_command(command, _provider, username, password):
     d.addBoth(_cbShutDown)
     reactor.run()
 
-if __name__ == '__main__':
+def main():
     color_init()
     description = (Fore.YELLOW + 'Manage and configure a LEAP Account '
         'using the bonafide protocol.' + Fore.RESET)
@@ -98,3 +98,7 @@ if __name__ == '__main__':
     password = getpass(
         Fore.BLUE + '%s@%s password:' % (ns.username, ns.provider) + Fore.RESET)
     run_command(ns.command, ns.provider, ns.username, password)
+
+
+if __name__ == '__main__':
+    main()

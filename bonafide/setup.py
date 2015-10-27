@@ -70,6 +70,8 @@ try:
 except Exception:
     long_description = ""
 
+bonafide_cli = 'bonafide_cli=leap.bonafide.bonafide_cli:main'
+
 setup(
     name='leap.bonafide',
     version=VERSION,
@@ -92,4 +94,7 @@ setup(
     install_requires=parsed_reqs,
     include_package_data=True,
     zip_safe=False,
+    entry_points={
+        'console_scripts': [bonafide_cli]
+    },
 )
