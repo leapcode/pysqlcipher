@@ -1,28 +1,26 @@
-0.4.0rc2 Aug 26, 2015:
-  o Fix nested multipart rendering. Closes: #7244
-  o Bugfix: fix keyerror when inserting msg on pending_inserts dict.
-  o Bugfix: Return the first cdoc if no body found
-  o Feature: add very basic support for message sequence numbers.
-  o Lots of style fixes and tests updates.
-  o Bugfix: fixed syntax error in models.py.
-
-0.4.0rc1 Jul 10, 2015:
-  o Parse OpenPGP header and import keys from it. Closes: #3879.
-  o Don't add any footer to the emails. Closes: #4692.
-  o Adapt to new events api on leap.common. Related to #5359.
-  o Discover public keys via attachment. Closes: #5937.
-  o Creates a OutgoingMail class that has the logic for encrypting, signing and
+0.4.0 Oct xx, 2015:
+  o Expose generic and protocol-agnostic public mail API.
+  o Make use of the twisted-based, async soledad API.
+  o Create a OutgoingMail class that has the logic for encrypting, signing and
     sending messages. Factors that logic out of EncryptedMessage so it can be
     used by other clients. Closes: #6357.
-  o Refactor email fetching outside IMAP to it's own independient IncomingMail
+  o Refactor email fetching outside IMAP to its own independient IncomingMail
     class. Closes: #6361.
-  o Port `enum` to `enum34`. Closes #6601.
+  o Adapt to new events api on leap.common. Related to #5359.
+  o Discover public keys via attachment. Closes: #5937.
   o Add public key as attachment. Closes: #6617.
+  o Parse OpenPGP header and import keys from it. Closes: #3879.
+  o Don't add any footer to the emails. Closes: #4692.
   o Add listener for each email added to inbox in IncomingMail. Closes: #6742.
   o Ability to reindex local UIDs after a soledad sync. Closes: #6996.
-  o Update SMTP gateway docs. Closes #7169.
+  o Feature: add very basic support for message sequence numbers.
   o Send a BYE command to all open connections, so that the MUA is notified
     when the server is shutted down.
+  o Fix nested multipart rendering. Closes: #7244
+  o Update SMTP gateway docs. Closes #7169.
+  o Bugfix: fix keyerror when inserting msg on pending_inserts dict.
+  o Bugfix: Return the first cdoc if no body found
+  o Lots of style fixes and tests updates.
 
 0.3.10 Sept 26, 2014:
   o MessageCollection iterator now creates the LeapMessage with the
