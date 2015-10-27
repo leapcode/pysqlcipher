@@ -1,4 +1,4 @@
-0.4.0 Oct xx, 2015:
+0.4.0 Oct 28, 2015:
   o Expose generic and protocol-agnostic public mail API.
   o Make use of the twisted-based, async soledad API.
   o Create a OutgoingMail class that has the logic for encrypting, signing and
@@ -21,6 +21,11 @@
   o Bugfix: fix keyerror when inserting msg on pending_inserts dict.
   o Bugfix: Return the first cdoc if no body found
   o Lots of style fixes and tests updates.
+  o If the auth token has expired signal the GUI to request her to log in again
+    (Closes: #7430)
+  o don't extract openpgp header if valid attached key (Closes: #7480)
+  o disable local only tcp bind on docker containers to allow access to IMAP
+    and SMTP. Related to #7471.
 
 0.3.10 Sept 26, 2014:
   o MessageCollection iterator now creates the LeapMessage with the
