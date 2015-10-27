@@ -63,7 +63,7 @@ def _display_registered(result, _session, _provider):
               '%s@%s' % (user, _provider))
 
 
-def run_command(command, _provider, username, password):
+def run_command(command, _provider, username, password, skip_logout):
     api = provider.Api('https://api.%s:4430' % _provider)
     credentials = UsernamePassword(username, password)
     cdev_pem = os.path.expanduser(
@@ -81,23 +81,29 @@ def run_command(command, _provider, username, password):
         sys.exit()
 
     d.addErrback(_authEb)
-    d.addCallback(lambda _: _session.logout())
+    if not skip_logout:
+        d.addCallback(lambda _: _session.logout())
     d.addBoth(_cbShutDown)
     reactor.run()
+
 
 def main():
     color_init()
     description = (Fore.YELLOW + 'Manage and configure a LEAP Account '
-        'using the bonafide protocol.' + Fore.RESET)
+                   'using the bonafide protocol.' + Fore.RESET)
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument('command', type=str, choices=COMMANDS)
+    parser.add_argument(
+        '--skip-logout', action="store_true",
+        help=("Skip logout. Use this if you want to re-use the token."))
     parser.add_argument('--provider', dest='provider', required=True)
     parser.add_argument('--username', dest='username', required=True)
 
     ns = parser.parse_args()
     password = getpass(
-        Fore.BLUE + '%s@%s password:' % (ns.username, ns.provider) + Fore.RESET)
-    run_command(ns.command, ns.provider, ns.username, password)
+        Fore.BLUE + '%s@%s password:' % (
+            ns.username, ns.provider) + Fore.RESET)
+    run_command(ns.command, ns.provider, ns.username, password, ns.skip_logout)
 
 
 if __name__ == '__main__':

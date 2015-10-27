@@ -107,7 +107,6 @@ class Session(object):
         uri = self._api.get_logout_uri()
         met = self._api.get_logout_method()
         auth = yield self._request(self._agent, uri, method=met)
-        print "AUTH RESULT->", auth
         self.username = None
         self.password = None
         self._initialize_session()
