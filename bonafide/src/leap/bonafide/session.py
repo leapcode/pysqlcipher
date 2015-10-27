@@ -61,6 +61,10 @@ class Session(object):
         return self._token
 
     @property
+    def uuid(self):
+        return self._uuid
+
+    @property
     def is_authenticated(self):
         if not self._srp_user:
             return False
@@ -98,10 +102,16 @@ class Session(object):
         defer.returnValue(OK)
 
     @auth_required
+    @defer.inlineCallbacks
     def logout(self):
+        uri = self._api.get_logout_uri()
+        met = self._api.get_logout_method()
+        auth = yield self._request(self._agent, uri, method=met)
+        print "AUTH RESULT->", auth
         self.username = None
         self.password = None
         self._initialize_session()
+        defer.returnValue(OK)
 
     # User certificates
 
@@ -177,6 +187,12 @@ if __name__ == "__main__":
     d = session.authenticate()
     d.addCallback(print_result)
     d.addErrback(auth_eb)
+
+    d.addCallback(lambda _: session.get_smtp_cert())
+    #d.addCallback(lambda _: session.get_vpn_cert())
+    d.addCallback(print_result)
+    d.addErrback(auth_eb)
+
     d.addCallback(lambda _: session.logout())
     d.addErrback(auth_eb)
     d.addBoth(cbShutDown)

@@ -32,8 +32,7 @@ class SRPAuthMechanism(object):
     """
 
     def initialize(self, username, password):
-        srp_user = srp.User(username.encode('utf-8'),
-                            password.encode('utf-8'),
+        srp_user = srp.User(username, password,
                             srp.SHA256, srp.NG_1024)
         _, A = srp_user.start_authentication()
         return srp_user, A
@@ -71,7 +70,7 @@ class SRPAuthMechanism(object):
     def _check_for_errors(self, response):
         if 'errors' in response:
             msg = response['errors']['base']
-            raise SRPAuthError(msg)
+            raise SRPAuthError(unicode(msg).encode('utf-8'))
 
     def _unhex_salt_B(self, salt, B):
         if salt is None:
@@ -142,4 +141,3 @@ class SRPAuthBadDataFromServer(SRPAuthError):
 
 class SRPRegistrationError(Exception):
     pass
-

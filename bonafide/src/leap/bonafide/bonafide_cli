@@ -53,6 +53,8 @@ def _display_token(result, _session):
     if result == session.OK:
         print('[ok] token--> ' + Fore.GREEN +
               _session.token + Fore.RESET)
+        print('[ok] uuid --> ' + Fore.GREEN +
+              _session.uuid + Fore.RESET)
 
 def _display_registered(result, _session, _provider):
     ok, user = result

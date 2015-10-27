@@ -79,6 +79,8 @@ class Api(object):
     An object that has all the information that a client needs to communicate
     with the remote methods exposed by the web API of a LEAP provider.
 
+    The actions are described in https://leap.se/bonafide
+
     By using the _MetaActionDispatcher as a metaclass, the _actions dict will be
     translated dynamically into a set of instance methods that will allow
     getting the uri and method for each action.

@@ -50,6 +50,7 @@ def httpRequest(agent, url, values={}, headers={}, method='POST', token=None):
         headers['Authorization'] = ['Token token="%s"' % (bytes(token))]
 
     def handle_response(response):
+        print "RESPONSE CODE", response.code
         if response.code == 204:
             d = defer.succeed('')
         else:
