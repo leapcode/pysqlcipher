@@ -1,3 +1,9 @@
+pysqlcipher (2.6.3.5) unstable; urgency=medium
+
+  * Remove dependency on dh-python, its not available in wheezy
+
+ -- Micah Anderson <micah@debian.org>  Thu, 29 Oct 2015 16:54:36 -0400
+
 pysqlcipher (2.6.3.4) unstable; urgency=medium
 
   * remove unneeded debian watch file
