@@ -687,13 +687,14 @@ class MessageWrapper(object):
         :rtype: deferred
         """
         body_phash = self.hdoc.body
-        if not body_phash:
-            if self.cdocs:
-                return self.cdocs[1]
-        d = store.get_doc('C-' + body_phash)
-        d.addCallback(lambda doc: ContentDocWrapper(**doc.content))
-        return d
-
+        if body_phash:
+            d = store.get_doc('C-' + body_phash)
+            d.addCallback(lambda doc: ContentDocWrapper(**doc.content))
+            return d
+        elif self.cdocs:
+            return self.cdocs[1]
+        else:
+            return ''
 
 #
 # Mailboxes
