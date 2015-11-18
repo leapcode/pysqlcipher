@@ -1,3 +1,11 @@
+pysqlcipher (2.6.3.6) unstable; urgency=medium
+
+  * set dependency on sqlcipher to "> 3.2.0-1" so it matches
+    the jessie-backports version (3.2.0-1.1~bpo80+1)
+    see https://leap.se/code/issues/7576#note-10 and following
+
+ -- Varac Anero <varacanero@zeromail.org>  Wed, 18 Nov 2015 22:34:18 +0100
+
 pysqlcipher (2.6.3.5) unstable; urgency=medium
 
   * Remove dependency on dh-python, its not available in wheezy
