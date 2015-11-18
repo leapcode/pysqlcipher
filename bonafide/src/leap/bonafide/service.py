@@ -118,3 +118,12 @@ class BonafideService(object):
         mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         return '[+] Bonafide service: [%s sessions] [Mem usage: %s KB]' % (
             len(self._sessions), mem / 1024)
+
+    def do_get_vpn_cert(self):
+        pass
+
+    def do_get_smtp_cert(self):
+        pass
+
+    def do_update_user(self):
+        pass
