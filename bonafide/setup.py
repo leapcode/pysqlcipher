@@ -22,13 +22,7 @@ from setuptools import setup, find_packages
 
 from pkg import utils
 
-# XXX TODO --- update to versioneer 0.15  ---------------------
-#import versioneer
-#versioneer.versionfile_source = 'src/leap/bonafide/_version.py'
-#versioneer.versionfile_build = 'leap/common/_version.py'
-#versioneer.tag_prefix = ''  # tags are like 1.2.0
-#versioneer.parentdir_prefix = 'leap.bonafide-'
-# --------------------------------------------------------------
+import versioneer
 
 parsed_reqs = utils.parse_requirements()
 
@@ -49,10 +43,7 @@ trove_classifiers = [
 DOWNLOAD_BASE = ('https://github.com/leapcode/bonafide/'
                  'archive/%s.tar.gz')
 
-#_versions = versioneer.get_versions()
-#VERSION = _versions['version']
-VERSION = '0.0.1'
-#VERSION_FULL = _versions['full']
+VERSION = versioneer.get_version()
 DOWNLOAD_URL = ""
 
 # get the short version for the download url
@@ -60,9 +51,8 @@ DOWNLOAD_URL = ""
 #if len(_version_short) > 0:
     #VERSION_SHORT = _version_short[0]
     #DOWNLOAD_URL = DOWNLOAD_BASE % VERSION_SHORT
-#
-#cmdclass = versioneer.get_cmdclass()
-# ----------------------------------------------------------------
+
+cmdclass = versioneer.get_cmdclass()
 
 try:
     long_description = open('README.rst').read() + '\n\n\n' + \
@@ -75,7 +65,7 @@ bonafide_cli = 'bonafide_cli=leap.bonafide.bonafide_cli:main'
 setup(
     name='leap.bonafide',
     version=VERSION,
-    #cmdclass=cmdclass,
+    cmdclass=cmdclass,
     url='https://leap.se/',
     #download_url=DOWNLOAD_URL,
     license='GPLv3+',
