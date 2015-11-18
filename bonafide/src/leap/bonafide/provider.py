@@ -93,6 +93,7 @@ class Api(object):
     # TODO when should the provider-api object be created?
     # TODO pass a Provider object to constructor, with autoconf flag.
     # TODO make the actions attribute depend on the api version
+    # TODO missing UPDATE USER RECORD
 
     __metaclass__ = _MetaActionDispatcher
     _actions = {

@@ -31,7 +31,7 @@ from twisted.cred import portal, credentials, error as credError
 from twisted.cred.checkers import ICredentialsChecker
 from twisted.internet import defer, reactor
 
-from leap.bonafide.session import LeapSession
+from leap.bonafide.session import Session
 
 
 @implementer(ICredentialsChecker)
@@ -63,7 +63,7 @@ class SRPCredentialsChecker(object):
             self._check_srp_auth)
 
     def _check_srp_auth(session, username):
-        if session.authenticated:
+        if session.is_authenticated:
             # is ok! --- should add it to some global cache?
             return defer.succeed(username)
         else:
@@ -72,9 +72,8 @@ class SRPCredentialsChecker(object):
 
 
 def _get_leap_session(credentials):
-    session = LeapSession(credentials)
-    d = session.handshake()
-    d.addCallback(lambda _: session.authenticate())
+    session = Session(credentials)
+    d = session.authenticate()
     d.addCallback(lambda _: session)
     return d
 

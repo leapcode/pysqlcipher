@@ -17,4 +17,4 @@ the package in development mode by running::
 
 from the parent folder.
 
-Then you can use `bonafide_cli -h` to see the available commands.
+Then you can use `bonafide_cli2 -h` to see the available commands.
