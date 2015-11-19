@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# srp_auth.py
+# _srp.py
 # Copyright (C) 2015 LEAP
 #
 # This program is free software: you can redistribute it and/or modify

@@ -115,7 +115,7 @@ class BonafideProtocol(object):
         return d
 
     def do_stats(self):
-        log.msg('Calculating Bonafide STATS')
+        log.msg('Calculating Bonafide Service STATS')
         mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         return '[+] Bonafide service: [%s sessions] [Mem usage: %s KB]' % (
             len(self._sessions), mem / 1024)

@@ -3,7 +3,8 @@ Bonafide
 Bonafide is the protocol for secure user registration, authentication, and provider discovery for the LEAP
 applications. See the `Bonafide`_ design docs.
 
-This is a client implementation, written in python.
+This is a client implementation, written in python. It consists of a python library, a
+twisted service and a command-line interface to interact locally with it.
 
 .. _`Bonafide`: https://leap.se/en/docs/design/bonafide
 

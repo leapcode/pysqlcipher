@@ -14,11 +14,13 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 """
 Bonafide ZMQ Service.
 """
+
 from leap.bonafide import config
-from leap.bonafide.protocol import BonafideProtocol, COMMANDS
+from leap.bonafide._protocol import BonafideProtocol, COMMANDS
 
 from txzmq import ZmqEndpoint, ZmqFactory, ZmqREPConnection
 
@@ -26,6 +28,8 @@ from twisted.application import service
 from twisted.internet import reactor
 from twisted.python import log
 
+
+# TODO [] should shutdown all the ongoing connections when stopping the service
 
 class BonafideZMQService(service.Service):
 
@@ -36,8 +40,13 @@ class BonafideZMQService(service.Service):
     def startService(self):
         zf = ZmqFactory()
         e = ZmqEndpoint("bind", config.ENDPOINT)
+
         self._conn = _BonafideZmqREPConnection(zf, e, self._bonafide)
         reactor.callWhenRunning(self._conn.do_greet)
+
+    #def stopService(self):
+    #    pass
+
 
 
 class _BonafideZmqREPConnection(ZmqREPConnection):
@@ -50,7 +59,7 @@ class _BonafideZmqREPConnection(ZmqREPConnection):
         print "Bonafide service running..."
 
     def do_bye(self):
-        print "[+] Bonafide service stopped. Have a nice day."
+        print "Bonafide service stopped. Have a nice day."
         reactor.stop()
 
     def gotMessage(self, msgId, *parts):
@@ -59,7 +68,6 @@ class _BonafideZmqREPConnection(ZmqREPConnection):
 
         def log_err(failure):
             log.err(failure)
-            print "FAILURE", failure
             defer_reply("ERROR: %r" % failure)
 
         cmd = parts[0]
