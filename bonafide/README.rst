@@ -17,4 +17,8 @@ the package in development mode by running::
 
 from the parent folder.
 
+To run the bonafide daemon::
+
+  make bonafide_server
+
 Then you can use `bonafide_cli2 -h` to see the available commands.

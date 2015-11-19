@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# service.py
-# Copyright (C) 2014 LEAP
+# _protocol.py
+# Copyright (C) 2014-2015 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-Bonafide service.
+Bonafide protocol.
 """
 import os
 import resource
@@ -36,9 +36,9 @@ from twisted.python import log
 COMMANDS = 'signup', 'authenticate', 'logout', 'stats'
 
 
-class BonafideService(object):
+class BonafideProtocol(object):
     """
-    Expose the Bonafide Service API.
+    Expose the protocol that interacts with the Bonafide Service API.
     """
 
     _apis = defaultdict(None)
@@ -115,6 +115,7 @@ class BonafideService(object):
         return d
 
     def do_stats(self):
+        log.msg('Calculating Bonafide STATS')
         mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         return '[+] Bonafide service: [%s sessions] [Mem usage: %s KB]' % (
             len(self._sessions), mem / 1024)

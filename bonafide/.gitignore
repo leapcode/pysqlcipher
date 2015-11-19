@@ -4,6 +4,7 @@
 *.swp
 *.swo
 .project
+*.pid
 dist/
 build/
 MANIFEST

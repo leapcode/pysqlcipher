@@ -15,23 +15,39 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-Bonafide ZMQ Service
+Bonafide ZMQ Service.
 """
 from leap.bonafide import config
-from leap.bonafide.service import BonafideService, COMMANDS
+from leap.bonafide.protocol import BonafideProtocol, COMMANDS
 
 from txzmq import ZmqEndpoint, ZmqFactory, ZmqREPConnection
 
+from twisted.application import service
+from twisted.internet import reactor
 from twisted.python import log
 
 
-class BonafideZmqREPConnection(ZmqREPConnection):
+class BonafideZMQService(service.Service):
 
-    def initialize(self):
-        self._service = BonafideService()
+    def __init__(self):
+        self._bonafide = BonafideProtocol()
+        self._conn = None
+
+    def startService(self):
+        zf = ZmqFactory()
+        e = ZmqEndpoint("bind", config.ENDPOINT)
+        self._conn = _BonafideZmqREPConnection(zf, e, self._bonafide)
+        reactor.callWhenRunning(self._conn.do_greet)
+
+
+class _BonafideZmqREPConnection(ZmqREPConnection):
+
+    def __init__(self, zf, e, bonafide):
+        ZmqREPConnection.__init__(self, zf, e)
+        self._bonafide = bonafide
 
     def do_greet(self):
-        print "[+] Bonafide service running..."
+        print "Bonafide service running..."
 
     def do_bye(self):
         print "[+] Bonafide service stopped. Have a nice day."
@@ -58,40 +74,25 @@ class BonafideZmqREPConnection(ZmqREPConnection):
 
         elif cmd == 'signup':
             username, password = parts[1], parts[2]
-            d = self._service.do_signup(username, password)
+            d = self._bonafide.do_signup(username, password)
             d.addCallback(lambda response: defer_reply(
                 'REGISTERED -> %s' % response))
             d.addErrback(log_err)
 
         elif cmd == 'authenticate':
             username, password = parts[1], parts[2]
-            d = self._service.do_authenticate(username, password)
+            d = self._bonafide.do_authenticate(username, password)
             d.addCallback(lambda response: defer_reply(
                 'TOKEN -> %s' % response))
             d.addErrback(log_err)
 
         elif cmd == 'logout':
             username, password = parts[1], parts[2]
-            d = self._service.do_logout(username, password)
+            d = self._bonafide.do_logout(username, password)
             d.addCallback(lambda response: defer_reply(
                 'LOGOUT -> ok'))
             d.addErrback(log_err)
 
         elif cmd == 'stats':
-            response = self._service.do_stats()
+            response = self._bonafide.do_stats()
             defer_reply(response)
-
-
-def get_zmq_connection():
-    zf = ZmqFactory()
-    e = ZmqEndpoint("bind", config.ENDPOINT)
-    return BonafideZmqREPConnection(zf, e)
-
-
-if __name__ == "__main__":
-    from twisted.internet import reactor
-
-    s = get_zmq_connection()
-    reactor.callWhenRunning(s.initialize)
-    reactor.callWhenRunning(s.do_greet)
-    reactor.run()
