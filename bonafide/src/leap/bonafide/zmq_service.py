@@ -37,26 +37,44 @@ class BonafideZMQService(service.Service):
         self._bonafide = BonafideProtocol()
         self._conn = None
 
+        self.service_hooks = {}
+
     def startService(self):
         zf = ZmqFactory()
         e = ZmqEndpoint("bind", config.ENDPOINT)
 
-        self._conn = _BonafideZmqREPConnection(zf, e, self._bonafide)
+        self._conn = _BonafideZmqREPConnection(zf, e, self._bonafide, self)
         reactor.callWhenRunning(self._conn.do_greet)
 
-    #def stopService(self):
-    #    pass
+    def register_hook(self, kind, service):
+        print "REGISTERING HOOK", kind, service
+        self.service_hooks[kind] = service
+
+
+    # def stopService(self):
+    #     pass
 
 
 
 class _BonafideZmqREPConnection(ZmqREPConnection):
 
-    def __init__(self, zf, e, bonafide):
+    def __init__(self, zf, e, bonafide, service):
+        # XXX passing a ref to the service,
+        # to be able to access sibling services
         ZmqREPConnection.__init__(self, zf, e)
         self._bonafide = bonafide
+        self._service = service
+
+    def get_sibling_service(self, kind):
+        return self._service.parent.getServiceNamed(kind)
+
+    def get_hooked_service(self, kind):
+        hooks = self._service.service_hooks
+        if kind in hooks:
+            return self.get_sibling_service(hooks[kind])
 
     def do_greet(self):
-        print "Bonafide service running..."
+        print "Starging Bonafide service"
 
     def do_bye(self):
         print "Bonafide service stopped. Have a nice day."
@@ -72,11 +90,13 @@ class _BonafideZmqREPConnection(ZmqREPConnection):
 
         cmd = parts[0]
 
+        # TODO split using dispatcher pattern
+
         if cmd == "shutdown":
             defer_reply('ok, shutting down')
             reactor.callLater(1, self.do_bye)
 
-        if cmd not in COMMANDS:
+        if cmd not in COMMANDS + ("get_soledad",):
             response = 'INVALID COMMAND'
             defer_reply(response)
 
@@ -88,8 +108,18 @@ class _BonafideZmqREPConnection(ZmqREPConnection):
             d.addErrback(log_err)
 
         elif cmd == 'authenticate':
+
+            def activate_hook(token):
+                hook_service = self.get_hooked_service('on_auth')
+                if hook_service:
+                    hook_service.activate_hook(
+                        # TODO GET UUID TOO!!
+                        'on_auth', username=username, uuid=uuid, token=token)
+                return token
+
             username, password = parts[1], parts[2]
             d = self._bonafide.do_authenticate(username, password)
+            d.addCallback(activate_hook)
             d.addCallback(lambda response: defer_reply(
                 'TOKEN -> %s' % response))
             d.addErrback(log_err)
@@ -104,3 +134,9 @@ class _BonafideZmqREPConnection(ZmqREPConnection):
         elif cmd == 'stats':
             response = self._bonafide.do_stats()
             defer_reply(response)
+
+        # XXX DEBUG ---------------------------------------------------------
+        elif cmd == 'get_soledad':
+            response = str(self._service.parent.getServiceNamed("soledad"))
+            defer_reply(response)
+        # ------------------------------------------------------------------

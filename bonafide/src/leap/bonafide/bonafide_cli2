@@ -47,6 +47,11 @@ parser.add_argument("--username", dest="username",
                     help="user to operate with")
 parser.add_argument("--shutdown", dest="do_shutdown", action="store_true",
                     help="shutdown the bonafide service.")
+
+# XXX DEBUG --------------------------------------------------------
+parser.add_argument("--debug", dest="do_debug", action="store_true",
+                    help="debug command, can be anything")
+# ------------------------------------------------------------------
 ns = parser.parse_args()
 
 
@@ -97,11 +102,14 @@ def send_command():
         passwd = getpass.getpass()
         data = ("logout", ns.username, passwd)
 
+    elif ns.do_debug:
+        data = ("get_soledad",)
+
     s = get_zmq_connection()
     try:
         d = s.sendMsg(*data)
     except zmq.error.Again:
-        print Fore.RED + "[ERROR] Server is down :(" + Fore.RESET
+        print Fore.RED + "[ERROR] Server is down" + Fore.RESET
     d.addCallback(cb)
     d.addCallback(lambda x: reactor.stop())
 
