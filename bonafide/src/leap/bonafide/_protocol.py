@@ -88,14 +88,14 @@ class BonafideProtocol(object):
         return d
 
     def do_authenticate(self, full_id, password):
-        def return_token(result, _session):
+        def return_token_and_uuid(result, _session):
             if result == OK:
-                return str(_session.token)
+                return str(_session.token), str(_session.uuid)
 
         log.msg('AUTH for %s' % full_id)
         session = self._get_session(full_id, password)
         d = session.authenticate()
-        d.addCallback(return_token, session)
+        d.addCallback(return_token_and_uuid, session)
         return d
 
     def do_logout(self, full_id, password):
