@@ -29,8 +29,6 @@ from twisted.internet import reactor
 from twisted.python import log
 
 
-# TODO [] should shutdown all the ongoing connections when stopping the service
-
 class BonafideZMQService(service.Service):
 
     def __init__(self):
@@ -45,14 +43,13 @@ class BonafideZMQService(service.Service):
 
         self._conn = _BonafideZmqREPConnection(zf, e, self._bonafide, self)
         reactor.callWhenRunning(self._conn.do_greet)
+        super(BonafideZMQService, self).startService()
 
-    def register_hook(self, kind, service):
-        print "REGISTERING HOOK", kind, service
-        self.service_hooks[kind] = service
+    def stopService(self):
+        super(BonafideZMQService, self).stopService()
 
-
-    # def stopService(self):
-    #     pass
+    def register_hook(self, kind, trigger):
+        self.service_hooks[kind] = trigger
 
 
 
@@ -74,7 +71,7 @@ class _BonafideZmqREPConnection(ZmqREPConnection):
             return self.get_sibling_service(hooks[kind])
 
     def do_greet(self):
-        print "Starging Bonafide service"
+        print "Starting Bonafide service"
 
     def do_bye(self):
         print "Bonafide service stopped. Have a nice day."
@@ -109,19 +106,21 @@ class _BonafideZmqREPConnection(ZmqREPConnection):
 
         elif cmd == 'authenticate':
 
-            def activate_hook(token):
-                hook_service = self.get_hooked_service('on_auth')
-                if hook_service:
-                    hook_service.activate_hook(
-                        # TODO GET UUID TOO!!
-                        'on_auth', username=username, uuid=uuid, token=token)
-                return token
+            def notify_hook(result):
+                this_hook = 'on_bonafide_auth'
+                token, uuid = result
+                hooked_service = self.get_hooked_service(this_hook)
+                if hooked_service:
+                    hooked_service.notify_hook(
+                        this_hook,
+                        username=username, uuid=uuid, token=token)
+                return result
 
             username, password = parts[1], parts[2]
             d = self._bonafide.do_authenticate(username, password)
-            d.addCallback(activate_hook)
+            d.addCallback(notify_hook)
             d.addCallback(lambda response: defer_reply(
-                'TOKEN -> %s' % response))
+                'TOKEN, UUID: %s' % str(response)))
             d.addErrback(log_err)
 
         elif cmd == 'logout':
