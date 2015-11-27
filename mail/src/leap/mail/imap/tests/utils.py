@@ -77,14 +77,11 @@ class IMAP4HelperMixin(SoledadTestMixin):
 
         soledad_adaptor.cleanup_deferred_locks()
 
-        UUID = 'deadbeef',
         USERID = TEST_USER
 
         def setup_server(account):
             self.server = LEAPIMAPServer(
-                uuid=UUID, userid=USERID,
-                contextFactory=self.serverCTX,
-                soledad=self._soledad)
+                contextFactory=self.serverCTX)
             self.server.theAccount = account
 
             d_server_ready = defer.Deferred()

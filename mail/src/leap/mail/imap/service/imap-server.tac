@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # imap-server.tac
 # Copyright (C) 2013,2014 LEAP
@@ -27,6 +28,9 @@ userid = 'user@provider'
 uuid = 'deadbeefdeadabad'
 passwd = 'supersecret' # optional, will get prompted if not found.
 """
+
+# TODO -- this .tac file should be deprecated in favor of bitmask.core.bitmaskd
+
 import ConfigParser
 import getpass
 import os
@@ -112,7 +116,7 @@ tempdir = "/tmp/"
 
 print "[~] user:", userid
 soledad = initialize_soledad(uuid, userid, passwd, secrets,
-                             localdb, gnupg_home, tempdir)
+                             localdb, gnupg_home, tempdir, userid=userid)
 km_args = (userid, "https://localhost", soledad)
 km_kwargs = {
     "token": "",
@@ -131,7 +135,8 @@ keymanager = KeyManager(*km_args, **km_kwargs)
 
 
 def getIMAPService():
-    factory = imap.LeapIMAPFactory(uuid, userid, soledad)
+    soledad_sessions = {userid: soledad}
+    factory = imap.LeapIMAPFactory(soledad_sessions)
     return internet.TCPServer(port, factory, interface="localhost")
 
 

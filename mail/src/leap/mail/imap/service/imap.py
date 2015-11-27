@@ -15,21 +15,26 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-IMAP service initialization
+IMAP Service Initialization.
 """
 import logging
 import os
 
 from collections import defaultdict
 
+from twisted.cred.portal import Portal, IRealm
+from twisted.cred.credentials import IUsernamePassword
+from twisted.cred.checkers import ICredentialsChecker
+from twisted.cred.error import UnauthorizedLogin
+from twisted.mail.imap4 import IAccount
+from twisted.internet import defer
 from twisted.internet import reactor
 from twisted.internet.error import CannotListenError
 from twisted.internet.protocol import ServerFactory
-from twisted.mail import imap4
 from twisted.python import log
+from zope.interface import implementer
 
 from leap.common.events import emit_async, catalog
-from leap.common.check import leap_check
 from leap.mail.imap.account import IMAPAccount
 from leap.mail.imap.server import LEAPIMAPServer
 
@@ -41,57 +46,145 @@ DO_MANHOLE = os.environ.get("LEAP_MAIL_MANHOLE", None)
 if DO_MANHOLE:
     from leap.mail.imap.service import manhole
 
-DO_PROFILE = os.environ.get("LEAP_PROFILE", None)
-if DO_PROFILE:
-    import cProfile
-    log.msg("Starting PROFILING...")
-
-    PROFILE_DAT = "/tmp/leap_mail_profile.pstats"
-    pr = cProfile.Profile()
-    pr.enable()
-
 # The default port in which imap service will run
+
 IMAP_PORT = 1984
 
+#
+# Credentials Handling
+#
 
-class IMAPAuthRealm(object):
-    """
-    Dummy authentication realm. Do not use in production!
-    """
-    theAccount = None
+
+@implementer(IRealm)
+class LocalSoledadIMAPRealm(object):
+
+    _encoding = 'utf-8'
+
+    def __init__(self, soledad_sessions):
+        """
+        :param soledad_sessions: a dict-like object, containing instances
+                                 of a Store (soledad instances), indexed by
+                                 userid.
+        """
+        self._soledad_sessions = soledad_sessions
 
     def requestAvatar(self, avatarId, mind, *interfaces):
-        return imap4.IAccount, self.theAccount, lambda: None
+        if isinstance(avatarId, str):
+            avatarId = avatarId.decode(self._encoding)
+
+        def gotSoledad(soledad):
+            for iface in interfaces:
+                if iface is IAccount:
+                    avatar = IMAPAccount(avatarId, soledad)
+                    return (IAccount, avatar,
+                            getattr(avatar, 'logout', lambda: None))
+            raise NotImplementedError(self, interfaces)
+
+        return self.lookupSoledadInstance(avatarId).addCallback(gotSoledad)
+
+    def lookupSoledadInstance(self, userid):
+        soledad = self._soledad_sessions[userid]
+        # XXX this should return the instance after whenReady callback
+        return defer.succeed(soledad)
+
+
+@implementer(ICredentialsChecker)
+class LocalSoledadTokenChecker(object):
+
+    """
+    A Credentials Checker for a LocalSoledad store.
+
+    It checks that:
+
+    1) The Local SoledadStorage has been correctly unlocked for the given
+       user. This currently means that the right passphrase has been passed
+       to the Local SoledadStorage.
+
+    2) The password passed in the credentials matches whatever token has
+       been stored in the local encrypted SoledadStorage, associated to the
+       Protocol that is requesting the authentication.
+    """
+
+    credentialInterfaces = (IUsernamePassword,)
+    service = None
+
+    def __init__(self, soledad_sessions):
+        """
+        :param soledad_sessions: a dict-like object, containing instances
+                                 of a Store (soledad instances), indexed by
+                                 userid.
+        """
+        self._soledad_sessions = soledad_sessions
+
+    def requestAvatarId(self, credentials):
+        if self.service is None:
+            raise NotImplementedError(
+                "this checker has not defined its service name")
+        username, password = credentials.username, credentials.password
+        d = self.checkSoledadToken(username, password, self.service)
+        d.addErrback(lambda f: defer.fail(UnauthorizedLogin()))
+        return d
+
+    def checkSoledadToken(self, username, password, service):
+        soledad = self._soledad_sessions.get(username)
+        if not soledad:
+            return defer.fail(Exception("No soledad"))
+
+        def match_token(token):
+            if token is None:
+                raise RuntimeError('no token')
+            if token == password:
+                return username
+            else:
+                raise RuntimeError('bad token')
+
+        d = soledad.get_or_create_service_token(service)
+        d.addCallback(match_token)
+        return d
+
+
+class IMAPTokenChecker(LocalSoledadTokenChecker):
+    """A credentials checker that will lookup a token for the IMAP service."""
+    service = 'imap'
+
+
+class LocalSoledadIMAPServer(LEAPIMAPServer):
+
+    """
+    An IMAP Server that authenticates against a LocalSoledad store.
+    """
+
+    def __init__(self, soledad_sessions, *args, **kw):
+
+        LEAPIMAPServer.__init__(self, *args, **kw)
+
+        realm = LocalSoledadIMAPRealm(soledad_sessions)
+        portal = Portal(realm)
+        checker = IMAPTokenChecker(soledad_sessions)
+        self.checker = checker
+        self.portal = portal
+        portal.registerChecker(checker)
 
 
 class LeapIMAPFactory(ServerFactory):
+
     """
     Factory for a IMAP4 server with soledad remote sync and gpg-decryption
     capabilities.
     """
-    protocol = LEAPIMAPServer
 
-    def __init__(self, uuid, userid, soledad):
+    protocol = LocalSoledadIMAPServer
+
+    def __init__(self, soledad_sessions):
         """
         Initializes the server factory.
 
-        :param uuid: user uuid
-        :type uuid: str
-
-        :param userid: user id (user@provider.org)
-        :type userid: str
-
-        :param soledad: soledad instance
-        :type soledad: Soledad
+        :param soledad_sessions: a dict-like object, containing instances
+                                 of a Store (soledad instances), indexed by
+                                 userid.
         """
-        self._uuid = uuid
-        self._userid = userid
-        self._soledad = soledad
-
-        theAccount = IMAPAccount(uuid, soledad)
-        self.theAccount = theAccount
+        self._soledad_sessions = soledad_sessions
         self._connections = defaultdict()
-        # XXX how to pass the store along?
 
     def buildProtocol(self, addr):
         """
@@ -103,13 +196,7 @@ class LeapIMAPFactory(ServerFactory):
         # TODO should reject anything from addr != localhost,
         # just in case.
         log.msg("Building protocol for connection %s" % addr)
-        imapProtocol = self.protocol(
-            uuid=self._uuid,
-            userid=self._userid,
-            soledad=self._soledad)
-        imapProtocol.theAccount = self.theAccount
-        imapProtocol.factory = self
-
+        imapProtocol = self.protocol(self._soledad_sessions)
         self._connections[addr] = imapProtocol
         return imapProtocol
 
@@ -123,39 +210,21 @@ class LeapIMAPFactory(ServerFactory):
         """
         Stops imap service (fetcher, factory and port).
         """
-        # mark account as unusable, so any imap command will fail
-        # with unauth state.
-        self.theAccount.end_session()
-
-        # TODO should wait for all the pending deferreds,
-        # the twisted way!
-        if DO_PROFILE:
-            log.msg("Stopping PROFILING")
-            pr.disable()
-            pr.dump_stats(PROFILE_DAT)
-
         return ServerFactory.doStop(self)
 
 
-def run_service(store, **kwargs):
+def run_service(soledad_sessions, port=IMAP_PORT):
     """
     Main entry point to run the service from the client.
 
-    :param store: a soledad instance
+    :param soledad_sessions: a dict-like object, containing instances
+                             of a Store (soledad instances), indexed by userid.
 
     :returns: the port as returned by the reactor when starts listening, and
               the factory for the protocol.
+    :rtype: tuple
     """
-    leap_check(store, "store cannot be None")
-    # XXX this can also be a ProxiedObject, FIXME
-    # leap_assert_type(store, Soledad)
-
-    port = kwargs.get('port', IMAP_PORT)
-    userid = kwargs.get('userid', None)
-    leap_check(userid is not None, "need an user id")
-
-    uuid = store.uuid
-    factory = LeapIMAPFactory(uuid, userid, store)
+    factory = LeapIMAPFactory(soledad_sessions)
 
     try:
         interface = "localhost"
@@ -164,6 +233,7 @@ def run_service(store, **kwargs):
         if os.environ.get("LEAP_DOCKERIZED"):
             interface = ''
 
+        # TODO use Endpoints !!!
         tport = reactor.listenTCP(port, factory,
                                   interface=interface)
     except CannotListenError:
@@ -178,9 +248,9 @@ def run_service(store, **kwargs):
             # TODO get pass from env var.too.
             manhole_factory = manhole.getManholeFactory(
                 {'f': factory,
-                 'a': factory.theAccount,
                  'gm': factory.theAccount.getMailbox},
                 "boss", "leap")
+            # TODO  use Endpoints !!!
             reactor.listenTCP(manhole.MANHOLE_PORT, manhole_factory,
                               interface="127.0.0.1")
         logger.debug("IMAP4 Server is RUNNING in port  %s" % (port,))

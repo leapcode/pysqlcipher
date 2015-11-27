@@ -20,15 +20,9 @@ LEAP IMAP4 Server Implementation.
 import StringIO
 from copy import copy
 
-from twisted import cred
-from twisted.internet import reactor
 from twisted.internet.defer import maybeDeferred
 from twisted.mail import imap4
 from twisted.python import log
-
-from leap.common.check import leap_assert, leap_assert_type
-from leap.common.events import emit_async, catalog
-from leap.soledad.client import Soledad
 
 # imports for LITERAL+ patch
 from twisted.internet import defer, interfaces
@@ -72,25 +66,6 @@ class LEAPIMAPServer(imap4.IMAP4Server):
     """
     An IMAP4 Server with a LEAP Storage Backend.
     """
-    def __init__(self, *args, **kwargs):
-        # pop extraneous arguments
-        soledad = kwargs.pop('soledad', None)
-        uuid = kwargs.pop('uuid', None)
-        userid = kwargs.pop('userid', None)
-
-        leap_assert(soledad, "need a soledad instance")
-        leap_assert_type(soledad, Soledad)
-        leap_assert(uuid, "need a user in the initialization")
-
-        self._userid = userid
-
-        # initialize imap server!
-        imap4.IMAP4Server.__init__(self, *args, **kwargs)
-
-        # we should initialize the account here,
-        # but we move it to the factory so we can
-        # populate the test account properly (and only once
-        # per session)
 
     #############################################################
     #
@@ -181,10 +156,6 @@ class LEAPIMAPServer(imap4.IMAP4Server):
         :param line: the line from the server, without the line delimiter.
         :type line: str
         """
-        if self.theAccount.session_ended is True and self.state != "unauth":
-            log.msg("Closing the session. State: unauth")
-            self.state = "unauth"
-
         if "login" in line.lower():
             # avoid to log the pass, even though we are using a dummy auth
             # by now.
@@ -208,24 +179,6 @@ class LEAPIMAPServer(imap4.IMAP4Server):
             self.mbox = None
         self.state = 'unauth'
 
-    def authenticateLogin(self, username, password):
-        """
-        Lookup the account with the given parameters, and deny
-        the improper combinations.
-
-        :param username: the username that is attempting authentication.
-        :type username: str
-        :param password: the password to authenticate with.
-        :type password: str
-        """
-        # XXX this should use portal:
-        # return portal.login(cred.credentials.UsernamePassword(user, pass)
-        if username != self._userid:
-            # bad username, reject.
-            raise cred.error.UnauthorizedLogin()
-        # any dummy password is allowed so far. use realm instead!
-        emit_async(catalog.IMAP_CLIENT_LOGIN, username, "1")
-        return imap4.IAccount, self.theAccount, lambda: None
 
     def do_FETCH(self, tag, messages, query, uid=0):
         """

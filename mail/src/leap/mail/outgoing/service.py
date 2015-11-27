@@ -71,7 +71,7 @@ class OutgoingMail:
 
     def __init__(self, from_address, keymanager, cert, key, host, port):
         """
-        Initialize the mail service.
+        Initialize the outgoing mail service.
 
         :param from_address: The sender address.
         :type from_address: str

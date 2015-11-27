@@ -49,6 +49,9 @@ from email import generator
 generator.Generator = RFC3156CompliantGenerator
 
 
+# TODO -- implement Queue using twisted.mail.mail.MailService
+
+
 #
 # Helper utilities
 #

@@ -49,6 +49,7 @@ if PROFILE_CMD:
 # Soledad IMAP Account
 #######################################
 
+
 class IMAPAccount(object):
     """
     An implementation of an imap4 Account
@@ -68,8 +69,8 @@ class IMAPAccount(object):
         You can either pass a deferred to this constructor, or use
         `callWhenReady` method.
 
-        :param user_id: The name of the account (user id, in the form
-                        user@provider).
+        :param user_id: The identifier of the user this account belongs to
+                        (user id, in the form user@provider).
         :type user_id: str
 
         :param store: a Soledad instance.
