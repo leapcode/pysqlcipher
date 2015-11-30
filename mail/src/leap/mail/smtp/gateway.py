@@ -202,20 +202,21 @@ class SMTPDelivery(object):
         def found(_):
             log.msg("Accepting mail for %s..." % user.dest.addrstr)
             emit_async(catalog.SMTP_RECIPIENT_ACCEPTED_ENCRYPTED,
-                       user.dest.addrstr)
+                       self._userid, user.dest.addrstr)
 
         def not_found(failure):
             failure.trap(KeyNotFound)
 
             # if key was not found, check config to see if will send anyway
             if self._encrypted_only:
-                emit_async(catalog.SMTP_RECIPIENT_REJECTED, user.dest.addrstr)
+                emit_async(catalog.SMTP_RECIPIENT_REJECTED, self._userid,
+                           user.dest.addrstr)
                 raise smtp.SMTPBadRcpt(user.dest.addrstr)
             log.msg("Warning: will send an unencrypted message (because "
                     "encrypted_only' is set to False).")
             emit_async(
                 catalog.SMTP_RECIPIENT_ACCEPTED_UNENCRYPTED,
-                user.dest.addrstr)
+                self._userid, user.dest.addrstr)
 
         def encrypt_func(_):
             return lambda: EncryptedMessage(user, self._outgoing_mail)
@@ -307,7 +308,8 @@ class EncryptedMessage(object):
         """
         log.msg("Connection lost unexpectedly!")
         log.err()
-        emit_async(catalog.SMTP_CONNECTION_LOST, self._user.dest.addrstr)
+        emit_async(catalog.SMTP_CONNECTION_LOST, self._userid,
+                   self._user.dest.addrstr)
         # unexpected loss of connection; don't save
 
         self._lines = []

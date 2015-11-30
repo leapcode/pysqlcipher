@@ -224,7 +224,7 @@ class LEAPIMAPServer(imap4.IMAP4Server):
             # bad username, reject.
             raise cred.error.UnauthorizedLogin()
         # any dummy password is allowed so far. use realm instead!
-        emit_async(catalog.IMAP_CLIENT_LOGIN, "1")
+        emit_async(catalog.IMAP_CLIENT_LOGIN, username, "1")
         return imap4.IAccount, self.theAccount, lambda: None
 
     def do_FETCH(self, tag, messages, query, uid=0):

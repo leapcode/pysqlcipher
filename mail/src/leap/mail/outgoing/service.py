@@ -135,7 +135,8 @@ class OutgoingMail:
         """
         dest_addrstr = smtp_sender_result[1][0][0]
         log.msg('Message sent to %s' % dest_addrstr)
-        emit_async(catalog.SMTP_SEND_MESSAGE_SUCCESS, dest_addrstr)
+        emit_async(catalog.SMTP_SEND_MESSAGE_SUCCESS,
+                   self._from_address, dest_addrstr)
 
     def sendError(self, failure):
         """
@@ -145,7 +146,8 @@ class OutgoingMail:
         :type e: anything
         """
         # XXX: need to get the address from the exception to send signal
-        # emit_async(catalog.SMTP_SEND_MESSAGE_ERROR, self._user.dest.addrstr)
+        # emit_async(catalog.SMTP_SEND_MESSAGE_ERROR, self._from_address,
+        #   self._user.dest.addrstr)
         err = failure.value
         log.err(err)
         raise err
@@ -178,7 +180,8 @@ class OutgoingMail:
             requireAuthentication=False,
             requireTransportSecurity=True)
         factory.domain = __version__
-        emit_async(catalog.SMTP_SEND_MESSAGE_START, recipient.dest.addrstr)
+        emit_async(catalog.SMTP_SEND_MESSAGE_START,
+                   self._from_address, recipient.dest.addrstr)
         reactor.connectSSL(
             self._host, self._port, factory,
             contextFactory=SSLContextFactory(self._cert, self._key))
@@ -241,6 +244,7 @@ class OutgoingMail:
 
         def signal_encrypt_sign(newmsg):
             emit_async(catalog.SMTP_END_ENCRYPT_AND_SIGN,
+                       self._from_address,
                        "%s,%s" % (self._from_address, to_address))
             return newmsg, recipient
 
@@ -248,7 +252,7 @@ class OutgoingMail:
             failure.trap(KeyNotFound, KeyAddressMismatch)
 
             log.msg('Will send unencrypted message to %s.' % to_address)
-            emit_async(catalog.SMTP_START_SIGN, self._from_address)
+            emit_async(catalog.SMTP_START_SIGN, self._from_address, to_address)
             d = self._sign(message, from_address)
             d.addCallback(signal_sign)
             return d
@@ -260,6 +264,7 @@ class OutgoingMail:
         log.msg("Will encrypt the message with %s and sign with %s."
                 % (to_address, from_address))
         emit_async(catalog.SMTP_START_ENCRYPT_AND_SIGN,
+                   self._from_address,
                    "%s,%s" % (self._from_address, to_address))
         d = self._maybe_attach_key(origmsg, from_address, to_address)
         d.addCallback(maybe_encrypt_and_sign)

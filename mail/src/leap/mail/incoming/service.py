@@ -233,7 +233,7 @@ class IncomingMail(Service):
             failure.trap(InvalidAuthTokenError)
             # if the token is invalid, send an event so the GUI can
             # disable mail and show an error message.
-            emit_async(catalog.SOLEDAD_INVALID_AUTH_TOKEN)
+            emit_async(catalog.SOLEDAD_INVALID_AUTH_TOKEN, self._userid)
 
         log.msg('FETCH: syncing soledad...')
         d = self._soledad.sync()
@@ -254,7 +254,7 @@ class IncomingMail(Service):
             num_mails = len(doclist) if doclist is not None else 0
             if num_mails != 0:
                 log.msg("there are %s mails" % (num_mails,))
-            emit_async(catalog.MAIL_FETCHED_INCOMING,
+            emit_async(catalog.MAIL_FETCHED_INCOMING, self._userid,
                        str(num_mails), str(fetched_ts))
             return doclist
 
@@ -262,7 +262,7 @@ class IncomingMail(Service):
         """
         Sends unread event to ui.
         """
-        emit_async(catalog.MAIL_UNREAD_MESSAGES,
+        emit_async(catalog.MAIL_UNREAD_MESSAGES, self._userid,
                    str(self._inbox_collection.count_unseen()))
 
     # process incoming mail.
@@ -286,7 +286,7 @@ class IncomingMail(Service):
         deferreds = []
         for index, doc in enumerate(doclist):
             logger.debug("processing doc %d of %d" % (index + 1, num_mails))
-            emit_async(catalog.MAIL_MSG_PROCESSING,
+            emit_async(catalog.MAIL_MSG_PROCESSING, self._userid,
                        str(index), str(num_mails))
 
             keys = doc.content.keys()
@@ -336,7 +336,8 @@ class IncomingMail(Service):
                 decrdata = ""
                 success = False
 
-            emit_async(catalog.MAIL_MSG_DECRYPTED, "1" if success else "0")
+            emit_async(catalog.MAIL_MSG_DECRYPTED, self._userid,
+                       "1" if success else "0")
             return self._process_decrypted_doc(doc, decrdata)
 
         d = self._keymanager.decrypt(
@@ -743,10 +744,11 @@ class IncomingMail(Service):
                 listener(result)
 
             def signal_deleted(doc_id):
-                emit_async(catalog.MAIL_MSG_DELETED_INCOMING)
+                emit_async(catalog.MAIL_MSG_DELETED_INCOMING,
+                           self._userid)
                 return doc_id
 
-            emit_async(catalog.MAIL_MSG_SAVED_LOCALLY)
+            emit_async(catalog.MAIL_MSG_SAVED_LOCALLY, self._userid)
             d = self._delete_incoming_message(doc)
             d.addCallback(signal_deleted)
             return d
