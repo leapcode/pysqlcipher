@@ -77,65 +77,90 @@ class _BonafideZmqREPConnection(ZmqREPConnection):
         print "Bonafide service stopped. Have a nice day."
         reactor.stop()
 
-    def gotMessage(self, msgId, *parts):
-        def defer_reply(response):
-            reactor.callLater(0, self.reply, msgId, str(response))
+    def defer_reply(self, response, msgId):
+        reactor.callLater(0, self.reply, msgId, str(response))
 
-        def log_err(failure):
-            log.err(failure)
-            defer_reply("ERROR: %r" % failure)
+    def log_err(self, failure, msgId):
+        log.err(failure)
+        self.defer_reply("ERROR: %r" % failure, msgId)
+
+    def gotMessage(self, msgId, *parts):
 
         cmd = parts[0]
 
-        # TODO split using dispatcher pattern
-
         if cmd == "shutdown":
-            defer_reply('ok, shutting down')
-            reactor.callLater(1, self.do_bye)
+            self.do_shutdown(msgId)
 
         if cmd not in COMMANDS + ("get_soledad",):
             response = 'INVALID COMMAND'
-            defer_reply(response)
+            self.defer_reply(response, msgId)
 
         elif cmd == 'signup':
-            username, password = parts[1], parts[2]
-            d = self._bonafide.do_signup(username, password)
-            d.addCallback(lambda response: defer_reply(
-                'REGISTERED -> %s' % response))
-            d.addErrback(log_err)
+            self.do_signup(parts, msgId)
 
         elif cmd == 'authenticate':
-
-            def notify_hook(result):
-                this_hook = 'on_bonafide_auth'
-                token, uuid = result
-                hooked_service = self.get_hooked_service(this_hook)
-                if hooked_service:
-                    hooked_service.notify_hook(
-                        this_hook,
-                        username=username, uuid=uuid, token=token)
-                return result
-
-            username, password = parts[1], parts[2]
-            d = self._bonafide.do_authenticate(username, password)
-            d.addCallback(notify_hook)
-            d.addCallback(lambda response: defer_reply(
-                'TOKEN, UUID: %s' % str(response)))
-            d.addErrback(log_err)
+            self.do_authenticate(parts, msgId)
 
         elif cmd == 'logout':
-            username, password = parts[1], parts[2]
-            d = self._bonafide.do_logout(username, password)
-            d.addCallback(lambda response: defer_reply(
-                'LOGOUT -> ok'))
-            d.addErrback(log_err)
+            self.do_logout(self, parts, msgId)
 
         elif cmd == 'stats':
-            response = self._bonafide.do_stats()
-            defer_reply(response)
+            self.do_stats(msgId)
 
-        # XXX DEBUG ---------------------------------------------------------
-        elif cmd == 'get_soledad':
-            response = str(self._service.parent.getServiceNamed("soledad"))
-            defer_reply(response)
-        # ------------------------------------------------------------------
+    def do_shutdown(self, msgId):
+        self.defer_reply('ok, shutting down', msgId)
+        reactor.callLater(1, self.do_bye)
+
+    def do_signup(self, parts, msgId):
+        username, password = parts[1], parts[2]
+        d = self._bonafide.do_signup(username, password)
+        d.addCallback(lambda response: self.defer_reply(
+            'REGISTERED -> %s' % response), msgId)
+        d.addErrback(self.log_err, msgId)
+
+    def do_authenticate(self, parts, msgId):
+
+        username, password = parts[1], parts[2]
+
+        def notify_passphrase_entry(username, password):
+            this_hook = 'on_passphrase_entry'
+            hooked_service = self.get_hooked_service(this_hook)
+            if hooked_service:
+                hooked_service.notify_hook(
+                    this_hook, username=username, password=password)
+
+        def notify_bonafide_auth_hook(result):
+            this_hook = 'on_bonafide_auth'
+            token, uuid = result
+            hooked_service = self.get_hooked_service(this_hook)
+            if hooked_service:
+                hooked_service.notify_hook(
+                    this_hook,
+                    username=username, token=token, uuid=uuid,
+                    password=password)
+            return result
+
+        # XXX I still have doubts from where it's best to trigger this.
+        # We probably should wait for BOTH deferreds and
+        # handle local and remote authentication success together
+        # (and fail if either one fails). Going with fire-and-forget for
+        # now, but needs needs improvement.
+
+        notify_passphrase_entry(username, password)
+
+        d = self._bonafide.do_authenticate(username, password)
+        d.addCallback(notify_bonafide_auth_hook)
+        d.addCallback(lambda response: self.defer_reply(
+            'TOKEN, UUID: %s' % str(response), msgId))
+        d.addErrback(self.log_err, msgId)
+
+    def do_logout(self, parts, msgId):
+        username, password = parts[1], parts[2]
+        d = self._bonafide.do_logout(username, password)
+        d.addCallback(lambda response: self.defer_reply(
+            'LOGOUT -> ok'), msgId)
+        d.addErrback(self.log_err, msgId)
+
+    def do_stats(self, msgId):
+        response = self._bonafide.do_stats()
+        self.defer_reply(response, msgId)
