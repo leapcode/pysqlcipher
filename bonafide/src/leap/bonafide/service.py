@@ -75,7 +75,8 @@ class BonafideService(service.Service):
 
         d = self._bonafide.do_authenticate(username, password)
         d.addCallback(notify_bonafide_auth_hook)
-        d.addCallback(lambda response: 'TOKEN, UUID: %s' % str(response))
+        d.addCallback(lambda response: '[ SRP TOKEN: %s ] [ UUID: %s ]' %
+                      (response[0], response[1]))
         return d
 
     def do_signup(self, username, password):
