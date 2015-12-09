@@ -19,6 +19,8 @@
 Bonafide Service.
 """
 
+import os
+
 from leap.bonafide._protocol import BonafideProtocol
 
 from twisted.application import service
@@ -28,8 +30,9 @@ class BonafideService(service.Service):
 
     # TODO inherit from HookableService (from common)
 
-    def __init__(self):
+    def __init__(self, basedir='~/.config/leap'):
         self._bonafide = BonafideProtocol()
+        self._basedir = os.path.expanduser(basedir)
         self.service_hooks = {}
 
     def register_hook(self, kind, trigger):
