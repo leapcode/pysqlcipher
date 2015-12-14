@@ -17,6 +17,7 @@ Features
 Bugfixes
 ~~~~~~~~
 - `#1235 <https://leap.se/code/issues/1235>`_: Description for the fixed stuff corresponding with issue #1235.
+- Fix the get_body logic for corner-cases in which body is None (yet-to-be synced docs, mainly).
 - Bugfix without related issue number.
 
 Misc
