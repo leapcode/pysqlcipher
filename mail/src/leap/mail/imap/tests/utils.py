@@ -20,10 +20,15 @@ Common utilities for testing Soledad IMAP Server.
 from email import parser
 
 from mock import Mock
+from twisted.cred.checkers import ICredentialsChecker
+from twisted.cred.credentials import IUsernamePassword
+from twisted.cred.error import UnauthorizedLogin
+from twisted.cred.portal import Portal, IRealm
 from twisted.mail import imap4
 from twisted.internet import defer
 from twisted.protocols import loopback
 from twisted.python import log
+from zope.interface import implementer
 
 from leap.mail.adaptors import soledad as soledad_adaptor
 from leap.mail.imap.account import IMAPAccount
@@ -64,6 +69,57 @@ class SimpleClient(imap4.IMAP4Client):
         self.events.append(['newMessages', exists, recent])
         self.transport.loseConnection()
 
+#
+# Dummy credentials for tests
+#
+
+
+@implementer(IRealm)
+class TestRealm(object):
+
+    def __init__(self, account):
+        self._account = account
+
+    def requestAvatar(self, avatarId, mind, *interfaces):
+        avatar = self._account
+        return (imap4.IAccount, avatar,
+                getattr(avatar, 'logout', lambda: None))
+
+
+@implementer(ICredentialsChecker)
+class TestCredentialsChecker(object):
+
+    credentialInterfaces = (IUsernamePassword,)
+
+    userid = TEST_USER
+    password = TEST_PASSWD
+
+    def requestAvatarId(self, credentials):
+        username, password = credentials.username, credentials.password
+        d = self.checkTestCredentials(username, password)
+        d.addErrback(lambda f: defer.fail(UnauthorizedLogin()))
+        return d
+
+    def checkTestCredentials(self, username, password):
+        if username == self.userid and password == self.password:
+            return defer.succeed(username)
+        else:
+            return defer.fail(Exception("Wrong credentials"))
+
+
+class TestSoledadIMAPServer(LEAPIMAPServer):
+
+    def __init__(self, account, *args, **kw):
+
+        LEAPIMAPServer.__init__(self, *args, **kw)
+
+        realm = TestRealm(account)
+        portal = Portal(realm)
+        checker = TestCredentialsChecker()
+        self.checker = checker
+        self.portal = portal
+        portal.registerChecker(checker)
+
 
 class IMAP4HelperMixin(SoledadTestMixin):
     """
@@ -80,7 +136,8 @@ class IMAP4HelperMixin(SoledadTestMixin):
         USERID = TEST_USER
 
         def setup_server(account):
-            self.server = LEAPIMAPServer(
+            self.server = TestSoledadIMAPServer(
+                account=account,
                 contextFactory=self.serverCTX)
             self.server.theAccount = account
 

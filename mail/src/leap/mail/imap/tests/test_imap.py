@@ -575,8 +575,8 @@ class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
         """
         Test login requiring quoting
         """
-        self.server._userid = '{test}user@leap.se'
-        self.server._password = '{test}password'
+        self.server.checker.userid = '{test}user@leap.se'
+        self.server.checker.password = '{test}password'
 
         def login():
             d = self.client.login('{test}user@leap.se', '{test}password')
