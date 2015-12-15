@@ -29,7 +29,10 @@ from leap.keymanager import (
     KeyNotFound,
     openpgp,
 )
-from leap.keymanager.keys import TYPE_ID_PRIVATE_INDEX
+from leap.keymanager.keys import (
+    TYPE_ID_PRIVATE_INDEX,
+    TYPE_ADDRESS_PRIVATE_INDEX,
+)
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.keymanager.tests import (
     KeyManagerWithSoledadTestCase,
@@ -308,6 +311,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         try:
             yield self.assertFailure(pgp.get_key(ADDRESS, private=False),
                                      KeyNotFound)
+            # it should have deleted the index
             self.assertEqual(self._soledad.delete_doc.call_count, 1)
         finally:
             self._soledad.get_from_index = get_from_index
@@ -345,6 +349,54 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         try:
             yield pgp.put_ascii_key(PUBLIC_KEY, ADDRESS)
             self.assertEqual(self._soledad.delete_doc.call_count, 2)
+        finally:
+            self._soledad.get_from_index = get_from_index
+            self._soledad.delete_doc = delete_doc
+
+    @inlineCallbacks
+    def test_self_repair_five_active_docs(self):
+        pgp = openpgp.OpenPGPScheme(
+            self._soledad, gpgbinary=self.gpg_binary_path)
+
+        get_from_index = self._soledad.get_from_index
+        delete_doc = self._soledad.delete_doc
+
+        def my_get_from_index(*args):
+            if (args[0] == TYPE_ADDRESS_PRIVATE_INDEX and
+                    args[2] == ADDRESS):
+                k1 = OpenPGPKey(ADDRESS, key_id="1",
+                                last_audited_at=datetime(2005, 1, 1))
+                k2 = OpenPGPKey(ADDRESS, key_id="2",
+                                last_audited_at=datetime(2007, 1, 1))
+                k3 = OpenPGPKey(ADDRESS, key_id="3",
+                                last_audited_at=datetime(2007, 1, 1),
+                                encr_used=True, sign_used=True)
+                k4 = OpenPGPKey(ADDRESS, key_id="4",
+                                last_audited_at=datetime(2007, 1, 1),
+                                sign_used=True)
+                k5 = OpenPGPKey(ADDRESS, key_id="5",
+                                last_audited_at=datetime(2007, 1, 1),
+                                encr_used=True)
+                deferreds = []
+                for k in [k1, k2, k3, k4, k5]:
+                    d = self._soledad.create_doc_from_json(
+                        k.get_active_json(ADDRESS))
+                    deferreds.append(d)
+                return gatherResults(deferreds)
+            elif args[0] == TYPE_ID_PRIVATE_INDEX:
+                key_id = args[2]
+                self.assertEqual(key_id, "3")
+                k = OpenPGPKey(ADDRESS, key_id="3")
+                return succeed(
+                    [self._soledad.create_doc_from_json(k.get_json())])
+            return get_from_index(*args)
+
+        self._soledad.get_from_index = my_get_from_index
+        self._soledad.delete_doc = Mock(return_value=succeed(None))
+
+        try:
+            yield pgp.get_key(ADDRESS, private=False)
+            self.assertEqual(self._soledad.delete_doc.call_count, 4)
         finally:
             self._soledad.get_from_index = get_from_index
             self._soledad.delete_doc = delete_doc

@@ -108,14 +108,14 @@ class ValidationLevelsTestCase(KeyManagerWithSoledadTestCase):
         TEXT = "some text"
 
         km = self._key_manager()
+        yield km.put_raw_key(UNEXPIRED_PRIVATE, OpenPGPKey, ADDRESS)
+        signature = yield km.sign(TEXT, ADDRESS, OpenPGPKey)
+        yield self.delete_all_keys(km)
+
         yield km.put_raw_key(UNEXPIRED_KEY, OpenPGPKey, ADDRESS)
         yield km.encrypt(TEXT, ADDRESS, OpenPGPKey)
-
-        km2 = self._key_manager()
-        yield km2.put_raw_key(UNEXPIRED_PRIVATE, OpenPGPKey, ADDRESS)
-        signature = yield km2.sign(TEXT, ADDRESS, OpenPGPKey)
-
         yield km.verify(TEXT, ADDRESS, OpenPGPKey, detached_sig=signature)
+
         d = km.put_raw_key(
             UNRELATED_KEY, OpenPGPKey, ADDRESS,
             validation=ValidationLevels.Provider_Endorsement)
@@ -126,17 +126,17 @@ class ValidationLevelsTestCase(KeyManagerWithSoledadTestCase):
         TEXT = "some text"
 
         km = self._key_manager()
+        yield km.put_raw_key(UNEXPIRED_PRIVATE, OpenPGPKey, ADDRESS)
+        yield km.put_raw_key(PUBLIC_KEY_2, OpenPGPKey, ADDRESS_2)
+        encrypted = yield km.encrypt(TEXT, ADDRESS_2, OpenPGPKey,
+                                     sign=ADDRESS)
+        yield self.delete_all_keys(km)
+
         yield km.put_raw_key(UNEXPIRED_KEY, OpenPGPKey, ADDRESS)
         yield km.put_raw_key(PRIVATE_KEY_2, OpenPGPKey, ADDRESS_2)
         yield km.encrypt(TEXT, ADDRESS, OpenPGPKey)
-
-        km2 = self._key_manager()
-        yield km2.put_raw_key(UNEXPIRED_PRIVATE, OpenPGPKey, ADDRESS)
-        yield km2.put_raw_key(PUBLIC_KEY_2, OpenPGPKey, ADDRESS_2)
-        encrypted = yield km2.encrypt(TEXT, ADDRESS_2, OpenPGPKey,
-                                      sign=ADDRESS)
-
         yield km.decrypt(encrypted, ADDRESS_2, OpenPGPKey, verify=ADDRESS)
+
         d = km.put_raw_key(
             UNRELATED_KEY, OpenPGPKey, ADDRESS,
             validation=ValidationLevels.Provider_Endorsement)
@@ -149,6 +149,33 @@ class ValidationLevelsTestCase(KeyManagerWithSoledadTestCase):
         yield km.put_raw_key(SIGNED_KEY, OpenPGPKey, ADDRESS)
         key = yield km.get_key(ADDRESS, OpenPGPKey, fetch_remote=False)
         self.assertEqual(key.fingerprint, SIGNED_FINGERPRINT)
+
+    @inlineCallbacks
+    def test_two_uuids(self):
+        TEXT = "some text"
+
+        km = self._key_manager()
+        yield km.put_raw_key(UUIDS_PRIVATE, OpenPGPKey, ADDRESS_2)
+        signature = yield km.sign(TEXT, ADDRESS_2, OpenPGPKey)
+        yield self.delete_all_keys(km)
+
+        yield km.put_raw_key(UUIDS_KEY, OpenPGPKey, ADDRESS_2)
+        yield km.put_raw_key(UUIDS_KEY, OpenPGPKey, ADDRESS)
+        yield km.encrypt(TEXT, ADDRESS_2, OpenPGPKey)
+        yield km.verify(TEXT, ADDRESS_2, OpenPGPKey, detached_sig=signature)
+
+        d = km.put_raw_key(
+            PUBLIC_KEY_2, OpenPGPKey, ADDRESS_2,
+            validation=ValidationLevels.Provider_Endorsement)
+        yield self.assertFailure(d, KeyNotValidUpgrade)
+        key = yield km.get_key(ADDRESS_2, OpenPGPKey, fetch_remote=False)
+        self.assertEqual(key.fingerprint, UUIDS_FINGERPRINT)
+
+        yield km.put_raw_key(
+            PUBLIC_KEY, OpenPGPKey, ADDRESS,
+            validation=ValidationLevels.Provider_Endorsement)
+        key = yield km.get_key(ADDRESS, OpenPGPKey, fetch_remote=False)
+        self.assertEqual(key.fingerprint, KEY_FINGERPRINT)
 
 
 # Key material for testing
@@ -364,6 +391,117 @@ X2+l7IOSt+31KQCBFN/VmhTySJOVQC1d2A56lSH2c/DWVClji+x3suzn
 -----END PGP PUBLIC KEY BLOCK-----
 """
 
+# key 0x1DDBAEB928D982F7: public key two uuids
+#    uid                  anotheruser <anotheruser@leap.se>
+#    uid                  Leap Test Key <leap@leap.se>
+UUIDS_FINGERPRINT = "21690ED054C1B2F3ACE963D38FCC7DEFB4EE5A9B"
+UUIDS_KEY = """
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+Version: GnuPG v1
+
+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
+vtQLNMD9Gn7D
+=MCXv
+-----END PGP PUBLIC KEY BLOCK-----
+"""
+UUIDS_PRIVATE = """
+-----BEGIN PGP PRIVATE KEY BLOCK-----
+Version: GnuPG v1
+
+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
+eNWbiM9EvtQLNMD9Gn7D
+=/3u/
+-----END PGP PRIVATE KEY BLOCK-----
+"""
+
 if __name__ == "__main__":
-    import unittest
     unittest.main()

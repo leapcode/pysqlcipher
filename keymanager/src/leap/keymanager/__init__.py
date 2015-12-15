@@ -439,6 +439,7 @@ class KeyManager(object):
         :return: A Deferred which fires with a list of all keys in local db.
         :rtype: Deferred
         """
+        # TODO: should it be based on activedocs?
         def build_keys(docs):
             return map(
                 lambda doc: build_key_from_dict(

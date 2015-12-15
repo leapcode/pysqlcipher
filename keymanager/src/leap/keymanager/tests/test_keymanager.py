@@ -83,13 +83,18 @@ class KeyManagerUtilTestCase(unittest.TestCase):
             'private': False,
             'length': 4096,
             'expiry_date': 0,
-            'last_audited_at': 0,
             'refreshed_at': 1311239602,
+        }
+        adict = {
+            'address': ADDRESS,
+            'key_id': KEY_FINGERPRINT[-16:],
+            'private': False,
+            'last_audited_at': 0,
             'validation': str(ValidationLevels.Weak_Chain),
             'encr_used': False,
             'sign_used': True,
         }
-        key = build_key_from_dict(OpenPGPKey, kdict)
+        key = build_key_from_dict(OpenPGPKey, kdict, adict)
         self.assertEqual(
             kdict['address'], key.address,
             'Wrong data in key.')
@@ -118,13 +123,13 @@ class KeyManagerUtilTestCase(unittest.TestCase):
             datetime.fromtimestamp(kdict['refreshed_at']), key.refreshed_at,
             'Wrong data in key.')
         self.assertEqual(
-            ValidationLevels.get(kdict['validation']), key.validation,
+            ValidationLevels.get(adict['validation']), key.validation,
             'Wrong data in key.')
         self.assertEqual(
-            kdict['encr_used'], key.encr_used,
+            adict['encr_used'], key.encr_used,
             'Wrong data in key.')
         self.assertEqual(
-            kdict['sign_used'], key.sign_used,
+            adict['sign_used'], key.sign_used,
             'Wrong data in key.')
 
 
