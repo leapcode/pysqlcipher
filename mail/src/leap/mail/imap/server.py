@@ -179,7 +179,6 @@ class LEAPIMAPServer(imap4.IMAP4Server):
             self.mbox = None
         self.state = 'unauth'
 
-
     def do_FETCH(self, tag, messages, query, uid=0):
         """
         Overwritten fetch dispatcher to use the fast fetch_flags
