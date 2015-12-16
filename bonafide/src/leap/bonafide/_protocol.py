@@ -114,17 +114,20 @@ class BonafideProtocol(object):
         d.addCallback(lambda _: '%s logged out' % full_id)
         return d
 
+    def do_get_smtp_cert(self, full_id):
+        session = self._get_session(full_id)
+        d = session.get_smtp_cert()
+        return d
+
+    def do_get_vpn_cert(self):
+        pass
+
+    def do_update_user(self):
+        pass
+
     def do_stats(self):
         log.msg('Calculating Bonafide Service STATS')
         mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         return '[+] Bonafide service: [%s sessions] [Mem usage: %s KB]' % (
             len(self._sessions), mem / 1024)
 
-    def do_get_vpn_cert(self):
-        pass
-
-    def do_get_smtp_cert(self):
-        pass
-
-    def do_update_user(self):
-        pass

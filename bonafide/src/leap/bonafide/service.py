@@ -24,6 +24,7 @@ import os
 from leap.bonafide._protocol import BonafideProtocol
 
 from twisted.application import service
+from twisted.internet import defer
 
 
 class BonafideService(service.Service):
@@ -34,6 +35,10 @@ class BonafideService(service.Service):
         self._bonafide = BonafideProtocol()
         self._basedir = os.path.expanduser(basedir)
         self.service_hooks = {}
+
+        # XXX this is a quick hack to get a ref
+        # to the latest authenticated user.
+        self._active_user = None
 
     def register_hook(self, kind, trigger):
         self.service_hooks[kind] = trigger
@@ -66,6 +71,7 @@ class BonafideService(service.Service):
                     this_hook,
                     username=username, token=token, uuid=uuid,
                     password=password)
+            self._active_user = username
             return result
 
         # XXX I still have doubts from where it's best to trigger this.
@@ -90,4 +96,15 @@ class BonafideService(service.Service):
     def do_logout(self, username, password):
         d = self._bonafide.do_logout(username, password)
         d.addCallback(lambda response: 'LOGOUT -> ok')
+        return d
+
+    def do_get_smtp_cert(self, username=None):
+        if not username:
+            username = self._active_user
+        if not username:
+            return defer.fail(
+                RuntimeError('No active user, cannot get SMTP cert.'))
+
+        d = self._bonafide.do_get_smtp_cert(username)
+        d.addCallback(lambda response: (username, response))
         return d
