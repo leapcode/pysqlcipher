@@ -14,6 +14,14 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+"""
+OutgoingMail module.
+
+The OutgoingMail class allows to send mail, and encrypts/signs it if needed.
+"""
+
+import os.path
 import re
 from StringIO import StringIO
 from copy import deepcopy
@@ -35,6 +43,7 @@ from leap.common.events import emit_async, catalog
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.keymanager.errors import KeyNotFound, KeyAddressMismatch
 from leap.mail import __version__
+from leap.mail import errors
 from leap.mail.utils import validate_address
 from leap.mail.rfc3156 import MultipartEncrypted
 from leap.mail.rfc3156 import MultipartSigned
@@ -64,9 +73,23 @@ class SSLContextFactory(ssl.ClientContextFactory):
         return ctx
 
 
-class OutgoingMail:
+def outgoingFactory(userid, keymanager, opts):
+
+    cert = unicode(opts.cert)
+    key = unicode(opts.key)
+    hostname = str(opts.hostname)
+    port = opts.port
+
+    if not os.path.isfile(cert):
+        raise errors.ConfigurationError(
+            'No valid SMTP certificate could be found for %s!' % userid)
+
+    return OutgoingMail(str(userid), keymanager, cert, key, hostname, port)
+
+
+class OutgoingMail(object):
     """
-    A service for handling encrypted outgoing mail.
+    Sends Outgoing Mail, encrypting and signing if needed.
     """
 
     def __init__(self, from_address, keymanager, cert, key, host, port):
@@ -134,9 +157,10 @@ class OutgoingMail:
         :type smtp_sender_result: tuple(int, list(tuple))
         """
         dest_addrstr = smtp_sender_result[1][0][0]
-        log.msg('Message sent to %s' % dest_addrstr)
+        fromaddr = self._from_address
+        log.msg('Message sent from %s to %s' % (fromaddr, dest_addrstr))
         emit_async(catalog.SMTP_SEND_MESSAGE_SUCCESS,
-                   self._from_address, dest_addrstr)
+                   fromaddr, dest_addrstr)
 
     def sendError(self, failure):
         """

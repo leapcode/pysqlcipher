@@ -23,47 +23,35 @@ import os
 
 from twisted.internet import reactor
 from twisted.internet.error import CannotListenError
-from leap.mail.outgoing.service import OutgoingMail
 
 from leap.common.events import emit_async, catalog
+
 from leap.mail.smtp.gateway import SMTPFactory
 
 logger = logging.getLogger(__name__)
 
 
-def setup_smtp_gateway(port, userid, keymanager, smtp_host, smtp_port,
-                       smtp_cert, smtp_key, encrypted_only):
+SMTP_PORT = 2013
+
+
+def run_service(soledad_sessions, keymanager_sessions, sendmail_opts,
+                port=SMTP_PORT):
     """
-    Setup SMTP gateway to run with Twisted.
+    Main entry point to run the service from the client.
 
-    This function sets up the SMTP gateway configuration and the Twisted
-    reactor.
+    :param soledad_sessions: a dict-like object, containing instances
+                             of a Store (soledad instances), indexed by userid.
+    :param keymanager_sessions: a dict-like object, containing instances
+                                of Keymanager, indexed by userid.
+    :param sendmail_opts: a dict-like object of sendmailOptions.
 
-    :param port: The port in which to run the server.
-    :type port: int
-    :param userid: The user currently logged in
-    :type userid: str
-    :param keymanager: A Key Manager from where to get recipients' public
-                       keys.
-    :type keymanager: leap.common.keymanager.KeyManager
-    :param smtp_host: The hostname of the remote SMTP server.
-    :type smtp_host: str
-    :param smtp_port: The port of the remote SMTP server.
-    :type smtp_port: int
-    :param smtp_cert: The client certificate for authentication.
-    :type smtp_cert: str
-    :param smtp_key: The client key for authentication.
-    :type smtp_key: str
-    :param encrypted_only: Whether the SMTP gateway should send unencrypted
-                           mail or not.
-    :type encrypted_only: bool
-
-    :returns: tuple of SMTPFactory, twisted.internet.tcp.Port
+    :returns: the port as returned by the reactor when starts listening, and
+              the factory for the protocol.
+    :rtype: tuple
     """
-    # configure the use of this service with twistd
-    outgoing_mail = OutgoingMail(
-        userid, keymanager, smtp_cert, smtp_key, smtp_host, smtp_port)
-    factory = SMTPFactory(userid, keymanager, encrypted_only, outgoing_mail)
+    factory = SMTPFactory(soledad_sessions, keymanager_sessions,
+                          sendmail_opts)
+
     try:
         interface = "localhost"
         # don't bind just to localhost if we are running on docker since we
@@ -71,8 +59,10 @@ def setup_smtp_gateway(port, userid, keymanager, smtp_host, smtp_port,
         if os.environ.get("LEAP_DOCKERIZED"):
             interface = ''
 
+        # TODO Use Endpoints instead --------------------------------
         tport = reactor.listenTCP(port, factory, interface=interface)
         emit_async(catalog.SMTP_SERVICE_STARTED, str(port))
+
         return factory, tport
     except CannotListenError:
         logger.error("STMP Service failed to start: "

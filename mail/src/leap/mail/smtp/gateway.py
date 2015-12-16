@@ -30,18 +30,26 @@ The following classes comprise the SMTP gateway service:
       knows how to encrypt/sign itself before sending.
 """
 
+from email.Header import Header
+
 from zope.interface import implements
+from zope.interface import implementer
+
+from twisted.cred.portal import Portal, IRealm
 from twisted.mail import smtp
-from twisted.internet.protocol import ServerFactory
+from twisted.mail.imap4 import LOGINCredentials, PLAINCredentials
+from twisted.internet import defer, protocol
 from twisted.python import log
 
-from email.Header import Header
 from leap.common.check import leap_assert_type
 from leap.common.events import emit_async, catalog
-from leap.keymanager.openpgp import OpenPGPKey
-from leap.keymanager.errors import KeyNotFound
+from leap.mail import errors
+from leap.mail.cred import LocalSoledadTokenChecker
 from leap.mail.utils import validate_address
 from leap.mail.rfc3156 import RFC3156CompliantGenerator
+from leap.mail.outgoing.service import outgoingFactory
+from leap.keymanager.openpgp import OpenPGPKey
+from leap.keymanager.errors import KeyNotFound
 
 # replace email generator with a RFC 3156 compliant one.
 from email import generator
@@ -49,86 +57,121 @@ from email import generator
 generator.Generator = RFC3156CompliantGenerator
 
 
-# TODO -- implement Queue using twisted.mail.mail.MailService
-
-
-#
-# Helper utilities
-#
-
 LOCAL_FQDN = "bitmask.local"
 
 
-class SMTPHeloLocalhost(smtp.SMTP):
-    """
-    An SMTP class that ensures a proper FQDN
-    for localhost.
+@implementer(IRealm)
+class LocalSMTPRealm(object):
 
-    This avoids a problem in which unproperly configured providers
-    would complain about the helo not being a fqdn.
-    """
+    _encoding = 'utf-8'
 
-    def __init__(self, *args):
-        smtp.SMTP.__init__(self, *args)
-        self.host = LOCAL_FQDN
+    def __init__(self, keymanager_sessions, sendmail_opts):
+        """
+        :param keymanager_sessions: a dict-like object, containing instances
+                                 of a Keymanager objects, indexed by
+                                 userid.
+        """
+        self._keymanager_sessions = keymanager_sessions
+        self._sendmail_opts = sendmail_opts
+
+    def requestAvatar(self, avatarId, mind, *interfaces):
+        if isinstance(avatarId, str):
+            avatarId = avatarId.decode(self._encoding)
+
+        def gotKeymanager(keymanager):
+
+            # TODO use IMessageDeliveryFactory instead ?
+            # it could reuse the connections.
+            if smtp.IMessageDelivery in interfaces:
+                userid = avatarId
+                opts = self.getSendingOpts(userid)
+                outgoing = outgoingFactory(userid, keymanager, opts)
+                avatar = SMTPDelivery(userid, keymanager, False, outgoing)
+
+                return (smtp.IMessageDelivery, avatar,
+                        getattr(avatar, 'logout', lambda: None))
+
+            raise NotImplementedError(self, interfaces)
+
+        return self.lookupKeymanagerInstance(avatarId).addCallback(
+            gotKeymanager)
+
+    def lookupKeymanagerInstance(self, userid):
+        try:
+            keymanager = self._keymanager_sessions[userid]
+        except:
+            raise errors.AuthenticationError(
+                'No keymanager session found for user %s. Is it authenticated?'
+                % userid)
+        # XXX this should return the instance after whenReady callback
+        return defer.succeed(keymanager)
+
+    def getSendingOpts(self, userid):
+        try:
+            opts = self._sendmail_opts[userid]
+        except KeyError:
+            raise errors.ConfigurationError(
+                'No sendingMail options found for user %s' % userid)
+        return opts
 
 
-class SMTPFactory(ServerFactory):
+class SMTPTokenChecker(LocalSoledadTokenChecker):
+    """A credentials checker that will lookup a token for the SMTP service."""
+    service = 'smtp'
+
+    # TODO besides checking for token credential,
+    # we could also verify the certificate here.
+
+
+# TODO -- implement Queue using twisted.mail.mail.MailService
+class LocalSMTPServer(smtp.ESMTP):
+
+    def __init__(self, soledad_sessions, keymanager_sessions, sendmail_opts,
+                 *args, **kw):
+
+        smtp.ESMTP.__init__(self, *args, **kw)
+
+        realm = LocalSMTPRealm(keymanager_sessions, sendmail_opts)
+        portal = Portal(realm)
+        checker = SMTPTokenChecker(soledad_sessions)
+        self.checker = checker
+        self.portal = portal
+        portal.registerChecker(checker)
+
+
+class SMTPFactory(protocol.ServerFactory):
     """
     Factory for an SMTP server with encrypted gatewaying capabilities.
     """
+
+    protocol = LocalSMTPServer
     domain = LOCAL_FQDN
+    timeout = 600
 
-    def __init__(self, userid, keymanager, encrypted_only, outgoing_mail):
-        """
-        Initialize the SMTP factory.
-
-        :param userid: The user currently logged in
-        :type userid: unicode
-        :param keymanager: A Key Manager from where to get recipients' public
-                           keys.
-        :param encrypted_only: Whether the SMTP gateway should send unencrypted
-                               mail or not.
-        :type encrypted_only: bool
-        :param outgoing_mail: The outgoing mail to send the message
-        :type outgoing_mail: leap.mail.outgoing.service.OutgoingMail
-        """
-
-        leap_assert_type(encrypted_only, bool)
-        # and store them
-        self._userid = userid
-        self._km = keymanager
-        self._outgoing_mail = outgoing_mail
-        self._encrypted_only = encrypted_only
+    def __init__(self, soledad_sessions, keymanager_sessions, sendmail_opts):
+        self._soledad_sessions = soledad_sessions
+        self._keymanager_sessions = keymanager_sessions
+        self._sendmail_opts = sendmail_opts
 
     def buildProtocol(self, addr):
-        """
-        Return a protocol suitable for the job.
-
-        :param addr: An address, e.g. a TCP (host, port).
-        :type addr:  twisted.internet.interfaces.IAddress
-
-        @return: The protocol.
-        @rtype: SMTPDelivery
-        """
-        smtpProtocol = SMTPHeloLocalhost(
-            SMTPDelivery(
-                self._userid, self._km, self._encrypted_only,
-                self._outgoing_mail))
-        smtpProtocol.factory = self
-        return smtpProtocol
+        p = self.protocol(
+            self._soledad_sessions, self._keymanager_sessions,
+            self._sendmail_opts)
+        p.factory = self
+        p.host = LOCAL_FQDN
+        p.challengers = {"LOGIN": LOGINCredentials, "PLAIN": PLAINCredentials}
+        return p
 
 
 #
 # SMTPDelivery
 #
 
+@implementer(smtp.IMessageDelivery)
 class SMTPDelivery(object):
     """
     Validate email addresses and handle message delivery.
     """
-
-    implements(smtp.IMessageDelivery)
 
     def __init__(self, userid, keymanager, encrypted_only, outgoing_mail):
         """

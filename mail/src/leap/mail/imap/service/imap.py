@@ -23,9 +23,6 @@ import os
 from collections import defaultdict
 
 from twisted.cred.portal import Portal, IRealm
-from twisted.cred.credentials import IUsernamePassword
-from twisted.cred.checkers import ICredentialsChecker
-from twisted.cred.error import UnauthorizedLogin
 from twisted.mail.imap4 import IAccount
 from twisted.internet import defer
 from twisted.internet import reactor
@@ -35,6 +32,7 @@ from twisted.python import log
 from zope.interface import implementer
 
 from leap.common.events import emit_async, catalog
+from leap.mail.cred import LocalSoledadTokenChecker
 from leap.mail.imap.account import IMAPAccount
 from leap.mail.imap.server import LEAPIMAPServer
 
@@ -86,61 +84,6 @@ class LocalSoledadIMAPRealm(object):
         soledad = self._soledad_sessions[userid]
         # XXX this should return the instance after whenReady callback
         return defer.succeed(soledad)
-
-
-@implementer(ICredentialsChecker)
-class LocalSoledadTokenChecker(object):
-
-    """
-    A Credentials Checker for a LocalSoledad store.
-
-    It checks that:
-
-    1) The Local SoledadStorage has been correctly unlocked for the given
-       user. This currently means that the right passphrase has been passed
-       to the Local SoledadStorage.
-
-    2) The password passed in the credentials matches whatever token has
-       been stored in the local encrypted SoledadStorage, associated to the
-       Protocol that is requesting the authentication.
-    """
-
-    credentialInterfaces = (IUsernamePassword,)
-    service = None
-
-    def __init__(self, soledad_sessions):
-        """
-        :param soledad_sessions: a dict-like object, containing instances
-                                 of a Store (soledad instances), indexed by
-                                 userid.
-        """
-        self._soledad_sessions = soledad_sessions
-
-    def requestAvatarId(self, credentials):
-        if self.service is None:
-            raise NotImplementedError(
-                "this checker has not defined its service name")
-        username, password = credentials.username, credentials.password
-        d = self.checkSoledadToken(username, password, self.service)
-        d.addErrback(lambda f: defer.fail(UnauthorizedLogin()))
-        return d
-
-    def checkSoledadToken(self, username, password, service):
-        soledad = self._soledad_sessions.get(username)
-        if not soledad:
-            return defer.fail(Exception("No soledad"))
-
-        def match_token(token):
-            if token is None:
-                raise RuntimeError('no token')
-            if token == password:
-                return username
-            else:
-                raise RuntimeError('bad token')
-
-        d = soledad.get_or_create_service_token(service)
-        d.addCallback(match_token)
-        return d
 
 
 class IMAPTokenChecker(LocalSoledadTokenChecker):
