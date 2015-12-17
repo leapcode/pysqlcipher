@@ -15,7 +15,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-
 """
 SMTP gateway tests.
 """
@@ -23,19 +22,18 @@ SMTP gateway tests.
 import re
 from datetime import datetime
 
+from twisted.mail import smtp
 from twisted.internet import reactor
 from twisted.internet.defer import inlineCallbacks, fail, succeed, Deferred
 from twisted.test import proto_helpers
 
 from mock import Mock
-from leap.mail.smtp.gateway import (
-    SMTPFactory
-)
-from leap.mail.tests import (
-    TestCaseWithKeyManager,
-    ADDRESS,
-    ADDRESS_2,
-)
+from leap.mail.smtp.gateway import SMTPFactory, LOCAL_FQDN
+from leap.mail.smtp.gateway import SMTPDelivery
+
+from leap.mail.outgoing.service import outgoingFactory
+from leap.mail.tests import TestCaseWithKeyManager
+from leap.mail.tests import ADDRESS, ADDRESS_2
 from leap.keymanager import openpgp, errors
 
 
@@ -45,6 +43,52 @@ IP_REGEX = "(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}" + \
 HOSTNAME_REGEX = "(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*" + \
     "([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])"
 IP_OR_HOST_REGEX = '(' + IP_REGEX + '|' + HOSTNAME_REGEX + ')'
+
+TEST_USER = u'anotheruser@leap.se'
+
+
+def getSMTPFactory(soledad_s, keymanager_s, sendmail_opts,
+                   encrypted_only=False):
+    factory = UnauthenticatedSMTPFactory
+    factory.encrypted_only = encrypted_only
+    proto = factory(
+        soledad_s, keymanager_s, sendmail_opts).buildProtocol(('127.0.0.1', 0))
+    return proto
+
+
+class UnauthenticatedSMTPServer(smtp.SMTP):
+
+    encrypted_only = False
+
+    def __init__(self, soledads, keyms, opts, encrypted_only=False):
+        smtp.SMTP.__init__(self)
+
+        userid = TEST_USER
+        keym = keyms[userid]
+
+        class Opts:
+            cert = '/tmp/cert'
+            key = '/tmp/cert'
+            hostname = 'remote'
+            port = 666
+
+        outgoing = outgoingFactory(
+            userid, keym, Opts, check_cert=False)
+        avatar = SMTPDelivery(userid, keym, encrypted_only, outgoing)
+        self.delivery = avatar
+
+    def validateFrom(self, helo, origin):
+        return origin
+
+
+class UnauthenticatedSMTPFactory(SMTPFactory):
+    """
+    A Factory that produces a SMTP server that does not authenticate user.
+    Only for tests!
+    """
+    protocol = UnauthenticatedSMTPServer
+    domain = LOCAL_FQDN
+    encrypted_only = False
 
 
 class TestSmtpGateway(TestCaseWithKeyManager):
@@ -85,14 +129,8 @@ class TestSmtpGateway(TestCaseWithKeyManager):
                         '250 Recipient address accepted',
                         '354 Continue']
 
-        # XXX this bit can be refactored away in a helper
-        # method...
-        proto = SMTPFactory(
-            u'anotheruser@leap.se',
-            self._km,
-            self._config['encrypted_only'],
-            outgoing_mail=Mock()).buildProtocol(('127.0.0.1', 0))
-        # snip...
+        user = TEST_USER
+        proto = getSMTPFactory({user: None}, {user: self._km}, {user: None})
         transport = proto_helpers.StringTransport()
         proto.makeConnection(transport)
         reply = ""
@@ -116,12 +154,10 @@ class TestSmtpGateway(TestCaseWithKeyManager):
         # mock the key fetching
         self._km._fetch_keys_from_server = Mock(
             return_value=fail(errors.KeyNotFound()))
-        # prepare the SMTP factory
-        proto = SMTPFactory(
-            u'anotheruser@leap.se',
-            self._km,
-            self._config['encrypted_only'],
-            outgoing_mail=Mock()).buildProtocol(('127.0.0.1', 0))
+        user = TEST_USER
+        proto = getSMTPFactory(
+            {user: None}, {user: self._km}, {user: None},
+            encrypted_only=True)
         transport = proto_helpers.StringTransport()
         proto.makeConnection(transport)
         yield self.getReply(self.EMAIL_DATA[0] + '\r\n', proto, transport)
@@ -132,7 +168,7 @@ class TestSmtpGateway(TestCaseWithKeyManager):
         self.assertEqual(
             '550 Cannot receive for specified address\r\n',
             reply,
-            'Address should have been rejecetd with appropriate message.')
+            'Address should have been rejected with appropriate message.')
         proto.setTimeout(None)
 
     @inlineCallbacks
@@ -149,11 +185,8 @@ class TestSmtpGateway(TestCaseWithKeyManager):
         # mock the key fetching
         self._km._fetch_keys_from_server = Mock(
             return_value=fail(errors.KeyNotFound()))
-        # prepare the SMTP factory with encrypted only equal to false
-        proto = SMTPFactory(
-            u'anotheruser@leap.se',
-            self._km,
-            False, outgoing_mail=Mock()).buildProtocol(('127.0.0.1', 0))
+        user = TEST_USER
+        proto = getSMTPFactory({user: None}, {user: self._km}, {user: None})
         transport = proto_helpers.StringTransport()
         proto.makeConnection(transport)
         yield self.getReply(self.EMAIL_DATA[0] + '\r\n', proto, transport)

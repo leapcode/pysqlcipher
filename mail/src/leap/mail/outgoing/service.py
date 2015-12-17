@@ -73,16 +73,17 @@ class SSLContextFactory(ssl.ClientContextFactory):
         return ctx
 
 
-def outgoingFactory(userid, keymanager, opts):
+def outgoingFactory(userid, keymanager, opts, check_cert=True):
 
     cert = unicode(opts.cert)
     key = unicode(opts.key)
     hostname = str(opts.hostname)
     port = opts.port
 
-    if not os.path.isfile(cert):
-        raise errors.ConfigurationError(
-            'No valid SMTP certificate could be found for %s!' % userid)
+    if check_cert:
+        if not os.path.isfile(cert):
+            raise errors.ConfigurationError(
+                'No valid SMTP certificate could be found for %s!' % userid)
 
     return OutgoingMail(str(userid), keymanager, cert, key, hostname, port)
 

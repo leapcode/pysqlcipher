@@ -29,19 +29,18 @@ from twisted.mail.smtp import User
 
 from mock import Mock
 
-from leap.mail.smtp.gateway import SMTPFactory
 from leap.mail.rfc3156 import RFC3156CompliantGenerator
 from leap.mail.outgoing.service import OutgoingMail
-from leap.mail.tests import (
-    TestCaseWithKeyManager,
-    ADDRESS,
-    ADDRESS_2,
-    PUBLIC_KEY_2,
-)
+from leap.mail.tests import TestCaseWithKeyManager
+from leap.mail.tests import ADDRESS, ADDRESS_2, PUBLIC_KEY_2
+from leap.mail.smtp.tests.test_gateway import getSMTPFactory
+
 from leap.keymanager import openpgp, errors
 
 
 BEGIN_PUBLIC_KEY = "-----BEGIN PGP PUBLIC KEY BLOCK-----"
+
+TEST_USER = u'anotheruser@leap.se'
 
 
 class TestOutgoingMail(TestCaseWithKeyManager):
@@ -73,11 +72,12 @@ class TestOutgoingMail(TestCaseWithKeyManager):
                 self.fromAddr, self._km, self._config['cert'],
                 self._config['key'], self._config['host'],
                 self._config['port'])
-            self.proto = SMTPFactory(
-                u'anotheruser@leap.se',
-                self._km,
-                self._config['encrypted_only'],
-                self.outgoing_mail).buildProtocol(('127.0.0.1', 0))
+
+            user = TEST_USER
+
+            # TODO -- this shouldn't need SMTP to be tested!? or does it?
+            self.proto = getSMTPFactory(
+                {user: None}, {user: self._km}, {user: None})
             self.dest = User(ADDRESS, 'gateway.leap.se', self.proto, ADDRESS_2)
 
         d = TestCaseWithKeyManager.setUp(self)

@@ -65,7 +65,8 @@ class LocalSMTPRealm(object):
 
     _encoding = 'utf-8'
 
-    def __init__(self, keymanager_sessions, sendmail_opts):
+    def __init__(self, keymanager_sessions, sendmail_opts,
+                 encrypted_only=False):
         """
         :param keymanager_sessions: a dict-like object, containing instances
                                  of a Keymanager objects, indexed by
@@ -73,6 +74,7 @@ class LocalSMTPRealm(object):
         """
         self._keymanager_sessions = keymanager_sessions
         self._sendmail_opts = sendmail_opts
+        self.encrypted_only = encrypted_only
 
     def requestAvatar(self, avatarId, mind, *interfaces):
         if isinstance(avatarId, str):
@@ -86,7 +88,8 @@ class LocalSMTPRealm(object):
                 userid = avatarId
                 opts = self.getSendingOpts(userid)
                 outgoing = outgoingFactory(userid, keymanager, opts)
-                avatar = SMTPDelivery(userid, keymanager, False, outgoing)
+                avatar = SMTPDelivery(userid, keymanager, self.encrypted_only,
+                                      outgoing)
 
                 return (smtp.IMessageDelivery, avatar,
                         getattr(avatar, 'logout', lambda: None))
@@ -123,20 +126,39 @@ class SMTPTokenChecker(LocalSoledadTokenChecker):
     # we could also verify the certificate here.
 
 
-# TODO -- implement Queue using twisted.mail.mail.MailService
-class LocalSMTPServer(smtp.ESMTP):
+class LEAPInitMixin(object):
 
+    """
+    A Mixin that takes care of initialization of all the data needed to access
+    LEAP sessions.
+    """
     def __init__(self, soledad_sessions, keymanager_sessions, sendmail_opts,
-                 *args, **kw):
-
-        smtp.ESMTP.__init__(self, *args, **kw)
-
-        realm = LocalSMTPRealm(keymanager_sessions, sendmail_opts)
+                 encrypted_only=False):
+        realm = LocalSMTPRealm(keymanager_sessions, sendmail_opts,
+                               encrypted_only)
         portal = Portal(realm)
+
         checker = SMTPTokenChecker(soledad_sessions)
         self.checker = checker
         self.portal = portal
         portal.registerChecker(checker)
+
+
+class LocalSMTPServer(smtp.ESMTP, LEAPInitMixin):
+    """
+    The Production ESMTP Server: Authentication Needed.
+    Authenticates against SMTP Token stored in Local Soledad instance.
+    The Realm will produce a Delivery Object that handles encryption/signing.
+    """
+
+    # TODO: implement Queue using twisted.mail.mail.MailService
+
+    def __init__(self, soledads, keyms, sendmailopts, *args, **kw):
+        encrypted_only = kw.pop('encrypted_only', False)
+
+        LEAPInitMixin.__init__(self, soledads, keyms, sendmailopts,
+                               encrypted_only)
+        smtp.ESMTP.__init__(self, *args, **kw)
 
 
 class SMTPFactory(protocol.ServerFactory):
@@ -147,6 +169,7 @@ class SMTPFactory(protocol.ServerFactory):
     protocol = LocalSMTPServer
     domain = LOCAL_FQDN
     timeout = 600
+    encrypted_only = False
 
     def __init__(self, soledad_sessions, keymanager_sessions, sendmail_opts):
         self._soledad_sessions = soledad_sessions
@@ -156,7 +179,7 @@ class SMTPFactory(protocol.ServerFactory):
     def buildProtocol(self, addr):
         p = self.protocol(
             self._soledad_sessions, self._keymanager_sessions,
-            self._sendmail_opts)
+            self._sendmail_opts, encrypted_only=self.encrypted_only)
         p.factory = self
         p.host = LOCAL_FQDN
         p.challengers = {"LOGIN": LOGINCredentials, "PLAIN": PLAINCredentials}
