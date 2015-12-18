@@ -48,7 +48,6 @@ logger = logging.getLogger(__name__)
 KEY_VERSION_KEY = 'version'
 KEY_ADDRESS_KEY = 'address'
 KEY_TYPE_KEY = 'type'
-KEY_ID_KEY = 'key_id'
 KEY_FINGERPRINT_KEY = 'fingerprint'
 KEY_DATA_KEY = 'key_data'
 KEY_PRIVATE_KEY = 'private'
@@ -80,16 +79,16 @@ KEYMANAGER_DOC_VERSION = 1
 #
 
 TAGS_PRIVATE_INDEX = 'by-tags-private'
-TYPE_ID_PRIVATE_INDEX = 'by-type-id-private'
+TYPE_FINGERPRINT_PRIVATE_INDEX = 'by-type-fingerprint-private'
 TYPE_ADDRESS_PRIVATE_INDEX = 'by-type-address-private'
 INDEXES = {
     TAGS_PRIVATE_INDEX: [
         KEY_TAGS_KEY,
         'bool(%s)' % KEY_PRIVATE_KEY,
     ],
-    TYPE_ID_PRIVATE_INDEX: [
+    TYPE_FINGERPRINT_PRIVATE_INDEX: [
         KEY_TYPE_KEY,
-        KEY_ID_KEY,
+        KEY_FINGERPRINT_KEY,
         'bool(%s)' % KEY_PRIVATE_KEY,
     ],
     TYPE_ADDRESS_PRIVATE_INDEX: [
@@ -137,7 +136,8 @@ def build_key_from_dict(kClass, key, active=None):
             validation = ValidationLevels.get(active[KEY_VALIDATION_KEY])
         except ValueError:
             logger.error("Not valid validation level (%s) for key %s",
-                         (active[KEY_VALIDATION_KEY], active[KEY_ID_KEY]))
+                         (active[KEY_VALIDATION_KEY],
+                          active[KEY_FINGERPRINT_KEY]))
         last_audited_at = _to_datetime(active[KEY_LAST_AUDITED_AT_KEY])
         encr_used = active[KEY_ENCR_USED_KEY]
         sign_used = active[KEY_SIGN_USED_KEY]
@@ -147,7 +147,6 @@ def build_key_from_dict(kClass, key, active=None):
 
     return kClass(
         key[KEY_ADDRESS_KEY],
-        key_id=key[KEY_ID_KEY],
         fingerprint=key[KEY_FINGERPRINT_KEY],
         key_data=key[KEY_DATA_KEY],
         private=key[KEY_PRIVATE_KEY],
@@ -189,13 +188,12 @@ class EncryptionKey(object):
 
     __metaclass__ = ABCMeta
 
-    def __init__(self, address, key_id="", fingerprint="",
+    def __init__(self, address, fingerprint="",
                  key_data="", private=False, length=0, expiry_date=None,
                  validation=ValidationLevels.Weak_Chain, last_audited_at=None,
                  refreshed_at=None, encr_used=False, sign_used=False):
         # TODO: it should know its own active address
         self.address = address
-        self.key_id = key_id
         self.fingerprint = fingerprint
         self.key_data = key_data
         self.private = private
@@ -221,7 +219,6 @@ class EncryptionKey(object):
         return json.dumps({
             KEY_ADDRESS_KEY: self.address,
             KEY_TYPE_KEY: self.__class__.__name__,
-            KEY_ID_KEY: self.key_id,
             KEY_FINGERPRINT_KEY: self.fingerprint,
             KEY_DATA_KEY: self.key_data,
             KEY_PRIVATE_KEY: self.private,
@@ -244,7 +241,7 @@ class EncryptionKey(object):
         return json.dumps({
             KEY_ADDRESS_KEY: address,
             KEY_TYPE_KEY: self.__class__.__name__ + KEYMANAGER_ACTIVE_TYPE,
-            KEY_ID_KEY: self.key_id,
+            KEY_FINGERPRINT_KEY: self.fingerprint,
             KEY_PRIVATE_KEY: self.private,
             KEY_VALIDATION_KEY: str(self.validation),
             KEY_LAST_AUDITED_AT_KEY: last_audited_at,
@@ -260,7 +257,7 @@ class EncryptionKey(object):
         """
         return u"<%s 0x%s (%s - %s)>" % (
             self.__class__.__name__,
-            self.key_id,
+            self.fingerprint,
             self.address,
             "priv" if self.private else "publ")
 
@@ -519,7 +516,7 @@ class EncryptionScheme(object):
         """
         def log_active_doc(doc):
             logger.error("\t%s: %s" % (doc.content[KEY_ADDRESS_KEY],
-                                       doc.content[KEY_ID_KEY]))
+                                       doc.content[KEY_FINGERPRINT_KEY]))
 
         def cmp_active(d1, d2):
             res = cmp(d1.content[KEY_LAST_AUDITED_AT_KEY],

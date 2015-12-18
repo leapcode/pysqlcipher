@@ -642,7 +642,7 @@ class KeyManager(object):
             else:
                 signature = InvalidSignature(
                     'Failed to verify signature with key %s' %
-                    (pubkey.key_id,))
+                    (pubkey.fingerprint,))
             defer.returnValue((decrypted, signature))
 
         dpriv = self.get_key(address, ktype, private=True)
@@ -741,7 +741,7 @@ class KeyManager(object):
             else:
                 raise InvalidSignature(
                     'Failed to verify signature with key %s' %
-                    (pubkey.key_id,))
+                    (pubkey.fingerprint,))
 
         d = self.get_key(address, ktype, private=False,
                          fetch_remote=fetch_remote)
@@ -804,7 +804,7 @@ class KeyManager(object):
             else:
                 raise KeyNotValidUpgrade(
                     "Key %s can not be upgraded by new key %s"
-                    % (old_key.key_id, key.key_id))
+                    % (old_key.fingerprint, key.fingerprint))
 
         d = _keys.get_key(address, private=key.private)
         d.addErrback(old_key_not_found)

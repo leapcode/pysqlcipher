@@ -77,7 +77,6 @@ class KeyManagerUtilTestCase(unittest.TestCase):
     def test_build_key_from_dict(self):
         kdict = {
             'address': [ADDRESS],
-            'key_id': KEY_FINGERPRINT[-16:],
             'fingerprint': KEY_FINGERPRINT,
             'key_data': PUBLIC_KEY,
             'private': False,
@@ -87,7 +86,6 @@ class KeyManagerUtilTestCase(unittest.TestCase):
         }
         adict = {
             'address': ADDRESS,
-            'key_id': KEY_FINGERPRINT[-16:],
             'private': False,
             'last_audited_at': 0,
             'validation': str(ValidationLevels.Weak_Chain),
@@ -97,9 +95,6 @@ class KeyManagerUtilTestCase(unittest.TestCase):
         key = build_key_from_dict(OpenPGPKey, kdict, adict)
         self.assertEqual(
             kdict['address'], key.address,
-            'Wrong data in key.')
-        self.assertEqual(
-            kdict['key_id'], key.key_id,
             'Wrong data in key.')
         self.assertEqual(
             kdict['fingerprint'], key.fingerprint,

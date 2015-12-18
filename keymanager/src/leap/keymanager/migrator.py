@@ -33,7 +33,7 @@ from leap.keymanager.keys import (
 
     KEYMANAGER_DOC_VERSION,
     KEY_VERSION_KEY,
-    KEY_ID_KEY,
+    KEY_FINGERPRINT_KEY,
     KEY_VALIDATION_KEY,
     KEY_LAST_AUDITED_AT_KEY,
     KEY_ENCR_USED_KEY,
@@ -41,6 +41,8 @@ from leap.keymanager.keys import (
 )
 from leap.keymanager.validation import ValidationLevels
 
+
+KEY_ID_KEY = 'key_id'
 
 KeyDocs = namedtuple("KeyDocs", ['key', 'active'])
 
@@ -132,6 +134,7 @@ class KeyDocumentsMigrator(object):
         last_audited = 0
         encr_used = False
         sign_used = False
+        fingerprint = key.content[KEY_FINGERPRINT_KEY]
         if len(actives) == 1 and KEY_VERSION_KEY not in key.content:
             # we can preserve the validation of the key if there is only one
             # active address for the key
@@ -146,10 +149,12 @@ class KeyDocumentsMigrator(object):
                 continue
 
             active.content[KEY_VERSION_KEY] = KEYMANAGER_DOC_VERSION
+            active.content[KEY_FINGERPRINT_KEY] = fingerprint
             active.content[KEY_VALIDATION_KEY] = validation
             active.content[KEY_LAST_AUDITED_AT_KEY] = last_audited
             active.content[KEY_ENCR_USED_KEY] = encr_used
             active.content[KEY_SIGN_USED_KEY] = sign_used
+            del active.content[KEY_ID_KEY]
             d = self._soledad.put_doc(active)
             deferreds.append(d)
         return gatherResults(deferreds)
@@ -159,6 +164,7 @@ class KeyDocumentsMigrator(object):
             return succeed(None)
 
         key.content[KEY_VERSION_KEY] = KEYMANAGER_DOC_VERSION
+        del key.content[KEY_ID_KEY]
         del key.content[KEY_VALIDATION_KEY]
         del key.content[KEY_LAST_AUDITED_AT_KEY]
         del key.content[KEY_ENCR_USED_KEY]

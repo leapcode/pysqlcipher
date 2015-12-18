@@ -97,7 +97,6 @@ class KeyManagerWithSoledadTestCase(unittest.TestCase, BaseLeapTest):
 
 
 # key 24D18DDF: public key "Leap Test Key <leap@leap.se>"
-KEY_ID = "2F455E2824D18DDF"
 KEY_FINGERPRINT = "E36E738D69173C13D709E44F2F455E2824D18DDF"
 PUBLIC_KEY = """
 -----BEGIN PGP PUBLIC KEY BLOCK-----

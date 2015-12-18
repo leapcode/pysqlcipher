@@ -39,10 +39,10 @@ from leap.keymanager.keys import (
     EncryptionScheme,
     is_address,
     build_key_from_dict,
-    TYPE_ID_PRIVATE_INDEX,
+    TYPE_FINGERPRINT_PRIVATE_INDEX,
     TYPE_ADDRESS_PRIVATE_INDEX,
     KEY_ADDRESS_KEY,
-    KEY_ID_KEY,
+    KEY_FINGERPRINT_KEY,
     KEYMANAGER_ACTIVE_TYPE,
 )
 
@@ -122,9 +122,9 @@ class TempGPGWrapper(object):
         # itself is enough to also have the public key in the keyring,
         # and we want to count the keys afterwards.
 
-        privids = map(lambda privkey: privkey.key_id, privkeys)
+        privfps = map(lambda privkey: privkey.fingerprint, privkeys)
         publkeys = filter(
-            lambda pubkey: pubkey.key_id not in privids, publkeys)
+            lambda pubkey: pubkey.fingerprint not in privfps, publkeys)
 
         listkeys = lambda: self._gpg.list_keys()
         listsecretkeys = lambda: self._gpg.list_keys(secret=True)
@@ -213,7 +213,7 @@ class OpenPGPKey(EncryptionKey):
         :rtype: list(str)
         """
         with TempGPGWrapper(keys=[self], gpgbinary=self._gpgbinary) as gpg:
-            res = gpg.list_sigs(self.key_id)
+            res = gpg.list_sigs(self.fingerprint)
             for uid, sigs in res.sigs.iteritems():
                 if _parse_address(uid) in self.address:
                     return sigs
@@ -370,7 +370,7 @@ class OpenPGPScheme(EncryptionScheme):
             leap_assert(
                 address in keydoc.content[KEY_ADDRESS_KEY],
                 'Wrong address in key %s. Expected %s, found %s.'
-                % (keydoc.content[KEY_ID_KEY], address,
+                % (keydoc.content[KEY_FINGERPRINT_KEY], address,
                    keydoc.content[KEY_ADDRESS_KEY]))
             key = build_key_from_dict(OpenPGPKey, keydoc.content,
                                       activedoc.content)
@@ -493,7 +493,7 @@ class OpenPGPScheme(EncryptionScheme):
                 deferreds.append(d)
             return defer.gatherResults(deferreds)
 
-        dk = self._get_key_doc_from_keyid(key.key_id, key.private)
+        dk = self._get_key_doc_from_fingerprint(key.fingerprint, key.private)
         da = self._get_active_doc_from_address(address, key.private)
         d = defer.gatherResults([dk, da])
         d.addCallback(merge_and_put)
@@ -517,8 +517,8 @@ class OpenPGPScheme(EncryptionScheme):
         def get_key_from_active_doc(activedoc):
             if not activedoc:
                 return (None, None)
-            key_id = activedoc.content[KEY_ID_KEY]
-            d = self._get_key_doc_from_keyid(key_id, private)
+            fingerprint = activedoc.content[KEY_FINGERPRINT_KEY]
+            d = self._get_key_doc_from_fingerprint(fingerprint, private)
             d.addCallback(delete_active_if_no_key, activedoc)
             return d
 
@@ -573,17 +573,17 @@ class OpenPGPScheme(EncryptionScheme):
 
         def get_key_docs(_):
             return self._soledad.get_from_index(
-                TYPE_ID_PRIVATE_INDEX,
+                TYPE_FINGERPRINT_PRIVATE_INDEX,
                 self.KEY_TYPE,
-                key.key_id,
+                key.fingerprint,
                 '1' if key.private else '0')
 
         def delete_key(docs):
             if len(docs) == 0:
                 raise errors.KeyNotFound(key)
             elif len(docs) > 1:
-                logger.warning("There is more than one key for key_id %s"
-                               % key.key_id)
+                logger.warning("There is more than one key for fingerprint %s"
+                               % key.fingerprint)
 
             has_deleted = False
             deferreds = []
@@ -597,9 +597,9 @@ class OpenPGPScheme(EncryptionScheme):
             return defer.gatherResults(deferreds)
 
         d = self._soledad.get_from_index(
-            TYPE_ID_PRIVATE_INDEX,
+            TYPE_FINGERPRINT_PRIVATE_INDEX,
             self.ACTIVE_TYPE,
-            key.key_id,
+            key.fingerprint,
             '1' if key.private else '0')
         d.addCallback(delete_docs)
         d.addCallback(get_key_docs)
@@ -659,7 +659,7 @@ class OpenPGPScheme(EncryptionScheme):
             result = yield from_thread(
                 gpg.encrypt,
                 data, pubkey.fingerprint,
-                default_key=sign.key_id if sign else None,
+                default_key=sign.fingerprint if sign else None,
                 passphrase=passphrase, symmetric=False,
                 cipher_algo=cipher_algo)
             # Here we cannot assert for correctness of sig because the sig is
@@ -761,7 +761,7 @@ class OpenPGPScheme(EncryptionScheme):
         # result.fingerprint - contains the fingerprint of the key used to
         #                      sign.
         with TempGPGWrapper(privkey, self._gpgbinary) as gpg:
-            result = gpg.sign(data, default_key=privkey.key_id,
+            result = gpg.sign(data, default_key=privkey.fingerprint,
                               digest_algo=digest_algo, clearsign=clearsign,
                               detach=detach, binary=binary)
             rfprint = privkey.fingerprint
@@ -770,7 +770,7 @@ class OpenPGPScheme(EncryptionScheme):
             if result.fingerprint is None:
                 raise errors.SignFailed(
                     'Failed to sign with key %s: %s' %
-                    (privkey['keyid'], result.stderr))
+                    (privkey['fingerprint'], result.stderr))
             leap_assert(
                 result.fingerprint == kfprint,
                 'Signature and private key fingerprints mismatch: '
@@ -823,11 +823,11 @@ class OpenPGPScheme(EncryptionScheme):
         d.addCallback(self._repair_and_get_doc, self._repair_active_docs)
         return d
 
-    def _get_key_doc_from_keyid(self, key_id, private):
+    def _get_key_doc_from_fingerprint(self, fingerprint, private):
         d = self._soledad.get_from_index(
-            TYPE_ID_PRIVATE_INDEX,
+            TYPE_FINGERPRINT_PRIVATE_INDEX,
             self.KEY_TYPE,
-            key_id,
+            fingerprint,
             '1' if private else '0')
         d.addCallback(self._repair_and_get_doc, self._repair_key_docs)
         return d
@@ -863,7 +863,6 @@ def build_gpg_key(key_info, key_data, gpgbinary=None):
     return OpenPGPKey(
         address,
         gpgbinary=gpgbinary,
-        key_id=key_info['keyid'],
         fingerprint=key_info['fingerprint'],
         key_data=key_data,
         private=True if key_info['type'] == 'sec' else False,
