@@ -25,6 +25,7 @@ from leap.bonafide._protocol import BonafideProtocol
 
 from twisted.application import service
 from twisted.internet import defer
+from twisted.python import log
 
 
 class BonafideService(service.Service):
@@ -63,6 +64,10 @@ class BonafideService(service.Service):
                     this_hook, username=username, password=password)
 
         def notify_bonafide_auth_hook(result):
+            if not result:
+                log.msg("Authentication hook did not return anything")
+                return
+
             this_hook = 'on_bonafide_auth'
             token, uuid = result
             hooked_service = self.get_hooked_service(this_hook)

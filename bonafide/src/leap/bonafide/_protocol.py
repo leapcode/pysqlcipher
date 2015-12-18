@@ -45,6 +45,7 @@ class BonafideProtocol(object):
     _sessions = defaultdict(None)
 
     def _get_api(self, provider_id):
+        # TODO should get deferred
         if provider_id in self._apis:
             return self._apis[provider_id]
 
@@ -73,26 +74,45 @@ class BonafideProtocol(object):
     # Service public methods
 
     def do_signup(self, full_id, password):
+        log.msg('SIGNUP for %s' % full_id)
+        _, provider_id = config.get_username_and_provider(full_id)
+
+        provider = config.Provider(provider_id)
+        d = provider.callWhenReady(self._do_signup, full_id, password)
+        return d
+
+    def _do_signup(self, full_id, password):
+
         # XXX check it's unauthenticated
         def return_user(result, _session):
             return_code, user = result
             if return_code == OK:
                 return user
 
-        log.msg('SIGNUP for %s' % full_id)
+        username, _ = config.get_username_and_provider(full_id)
+        # XXX get deferred?
         session = self._get_session(full_id, password)
-        username, provider_id = config.get_username_and_provider(full_id)
-
         d = session.signup(username, password)
         d.addCallback(return_user, session)
         return d
 
     def do_authenticate(self, full_id, password):
+        log.msg('SIGNUP for %s' % full_id)
+        _, provider_id = config.get_username_and_provider(full_id)
+
+        provider = config.Provider(provider_id)
+        d = provider.callWhenReady(self._do_authenticate, full_id, password)
+        return d
+
+    def _do_authenticate(self, full_id, password):
+
         def return_token_and_uuid(result, _session):
             if result == OK:
                 return str(_session.token), str(_session.uuid)
 
         log.msg('AUTH for %s' % full_id)
+
+        # XXX get deferred?
         session = self._get_session(full_id, password)
         d = session.authenticate()
         d.addCallback(return_token_and_uuid, session)
@@ -130,4 +150,3 @@ class BonafideProtocol(object):
         mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         return '[+] Bonafide service: [%s sessions] [Mem usage: %s KB]' % (
             len(self._sessions), mem / 1024)
-

@@ -38,11 +38,13 @@ class _MetaActionDispatcher(type):
     where `uri_template` is a string that will be formatted with an arbitrary
     number of keyword arguments.
 
-    Any class that uses this one as its metaclass needs to implement two private
-    methods::
+    Any class that uses this one as its metaclass needs to implement two
+    private methods::
 
         _get_uri(self, action_name, **extra_params)
         _get_method(self, action_name)
+
+    Beware that currently they cannot be inherited from bases.
     """
 
     def __new__(meta, name, bases, dct):
@@ -74,17 +76,34 @@ class _MetaActionDispatcher(type):
             meta, name, bases, newdct)
 
 
-class Api(object):
+class BaseProvider(object):
+
+    def __init__(self, netloc, version=1):
+        parsed = urlparse(netloc)
+        if parsed.scheme != 'https':
+            raise ValueError(
+                'ProviderApi needs to be passed a url with https scheme')
+        self.netloc = parsed.netloc
+        self.version = version
+
+    def get_hostname(self):
+        return urlparse(self._get_base_url()).hostname
+
+    def _get_base_url(self):
+        return "https://{0}/{1}".format(self.netloc, self.version)
+
+
+class Api(BaseProvider):
     """
     An object that has all the information that a client needs to communicate
     with the remote methods exposed by the web API of a LEAP provider.
 
     The actions are described in https://leap.se/bonafide
 
-    By using the _MetaActionDispatcher as a metaclass, the _actions dict will be
-    translated dynamically into a set of instance methods that will allow
+    By using the _MetaActionDispatcher as a metaclass, the _actions dict will
+    be translated dynamically into a set of instance methods that will allow
     getting the uri and method for each action.
-    
+
     The keyword arguments specified in the format string will automatically
     raise a KeyError if the needed keyword arguments are not passed to the
     dynamically created methods.
@@ -106,19 +125,48 @@ class Api(object):
         'smtp_cert': ('smtp_cert', 'POST'),
     }
 
-    def __init__(self, netloc, version=1):
-        parsed = urlparse(netloc)
-        if parsed.scheme != 'https':
-            raise ValueError(
-                'ProviderApi needs to be passed a url with https scheme')
-        self.netloc = parsed.netloc
-        self.version = version
+    # Methods expected by the dispatcher metaclass
 
-    def get_hostname(self):
-        return urlparse(self._get_base_url()).hostname
+    def _get_uri(self, action_name, **extra_params):
+        resource, _ = self._actions.get(action_name)
+        uri = '{0}/{1}'.format(
+            bytes(self._get_base_url()),
+            bytes(resource)).format(**extra_params)
+        return uri
+
+    def _get_method(self, action_name):
+        _, method = self._actions.get(action_name)
+        return method
+
+
+class Discovery(BaseProvider):
+    """
+    Discover basic information about a provider, including the provided
+    services.
+    """
+
+    __metaclass__ = _MetaActionDispatcher
+    _actions = {
+        'provider_info': ('provider.json', 'GET'),
+        'configs': ('1/configs.json', 'GET'),
+    }
+
+    api_uri = None
+    api_port = None
 
     def _get_base_url(self):
-        return "https://{0}/{1}".format(self.netloc, self.version)
+        if self.api_uri:
+            base = self.api_uri
+        else:
+            base = self.netloc
+
+        uri = "https://{0}".format(base)
+        if self.api_port:
+            uri = uri + ':%s' % self.api_port
+        return uri
+
+    def get_base_uri(self):
+        return self._get_base_url()
 
     # Methods expected by the dispatcher metaclass
 
