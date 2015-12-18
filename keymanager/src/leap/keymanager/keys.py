@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 # Dictionary keys used for storing cryptographic keys.
 #
 
+KEY_VERSION_KEY = 'version'
 KEY_ADDRESS_KEY = 'address'
 KEY_TYPE_KEY = 'type'
 KEY_ID_KEY = 'key_id'
@@ -68,6 +69,10 @@ KEY_TAGS_KEY = 'tags'
 KEYMANAGER_KEY_TAG = 'keymanager-key'
 KEYMANAGER_ACTIVE_TAG = 'keymanager-active'
 KEYMANAGER_ACTIVE_TYPE = '-active'
+
+# Version of the Soledad Document schema,
+# it should be bumped each time the document format changes
+KEYMANAGER_DOC_VERSION = 1
 
 
 #
@@ -223,6 +228,7 @@ class EncryptionKey(object):
             KEY_LENGTH_KEY: self.length,
             KEY_EXPIRY_DATE_KEY: expiry_date,
             KEY_REFRESHED_AT_KEY: refreshed_at,
+            KEY_VERSION_KEY: KEYMANAGER_DOC_VERSION,
             KEY_TAGS_KEY: [KEYMANAGER_KEY_TAG],
         })
 
@@ -244,6 +250,7 @@ class EncryptionKey(object):
             KEY_LAST_AUDITED_AT_KEY: last_audited_at,
             KEY_ENCR_USED_KEY: self.encr_used,
             KEY_SIGN_USED_KEY: self.sign_used,
+            KEY_VERSION_KEY: KEYMANAGER_DOC_VERSION,
             KEY_TAGS_KEY: [KEYMANAGER_ACTIVE_TAG],
         })
 
@@ -281,7 +288,8 @@ class EncryptionScheme(object):
         :type soledad: leap.soledad.Soledad
         """
         self._soledad = soledad
-        self._init_indexes()
+        self.deferred_init = self._init_indexes()
+        self.deferred_init.addCallback(self._migrate_documents_schema)
 
     def _init_indexes(self):
         """
@@ -309,8 +317,14 @@ class EncryptionScheme(object):
                     deferreds.append(d)
             return defer.gatherResults(deferreds, consumeErrors=True)
 
-        self.deferred_indexes = self._soledad.list_indexes()
-        self.deferred_indexes.addCallback(init_idexes)
+        d = self._soledad.list_indexes()
+        d.addCallback(init_idexes)
+        return d
+
+    def _migrate_documents_schema(self, _):
+        from leap.keymanager.migrator import KeyDocumentsMigrator
+        migrator = KeyDocumentsMigrator(self._soledad)
+        return migrator.migrate()
 
     def _wait_indexes(self, *methods):
         """
@@ -343,7 +357,7 @@ class EncryptionScheme(object):
             self.stored[method] = getattr(self, method)
             setattr(self, method, makeWrapper(method))
 
-        self.deferred_indexes.addCallback(restore)
+        self.deferred_init.addCallback(restore)
 
     @abstractmethod
     def get_key(self, address, private=False):

@@ -76,7 +76,7 @@ class KeyManagerWithSoledadTestCase(unittest.TestCase, BaseLeapTest):
             return d
 
         # wait for the indexes to be ready for the tear down
-        d = km._wrapper_map[OpenPGPKey].deferred_indexes
+        d = km._wrapper_map[OpenPGPKey].deferred_init
         d.addCallback(get_and_delete_keys)
         d.addCallback(lambda _: self.tearDownEnv())
         d.addCallback(lambda _: self._soledad.close())
