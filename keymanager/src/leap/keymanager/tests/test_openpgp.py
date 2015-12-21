@@ -335,7 +335,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
                 deferreds = []
                 for k in (k1, k2, k3, k4, k5):
                     d = self._soledad.create_doc_from_json(
-                        k.get_active_json(ADDRESS))
+                        k.get_active_json())
                     deferreds.append(d)
                 return gatherResults(deferreds)
             elif args[0] == TYPE_FINGERPRINT_PRIVATE_INDEX:

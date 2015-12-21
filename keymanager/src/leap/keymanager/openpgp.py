@@ -41,7 +41,7 @@ from leap.keymanager.keys import (
     build_key_from_dict,
     TYPE_FINGERPRINT_PRIVATE_INDEX,
     TYPE_ADDRESS_PRIVATE_INDEX,
-    KEY_ADDRESS_KEY,
+    KEY_UIDS_KEY,
     KEY_FINGERPRINT_KEY,
     KEYMANAGER_ACTIVE_TYPE,
 )
@@ -200,7 +200,7 @@ class OpenPGPKey(EncryptionKey):
     Base class for OpenPGP keys.
     """
 
-    def __init__(self, address, gpgbinary=None, **kwargs):
+    def __init__(self, address=None, gpgbinary=None, **kwargs):
         self._gpgbinary = gpgbinary
         super(OpenPGPKey, self).__init__(address, **kwargs)
 
@@ -215,7 +215,7 @@ class OpenPGPKey(EncryptionKey):
         with TempGPGWrapper(keys=[self], gpgbinary=self._gpgbinary) as gpg:
             res = gpg.list_sigs(self.fingerprint)
             for uid, sigs in res.sigs.iteritems():
-                if _parse_address(uid) in self.address:
+                if _parse_address(uid) in self.uids:
                     return sigs
 
         return []
@@ -335,8 +335,9 @@ class OpenPGPScheme(EncryptionScheme):
                     key = gpg.list_keys(secret=secret).pop()
                     openpgp_key = self._build_key_from_gpg(
                         key,
-                        gpg.export_keys(key['fingerprint'], secret=secret))
-                    d = self.put_key(openpgp_key, address)
+                        gpg.export_keys(key['fingerprint'], secret=secret),
+                        address)
+                    d = self.put_key(openpgp_key)
                     deferreds.append(d)
                 yield defer.gatherResults(deferreds)
 
@@ -368,10 +369,10 @@ class OpenPGPScheme(EncryptionScheme):
             if keydoc is None:
                 raise errors.KeyNotFound(address)
             leap_assert(
-                address in keydoc.content[KEY_ADDRESS_KEY],
+                address in keydoc.content[KEY_UIDS_KEY],
                 'Wrong address in key %s. Expected %s, found %s.'
                 % (keydoc.content[KEY_FINGERPRINT_KEY], address,
-                   keydoc.content[KEY_ADDRESS_KEY]))
+                   keydoc.content[KEY_UIDS_KEY]))
             key = build_key_from_dict(OpenPGPKey, keydoc.content,
                                       activedoc.content)
             key._gpgbinary = self._gpgbinary
@@ -381,13 +382,15 @@ class OpenPGPScheme(EncryptionScheme):
         d.addCallback(build_key)
         return d
 
-    def parse_ascii_key(self, key_data):
+    def parse_ascii_key(self, key_data, address=None):
         """
         Parses an ascii armored key (or key pair) data and returns
         the OpenPGPKey keys.
 
         :param key_data: the key data to be parsed.
         :type key_data: str or unicode
+        :param address: Active address for the key.
+        :type address: str
 
         :returns: the public key and private key (if applies) for that data.
         :rtype: (public, private) -> tuple(OpenPGPKey, OpenPGPKey)
@@ -408,12 +411,13 @@ class OpenPGPScheme(EncryptionScheme):
         openpgp_privkey = None
         if privkey:
             # build private key
-            openpgp_privkey = self._build_key_from_gpg(priv_info, privkey)
+            openpgp_privkey = self._build_key_from_gpg(priv_info, privkey,
+                                                       address)
             leap_check(pub_info['fingerprint'] == priv_info['fingerprint'],
                        'Fingerprints for public and private key differ.',
                        errors.KeyFingerprintMismatch)
         # build public key
-        openpgp_pubkey = self._build_key_from_gpg(pub_info, pubkey)
+        openpgp_pubkey = self._build_key_from_gpg(pub_info, pubkey, address)
 
         return (openpgp_pubkey, openpgp_privkey)
 
@@ -433,12 +437,13 @@ class OpenPGPScheme(EncryptionScheme):
 
         openpgp_privkey = None
         try:
-            openpgp_pubkey, openpgp_privkey = self.parse_ascii_key(key_data)
+            openpgp_pubkey, openpgp_privkey = self.parse_ascii_key(
+                key_data, address)
         except (errors.KeyAddressMismatch, errors.KeyFingerprintMismatch) as e:
             return defer.fail(e)
 
         def put_key(_, key):
-            return self.put_key(key, address)
+            return self.put_key(key)
 
         d = defer.succeed(None)
         if openpgp_pubkey is not None:
@@ -447,14 +452,12 @@ class OpenPGPScheme(EncryptionScheme):
             d.addCallback(put_key, openpgp_privkey)
         return d
 
-    def put_key(self, key, address):
+    def put_key(self, key):
         """
         Put C{key} in local storage.
 
         :param key: The key to be stored.
         :type key: OpenPGPKey
-        :param address: address for which this key will be active.
-        :type address: str
 
         :return: A Deferred which fires when the key is in the storage.
         :rtype: Deferred
@@ -471,31 +474,36 @@ class OpenPGPScheme(EncryptionScheme):
 
             key.merge(oldkey)
             keydoc.set_json(key.get_json())
-            deferred_key = self._soledad.put_doc(keydoc)
-
-            active_json = key.get_active_json(address)
-            if activedoc:
-                activedoc.set_json(active_json)
-                deferred_active = self._soledad.put_doc(activedoc)
-            else:
-                deferred_active = self._soledad.create_doc_from_json(
-                    active_json)
-
-            return defer.gatherResults([deferred_key, deferred_active])
+            d = self._soledad.put_doc(keydoc)
+            d.addCallback(put_active, activedoc)
+            return d
 
         def put_new_key(activedoc):
             deferreds = []
             if activedoc:
                 d = self._soledad.delete_doc(activedoc)
                 deferreds.append(d)
-            for json in [key.get_json(), key.get_active_json(address)]:
+            for json in [key.get_json(), key.get_active_json()]:
                 d = self._soledad.create_doc_from_json(json)
                 deferreds.append(d)
             return defer.gatherResults(deferreds)
 
-        dk = self._get_key_doc_from_fingerprint(key.fingerprint, key.private)
-        da = self._get_active_doc_from_address(address, key.private)
-        d = defer.gatherResults([dk, da])
+        def put_active(_, activedoc):
+            active_json = key.get_active_json()
+            if activedoc:
+                activedoc.set_json(active_json)
+                d = self._soledad.put_doc(activedoc)
+            else:
+                d = self._soledad.create_doc_from_json(active_json)
+            return d
+
+        def get_active_doc(keydoc):
+            d = self._get_active_doc_from_address(key.address, key.private)
+            d.addCallback(lambda activedoc: (keydoc, activedoc))
+            return d
+
+        d = self._get_key_doc_from_fingerprint(key.fingerprint, key.private)
+        d.addCallback(get_active_doc)
         d.addCallback(merge_and_put)
         return d
 
@@ -533,7 +541,7 @@ class OpenPGPScheme(EncryptionScheme):
         d.addCallback(get_key_from_active_doc)
         return d
 
-    def _build_key_from_gpg(self, key, key_data):
+    def _build_key_from_gpg(self, key, key_data, address=None):
         """
         Build an OpenPGPKey for C{address} based on C{key} from
         local gpg storage.
@@ -541,6 +549,8 @@ class OpenPGPScheme(EncryptionScheme):
         ASCII armored GPG key data has to be queried independently in this
         wrapper, so we receive it in C{key_data}.
 
+        :param address: Active address for the key.
+        :type address: str
         :param key: Key obtained from GPG storage.
         :type key: dict
         :param key_data: Key data obtained from GPG storage.
@@ -548,7 +558,7 @@ class OpenPGPScheme(EncryptionScheme):
         :return: An instance of the key.
         :rtype: OpenPGPKey
         """
-        return build_gpg_key(key, key_data, self._gpgbinary)
+        return build_gpg_key(key, key_data, address, self._gpgbinary)
 
     def delete_key(self, key):
         """
@@ -852,16 +862,20 @@ def process_ascii_key(key_data, gpgbinary, secret=False):
     return info, key
 
 
-def build_gpg_key(key_info, key_data, gpgbinary=None):
+def build_gpg_key(key_info, key_data, address=None, gpgbinary=None):
     expiry_date = None
     if key_info['expires']:
         expiry_date = datetime.fromtimestamp(int(key_info['expires']))
-    address = []
+    uids = []
     for uid in key_info['uids']:
-        address.append(_parse_address(uid))
+        uids.append(_parse_address(uid))
+    if address and address not in uids:
+        raise errors.KeyAddressMismatch("UIDs %s found, but expected %s"
+                                        % (str(uids), address))
 
     return OpenPGPKey(
-        address,
+        address=address,
+        uids=uids,
         gpgbinary=gpgbinary,
         fingerprint=key_info['fingerprint'],
         key_data=key_data,

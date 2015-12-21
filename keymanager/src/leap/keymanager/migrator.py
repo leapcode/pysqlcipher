@@ -32,6 +32,8 @@ from leap.keymanager.keys import (
     KEYMANAGER_ACTIVE_TAG,
 
     KEYMANAGER_DOC_VERSION,
+    KEY_ADDRESS_KEY,
+    KEY_UIDS_KEY,
     KEY_VERSION_KEY,
     KEY_FINGERPRINT_KEY,
     KEY_VALIDATION_KEY,
@@ -164,6 +166,8 @@ class KeyDocumentsMigrator(object):
             return succeed(None)
 
         key.content[KEY_VERSION_KEY] = KEYMANAGER_DOC_VERSION
+        key.content[KEY_UIDS_KEY] = key.content[KEY_ADDRESS_KEY]
+        del key.content[KEY_ADDRESS_KEY]
         del key.content[KEY_ID_KEY]
         del key.content[KEY_VALIDATION_KEY]
         del key.content[KEY_LAST_AUDITED_AT_KEY]

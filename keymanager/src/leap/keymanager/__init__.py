@@ -580,7 +580,7 @@ class KeyManager(object):
                 data, pubkey, passphrase, sign=signkey,
                 cipher_algo=cipher_algo)
             pubkey.encr_used = True
-            yield _keys.put_key(pubkey, address)
+            yield _keys.put_key(pubkey)
             defer.returnValue(encrypted)
 
         dpub = self.get_key(address, ktype, private=False,
@@ -637,7 +637,7 @@ class KeyManager(object):
                 signature = pubkey
                 if not pubkey.sign_used:
                     pubkey.sign_used = True
-                    yield _keys.put_key(pubkey, verify)
+                    yield _keys.put_key(pubkey)
                     defer.returnValue((decrypted, signature))
             else:
                 signature = InvalidSignature(
@@ -734,7 +734,7 @@ class KeyManager(object):
             if signed:
                 if not pubkey.sign_used:
                     pubkey.sign_used = True
-                    d = _keys.put_key(pubkey, address)
+                    d = _keys.put_key(pubkey)
                     d.addCallback(lambda _: pubkey)
                     return d
                 return pubkey
@@ -765,20 +765,16 @@ class KeyManager(object):
         _keys = self._wrapper_map[type(key)]
         return _keys.delete_key(key)
 
-    def put_key(self, key, address):
+    def put_key(self, key):
         """
         Put key bound to address in local storage.
 
         :param key: The key to be stored
         :type key: EncryptionKey
-        :param address: address for which this key will be active
-        :type address: str
 
         :return: A Deferred which fires when the key is in the storage, or
-                 which fails with KeyAddressMismatch if address doesn't match
-                 any uid on the key or fails with KeyNotValidUpdate if a key
-                 with the same uid exists and the new one is not a valid update
-                 for it.
+                 which fails with KeyNotValidUpdate if a key with the same
+                 uid exists and the new one is not a valid update for it.
         :rtype: Deferred
 
         :raise UnsupportedKeyTypeError: if invalid key type
@@ -786,11 +782,6 @@ class KeyManager(object):
         ktype = type(key)
         self._assert_supported_key_type(ktype)
         _keys = self._wrapper_map[ktype]
-
-        if address not in key.address:
-            return defer.fail(
-                KeyAddressMismatch("UID %s found, but expected %s"
-                                   % (str(key.address), address)))
 
         def old_key_not_found(failure):
             if failure.check(KeyNotFound):
@@ -800,13 +791,13 @@ class KeyManager(object):
 
         def check_upgrade(old_key):
             if key.private or can_upgrade(key, old_key):
-                return _keys.put_key(key, address)
+                return _keys.put_key(key)
             else:
                 raise KeyNotValidUpgrade(
                     "Key %s can not be upgraded by new key %s"
                     % (old_key.fingerprint, key.fingerprint))
 
-        d = _keys.get_key(address, private=key.private)
+        d = _keys.get_key(key.address, private=key.private)
         d.addErrback(old_key_not_found)
         d.addCallback(check_upgrade)
         return d
@@ -838,11 +829,11 @@ class KeyManager(object):
         self._assert_supported_key_type(ktype)
         _keys = self._wrapper_map[ktype]
 
-        pubkey, privkey = _keys.parse_ascii_key(key)
+        pubkey, privkey = _keys.parse_ascii_key(key, address)
         pubkey.validation = validation
-        d = self.put_key(pubkey, address)
+        d = self.put_key(pubkey)
         if privkey is not None:
-            d.addCallback(lambda _: self.put_key(privkey, address))
+            d.addCallback(lambda _: self.put_key(privkey))
         return d
 
     @defer.inlineCallbacks
@@ -878,12 +869,12 @@ class KeyManager(object):
         ascii_content = yield self._get_with_combined_ca_bundle(uri)
 
         # XXX parse binary keys
-        pubkey, _ = _keys.parse_ascii_key(ascii_content)
+        pubkey, _ = _keys.parse_ascii_key(ascii_content, address)
         if pubkey is None:
             raise KeyNotFound(uri)
 
         pubkey.validation = validation
-        yield self.put_key(pubkey, address)
+        yield self.put_key(pubkey)
 
     def _assert_supported_key_type(self, ktype):
         """

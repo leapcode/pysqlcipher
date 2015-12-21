@@ -76,7 +76,7 @@ class KeyManagerUtilTestCase(unittest.TestCase):
 
     def test_build_key_from_dict(self):
         kdict = {
-            'address': [ADDRESS],
+            'uids': [ADDRESS],
             'fingerprint': KEY_FINGERPRINT,
             'key_data': PUBLIC_KEY,
             'private': False,
@@ -94,7 +94,7 @@ class KeyManagerUtilTestCase(unittest.TestCase):
         }
         key = build_key_from_dict(OpenPGPKey, kdict, adict)
         self.assertEqual(
-            kdict['address'], key.address,
+            kdict['uids'], key.uids,
             'Wrong data in key.')
         self.assertEqual(
             kdict['fingerprint'], key.fingerprint,
@@ -118,6 +118,9 @@ class KeyManagerUtilTestCase(unittest.TestCase):
             datetime.fromtimestamp(kdict['refreshed_at']), key.refreshed_at,
             'Wrong data in key.')
         self.assertEqual(
+            adict['address'], key.address,
+            'Wrong data in key.')
+        self.assertEqual(
             ValidationLevels.get(adict['validation']), key.validation,
             'Wrong data in key.')
         self.assertEqual(
@@ -137,12 +140,12 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         # get public keys
         keys = yield km.get_all_keys(False)
         self.assertEqual(len(keys), 1, 'Wrong number of keys')
-        self.assertTrue(ADDRESS in keys[0].address)
+        self.assertTrue(ADDRESS in keys[0].uids)
         self.assertFalse(keys[0].private)
         # get private keys
         keys = yield km.get_all_keys(True)
         self.assertEqual(len(keys), 1, 'Wrong number of keys')
-        self.assertTrue(ADDRESS in keys[0].address)
+        self.assertTrue(ADDRESS in keys[0].uids)
         self.assertTrue(keys[0].private)
 
     @defer.inlineCallbacks
@@ -153,7 +156,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         key = yield km.get_key(ADDRESS, OpenPGPKey, private=False,
                                fetch_remote=False)
         self.assertTrue(key is not None)
-        self.assertTrue(ADDRESS in key.address)
+        self.assertTrue(ADDRESS in key.uids)
         self.assertEqual(
             key.fingerprint.lower(), KEY_FINGERPRINT.lower())
         self.assertFalse(key.private)
@@ -166,7 +169,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         key = yield km.get_key(ADDRESS, OpenPGPKey, private=True,
                                fetch_remote=False)
         self.assertTrue(key is not None)
-        self.assertTrue(ADDRESS in key.address)
+        self.assertTrue(ADDRESS in key.uids)
         self.assertEqual(
             key.fingerprint.lower(), KEY_FINGERPRINT.lower())
         self.assertTrue(key.private)
@@ -231,7 +234,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
 
         key = yield self._fetch_key(km, ADDRESS, PUBLIC_KEY)
         self.assertIsInstance(key, OpenPGPKey)
-        self.assertTrue(ADDRESS in key.address)
+        self.assertTrue(ADDRESS in key.uids)
         self.assertEqual(key.validation, ValidationLevels.Provider_Trust)
 
     @defer.inlineCallbacks
@@ -243,7 +246,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
 
         key = yield self._fetch_key(km, ADDRESS_OTHER, PUBLIC_KEY_OTHER)
         self.assertIsInstance(key, OpenPGPKey)
-        self.assertTrue(ADDRESS_OTHER in key.address)
+        self.assertTrue(ADDRESS_OTHER in key.uids)
         self.assertEqual(key.validation, ValidationLevels.Weak_Chain)
 
     def _fetch_key(self, km, address, key):
@@ -273,7 +276,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         yield km.put_raw_key(PUBLIC_KEY, OpenPGPKey, ADDRESS)
         key = yield km.get_key(ADDRESS, OpenPGPKey)
         self.assertIsInstance(key, OpenPGPKey)
-        self.assertTrue(ADDRESS in key.address)
+        self.assertTrue(ADDRESS in key.uids)
 
     @defer.inlineCallbacks
     def test_fetch_uri_ascii_key(self):

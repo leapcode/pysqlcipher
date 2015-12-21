@@ -46,6 +46,7 @@ logger = logging.getLogger(__name__)
 #
 
 KEY_VERSION_KEY = 'version'
+KEY_UIDS_KEY = 'uids'
 KEY_ADDRESS_KEY = 'address'
 KEY_TYPE_KEY = 'type'
 KEY_FINGERPRINT_KEY = 'fingerprint'
@@ -126,12 +127,14 @@ def build_key_from_dict(kClass, key, active=None):
     :return: An instance of the key.
     :rtype: C{kClass}
     """
+    address = None
     validation = ValidationLevels.Weak_Chain
     last_audited_at = None
     encr_used = False
     sign_used = False
 
     if active:
+        address = active[KEY_ADDRESS_KEY]
         try:
             validation = ValidationLevels.get(active[KEY_VALIDATION_KEY])
         except ValueError:
@@ -146,7 +149,8 @@ def build_key_from_dict(kClass, key, active=None):
     refreshed_at = _to_datetime(key[KEY_REFRESHED_AT_KEY])
 
     return kClass(
-        key[KEY_ADDRESS_KEY],
+        address=address,
+        uids=key[KEY_UIDS_KEY],
         fingerprint=key[KEY_FINGERPRINT_KEY],
         key_data=key[KEY_DATA_KEY],
         private=key[KEY_PRIVATE_KEY],
@@ -188,12 +192,15 @@ class EncryptionKey(object):
 
     __metaclass__ = ABCMeta
 
-    def __init__(self, address, fingerprint="",
+    def __init__(self, address=None, uids=[], fingerprint="",
                  key_data="", private=False, length=0, expiry_date=None,
                  validation=ValidationLevels.Weak_Chain, last_audited_at=None,
                  refreshed_at=None, encr_used=False, sign_used=False):
-        # TODO: it should know its own active address
         self.address = address
+        if not uids and address:
+            self.uids = [address]
+        else:
+            self.uids = uids
         self.fingerprint = fingerprint
         self.key_data = key_data
         self.private = private
@@ -217,7 +224,7 @@ class EncryptionKey(object):
         refreshed_at = _to_unix_time(self.refreshed_at)
 
         return json.dumps({
-            KEY_ADDRESS_KEY: self.address,
+            KEY_UIDS_KEY: self.uids,
             KEY_TYPE_KEY: self.__class__.__name__,
             KEY_FINGERPRINT_KEY: self.fingerprint,
             KEY_DATA_KEY: self.key_data,
@@ -229,7 +236,7 @@ class EncryptionKey(object):
             KEY_TAGS_KEY: [KEYMANAGER_KEY_TAG],
         })
 
-    def get_active_json(self, address):
+    def get_active_json(self):
         """
         Return a JSON string describing this key.
 
@@ -239,7 +246,7 @@ class EncryptionKey(object):
         last_audited_at = _to_unix_time(self.last_audited_at)
 
         return json.dumps({
-            KEY_ADDRESS_KEY: address,
+            KEY_ADDRESS_KEY: self.address,
             KEY_TYPE_KEY: self.__class__.__name__ + KEYMANAGER_ACTIVE_TYPE,
             KEY_FINGERPRINT_KEY: self.fingerprint,
             KEY_PRIVATE_KEY: self.private,
@@ -374,14 +381,12 @@ class EncryptionScheme(object):
         pass
 
     @abstractmethod
-    def put_key(self, key, address):
+    def put_key(self, key):
         """
         Put a key in local storage.
 
         :param key: The key to be stored.
         :type key: EncryptionKey
-        :param address: address for which this key will be active.
-        :type address: str
 
         :return: A Deferred which fires when the key is in the storage.
         :rtype: Deferred
@@ -496,7 +501,7 @@ class EncryptionScheme(object):
         :rtype: Deferred
         """
         def log_key_doc(doc):
-            logger.error("\t%s: %s" % (doc.content[KEY_ADDRESS_KEY],
+            logger.error("\t%s: %s" % (doc.content[KEY_UIDS_KEY],
                                        doc.content[KEY_FINGERPRINT_KEY]))
 
         def cmp_key(d1, d2):

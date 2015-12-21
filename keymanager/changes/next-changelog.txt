@@ -13,6 +13,7 @@ Features
 - `#7485 <https://leap.se/code/issues/7485>`_: Move validation, usage and audited date to the active document.
 - `#7713 <https://leap.se/code/issues/7713>`_: Update soledad documents by adding versioning field.
 - `#7500 <https://leap.se/code/issues/7500>`_: Use fingerprints instead of key ids.
+- Make EncryptionKey aware of the active address.
 
 - `#1234 <https://leap.se/code/issues/1234>`_: Description of the new feature corresponding with issue #1234.
 - New feature without related issue number.
