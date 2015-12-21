@@ -461,7 +461,7 @@ class IncomingMail(Service):
                 decrmsg.add_header(
                     self.LEAP_SIGNATURE_HEADER,
                     self.LEAP_SIGNATURE_VALID,
-                    pubkey=signkey.key_id)
+                    pubkey=signkey.fingerprint)
             return decrmsg.as_string()
 
         if msg.get_content_type() == MULTIPART_ENCRYPTED:

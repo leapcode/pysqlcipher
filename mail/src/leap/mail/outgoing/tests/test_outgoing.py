@@ -236,7 +236,7 @@ class TestOutgoingMail(TestCaseWithKeyManager):
     def _set_sign_used(self, address):
         def set_sign(key):
             key.sign_used = True
-            return self._km.put_key(key, address)
+            return self._km.put_key(key)
 
         d = self._km.get_key(address, openpgp.OpenPGPKey, fetch_remote=False)
         d.addCallback(set_sign)

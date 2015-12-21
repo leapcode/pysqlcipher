@@ -487,7 +487,7 @@ class OutgoingMail(object):
         def add_openpgp_header(signkey):
             username, domain = sign_address.split('@')
             newmsg.add_header(
-                'OpenPGP', 'id=%s' % signkey.key_id,
+                'OpenPGP', 'id=%s' % signkey.fingerprint,
                 url='https://%s/key/%s' % (domain, username),
                 preference='signencrypt')
             return newmsg, origmsg
