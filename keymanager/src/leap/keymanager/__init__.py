@@ -579,8 +579,9 @@ class KeyManager(object):
             encrypted = yield _keys.encrypt(
                 data, pubkey, passphrase, sign=signkey,
                 cipher_algo=cipher_algo)
-            pubkey.encr_used = True
-            yield _keys.put_key(pubkey)
+            if not pubkey.encr_used:
+                pubkey.encr_used = True
+                yield _keys.put_key(pubkey)
             defer.returnValue(encrypted)
 
         dpub = self.get_key(address, ktype, private=False,
