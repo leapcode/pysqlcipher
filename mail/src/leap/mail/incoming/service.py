@@ -24,7 +24,6 @@ import time
 import warnings
 
 from email.parser import Parser
-from email.generator import Generator
 from email.utils import parseaddr
 from email.utils import formatdate
 from StringIO import StringIO
@@ -43,6 +42,7 @@ from leap.common.mail import get_email_charset
 from leap.keymanager import errors as keymanager_errors
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.mail.adaptors import soledad_indexes as fields
+from leap.mail.generator import Generator
 from leap.mail.utils import json_loads, empty
 from leap.soledad.client import Soledad
 from leap.soledad.common.crypto import ENC_SCHEME_KEY, ENC_JSON_KEY
@@ -394,7 +394,7 @@ class IncomingMail(Service):
 
         # ok, this is an incoming message
         rawmsg = msg.get(self.CONTENT_KEY, None)
-        if not rawmsg:
+        if rawmsg is None:
             return ""
         return self._maybe_decrypt_msg(rawmsg)
 
@@ -525,8 +525,8 @@ class IncomingMail(Service):
             return (msg, signkey)
 
         d = self._keymanager.decrypt(
-                encdata, self._userid, OpenPGPKey,
-                verify=senderAddress)
+            encdata, self._userid, OpenPGPKey,
+            verify=senderAddress)
         d.addCallbacks(build_msg, self._decryption_error, errbackArgs=(msg,))
         return d
 
@@ -593,9 +593,10 @@ class IncomingMail(Service):
         :rtype: Deferred
         """
         msg = copy.deepcopy(origmsg)
-        data = msg.get_payload()[0].as_string()
-        detached_sig = msg.get_payload()[1].get_payload()
-        d = self._keymanager.verify(data, sender_address, OpenPGPKey, detached_sig)
+        data = self._serialize_msg(msg.get_payload(0))
+        detached_sig = self._extract_signature(msg)
+        d = self._keymanager.verify(data, sender_address, OpenPGPKey,
+                                    detached_sig)
 
         d.addCallback(lambda sign_key: (msg, sign_key))
         d.addErrback(lambda _: (msg, keymanager_errors.InvalidSignature()))
@@ -606,6 +607,16 @@ class IncomingMail(Service):
         g = Generator(buf)
         g.flatten(origmsg)
         return buf.getvalue()
+
+    def _extract_signature(self, msg):
+        body = msg.get_payload(0).get_payload()
+
+        if isinstance(body, str):
+            body = msg.get_payload(0)
+
+        detached_sig = msg.get_payload(1).get_payload()
+        msg.set_payload(body)
+        return detached_sig
 
     def _decryption_error(self, failure, msg):
         """
