@@ -192,10 +192,13 @@ class MyBuildExt(build_ext):
                 ext.define_macros.append(("inline", "__inline"))
 
                 # Configure the linker
-                ext.extra_link_args.append("libeay32.lib")
-                ext.extra_link_args.append(
-                    "/LIBPATH:" + os.path.join(openssl, "lib")
-                )
+                if self.compiler.compiler_type == "msvc":
+                    ext.extra_link_args.append("libeay32.lib")
+                    ext.extra_link_args.append(
+                        "/LIBPATH:" + os.path.join(openssl, "lib")
+                    )
+                if self.compiler.compiler_type == "mingw32":
+                    ext.extra_link_args.append("-lcrypto")     
             else:
                 ext.extra_link_args.append("-lcrypto")
 
