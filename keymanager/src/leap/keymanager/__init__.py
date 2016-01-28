@@ -22,6 +22,8 @@ import fileinput
 import os
 import sys
 import tempfile
+import json
+import urllib
 
 from leap.common import ca_bundle
 
@@ -58,10 +60,10 @@ import logging
 import requests
 
 from twisted.internet import defer
-from twisted.internet import threads
 from urlparse import urlparse
 
 from leap.common.check import leap_assert
+from leap.common.http import HTTPClient
 from leap.common.events import emit_async, catalog
 from leap.common.decorators import memoized_method
 
@@ -142,6 +144,8 @@ class KeyManager(object):
         # the following are used to perform https requests
         self._fetcher = requests
         self._combined_ca_bundle = self._create_combined_bundle_file()
+        self._async_client = HTTPClient(self._combined_ca_bundle)
+        self._async_client_pinned = HTTPClient(self._ca_cert_path)
 
     #
     # destructor
@@ -201,27 +205,29 @@ class KeyManager(object):
             self._ca_cert_path is not None,
             'We need the CA certificate path!')
         try:
-            uri, data = self._nickserver_uri, {'address': address}
-            res = yield threads.deferToThread(self._fetcher.get, uri,
-                                              data=data,
-                                              verify=self._ca_cert_path)
-            res.raise_for_status()
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 404:
-                raise KeyNotFound(address)
-            else:
-                raise KeyNotFound(e.message)
+            uri = self._nickserver_uri + '?address=' + address
+            content = yield self._async_client_pinned.request(str(uri), 'GET')
+            json_content = json.loads(content)
+        except IOError as e:
+            # FIXME: 404 doesnt raise today, but it wont produce json anyway
+            # if e.response.status_code == 404:
+                # raise KeyNotFound(address)
             logger.warning("HTTP error retrieving key: %r" % (e,))
-            logger.warning("%s" % (res.content,))
+            logger.warning("%s" % (content,))
+            raise KeyNotFound(e), None, sys.exc_info()[2]
+        except ValueError as v:
+            logger.warning("Invalid JSON data from key: %s" % (uri,))
+            raise KeyNotFound(v.message + ' - ' + uri), None, sys.exc_info()[2]
+
         except Exception as e:
-            raise KeyNotFound(e.message)
             logger.warning("Error retrieving key: %r" % (e,))
+            raise KeyNotFound(e.message), None, sys.exc_info()[2]
         # Responses are now text/plain, although it's json anyway, but
         # this will fail when it shouldn't
         # leap_assert(
         #     res.headers['content-type'].startswith('application/json'),
         #     'Content-type is not JSON.')
-        defer.returnValue(res.json())
+        defer.returnValue(json_content)
 
     @defer.inlineCallbacks
     def _get_with_combined_ca_bundle(self, uri, data=None):
@@ -240,14 +246,13 @@ class KeyManager(object):
         :rtype: Deferred
         """
         try:
-            res = yield threads.deferToThread(self._fetcher.get, uri,
-                                              verify=self._combined_ca_bundle)
+            content = yield self._async_client.request(str(uri), 'GET')
         except Exception as e:
             logger.warning("There was a problem fetching key: %s" % (e,))
             raise KeyNotFound(uri)
-        if not res.ok:
+        if not content:
             raise KeyNotFound(uri)
-        defer.returnValue(res.content)
+        defer.returnValue(content)
 
     @defer.inlineCallbacks
     def _put(self, uri, data=None):
@@ -272,14 +277,20 @@ class KeyManager(object):
         leap_assert(
             self._token is not None,
             'We need a token to interact with webapp!')
-        headers = {'Authorization': 'Token token=%s' % self._token}
-        res = yield threads.deferToThread(self._fetcher.put,
-                                          uri, data=data,
-                                          verify=self._ca_cert_path,
-                                          headers=headers)
-        # assert that the response is valid
-        res.raise_for_status()
-        defer.returnValue(res)
+        if type(data) == dict:
+            data = urllib.urlencode(data)
+        headers = {'Authorization': [str('Token token=%s' % self._token)]}
+        headers['Content-Type'] = ['application/x-www-form-urlencoded']
+        try:
+            res = yield self._async_client_pinned.request(str(uri), 'PUT', body=str(data), headers=headers)
+        except Exception as e:
+            logger.warning("Error uploading key: %r" % (e,))
+            raise e
+        if 'error' in res:
+            # FIXME: That's a workaround for 500,
+            # we need to implement a readBody to assert response code
+            logger.warning("Error uploading key: %r" % (res,))
+            raise Exception(res)
 
     @memoized_method(invalidation=300)
     @defer.inlineCallbacks
