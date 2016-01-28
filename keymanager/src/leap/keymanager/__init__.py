@@ -187,35 +187,43 @@ class KeyManager(object):
             self._wrapper_map).pop()
 
     @defer.inlineCallbacks
-    def _get(self, uri, data=None):
+    def _get_json(self, address):
         """
         Send a GET request to C{uri} containing C{data}.
 
         :param uri: The URI of the request.
         :type uri: str
-        :param data: The body of the request.
-        :type data: dict, str or file
 
-        :return: The response to the request.
-        :rtype: requests.Response
+        :return: A deferred that will be fired with the GET response
+        :rtype: Deferred
         """
         leap_assert(
             self._ca_cert_path is not None,
             'We need the CA certificate path!')
-        res = yield threads.deferToThread(self._fetcher.get, uri, data=data,
-                                          verify=self._ca_cert_path)
-        # Nickserver now returns 404 for key not found and 500 for
-        # other cases (like key too small), so we are skipping this
-        # check for the time being
-        # res.raise_for_status()
-
+        try:
+            uri, data = self._nickserver_uri, {'address': address}
+            res = yield threads.deferToThread(self._fetcher.get, uri,
+                                              data=data,
+                                              verify=self._ca_cert_path)
+            res.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                raise KeyNotFound(address)
+            else:
+                raise KeyNotFound(e.message)
+            logger.warning("HTTP error retrieving key: %r" % (e,))
+            logger.warning("%s" % (res.content,))
+        except Exception as e:
+            raise KeyNotFound(e.message)
+            logger.warning("Error retrieving key: %r" % (e,))
         # Responses are now text/plain, although it's json anyway, but
         # this will fail when it shouldn't
         # leap_assert(
         #     res.headers['content-type'].startswith('application/json'),
         #     'Content-type is not JSON.')
-        defer.returnValue(res)
+        defer.returnValue(res.json())
 
+    @defer.inlineCallbacks
     def _get_with_combined_ca_bundle(self, uri, data=None):
         """
         Send a GET request to C{uri} containing C{data}.
@@ -228,12 +236,18 @@ class KeyManager(object):
         :param data: The body of the request.
         :type data: dict, str or file
 
-        :return: The response to the request.
-        :rtype: requests.Response
+        :return: A deferred that will be fired with the GET response
+        :rtype: Deferred
         """
-        return threads.deferToThread(self._fetcher.get,
-                                     uri, data=data,
-                                     verify=self._combined_ca_bundle)
+        try:
+            res = yield threads.deferToThread(self._fetcher.get, uri,
+                                              verify=self._combined_ca_bundle)
+        except Exception as e:
+            logger.warning("There was a problem fetching key: %s" % (e,))
+            raise KeyNotFound(uri)
+        if not res.ok:
+            raise KeyNotFound(uri)
+        defer.returnValue(res.content)
 
     @defer.inlineCallbacks
     def _put(self, uri, data=None):
@@ -249,8 +263,8 @@ class KeyManager(object):
         :param data: The body of the request.
         :type data: dict, str or file
 
-        :return: The response to the request.
-        :rtype: requests.Response
+        :return: A deferred that will be fired when PUT request finishes
+        :rtype: Deferred
         """
         leap_assert(
             self._ca_cert_path is not None,
@@ -284,38 +298,22 @@ class KeyManager(object):
 
         """
         # request keys from the nickserver
-        d = defer.succeed(None)
-        res = None
-        try:
-            res = yield self._get(self._nickserver_uri, {'address': address})
-            res.raise_for_status()
-            server_keys = res.json()
+        server_keys = yield self._get_json(address)
 
-            # insert keys in local database
-            if self.OPENPGP_KEY in server_keys:
-                # nicknym server is authoritative for its own domain,
-                # for other domains the key might come from key servers.
-                validation_level = ValidationLevels.Weak_Chain
-                _, domain = _split_email(address)
-                if (domain == _get_domain(self._nickserver_uri)):
-                    validation_level = ValidationLevels.Provider_Trust
+        # insert keys in local database
+        if self.OPENPGP_KEY in server_keys:
+            # nicknym server is authoritative for its own domain,
+            # for other domains the key might come from key servers.
+            validation_level = ValidationLevels.Weak_Chain
+            _, domain = _split_email(address)
+            if (domain == _get_domain(self._nickserver_uri)):
+                validation_level = ValidationLevels.Provider_Trust
 
-                d = self.put_raw_key(
-                    server_keys['openpgp'],
-                    OpenPGPKey,
-                    address=address,
-                    validation=validation_level)
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 404:
-                d = defer.fail(KeyNotFound(address))
-            else:
-                d = defer.fail(KeyNotFound(e.message))
-            logger.warning("HTTP error retrieving key: %r" % (e,))
-            logger.warning("%s" % (res.content,))
-        except Exception as e:
-            d = defer.fail(KeyNotFound(e.message))
-            logger.warning("Error retrieving key: %r" % (e,))
-        yield d
+            yield self.put_raw_key(
+                server_keys['openpgp'],
+                OpenPGPKey,
+                address=address,
+                validation=validation_level)
 
     #
     # key management
@@ -861,16 +859,10 @@ class KeyManager(object):
         _keys = self._wrapper_map[ktype]
 
         logger.info("Fetch key for %s from %s" % (address, uri))
-        try:
-            res = yield self._get_with_combined_ca_bundle(uri)
-        except Exception as e:
-            logger.warning("There was a problem fetching key: %s" % (e,))
-            raise KeyNotFound(uri)
-        if not res.ok:
-            raise KeyNotFound(uri)
+        ascii_content = yield self._get_with_combined_ca_bundle(uri)
 
         # XXX parse binary keys
-        pubkey, _ = _keys.parse_ascii_key(res.content)
+        pubkey, _ = _keys.parse_ascii_key(ascii_content)
         if pubkey is None:
             raise KeyNotFound(uri)
 

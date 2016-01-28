@@ -342,7 +342,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
 
         yield km.fetch_key(ADDRESS_OTHER, REMOTE_KEY_URL, OpenPGPKey)
 
-        get_mock.assert_called_once_with(REMOTE_KEY_URL, data=None,
+        get_mock.assert_called_once_with(REMOTE_KEY_URL,
                                          verify=ca_bundle.where())
 
     @inlineCallbacks
@@ -353,7 +353,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
 
         yield km.fetch_key(ADDRESS_OTHER, REMOTE_KEY_URL, OpenPGPKey)
 
-        get_mock.assert_called_once_with(REMOTE_KEY_URL, data=None,
+        get_mock.assert_called_once_with(REMOTE_KEY_URL,
                                          verify=ca_bundle.where())
 
     @inlineCallbacks
@@ -364,7 +364,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
 
         yield km.fetch_key(ADDRESS_OTHER, REMOTE_KEY_URL, OpenPGPKey)
 
-        get_mock.assert_called_once_with(REMOTE_KEY_URL, data=None,
+        get_mock.assert_called_once_with(REMOTE_KEY_URL,
                                          verify=ca_bundle.where())
 
     @inlineCallbacks
@@ -383,7 +383,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
                 yield km.fetch_key(ADDRESS_OTHER, REMOTE_KEY_URL, OpenPGPKey)
 
                 # assert that combined bundle file is passed to get call
-                get_mock.assert_called_once_with(REMOTE_KEY_URL, data=None,
+                get_mock.assert_called_once_with(REMOTE_KEY_URL,
                                                  verify=tmp_output.name)
 
                 # assert that files got appended
