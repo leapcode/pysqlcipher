@@ -184,26 +184,29 @@ class KeyManager(object):
 
     def _key_class_from_type(self, ktype):
         """
-        Return key class from string representation of key type.
+        Given a class type, return a class
+
+        :param ktype: string representation of a class name
+        :type ktype: str
+
+        :return: A class with the matching name
+        :rtype: classobj or type
         """
         return filter(
             lambda klass: klass.__name__ == ktype,
             self._wrapper_map).pop()
 
     @defer.inlineCallbacks
-    def _get_json(self, address):
+    def _get_key_from_nicknym(self, address):
         """
         Send a GET request to C{uri} containing C{data}.
 
-        :param uri: The URI of the request.
-        :type uri: str
+        :param address: The URI of the request.
+        :type address: str
 
-        :return: A deferred that will be fired with the GET response
+        :return: A deferred that will be fired with GET content as json (dict)
         :rtype: Deferred
         """
-        leap_assert(
-            self._ca_cert_path is not None,
-            'We need the CA certificate path!')
         try:
             uri = self._nickserver_uri + '?address=' + address
             content = yield self._async_client_pinned.request(str(uri), 'GET')
@@ -214,7 +217,7 @@ class KeyManager(object):
                 # raise KeyNotFound(address)
             logger.warning("HTTP error retrieving key: %r" % (e,))
             logger.warning("%s" % (content,))
-            raise KeyNotFound(e), None, sys.exc_info()[2]
+            raise KeyNotFound(e.message), None, sys.exc_info()[2]
         except ValueError as v:
             logger.warning("Invalid JSON data from key: %s" % (uri,))
             raise KeyNotFound(v.message + ' - ' + uri), None, sys.exc_info()[2]
@@ -272,9 +275,6 @@ class KeyManager(object):
         :rtype: Deferred
         """
         leap_assert(
-            self._ca_cert_path is not None,
-            'We need the CA certificate path!')
-        leap_assert(
             self._token is not None,
             'We need a token to interact with webapp!')
         if type(data) == dict:
@@ -282,7 +282,9 @@ class KeyManager(object):
         headers = {'Authorization': [str('Token token=%s' % self._token)]}
         headers['Content-Type'] = ['application/x-www-form-urlencoded']
         try:
-            res = yield self._async_client_pinned.request(str(uri), 'PUT', body=str(data), headers=headers)
+            res = yield self._async_client_pinned.request(str(uri), 'PUT',
+                                                          body=str(data),
+                                                          headers=headers)
         except Exception as e:
             logger.warning("Error uploading key: %r" % (e,))
             raise e
@@ -309,7 +311,7 @@ class KeyManager(object):
 
         """
         # request keys from the nickserver
-        server_keys = yield self._get_json(address)
+        server_keys = yield self._get_key_from_nicknym(address)
 
         # insert keys in local database
         if self.OPENPGP_KEY in server_keys:
@@ -357,7 +359,9 @@ class KeyManager(object):
                 self._api_version,
                 self._uid)
             d = self._put(uri, data)
-            emit_async(catalog.KEYMANAGER_DONE_UPLOADING_KEYS, self._address)
+            d.addCallback(lambda _:
+                          emit_async(catalog.KEYMANAGER_DONE_UPLOADING_KEYS,
+                                     self._address))
             return d
 
         d = self.get_key(
