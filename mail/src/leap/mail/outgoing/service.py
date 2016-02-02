@@ -254,7 +254,7 @@ class OutgoingMail(object):
         origmsg = Parser().parsestr(raw)
 
         if origmsg.get_content_type() == 'multipart/encrypted':
-            return defer.success((origmsg, recipient))
+            return defer.succeed((origmsg, recipient))
 
         from_address = validate_address(self._from_address)
         username, domain = from_address.split('@')

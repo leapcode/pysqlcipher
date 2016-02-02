@@ -20,9 +20,10 @@ Features
 
 Bugfixes
 ~~~~~~~~
-- `#1235 <https://leap.se/code/issues/1235>`_: Description for the fixed stuff corresponding with issue #1235.
+- `#7861 <https://leap.se/code/issues/7861>`_: Use the right succeed function for passthrough encrypted email.
 - Fix the get_body logic for corner-cases in which body is None (yet-to-be synced docs, mainly).
 
+- `#1235 <https://leap.se/code/issues/1235>`_: Description for the fixed stuff corresponding with issue #1235.
 - Bugfix without related issue number.
 
 Misc
