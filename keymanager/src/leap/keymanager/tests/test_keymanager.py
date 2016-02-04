@@ -21,11 +21,14 @@ Tests for the Key Manager.
 """
 
 from os import path
+import json
+import urllib
 from datetime import datetime
 import tempfile
+import pkg_resources
 from leap.common import ca_bundle
 from mock import Mock, MagicMock, patch
-from twisted.internet.defer import inlineCallbacks
+from twisted.internet import defer
 from twisted.trial import unittest
 
 from leap.keymanager import (
@@ -127,7 +130,7 @@ class KeyManagerUtilTestCase(unittest.TestCase):
 
 class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
 
-    @inlineCallbacks
+    @defer.inlineCallbacks
     def test_get_all_keys_in_db(self):
         km = self._key_manager()
         yield km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
@@ -142,7 +145,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         self.assertTrue(ADDRESS in keys[0].address)
         self.assertTrue(keys[0].private)
 
-    @inlineCallbacks
+    @defer.inlineCallbacks
     def test_get_public_key(self):
         km = self._key_manager()
         yield km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
@@ -155,7 +158,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
             key.fingerprint.lower(), KEY_FINGERPRINT.lower())
         self.assertFalse(key.private)
 
-    @inlineCallbacks
+    @defer.inlineCallbacks
     def test_get_private_key(self):
         km = self._key_manager()
         yield km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
@@ -173,7 +176,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         d = km.send_key(OpenPGPKey)
         return self.assertFailure(d, KeyNotFound)
 
-    @inlineCallbacks
+    @defer.inlineCallbacks
     def test_send_key(self):
         """
         Test that request is well formed when sending keys to server.
@@ -181,7 +184,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         token = "mytoken"
         km = self._key_manager(token=token)
         yield km._wrapper_map[OpenPGPKey].put_ascii_key(PUBLIC_KEY, ADDRESS)
-        km._fetcher.put = Mock()
+        km._async_client_pinned.request = Mock(return_value=defer.succeed(''))
         # the following data will be used on the send
         km.ca_cert_path = 'capath'
         km.session_id = 'sessionid'
@@ -191,13 +194,15 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         yield km.send_key(OpenPGPKey)
         # setup expected args
         pubkey = yield km.get_key(km._address, OpenPGPKey)
-        data = {
+        data = urllib.urlencode({
             km.PUBKEY_KEY: pubkey.key_data,
-        }
+        })
+        headers = {'Authorization': [str('Token token=%s' % token)]}
+        headers['Content-Type'] = ['application/x-www-form-urlencoded']
         url = '%s/%s/users/%s.json' % ('apiuri', 'apiver', 'myuid')
-        km._fetcher.put.assert_called_once_with(
-            url, data=data, verify='capath',
-            headers={'Authorization': 'Token token=%s' % token},
+        km._async_client_pinned.request.assert_called_once_with(
+            str(url), 'PUT', body=str(data),
+            headers=headers
         )
 
     def test_fetch_keys_from_server(self):
@@ -205,19 +210,19 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         Test that the request is well formed when fetching keys from server.
         """
         km = self._key_manager(url=NICKSERVER_URI)
+        expected_url = NICKSERVER_URI + '?address=' + ADDRESS_2
 
         def verify_the_call(_):
-            km._fetcher.get.assert_called_once_with(
-                NICKSERVER_URI,
-                data={'address': ADDRESS_2},
-                verify='cacertpath',
+            km._async_client_pinned.request.assert_called_once_with(
+                expected_url,
+                'GET',
             )
 
         d = self._fetch_key(km, ADDRESS_2, PUBLIC_KEY_2)
         d.addCallback(verify_the_call)
         return d
 
-    @inlineCallbacks
+    @defer.inlineCallbacks
     def test_get_key_fetches_from_server(self):
         """
         Test that getting a key successfuly fetches from server.
@@ -229,7 +234,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         self.assertTrue(ADDRESS in key.address)
         self.assertEqual(key.validation, ValidationLevels.Provider_Trust)
 
-    @inlineCallbacks
+    @defer.inlineCallbacks
     def test_get_key_fetches_other_domain(self):
         """
         Test that getting a key successfuly fetches from server.
@@ -245,18 +250,10 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         """
         :returns: a Deferred that will fire with the OpenPGPKey
         """
-        class Response(object):
-            status_code = 200
-            headers = {'content-type': 'application/json'}
-
-            def json(self):
-                return {'address': address, 'openpgp': key}
-
-            def raise_for_status(self):
-                pass
+        data = json.dumps({'address': address, 'openpgp': key})
 
         # mock the fetcher so it returns the key for ADDRESS_2
-        km._fetcher.get = Mock(return_value=Response())
+        km._async_client_pinned.request = Mock(return_value=defer.succeed(data))
         km.ca_cert_path = 'cacertpath'
         # try to key get without fetching from server
         d_fail = km.get_key(address, OpenPGPKey, fetch_remote=False)
@@ -265,7 +262,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         d.addCallback(lambda _: km.get_key(address, OpenPGPKey))
         return d
 
-    @inlineCallbacks
+    @defer.inlineCallbacks
     def test_put_key_ascii(self):
         """
         Test that putting ascii key works
@@ -277,7 +274,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         self.assertIsInstance(key, OpenPGPKey)
         self.assertTrue(ADDRESS in key.address)
 
-    @inlineCallbacks
+    @defer.inlineCallbacks
     def test_fetch_uri_ascii_key(self):
         """
         Test that fetch key downloads the ascii key and gets included in
@@ -285,11 +282,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         """
         km = self._key_manager()
 
-        class Response(object):
-            ok = True
-            content = PUBLIC_KEY
-
-        km._fetcher.get = Mock(return_value=Response())
+        km._async_client.request = Mock(return_value=defer.succeed(PUBLIC_KEY))
 
         yield km.fetch_key(ADDRESS, "http://site.domain/key", OpenPGPKey)
         key = yield km.get_key(ADDRESS, OpenPGPKey)
@@ -316,25 +309,16 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         """
         km = self._key_manager()
 
-        class Response(object):
-            ok = True
-            content = PUBLIC_KEY
-
-        km._fetcher.get = Mock(return_value=Response())
+        km._async_client.request = Mock(return_value=defer.succeed(PUBLIC_KEY))
         d = km.fetch_key(ADDRESS_2, "http://site.domain/key", OpenPGPKey)
         return self.assertFailure(d, KeyAddressMismatch)
 
     def _mock_get_response(self, km, body):
-        class Response(object):
-            ok = True
-            content = body
+        km._async_client.request = MagicMock(return_value=defer.succeed(body))
 
-        mock = MagicMock(return_value=Response())
-        km._fetcher.get = mock
+        return km._async_client.request
 
-        return mock
-
-    @inlineCallbacks
+    @defer.inlineCallbacks
     def test_fetch_key_uses_ca_bundle_if_none_specified(self):
         ca_cert_path = None
         km = self._key_manager(ca_cert_path=ca_cert_path)
@@ -342,10 +326,9 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
 
         yield km.fetch_key(ADDRESS_OTHER, REMOTE_KEY_URL, OpenPGPKey)
 
-        get_mock.assert_called_once_with(REMOTE_KEY_URL, data=None,
-                                         verify=ca_bundle.where())
+        get_mock.assert_called_once_with(REMOTE_KEY_URL, 'GET')
 
-    @inlineCallbacks
+    @defer.inlineCallbacks
     def test_fetch_key_uses_ca_bundle_if_empty_string_specified(self):
         ca_cert_path = ''
         km = self._key_manager(ca_cert_path=ca_cert_path)
@@ -353,10 +336,9 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
 
         yield km.fetch_key(ADDRESS_OTHER, REMOTE_KEY_URL, OpenPGPKey)
 
-        get_mock.assert_called_once_with(REMOTE_KEY_URL, data=None,
-                                         verify=ca_bundle.where())
+        get_mock.assert_called_once_with(REMOTE_KEY_URL, 'GET')
 
-    @inlineCallbacks
+    @defer.inlineCallbacks
     def test_fetch_key_use_default_ca_bundle_if_set_as_ca_cert_path(self):
         ca_cert_path = ca_bundle.where()
         km = self._key_manager(ca_cert_path=ca_cert_path)
@@ -364,14 +346,14 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
 
         yield km.fetch_key(ADDRESS_OTHER, REMOTE_KEY_URL, OpenPGPKey)
 
-        get_mock.assert_called_once_with(REMOTE_KEY_URL, data=None,
-                                         verify=ca_bundle.where())
+        get_mock.assert_called_once_with(REMOTE_KEY_URL, 'GET')
 
-    @inlineCallbacks
+    @defer.inlineCallbacks
     def test_fetch_uses_combined_ca_bundle_otherwise(self):
         with tempfile.NamedTemporaryFile() as tmp_input, \
                 tempfile.NamedTemporaryFile(delete=False) as tmp_output:
-            ca_content = 'some\ncontent\n'
+            ca_content = pkg_resources.resource_string('leap.common.testing',
+                                                       'cacert.pem')
             ca_cert_path = tmp_input.name
             self._dump_to_file(ca_cert_path, ca_content)
 
@@ -383,8 +365,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
                 yield km.fetch_key(ADDRESS_OTHER, REMOTE_KEY_URL, OpenPGPKey)
 
                 # assert that combined bundle file is passed to get call
-                get_mock.assert_called_once_with(REMOTE_KEY_URL, data=None,
-                                                 verify=tmp_output.name)
+                get_mock.assert_called_once_with(REMOTE_KEY_URL, 'GET')
 
                 # assert that files got appended
                 expected = self._slurp_file(ca_bundle.where()) + ca_content
@@ -402,7 +383,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
             content = f.read()
         return content
 
-    @inlineCallbacks
+    @defer.inlineCallbacks
     def test_decrypt_updates_sign_used_for_signer(self):
         # given
         km = self._key_manager()
@@ -420,7 +401,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         # then
         self.assertEqual(True, key.sign_used)
 
-    @inlineCallbacks
+    @defer.inlineCallbacks
     def test_decrypt_does_not_update_sign_used_for_recipient(self):
         # given
         km = self._key_manager()
@@ -445,7 +426,7 @@ class KeyManagerCryptoTestCase(KeyManagerWithSoledadTestCase):
 
     RAW_DATA = 'data'
 
-    @inlineCallbacks
+    @defer.inlineCallbacks
     def test_keymanager_openpgp_encrypt_decrypt(self):
         km = self._key_manager()
         # put raw private key
@@ -464,7 +445,7 @@ class KeyManagerCryptoTestCase(KeyManagerWithSoledadTestCase):
                                fetch_remote=False)
         self.assertEqual(signingkey.fingerprint, key.fingerprint)
 
-    @inlineCallbacks
+    @defer.inlineCallbacks
     def test_keymanager_openpgp_encrypt_decrypt_wrong_sign(self):
         km = self._key_manager()
         # put raw keys
@@ -481,7 +462,7 @@ class KeyManagerCryptoTestCase(KeyManagerWithSoledadTestCase):
         self.assertEqual(self.RAW_DATA, rawdata)
         self.assertTrue(isinstance(signingkey, errors.InvalidSignature))
 
-    @inlineCallbacks
+    @defer.inlineCallbacks
     def test_keymanager_openpgp_sign_verify(self):
         km = self._key_manager()
         # put raw private keys

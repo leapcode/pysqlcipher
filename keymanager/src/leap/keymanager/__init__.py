@@ -22,6 +22,8 @@ import fileinput
 import os
 import sys
 import tempfile
+import json
+import urllib
 
 from leap.common import ca_bundle
 
@@ -61,6 +63,7 @@ from twisted.internet import defer
 from urlparse import urlparse
 
 from leap.common.check import leap_assert
+from leap.common.http import HTTPClient
 from leap.common.events import emit_async, catalog
 from leap.common.decorators import memoized_method
 
@@ -141,6 +144,8 @@ class KeyManager(object):
         # the following are used to perform https requests
         self._fetcher = requests
         self._combined_ca_bundle = self._create_combined_bundle_file()
+        self._async_client = HTTPClient(self._combined_ca_bundle)
+        self._async_client_pinned = HTTPClient(self._ca_cert_path)
 
     #
     # destructor
@@ -179,40 +184,55 @@ class KeyManager(object):
 
     def _key_class_from_type(self, ktype):
         """
-        Return key class from string representation of key type.
+        Given a class type, return a class
+
+        :param ktype: string representation of a class name
+        :type ktype: str
+
+        :return: A class with the matching name
+        :rtype: classobj or type
         """
         return filter(
             lambda klass: klass.__name__ == ktype,
             self._wrapper_map).pop()
 
-    def _get(self, uri, data=None):
+    @defer.inlineCallbacks
+    def _get_key_from_nicknym(self, address):
         """
         Send a GET request to C{uri} containing C{data}.
 
-        :param uri: The URI of the request.
-        :type uri: str
-        :param data: The body of the request.
-        :type data: dict, str or file
+        :param address: The URI of the request.
+        :type address: str
 
-        :return: The response to the request.
-        :rtype: requests.Response
+        :return: A deferred that will be fired with GET content as json (dict)
+        :rtype: Deferred
         """
-        leap_assert(
-            self._ca_cert_path is not None,
-            'We need the CA certificate path!')
-        res = self._fetcher.get(uri, data=data, verify=self._ca_cert_path)
-        # Nickserver now returns 404 for key not found and 500 for
-        # other cases (like key too small), so we are skipping this
-        # check for the time being
-        # res.raise_for_status()
+        try:
+            uri = self._nickserver_uri + '?address=' + address
+            content = yield self._async_client_pinned.request(str(uri), 'GET')
+            json_content = json.loads(content)
+        except IOError as e:
+            # FIXME: 404 doesnt raise today, but it wont produce json anyway
+            # if e.response.status_code == 404:
+                # raise KeyNotFound(address)
+            logger.warning("HTTP error retrieving key: %r" % (e,))
+            logger.warning("%s" % (content,))
+            raise KeyNotFound(e.message), None, sys.exc_info()[2]
+        except ValueError as v:
+            logger.warning("Invalid JSON data from key: %s" % (uri,))
+            raise KeyNotFound(v.message + ' - ' + uri), None, sys.exc_info()[2]
 
+        except Exception as e:
+            logger.warning("Error retrieving key: %r" % (e,))
+            raise KeyNotFound(e.message), None, sys.exc_info()[2]
         # Responses are now text/plain, although it's json anyway, but
         # this will fail when it shouldn't
         # leap_assert(
         #     res.headers['content-type'].startswith('application/json'),
         #     'Content-type is not JSON.')
-        return res
+        defer.returnValue(json_content)
 
+    @defer.inlineCallbacks
     def _get_with_combined_ca_bundle(self, uri, data=None):
         """
         Send a GET request to C{uri} containing C{data}.
@@ -225,12 +245,19 @@ class KeyManager(object):
         :param data: The body of the request.
         :type data: dict, str or file
 
-        :return: The response to the request.
-        :rtype: requests.Response
+        :return: A deferred that will be fired with the GET response
+        :rtype: Deferred
         """
-        return self._fetcher.get(
-            uri, data=data, verify=self._combined_ca_bundle)
+        try:
+            content = yield self._async_client.request(str(uri), 'GET')
+        except Exception as e:
+            logger.warning("There was a problem fetching key: %s" % (e,))
+            raise KeyNotFound(uri)
+        if not content:
+            raise KeyNotFound(uri)
+        defer.returnValue(content)
 
+    @defer.inlineCallbacks
     def _put(self, uri, data=None):
         """
         Send a PUT request to C{uri} containing C{data}.
@@ -244,23 +271,31 @@ class KeyManager(object):
         :param data: The body of the request.
         :type data: dict, str or file
 
-        :return: The response to the request.
-        :rtype: requests.Response
+        :return: A deferred that will be fired when PUT request finishes
+        :rtype: Deferred
         """
-        leap_assert(
-            self._ca_cert_path is not None,
-            'We need the CA certificate path!')
         leap_assert(
             self._token is not None,
             'We need a token to interact with webapp!')
-        res = self._fetcher.put(
-            uri, data=data, verify=self._ca_cert_path,
-            headers={'Authorization': 'Token token=%s' % self._token})
-        # assert that the response is valid
-        res.raise_for_status()
-        return res
+        if type(data) == dict:
+            data = urllib.urlencode(data)
+        headers = {'Authorization': [str('Token token=%s' % self._token)]}
+        headers['Content-Type'] = ['application/x-www-form-urlencoded']
+        try:
+            res = yield self._async_client_pinned.request(str(uri), 'PUT',
+                                                          body=str(data),
+                                                          headers=headers)
+        except Exception as e:
+            logger.warning("Error uploading key: %r" % (e,))
+            raise e
+        if 'error' in res:
+            # FIXME: That's a workaround for 500,
+            # we need to implement a readBody to assert response code
+            logger.warning("Error uploading key: %r" % (res,))
+            raise Exception(res)
 
     @memoized_method(invalidation=300)
+    @defer.inlineCallbacks
     def _fetch_keys_from_server(self, address):
         """
         Fetch keys bound to address from nickserver and insert them in
@@ -276,38 +311,22 @@ class KeyManager(object):
 
         """
         # request keys from the nickserver
-        d = defer.succeed(None)
-        res = None
-        try:
-            res = self._get(self._nickserver_uri, {'address': address})
-            res.raise_for_status()
-            server_keys = res.json()
+        server_keys = yield self._get_key_from_nicknym(address)
 
-            # insert keys in local database
-            if self.OPENPGP_KEY in server_keys:
-                # nicknym server is authoritative for its own domain,
-                # for other domains the key might come from key servers.
-                validation_level = ValidationLevels.Weak_Chain
-                _, domain = _split_email(address)
-                if (domain == _get_domain(self._nickserver_uri)):
-                    validation_level = ValidationLevels.Provider_Trust
+        # insert keys in local database
+        if self.OPENPGP_KEY in server_keys:
+            # nicknym server is authoritative for its own domain,
+            # for other domains the key might come from key servers.
+            validation_level = ValidationLevels.Weak_Chain
+            _, domain = _split_email(address)
+            if (domain == _get_domain(self._nickserver_uri)):
+                validation_level = ValidationLevels.Provider_Trust
 
-                d = self.put_raw_key(
-                    server_keys['openpgp'],
-                    OpenPGPKey,
-                    address=address,
-                    validation=validation_level)
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 404:
-                d = defer.fail(KeyNotFound(address))
-            else:
-                d = defer.fail(KeyNotFound(e.message))
-            logger.warning("HTTP error retrieving key: %r" % (e,))
-            logger.warning("%s" % (res.content,))
-        except Exception as e:
-            d = defer.fail(KeyNotFound(e.message))
-            logger.warning("Error retrieving key: %r" % (e,))
-        return d
+            yield self.put_raw_key(
+                server_keys['openpgp'],
+                OpenPGPKey,
+                address=address,
+                validation=validation_level)
 
     #
     # key management
@@ -339,8 +358,11 @@ class KeyManager(object):
                 self._api_uri,
                 self._api_version,
                 self._uid)
-            self._put(uri, data)
-            emit_async(catalog.KEYMANAGER_DONE_UPLOADING_KEYS, self._address)
+            d = self._put(uri, data)
+            d.addCallback(lambda _:
+                          emit_async(catalog.KEYMANAGER_DONE_UPLOADING_KEYS,
+                                     self._address))
+            return d
 
         d = self.get_key(
             self._address, ktype, private=False, fetch_remote=False)
@@ -822,6 +844,7 @@ class KeyManager(object):
             d.addCallback(lambda _: self.put_key(privkey, address))
         return d
 
+    @defer.inlineCallbacks
     def fetch_key(self, address, uri, ktype,
                   validation=ValidationLevels.Weak_Chain):
         """
@@ -851,21 +874,15 @@ class KeyManager(object):
         _keys = self._wrapper_map[ktype]
 
         logger.info("Fetch key for %s from %s" % (address, uri))
-        try:
-            res = self._get_with_combined_ca_bundle(uri)
-        except Exception as e:
-            logger.warning("There was a problem fetching key: %s" % (e,))
-            return defer.fail(KeyNotFound(uri))
-        if not res.ok:
-            return defer.fail(KeyNotFound(uri))
+        ascii_content = yield self._get_with_combined_ca_bundle(uri)
 
         # XXX parse binary keys
-        pubkey, _ = _keys.parse_ascii_key(res.content)
+        pubkey, _ = _keys.parse_ascii_key(ascii_content)
         if pubkey is None:
-            return defer.fail(KeyNotFound(uri))
+            raise KeyNotFound(uri)
 
         pubkey.validation = validation
-        return self.put_key(pubkey, address)
+        yield self.put_key(pubkey, address)
 
     def _assert_supported_key_type(self, ktype):
         """
