@@ -24,7 +24,6 @@ import time
 import warnings
 
 from email.parser import Parser
-from email.generator import Generator
 from email.utils import parseaddr
 from email.utils import formatdate
 from StringIO import StringIO
@@ -43,6 +42,7 @@ from leap.common.mail import get_email_charset
 from leap.keymanager import errors as keymanager_errors
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.mail.adaptors import soledad_indexes as fields
+from leap.mail.generator import Generator
 from leap.mail.utils import json_loads, empty
 from leap.soledad.client import Soledad
 from leap.soledad.common.crypto import ENC_SCHEME_KEY, ENC_JSON_KEY
@@ -394,7 +394,7 @@ class IncomingMail(Service):
 
         # ok, this is an incoming message
         rawmsg = msg.get(self.CONTENT_KEY, None)
-        if not rawmsg:
+        if rawmsg is None:
             return ""
         return self._maybe_decrypt_msg(rawmsg)
 
@@ -440,6 +440,7 @@ class IncomingMail(Service):
 
         fromHeader = msg.get('from', None)
         senderAddress = None
+
         if (fromHeader is not None and
             (msg.get_content_type() == MULTIPART_ENCRYPTED or
              msg.get_content_type() == MULTIPART_SIGNED)):
@@ -466,6 +467,8 @@ class IncomingMail(Service):
         if msg.get_content_type() == MULTIPART_ENCRYPTED:
             d = self._decrypt_multipart_encrypted_msg(
                 msg, encoding, senderAddress)
+        elif msg.get_content_type() == MULTIPART_SIGNED:
+            d = self._verify_signature_not_encrypted_msg(msg, senderAddress)
         else:
             d = self._maybe_decrypt_inline_encrypted_msg(
                 msg, encoding, senderAddress)
@@ -545,11 +548,8 @@ class IncomingMail(Service):
         :rtype: Deferred
         """
         log.msg('maybe decrypting inline encrypted msg')
-        # serialize the original message
-        buf = StringIO()
-        g = Generator(buf)
-        g.flatten(origmsg)
-        data = buf.getvalue()
+
+        data = self._serialize_msg(origmsg)
 
         def decrypted_data(res):
             decrdata, signkey = res
@@ -577,6 +577,46 @@ class IncomingMail(Service):
             d = defer.succeed((data, None))
         d.addCallback(encode_and_return)
         return d
+
+    def _verify_signature_not_encrypted_msg(self, origmsg, sender_address):
+        """
+        Possibly decrypt an inline OpenPGP encrypted message.
+
+        :param origmsg: The original, possibly encrypted message.
+        :type origmsg: Message
+        :param sender_address: The email address of the sender of the message.
+        :type sender_address: str
+
+        :return: A Deferred that will be fired with a tuple containing a
+        signed Message and the signing OpenPGPKey if the signature
+        is valid or InvalidSignature.
+        :rtype: Deferred
+        """
+        msg = copy.deepcopy(origmsg)
+        data = self._serialize_msg(msg.get_payload(0))
+        detached_sig = self._extract_signature(msg)
+        d = self._keymanager.verify(data, sender_address, OpenPGPKey,
+                                    detached_sig)
+
+        d.addCallback(lambda sign_key: (msg, sign_key))
+        d.addErrback(lambda _: (msg, keymanager_errors.InvalidSignature()))
+        return d
+
+    def _serialize_msg(self, origmsg):
+        buf = StringIO()
+        g = Generator(buf)
+        g.flatten(origmsg)
+        return buf.getvalue()
+
+    def _extract_signature(self, msg):
+        body = msg.get_payload(0).get_payload()
+
+        if isinstance(body, str):
+            body = msg.get_payload(0)
+
+        detached_sig = msg.get_payload(1).get_payload()
+        msg.set_payload(body)
+        return detached_sig
 
     def _decryption_error(self, failure, msg):
         """
