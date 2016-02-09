@@ -1,5 +1,6 @@
 from email.generator import Generator as EmailGenerator
 
+
 class Generator(EmailGenerator):
     """
     Generates output from a Message object tree, keeping signatures.
