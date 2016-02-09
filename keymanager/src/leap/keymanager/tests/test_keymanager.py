@@ -253,7 +253,8 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         data = json.dumps({'address': address, 'openpgp': key})
 
         # mock the fetcher so it returns the key for ADDRESS_2
-        km._async_client_pinned.request = Mock(return_value=defer.succeed(data))
+        km._async_client_pinned.request = Mock(
+            return_value=defer.succeed(data))
         km.ca_cert_path = 'cacertpath'
         # try to key get without fetching from server
         d_fail = km.get_key(address, OpenPGPKey, fetch_remote=False)
