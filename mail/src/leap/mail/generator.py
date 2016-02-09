@@ -13,7 +13,8 @@ class Generator(EmailGenerator):
 
     So you need to set foldheaders if you want the toplevel to fold headers
 
-    TODO: Python 3.3 is patched against this problems. See issue 1590744 on python bug tracker.
+    TODO: Python 3.3 is patched against this problems. See issue 1590744 on
+          python bug tracker.
     """
     def _write_headers(self, msg):
         for h, v in msg.items():
