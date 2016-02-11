@@ -572,15 +572,15 @@ class KeyManager(object):
         self._assert_supported_key_type(ktype)
         _keys = self._wrapper_map[ktype]
 
+        @defer.inlineCallbacks
         def encrypt(keys):
             pubkey, signkey = keys
-            encrypted = _keys.encrypt(
+            encrypted = yield _keys.encrypt(
                 data, pubkey, passphrase, sign=signkey,
                 cipher_algo=cipher_algo)
             pubkey.encr_used = True
-            d = _keys.put_key(pubkey, address)
-            d.addCallback(lambda _: encrypted)
-            return d
+            yield _keys.put_key(pubkey, address)
+            defer.returnValue(encrypted)
 
         dpub = self.get_key(address, ktype, private=False,
                             fetch_remote=fetch_remote)
@@ -625,9 +625,10 @@ class KeyManager(object):
         self._assert_supported_key_type(ktype)
         _keys = self._wrapper_map[ktype]
 
+        @defer.inlineCallbacks
         def decrypt(keys):
             pubkey, privkey = keys
-            decrypted, signed = _keys.decrypt(
+            decrypted, signed = yield _keys.decrypt(
                 data, privkey, passphrase=passphrase, verify=pubkey)
             if pubkey is None:
                 signature = KeyNotFound(verify)
@@ -635,14 +636,13 @@ class KeyManager(object):
                 signature = pubkey
                 if not pubkey.sign_used:
                     pubkey.sign_used = True
-                    d = _keys.put_key(pubkey, verify)
-                    d.addCallback(lambda _: (decrypted, signature))
-                    return d
+                    yield _keys.put_key(pubkey, verify)
+                    defer.returnValue((decrypted, signature))
             else:
                 signature = InvalidSignature(
                     'Failed to verify signature with key %s' %
                     (pubkey.key_id,))
-            return (decrypted, signature)
+            defer.returnValue((decrypted, signature))
 
         dpriv = self.get_key(address, ktype, private=True)
         dpub = defer.succeed(None)

@@ -109,7 +109,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         # encrypt
         yield pgp.put_ascii_key(PUBLIC_KEY, ADDRESS)
         pubkey = yield pgp.get_key(ADDRESS, private=False)
-        cyphertext = pgp.encrypt(data, pubkey)
+        cyphertext = yield pgp.encrypt(data, pubkey)
 
         self.assertTrue(cyphertext is not None)
         self.assertTrue(cyphertext != '')
@@ -121,7 +121,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         yield self._assert_key_not_found(pgp, ADDRESS, private=True)
         yield pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         privkey = yield pgp.get_key(ADDRESS, private=True)
-        decrypted, _ = pgp.decrypt(cyphertext, privkey)
+        decrypted, _ = yield pgp.decrypt(cyphertext, privkey)
         self.assertEqual(decrypted, data)
 
         yield pgp.delete_key(pubkey)
@@ -171,9 +171,9 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         yield pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         privkey = yield pgp.get_key(ADDRESS, private=True)
         pubkey = yield pgp.get_key(ADDRESS, private=False)
-        self.assertRaises(
-            AssertionError,
-            pgp.encrypt, data, privkey, sign=pubkey)
+        self.failureResultOf(
+            pgp.encrypt(data, privkey, sign=pubkey),
+            AssertionError)
 
     @inlineCallbacks
     def test_decrypt_verify_with_private_raises(self):
@@ -183,12 +183,11 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         yield pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         privkey = yield pgp.get_key(ADDRESS, private=True)
         pubkey = yield pgp.get_key(ADDRESS, private=False)
-        encrypted_and_signed = pgp.encrypt(
+        encrypted_and_signed = yield pgp.encrypt(
             data, pubkey, sign=privkey)
-        self.assertRaises(
-            AssertionError,
-            pgp.decrypt,
-            encrypted_and_signed, privkey, verify=privkey)
+        self.failureResultOf(
+            pgp.decrypt(encrypted_and_signed, privkey, verify=privkey),
+            AssertionError)
 
     @inlineCallbacks
     def test_decrypt_verify_with_wrong_key(self):
@@ -198,11 +197,12 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         yield pgp.put_ascii_key(PRIVATE_KEY, ADDRESS)
         privkey = yield pgp.get_key(ADDRESS, private=True)
         pubkey = yield pgp.get_key(ADDRESS, private=False)
-        encrypted_and_signed = pgp.encrypt(data, pubkey, sign=privkey)
+        encrypted_and_signed = yield pgp.encrypt(data, pubkey, sign=privkey)
         yield pgp.put_ascii_key(PUBLIC_KEY_2, ADDRESS_2)
         wrongkey = yield pgp.get_key(ADDRESS_2)
-        decrypted, validsign = pgp.decrypt(encrypted_and_signed, privkey,
-                                           verify=wrongkey)
+        decrypted, validsign = yield pgp.decrypt(encrypted_and_signed,
+                                                 privkey,
+                                                 verify=wrongkey)
         self.assertEqual(decrypted, data)
         self.assertFalse(validsign)
 
@@ -232,9 +232,9 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         privkey2 = yield pgp.get_key(ADDRESS_2, private=True)
 
         data = 'data'
-        encrypted_and_signed = pgp.encrypt(
+        encrypted_and_signed = yield pgp.encrypt(
             data, pubkey2, sign=privkey)
-        res, validsign = pgp.decrypt(
+        res, validsign = yield pgp.decrypt(
             encrypted_and_signed, privkey2, verify=pubkey)
         self.assertEqual(data, res)
         self.assertTrue(validsign)
