@@ -1,7 +1,5 @@
 --index-url https://pypi.python.org/simple/
 
-pycryptopp
-
 --allow-external u1db  --allow-unverified u1db
 --allow-external dirspec  --allow-unverified dirspec
 -e 'git+https://github.com/pixelated-project/leap_pycommon.git@develop#egg=leap.common'

@@ -12,6 +12,7 @@ Features
 ~~~~~~~~
 - `#7656 <https://leap.se/code/issues/7656>`_: Emit multi-user aware events.
 - `#4008 <https://leap.se/code/issues/4008>`_: Add token-based authentication to local IMAP/SMTP services.
+- `#7889 <https://leap.se/code/issues/7889>`_: Use cryptography instead of pycryptopp to reduce dependencies.
 - Use twisted.cred to authenticate IMAP users.
 
 - `#1234 <https://leap.se/code/issues/1234>`_: Description of the new feature corresponding with issue #1234.

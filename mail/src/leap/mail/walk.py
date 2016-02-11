@@ -17,13 +17,16 @@
 """
 Utilities for walking along a message tree.
 """
-from pycryptopp.hash import sha256
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
 
 from leap.mail.utils import first
 
 
 def get_hash(s):
-    return sha256.SHA256(s).hexdigest()
+    digest = hashes.Hash(hashes.SHA256(), default_backend())
+    digest.update(s)
+    return digest.finalize().encode("hex").upper()
 
 
 """

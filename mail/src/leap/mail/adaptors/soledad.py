@@ -22,7 +22,6 @@ import re
 from collections import defaultdict
 from email import message_from_string
 
-from pycryptopp.hash import sha256
 from twisted.internet import defer
 from twisted.python import log
 from zope.interface import implements
@@ -1208,7 +1207,7 @@ def _split_into_parts(raw):
 def _parse_msg(raw):
     msg = message_from_string(raw)
     parts = walk.get_parts(msg)
-    chash = sha256.SHA256(raw).hexdigest()
+    chash = walk.get_hash(raw)
     multi = msg.is_multipart()
     return msg, parts, chash, multi
 
