@@ -101,13 +101,23 @@ class BonafideProtocol(object):
         _, provider_id = config.get_username_and_provider(full_id)
 
         provider = config.Provider(provider_id)
-        d = provider.callWhenReady(self._do_authenticate, full_id, password)
+
+        def maybe_finish_provider_bootstrap(result, provider):
+            session = self._get_session(full_id, password)
+            d = provider.download_services_config_with_auth(session)
+            d.addCallback(lambda _: result)
+            return d
+
+        d = provider.callWhenMainConfigReady(
+            self._do_authenticate, full_id, password)
+        d.addCallback(maybe_finish_provider_bootstrap, provider)
         return d
 
     def _do_authenticate(self, full_id, password):
 
         def return_token_and_uuid(result, _session):
             if result == OK:
+                # TODO -- turn this into JSON response
                 return str(_session.token), str(_session.uuid)
 
         log.msg('AUTH for %s' % full_id)

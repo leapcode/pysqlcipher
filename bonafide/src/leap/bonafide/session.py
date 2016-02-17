@@ -156,6 +156,15 @@ class Session(object):
     def update_user_record(self):
         pass
 
+    # Authentication-protected configuration
+
+    @defer.inlineCallbacks
+    def fetch_provider_configs(self, uri, path):
+        config = yield self._request(self._agent, uri)
+        with open(path, 'w') as cf:
+            cf.write(config)
+        defer.returnValue('ok')
+
 
 if __name__ == "__main__":
     import os

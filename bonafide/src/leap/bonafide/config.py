@@ -22,6 +22,9 @@ import json
 import os
 import sys
 
+from collections import defaultdict
+from urlparse import urlparse
+
 from twisted.internet import defer, reactor
 from twisted.internet.ssl import ClientContextFactory
 from twisted.python import log
@@ -127,12 +130,15 @@ class WebClientContextFactory(ClientContextFactory):
 
 
 class Provider(object):
-    # TODO split Provider, ProviderConfig
     # TODO add validation
 
     SERVICES_MAP = {
         'openvpn': ['eip'],
         'mx': ['soledad', 'smtp']}
+
+    first_bootstrap = defaultdict(None)
+    ongoing_bootstrap = defaultdict(None)
+    stuck_bootstrap = defaultdict(None)
 
     def __init__(self, domain, autoconf=True, basedir='~/.config/leap',
                  check_certificate=True):
@@ -155,24 +161,18 @@ class Provider(object):
             self.contextFactory = WebClientContextFactory()
         self._agent = Agent(reactor, self.contextFactory)
 
-        self._load_provider_config()
-        # TODO if loaded, setup _get_api_uri on the DISCOVERY
-
-        self._init_deferred = None
+        self._load_provider_json()
 
         if not is_configured and autoconf:
-            print 'provider %s not configured: downloading files...' % domain
+            log.msg('provider %s not configured: downloading files...' %
+                    domain)
             self.bootstrap()
         else:
-            print 'already initialized'
-            self._init_deferred = defer.succeed('already_initialized')
-
-    def callWhenReady(self, cb, *args, **kw):
-        print 'calling when ready', cb
-        d = self._init_deferred
-        d.addCallback(lambda _: cb(*args, **kw))
-        d.addErrback(log.err)
-        return d
+            log.msg('Provider already initialized')
+            self.first_bootstrap[self._domain] = defer.succeed(
+                'already_initialized')
+            self.ongoing_bootstrap[self._domain] = defer.succeed(
+                'already_initialized')
 
     def is_configured(self):
         provider_json = self._get_provider_json_path()
@@ -181,16 +181,44 @@ class Provider(object):
             return False
         if not is_file(self._get_ca_cert_path()):
             return False
+        if not self.has_config_for_all_services():
+            return False
         return True
 
     def bootstrap(self):
-        print "Bootstrapping provider %s" % self._domain
+        domain = self._domain
+        log.msg("Bootstrapping provider %s" % domain)
+        ongoing = self.ongoing_bootstrap.get(domain)
+        if ongoing:
+            log.msg('already bootstrapping this provider...')
+            return
+
+        self.first_bootstrap[self._domain] = defer.Deferred()
+
+        def first_bootstrap_done(ignored):
+            try:
+                self.first_bootstrap[domain].callback('got config')
+            except defer.AlreadyCalledError:
+                pass
+
         d = self.maybe_download_provider_info()
         d.addCallback(self.maybe_download_ca_cert)
         d.addCallback(self.validate_ca_cert)
+        d.addCallback(first_bootstrap_done)
         d.addCallback(self.maybe_download_services_config)
-        d.addCallback(self.load_services_config)
-        self._init_deferred = d
+        self.ongoing_bootstrap[domain] = d
+
+    def callWhenMainConfigReady(self, cb, *args, **kw):
+        d = self.first_bootstrap[self._domain]
+        d.addCallback(lambda _: cb(*args, **kw))
+        d.addErrback(log.err)
+        return d
+
+    def callWhenReady(self, cb, *args, **kw):
+        d = self.ongoing_bootstrap[self._domain]
+        d.addCallback(lambda _: cb(*args, **kw))
+        d.addErrback(log.err)
+        return d
 
     def has_valid_certificate(self):
         pass
@@ -213,7 +241,7 @@ class Provider(object):
         met = self._disco.get_provider_info_method()
 
         d = downloadPage(uri, provider_json, method=met)
-        d.addCallback(lambda _: self._load_provider_config())
+        d.addCallback(lambda _: self._load_provider_json())
         d.addErrback(log.err)
         return d
 
@@ -238,7 +266,7 @@ class Provider(object):
         return d
 
     def validate_ca_cert(self, ignored):
-        # XXX Need to verify fingerprint against the one in provider.json
+        # TODO Need to verify fingerprint against the one in provider.json
         expected = self._get_expected_ca_cert_fingerprint()
         print "EXPECTED FINGERPRINT:", expected
 
@@ -249,39 +277,116 @@ class Provider(object):
             fgp = None
         return fgp
 
+    # Services config files
+
+    def has_fetched_services_config(self):
+        return os.path.isfile(self._get_configs_path())
 
     def maybe_download_services_config(self, ignored):
-        pass
 
-    def load_services_config(self, ignored):
-        print 'loading services config...'
-        configs_path = self._get_configs_path()
-
-        uri = self._disco.get_configs_uri()
-        met = self._disco.get_configs_method()
-
-        # TODO --- currently, provider on mail.bitmask.net raises 401
-        # UNAUTHENTICATED if we try to # get the services on first boostrap.
+        # TODO --- currently, some providers (mail.bitmask.net) raise 401
+        # UNAUTHENTICATED if we try to get the services
         # See: # https://leap.se/code/issues/7906
 
-        # As a Workaround, these urls work though:
-        # curl -k https://api.mail.bitmask.net:4430/1/config/smtp-service.json 
-        # curl -k https://api.mail.bitmask.net:4430/1/config/soledad-service.json 
+        def further_bootstrap_needs_auth(ignored):
+            log.err('cannot download services config yet, need auth')
+            pending_deferred = defer.Deferred()
+            self.stuck_bootstrap[self._domain] = pending_deferred
+            return pending_deferred
 
-        print "GETTING SERVICES FROM...", uri
+        uri, met, path = self._get_configs_download_params()
 
-        d = downloadPage(uri, configs_path, method=met)
-        d.addCallback(lambda _: self._load_provider_config())
-        d.addCallback(lambda _: self._get_config_for_all_services())
-        d.addErrback(log.err)
+        d = downloadPage(uri, path, method=met)
+        d.addCallback(lambda _: self._load_provider_json())
+        d.addCallback(
+            lambda _: self._get_config_for_all_services(session=None))
+        d.addErrback(further_bootstrap_needs_auth)
         return d
+
+    def download_services_config_with_auth(self, session):
+
+        def verify_provider_configs(ignored):
+            self._load_provider_configs()
+            return True
+
+        def workaround_for_config_fetch(failure):
+            # FIXME --- configs.json raises 500, see #7914.
+            # This is a workaround until that's fixed.
+            log.err(failure)
+            log.msg("COULD NOT VERIFY CONFIGS.JSON, WORKAROUND: DIRECT DOWNLOAD")
+
+            if 'mx' in self._provider_config.services:
+                soledad_uri = '/1/config/soledad-service.json'
+                smtp_uri = '/1/config/smtp-service.json'
+                base = self._disco.api_uri
+
+                fetch = self._fetch_provider_configs_unauthenticated
+                get_path = self._get_service_config_path
+
+                d1 = fetch('https://' + str(base + soledad_uri), get_path('soledad'))
+                d2 = fetch('https://' + str(base + smtp_uri), get_path('smtp'))
+                d = defer.gatherResults([d1, d2])
+                d.addCallback(lambda _: finish_stuck_after_workaround())
+                return d
+
+        def finish_stuck_after_workaround():
+            stuck = self.stuck_bootstrap.get(self._domain, None)
+            if stuck:
+                stuck.callback('continue!')
+
+        def complete_bootstrapping(ignored):
+            stuck = self.stuck_bootstrap.get(self._domain, None)
+            if stuck:
+                d = self._get_config_for_all_services(session)
+                d.addCallback(lambda _: stuck.callback('continue!'))
+                d.addErrback(log.err)
+                return d
+
+        if not self.has_fetched_services_config():
+            self._load_provider_json()
+            uri, met, path = self._get_configs_download_params()
+            d = session.fetch_provider_configs(uri, path)
+            d.addCallback(verify_provider_configs)
+            d.addCallback(complete_bootstrapping)
+            d.addErrback(workaround_for_config_fetch)
+            return d
+        else:
+            d = defer.succeed('already downloaded')
+            d.addCallback(complete_bootstrapping)
+            return d
+
+    def _get_configs_download_params(self):
+        uri = self._disco.get_configs_uri()
+        met = self._disco.get_configs_method()
+        path = self._get_configs_path()
+        return uri, met, path
 
     def offers_service(self, service):
         if service not in self.SERVICES_MAP.keys():
             raise RuntimeError('Unknown service: %s' % service)
         return service in self._provider_config.services
 
-    # TODO is_service_enabled ---> this belongs to core?
+    def is_service_enabled(self, service):
+        # TODO implement on some config file
+        return True
+
+    def has_config_for_service(self, service):
+        has_file = os.path.isfile
+        path = self._get_service_config_path
+        smap = self.SERVICES_MAP
+
+        result = all([has_file(path(subservice)) for
+                      subservice in smap[service]])
+        return result
+
+    def has_config_for_all_services(self):
+        if not self._provider_config:
+            return False
+        all_services = self._provider_config.services
+        has_all = all(
+            [self._has_config_for_service(service) for service in
+             all_services])
+        return has_all
 
     def _get_provider_json_path(self):
         domain = self._domain.encode(sys.getfilesystemencoding())
@@ -315,28 +420,47 @@ class Provider(object):
             uri = None
         return uri
 
-    def _load_provider_config(self):
+    def _load_provider_json(self):
         path = self._get_provider_json_path()
         if not is_file(path):
+            log.msg("Cannot LOAD provider config path %s" % path)
             return
+
         with open(path, 'r') as config:
             self._provider_config = Record(**json.load(config))
 
-    def _get_config_for_all_services(self):
+        api_uri = self._provider_config.api_uri
+        if api_uri:
+            parsed = urlparse(api_uri)
+            self._disco.api_uri = parsed.netloc
+
+    def _get_config_for_all_services(self, session):
+        services_dict = self._load_provider_configs()
         configs_path = self._get_configs_path()
         with open(configs_path) as jsonf:
             services_dict = Record(**json.load(jsonf)).services
         pending = []
         base = self._disco.get_base_uri()
         for service in self._provider_config.services:
-            for subservice in self.SERVICES_MAP[service]:
-                uri = base + str(services_dict[subservice])
-                path = self._get_service_config_path(subservice)
-                d = self._fetch_config_for_service(uri, path)
-                pending.append(d)
+            if service in self.SERVICES_MAP.keys():
+                for subservice in self.SERVICES_MAP[service]:
+                    uri = base + str(services_dict[subservice])
+                    path = self._get_service_config_path(subservice)
+                    if session:
+                        d = session.fetch_provider_configs(uri, path)
+                    else:
+                        d = self._fetch_provider_configs_unauthenticated(
+                            uri, path)
+                    pending.append(d)
         return defer.gatherResults(pending)
 
-    def _fetch_config_for_service(self, uri, path):
+    def _load_provider_configs(self):
+        configs_path = self._get_configs_path()
+        with open(configs_path) as jsonf:
+            services_dict = Record(**json.load(jsonf)).services
+        return services_dict
+
+    def _fetch_provider_configs_unauthenticated(self, uri, path):
         log.msg('Downloading config for %s...' % uri)
         d = downloadPage(uri, path, method='GET')
         return d
