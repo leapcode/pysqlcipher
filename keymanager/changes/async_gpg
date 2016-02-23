@@ -1,0 +1,1 @@
+-- Defer encrypt, decrypt and gen_key operations from gnupg to external threads, limited by cpu core amount.

@@ -27,9 +27,11 @@ import io
 
 
 from datetime import datetime
+from multiprocessing import cpu_count
 from gnupg import GPG
 from gnupg.gnupg import GPGUtilities
 from twisted.internet import defer
+from twisted.internet.threads import deferToThread
 
 from leap.common.check import leap_assert, leap_assert_type, leap_check
 from leap.keymanager import errors
@@ -54,6 +56,16 @@ logger = logging.getLogger(__name__)
 #
 # A temporary GPG keyring wrapped to provide OpenPGP functionality.
 #
+
+# This function will be used to call blocking GPG functions outside
+# of Twisted reactor and match the concurrent calls to the amount of CPU cores
+cpu_core_semaphore = defer.DeferredSemaphore(cpu_count())
+
+
+def from_thread(func, *args, **kwargs):
+    call = lambda: deferToThread(func, *args, **kwargs)
+    return cpu_core_semaphore.run(call)
+
 
 class TempGPGWrapper(object):
     """
@@ -253,6 +265,7 @@ class OpenPGPScheme(EncryptionScheme):
         # make sure the key does not already exist
         leap_assert(is_address(address), 'Not an user address: %s' % address)
 
+        @defer.inlineCallbacks
         def _gen_key(_):
             with TempGPGWrapper(gpgbinary=self._gpgbinary) as gpg:
                 # TODO: inspect result, or use decorator
@@ -264,7 +277,7 @@ class OpenPGPScheme(EncryptionScheme):
                     name_comment='')
                 logger.info("About to generate keys... "
                             "This might take SOME time.")
-                gpg.gen_key(params)
+                yield from_thread(gpg.gen_key, params)
                 logger.info("Keys for %s have been successfully "
                             "generated." % (address,))
                 pubkeys = gpg.list_keys()
@@ -293,7 +306,7 @@ class OpenPGPScheme(EncryptionScheme):
                         gpg.export_keys(key['fingerprint'], secret=secret))
                     d = self.put_key(openpgp_key, address)
                     deferreds.append(d)
-                return defer.gatherResults(deferreds)
+                yield defer.gatherResults(deferreds)
 
         def key_already_exists(_):
             raise errors.KeyAlreadyExists(address)
@@ -686,6 +699,7 @@ class OpenPGPScheme(EncryptionScheme):
             raise errors.GPGError(
                 'Failed to encrypt/decrypt: %s' % stderr)
 
+    @defer.inlineCallbacks
     def encrypt(self, data, pubkey, passphrase=None, sign=None,
                 cipher_algo='AES256'):
         """
@@ -700,8 +714,8 @@ class OpenPGPScheme(EncryptionScheme):
         :param cipher_algo: The cipher algorithm to use.
         :type cipher_algo: str
 
-        :return: The encrypted data.
-        :rtype: str
+        :return: A Deferred that will be fired with the encrypted data.
+        :rtype: defer.Deferred
 
         :raise EncryptError: Raised if failed encrypting for some reason.
         """
@@ -713,7 +727,8 @@ class OpenPGPScheme(EncryptionScheme):
             leap_assert(sign.private is True)
             keys.append(sign)
         with TempGPGWrapper(keys, self._gpgbinary) as gpg:
-            result = gpg.encrypt(
+            result = yield from_thread(
+                gpg.encrypt,
                 data, pubkey.fingerprint,
                 default_key=sign.key_id if sign else None,
                 passphrase=passphrase, symmetric=False,
@@ -724,11 +739,12 @@ class OpenPGPScheme(EncryptionScheme):
             # result.data  - (bool) contains the result of the operation
             try:
                 self._assert_gpg_result_ok(result)
-                return result.data
+                defer.returnValue(result.data)
             except errors.GPGError as e:
                 logger.error('Failed to decrypt: %s.' % str(e))
                 raise errors.EncryptError()
 
+    @defer.inlineCallbacks
     def decrypt(self, data, privkey, passphrase=None, verify=None):
         """
         Decrypt C{data} using private @{privkey} and verify with C{verify} key.
@@ -743,8 +759,9 @@ class OpenPGPScheme(EncryptionScheme):
         :param verify: The key used to verify a signature.
         :type verify: OpenPGPKey
 
-        :return: The decrypted data and if signature verifies
-        :rtype: (unicode, bool)
+        :return: Deferred that will fire with the decrypted data and
+                 if signature verifies (unicode, bool)
+        :rtype: Deferred
 
         :raise DecryptError: Raised if failed decrypting for some reason.
         """
@@ -756,8 +773,9 @@ class OpenPGPScheme(EncryptionScheme):
             keys.append(verify)
         with TempGPGWrapper(keys, self._gpgbinary) as gpg:
             try:
-                result = gpg.decrypt(
-                    data, passphrase=passphrase, always_trust=True)
+                result = yield from_thread(gpg.decrypt,
+                                           data, passphrase=passphrase,
+                                           always_trust=True)
                 self._assert_gpg_result_ok(result)
 
                 # verify signature
@@ -767,7 +785,7 @@ class OpenPGPScheme(EncryptionScheme):
                         verify.fingerprint == result.pubkey_fingerprint):
                     sign_valid = True
 
-                return (result.data, sign_valid)
+                defer.returnValue((result.data, sign_valid))
             except errors.GPGError as e:
                 logger.error('Failed to decrypt: %s.' % str(e))
                 raise errors.DecryptError(str(e))
