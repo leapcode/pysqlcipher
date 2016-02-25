@@ -54,19 +54,18 @@ class KeyManagerWithSoledadTestCase(unittest.TestCase, BaseLeapTest):
     def tearDown(self):
         km = self._key_manager()
 
+        # wait for the indexes to be ready for the tear down
+        d = km._wrapper_map[OpenPGPKey].deferred_init
+        d.addCallback(lambda _: self.delete_all_keys(km))
+        d.addCallback(lambda _: self.tearDownEnv())
+        d.addCallback(lambda _: self._soledad.close())
+        return d
+
+    def delete_all_keys(self, km):
         def delete_keys(keys):
             deferreds = []
             for key in keys:
                 d = km._wrapper_map[key.__class__].delete_key(key)
-                deferreds.append(d)
-            return gatherResults(deferreds)
-
-        def get_and_delete_keys(_):
-            deferreds = []
-            for private in [True, False]:
-                d = km.get_all_keys(private=private)
-                d.addCallback(delete_keys)
-                d.addCallback(check_deleted, private)
                 deferreds.append(d)
             return gatherResults(deferreds)
 
@@ -75,12 +74,13 @@ class KeyManagerWithSoledadTestCase(unittest.TestCase, BaseLeapTest):
             d.addCallback(lambda keys: self.assertEqual(keys, []))
             return d
 
-        # wait for the indexes to be ready for the tear down
-        d = km._wrapper_map[OpenPGPKey].deferred_init
-        d.addCallback(get_and_delete_keys)
-        d.addCallback(lambda _: self.tearDownEnv())
-        d.addCallback(lambda _: self._soledad.close())
-        return d
+        deferreds = []
+        for private in [True, False]:
+            d = km.get_all_keys(private=private)
+            d.addCallback(delete_keys)
+            d.addCallback(check_deleted, private)
+            deferreds.append(d)
+        return gatherResults(deferreds)
 
     def _key_manager(self, user=ADDRESS, url='', token=None,
                      ca_cert_path=None):
