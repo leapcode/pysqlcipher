@@ -52,6 +52,10 @@ class BonafideService(service.Service):
     def get_sibling_service(self, kind):
         return self.parent.getServiceNamed(kind)
 
+    def startService(self):
+        log.msg('Starting Bonafide Service')
+        super(BonafideService, self).startService()
+
     # Commands
 
     def do_authenticate(self, username, password):
@@ -99,7 +103,15 @@ class BonafideService(service.Service):
         return d
 
     def do_logout(self, username, password):
+        if not username:
+            username = self._active_user
+
+        def reset_active(passthrough):
+            self._active_user = None
+            return passthrough
+
         d = self._bonafide.do_logout(username, password)
+        d.addCallback(reset_active)
         d.addCallback(lambda response: 'LOGOUT -> ok')
         return d
 
@@ -113,3 +125,7 @@ class BonafideService(service.Service):
         d = self._bonafide.do_get_smtp_cert(username)
         d.addCallback(lambda response: (username, response))
         return d
+
+    def do_get_active_user(self):
+        user = self._active_user
+        return user
