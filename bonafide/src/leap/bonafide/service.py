@@ -128,4 +128,4 @@ class BonafideService(service.Service):
 
     def do_get_active_user(self):
         user = self._active_user
-        return user
+        return defer.succeed(user)
