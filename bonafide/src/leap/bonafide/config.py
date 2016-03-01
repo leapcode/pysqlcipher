@@ -145,7 +145,7 @@ class Provider(object):
         self._domain = domain
         self._basedir = os.path.expanduser(basedir)
         self._disco = Discovery('https://%s' % domain)
-        self._provider_config = {}
+        self._provider_config = None
 
         is_configured = self.is_configured()
         if not is_configured:
@@ -380,11 +380,12 @@ class Provider(object):
         return result
 
     def has_config_for_all_services(self):
+        self._load_provider_json()
         if not self._provider_config:
             return False
         all_services = self._provider_config.services
         has_all = all(
-            [self._has_config_for_service(service) for service in
+            [self.has_config_for_service(service) for service in
              all_services])
         return has_all
 
