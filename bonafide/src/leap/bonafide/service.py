@@ -18,8 +18,8 @@
 """
 Bonafide Service.
 """
-
 import os
+from collections import defaultdict
 
 from leap.bonafide._protocol import BonafideProtocol
 
@@ -35,19 +35,21 @@ class BonafideService(service.Service):
     def __init__(self, basedir='~/.config/leap'):
         self._bonafide = BonafideProtocol()
         self._basedir = os.path.expanduser(basedir)
-        self.service_hooks = {}
+        self.service_hooks = defaultdict(list)
 
         # XXX this is a quick hack to get a ref
         # to the latest authenticated user.
         self._active_user = None
 
     def register_hook(self, kind, trigger):
-        self.service_hooks[kind] = trigger
+        log.msg("Registering hook %s->%s" % (kind, trigger))
+        self.service_hooks[kind].append(trigger)
 
-    def get_hooked_service(self, kind):
+    def get_hooked_services(self, kind):
         hooks = self.service_hooks
         if kind in hooks:
-            return self.get_sibling_service(hooks[kind])
+            names = hooks[kind]
+            return [self.get_sibling_service(name) for name in names]
 
     def get_sibling_service(self, kind):
         return self.parent.getServiceNamed(kind)
@@ -62,9 +64,9 @@ class BonafideService(service.Service):
 
         def notify_passphrase_entry(username, password):
             this_hook = 'on_passphrase_entry'
-            hooked_service = self.get_hooked_service(this_hook)
-            if hooked_service:
-                hooked_service.notify_hook(
+            hooked_services = self.get_hooked_services(this_hook)
+            for service in hooked_services:
+                service.notify_hook(
                     this_hook, username=username, password=password)
 
         def notify_bonafide_auth_hook(result):
@@ -74,9 +76,9 @@ class BonafideService(service.Service):
 
             this_hook = 'on_bonafide_auth'
             token, uuid = result
-            hooked_service = self.get_hooked_service(this_hook)
-            if hooked_service:
-                hooked_service.notify_hook(
+            hooked_services = self.get_hooked_services(this_hook)
+            for service in hooked_services:
+                service.notify_hook(
                     this_hook,
                     username=username, token=token, uuid=uuid,
                     password=password)
@@ -93,8 +95,8 @@ class BonafideService(service.Service):
 
         d = self._bonafide.do_authenticate(username, password)
         d.addCallback(notify_bonafide_auth_hook)
-        d.addCallback(lambda response: '[ SRP TOKEN: %s ] [ UUID: %s ]' %
-                      (response[0], response[1]))
+        d.addCallback(lambda response: {
+            'srp_token': response[0], 'uuid': response[1]})
         return d
 
     def do_signup(self, username, password):
