@@ -133,12 +133,8 @@ class BonafideProtocol(object):
         session = self._get_session(full_id)
         if not session.is_authenticated:
             return fail(RuntimeError("There is no session for such user"))
-        try:
-            d = session.logout()
-        except Exception as exc:
-            log.err(exc)
-            return fail(exc)
 
+        d = session.logout()
         d.addCallback(lambda _: self._sessions.pop(full_id))
         d.addCallback(lambda _: '%s logged out' % full_id)
         return d
