@@ -21,6 +21,7 @@ Bonafide Service.
 import os
 from collections import defaultdict
 
+from leap.common.config import get_path_prefix
 from leap.common.service_hooks import HookableService
 from leap.bonafide._protocol import BonafideProtocol
 
@@ -29,12 +30,16 @@ from twisted.internet import defer
 from twisted.python import log
 
 
+_preffix = get_path_prefix()
+
+
 class BonafideService(service.Service, HookableService):
 
-    def __init__(self, basedir='~/.config/leap'):
-        # TODO fix hardcoded basedir
-        self._bonafide = BonafideProtocol()
+    def __init__(self, basedir=None):
+        if not basedir:
+            basedir = os.path.join(_preffix, 'leap')
         self._basedir = os.path.expanduser(basedir)
+        self._bonafide = BonafideProtocol()
         self.service_hooks = defaultdict(list)
 
         # XXX this is a quick hack to get a ref

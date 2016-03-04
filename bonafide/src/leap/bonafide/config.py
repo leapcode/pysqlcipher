@@ -47,6 +47,9 @@ def get_path_prefix(standalone=False):
     return common_get_path_prefix(standalone)
 
 
+_preffix = get_path_prefix()
+
+
 def get_provider_path(domain, config='provider.json'):
     """
     Returns relative path for provider configs.
@@ -135,10 +138,12 @@ class Provider(object):
     ongoing_bootstrap = defaultdict(None)
     stuck_bootstrap = defaultdict(None)
 
-    def __init__(self, domain, autoconf=True, basedir='~/.config/leap',
+    def __init__(self, domain, autoconf=True, basedir=None,
                  check_certificate=True):
-        self._domain = domain
+        if not basedir:
+            basedir = os.path.join(_preffix, 'leap')
         self._basedir = os.path.expanduser(basedir)
+        self._domain = domain
         self._disco = Discovery('https://%s' % domain)
         self._provider_config = None
 
