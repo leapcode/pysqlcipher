@@ -52,6 +52,7 @@ class Session(object):
         # this provider can have an api attribute,
         # and a "autoconfig" attribute passed on initialization.
         # TODO get a file-descriptor for password if not in credentials
+        # TODO merge self._request with config.Provider._http_request ?
 
         self.username = credentials.username
         self.password = credentials.password
