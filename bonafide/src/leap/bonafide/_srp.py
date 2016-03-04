@@ -31,41 +31,45 @@ class SRPAuthMechanism(object):
     Implement a protocol-agnostic SRP Authentication mechanism.
     """
 
-    def initialize(self, username, password):
-        srp_user = srp.User(username, password,
-                            srp.SHA256, srp.NG_1024)
-        _, A = srp_user.start_authentication()
-        return srp_user, A
+    def __init__(self, username, password):
+        self.username = username
+        self.srp_user = srp.User(username, password,
+                                 srp.SHA256, srp.NG_1024)
+        _, A = self.srp_user.start_authentication()
+        self.A = A
+        self.M = None
+        self.M2 = None
 
-    def get_handshake_params(self, username, A):
-        return {'login': bytes(username), 'A': binascii.hexlify(A)}
+    def get_handshake_params(self):
+        return {'login': bytes(self.username),
+                'A': binascii.hexlify(self.A)}
 
-    def process_handshake(self, srp_user, handshake_response):
+    def process_handshake(self, handshake_response):
         challenge = json.loads(handshake_response)
         self._check_for_errors(challenge)
         salt = challenge.get('salt', None)
         B = challenge.get('B', None)
         unhex_salt, unhex_B = self._unhex_salt_B(salt, B)
-        M = srp_user.process_challenge(unhex_salt, unhex_B)
-        return M
+        self.M = self.srp_user.process_challenge(unhex_salt, unhex_B)
 
-    def get_authentication_params(self, M, A):
+    def get_authentication_params(self):
         # It looks A is not used server side
-        return {'client_auth': binascii.hexlify(M), 'A': binascii.hexlify(A)}
+        return {'client_auth': binascii.hexlify(self.M),
+                'A': binascii.hexlify(self.A)}
 
     def process_authentication(self, authentication_response):
         auth = json.loads(authentication_response)
         self._check_for_errors(auth)
         uuid = auth.get('id', None)
         token = auth.get('token', None)
-        M2 = auth.get('M2', None)
-        self._check_auth_params(uuid, token, M2)
-        return uuid, token, M2
+        self.M2 = auth.get('M2', None)
+        self._check_auth_params(uuid, token, self.M2)
+        return uuid, token
 
-    def verify_authentication(self, srp_user, M2):
-        unhex_M2 = _safe_unhexlify(M2)
-        srp_user.verify_session(unhex_M2)
-        assert srp_user.authenticated()
+    def verify_authentication(self):
+        unhex_M2 = _safe_unhexlify(self.M2)
+        self.srp_user.verify_session(unhex_M2)
+        assert self.srp_user.authenticated()
 
     def _check_for_errors(self, response):
         if 'errors' in response:

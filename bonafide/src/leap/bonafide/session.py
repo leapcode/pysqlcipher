@@ -61,9 +61,10 @@ class Session(object):
 
     def _initialize_session(self):
         self._agent = cookieAgentFactory(self._provider_cert)
-        self._srp_auth = _srp.SRPAuthMechanism()
+        username = self.username or ''
+        password = self.password or ''
+        self._srp_auth = _srp.SRPAuthMechanism(username, password)
         self._srp_signup = _srp.SRPSignupMechanism()
-        self._srp_user = None
         self._token = None
         self._uuid = None
 
@@ -79,36 +80,30 @@ class Session(object):
 
     @property
     def is_authenticated(self):
-        if not self._srp_user:
-            return False
-        return self._srp_user.authenticated()
+        return self._srp_auth.srp_user.authenticated()
 
     @defer.inlineCallbacks
     def authenticate(self):
-        srpuser, A = self._srp_auth.initialize(
-            self.username, self.password)
-        self._srp_user = srpuser
-
         uri = self._api.get_handshake_uri()
         met = self._api.get_handshake_method()
         log.msg("%s to %s" % (met, uri))
-        params = self._srp_auth.get_handshake_params(self.username, A)
+        params = self._srp_auth.get_handshake_params()
 
         handshake = yield self._request(self._agent, uri, values=params,
                                         method=met)
 
-        M = self._srp_auth.process_handshake(srpuser, handshake)
+        self._srp_auth.process_handshake(handshake)
         uri = self._api.get_authenticate_uri(login=self.username)
         met = self._api.get_authenticate_method()
 
         log.msg("%s to %s" % (met, uri))
-        params = self._srp_auth.get_authentication_params(M, A)
+        params = self._srp_auth.get_authentication_params()
 
         auth = yield self._request(self._agent, uri, values=params,
                                    method=met)
 
-        uuid, token, M2 = self._srp_auth.process_authentication(auth)
-        self._srp_auth.verify_authentication(srpuser, M2)
+        uuid, token = self._srp_auth.process_authentication(auth)
+        self._srp_auth.verify_authentication()
 
         self._uuid = uuid
         self._token = token
@@ -120,6 +115,8 @@ class Session(object):
         uri = self._api.get_logout_uri()
         met = self._api.get_logout_method()
         auth = yield self._request(self._agent, uri, method=met)
+        print 'AUTH', auth
+        print 'resetting user/pass'
         self.username = None
         self.password = None
         self._initialize_session()
