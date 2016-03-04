@@ -18,10 +18,10 @@ the package in development mode by running::
 
 from the parent folder.
 
-To run the bonafide service, you can use the bitmask.core daemon. From the root
-of the bitmask_core repo::
+To run the bonafide service, you can use the bitmask.core daemon. From an
+environment in which you have installed the bitmask_core repo::
 
-  make bitmaskd
+  bitmaskd
 
 Then you can use `bitmask_cli` to see the available actions, under the user
 command.
