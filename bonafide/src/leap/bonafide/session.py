@@ -22,10 +22,23 @@ from twisted.python import log
 
 from leap.bonafide import _srp
 from leap.bonafide import provider
-from leap.bonafide._decorators import auth_required
 from leap.bonafide._http import httpRequest, cookieAgentFactory
 
 OK = 'ok'
+
+
+def _auth_required(func):
+    """
+    Decorate a method so that it will not be called if the instance
+    attribute `is_authenticated` does not evaluate to True.
+    """
+    def decorated(*args, **kwargs):
+        instance = args[0]
+        allowed = getattr(instance, 'is_authenticated')
+        if not allowed:
+            raise RuntimeError('This method requires authentication')
+        return func(*args, **kwargs)
+    return decorated
 
 
 class Session(object):
@@ -101,7 +114,7 @@ class Session(object):
         self._token = token
         defer.returnValue(OK)
 
-    @auth_required
+    @_auth_required
     @defer.inlineCallbacks
     def logout(self):
         uri = self._api.get_logout_uri()
@@ -121,7 +134,7 @@ class Session(object):
         met = self._api.get_vpn_cert_method()
         return self._request(self._agent, uri, method=met)
 
-    @auth_required
+    @_auth_required
     def get_smtp_cert(self):
         # TODO pass it to the provider object so that it can save it in the
         # right path.
@@ -152,8 +165,9 @@ class Session(object):
         self.password = password
         defer.returnValue((OK, registered_user))
 
-    @auth_required
+    @_auth_required
     def update_user_record(self):
+        # FIXME to be implemented
         pass
 
     # Authentication-protected configuration
