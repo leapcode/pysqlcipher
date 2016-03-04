@@ -24,6 +24,7 @@ from collections import defaultdict
 from leap.bonafide import config
 from leap.bonafide import provider
 from leap.bonafide.session import Session, OK
+from leap.common.config import get_path_prefix
 
 from twisted.cred.credentials import UsernamePassword
 from twisted.internet.defer import fail
@@ -34,6 +35,7 @@ from twisted.python import log
 # TODO [ ] read provider info
 
 COMMANDS = 'signup', 'authenticate', 'logout', 'stats'
+_preffix = get_path_prefix()
 
 
 class BonafideProtocol(object):
@@ -64,10 +66,8 @@ class BonafideProtocol(object):
         username, provider_id = config.get_username_and_provider(full_id)
         credentials = UsernamePassword(username, password)
         api = self._get_api(provider_id)
-        cdev_pem = os.path.expanduser(
-            '~/.config/leap/providers/%s/keys/ca/cacert.pem' %
-            provider_id)
-        session = Session(credentials, api, cdev_pem)
+        provider_pem = _get_provider_ca_path(provider_id)
+        session = Session(credentials, api, provider_pem)
         self._sessions[full_id] = session
         return session
 
@@ -160,3 +160,8 @@ class BonafideProtocol(object):
         mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         return '[+] Bonafide service: [%s sessions] [Mem usage: %s KB]' % (
             len(self._sessions), mem / 1024)
+
+
+def _get_provider_ca_path(provider_id):
+    return os.path.join(
+        _preffix, 'leap', 'providers', provider_id, 'keys', 'ca', 'cacert.pem')
