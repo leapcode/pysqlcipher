@@ -124,11 +124,6 @@ def get_username_and_provider(full_id):
     return full_id.split('@')
 
 
-class WebClientContextFactory(ClientContextFactory):
-    def getContext(self, hostname, port):
-        return ClientContextFactory.getContext(self)
-
-
 class Provider(object):
     # TODO add validation
 
@@ -313,7 +308,8 @@ class Provider(object):
             # FIXME --- configs.json raises 500, see #7914.
             # This is a workaround until that's fixed.
             log.err(failure)
-            log.msg("COULD NOT VERIFY CONFIGS.JSON, WORKAROUND: DIRECT DOWNLOAD")
+            log.msg(
+                "COULD NOT VERIFY CONFIGS.JSON, WORKAROUND: DIRECT DOWNLOAD")
 
             if 'mx' in self._provider_config.services:
                 soledad_uri = '/1/config/soledad-service.json'
@@ -323,8 +319,10 @@ class Provider(object):
                 fetch = self._fetch_provider_configs_unauthenticated
                 get_path = self._get_service_config_path
 
-                d1 = fetch('https://' + str(base + soledad_uri), get_path('soledad'))
-                d2 = fetch('https://' + str(base + smtp_uri), get_path('smtp'))
+                d1 = fetch(
+                    'https://' + str(base + soledad_uri), get_path('soledad'))
+                d2 = fetch(
+                    'https://' + str(base + smtp_uri), get_path('smtp'))
                 d = defer.gatherResults([d1, d2])
                 d.addCallback(lambda _: finish_stuck_after_workaround())
                 return d
@@ -477,6 +475,11 @@ class Provider(object):
 class Record(object):
     def __init__(self, **kw):
         self.__dict__.update(kw)
+
+
+class WebClientContextFactory(ClientContextFactory):
+    def getContext(self, hostname, port):
+        return ClientContextFactory.getContext(self)
 
 
 if __name__ == '__main__':
