@@ -145,16 +145,18 @@ class BonafideProtocol(object):
         return d
 
     def do_get_vpn_cert(self):
+        # FIXME to be implemented
         pass
 
     def do_update_user(self):
+        # FIXME to be implemented
         pass
 
     def do_stats(self):
         log.msg('Calculating Bonafide Service STATS')
         mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-        return '[+] Bonafide service: [%s sessions] [Mem usage: %s KB]' % (
-            len(self._sessions), mem / 1024)
+        return {'sessions': len(self._sessions),
+                'mem': '%s KB' % (mem / 1024)}
 
 
 def _get_provider_ca_path(provider_id):
