@@ -97,7 +97,6 @@ class BonafideProtocol(object):
         return d
 
     def do_authenticate(self, full_id, password):
-        log.msg('SIGNUP for %s' % full_id)
         _, provider_id = config.get_username_and_provider(full_id)
 
         provider = config.Provider(provider_id)
