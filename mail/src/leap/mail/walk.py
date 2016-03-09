@@ -17,14 +17,16 @@
 """
 Utilities for walking along a message tree.
 """
-from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.backends.multibackend import MultiBackend
+from cryptography.hazmat.backends.openssl.backend import Backend as OpenSSLBackend 
 from cryptography.hazmat.primitives import hashes
 
 from leap.mail.utils import first
 
 
 def get_hash(s):
-    digest = hashes.Hash(hashes.SHA256(), default_backend())
+    backend = MultiBackend([OpenSSLBackend()])
+    digest = hashes.Hash(hashes.SHA256(), backend)
     digest.update(s)
     return digest.finalize().encode("hex").upper()
 
