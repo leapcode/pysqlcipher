@@ -18,7 +18,8 @@
 Utilities for walking along a message tree.
 """
 from cryptography.hazmat.backends.multibackend import MultiBackend
-from cryptography.hazmat.backends.openssl.backend import Backend as OpenSSLBackend 
+from cryptography.hazmat.backends.openssl.backend import (
+    Backend as OpenSSLBackend)
 from cryptography.hazmat.primitives import hashes
 
 from leap.mail.utils import first
