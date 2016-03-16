@@ -508,7 +508,7 @@ class IMAPMailbox(object):
         def get_range(messages_asked):
             return self._filter_msg_seq(messages_asked)
 
-        d = defer.maybeDeferred(self._bound_seq, messages_asked, uid)
+        d = self._bound_seq(messages_asked, uid)
         if uid:
             d.addCallback(get_range)
         d.addErrback(lambda f: log.err(f))
@@ -520,7 +520,7 @@ class IMAPMailbox(object):
 
         :param messages_asked: IDs of the messages.
         :type messages_asked: MessageSet
-        :rtype: MessageSet
+        :return: a Deferred that will fire with a MessageSet
         """
 
         def set_last_uid(last_uid):
@@ -543,7 +543,7 @@ class IMAPMailbox(object):
                     d = self.collection.all_uid_iter()
                     d.addCallback(set_last_seq)
                 return d
-        return messages_asked
+        return defer.succeed(messages_asked)
 
     def _filter_msg_seq(self, messages_asked):
         """
@@ -713,6 +713,7 @@ class IMAPMailbox(object):
         d_seq.addCallback(get_flags_for_seq)
         return d_seq
 
+    @defer.inlineCallbacks
     def fetch_headers(self, messages_asked, uid):
         """
         A fast method to fetch all headers, tricking just the
@@ -757,14 +758,15 @@ class IMAPMailbox(object):
                     for key, value in
                     self.headers.items())
 
-        messages_asked = self._bound_seq(messages_asked)
-        seq_messg = self._filter_msg_seq(messages_asked)
+        messages_asked = yield self._bound_seq(messages_asked, uid)
+        seq_messg = yield self._filter_msg_seq(messages_asked)
 
-        all_headers = self.messages.all_headers()
-        result = ((msgid, headersPart(
-            msgid, all_headers.get(msgid, {})))
-            for msgid in seq_messg)
-        return result
+        result = []
+        for msgid in seq_messg:
+            msg = yield self.collection.get_message_by_uid(msgid)
+            headers = headersPart(msgid, msg.get_headers())
+            result.append((msgid, headers))
+        defer.returnValue(iter(result))
 
     def store(self, messages_asked, flags, mode, uid):
         """
