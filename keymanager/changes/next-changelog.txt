@@ -21,6 +21,8 @@ Features
 
 Bugfixes
 ~~~~~~~~
+- `#7974 <https://leap.se/code/issues/7974>`_: Return KeyNotFound Failure if not valid key is given to put_raw_key.
+
 - `#1235 <https://leap.se/code/issues/1235>`_: Description for the fixed stuff corresponding with issue #1235.
 - Bugfix without related issue number.
 

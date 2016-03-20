@@ -820,9 +820,10 @@ class KeyManager(object):
 
         :return: A Deferred which fires when the key is in the storage, or
                  which fails with KeyAddressMismatch if address doesn't match
-                 any uid on the key or fails with KeyNotValidUpdate if a key
-                 with the same uid exists and the new one is not a valid update
-                 for it.
+                 any uid on the key or fails with KeyNotFound if no OpenPGP
+                 material was found in key or fails with KeyNotValidUpdate if a
+                 key with the same uid exists and the new one is not a valid
+                 update for it.
         :rtype: Deferred
 
         :raise UnsupportedKeyTypeError: if invalid key type
@@ -831,6 +832,10 @@ class KeyManager(object):
         _keys = self._wrapper_map[ktype]
 
         pubkey, privkey = _keys.parse_ascii_key(key, address)
+
+        if pubkey is None:
+            return defer.fail(KeyNotFound(key))
+
         pubkey.validation = validation
         d = self.put_key(pubkey)
         if privkey is not None:
