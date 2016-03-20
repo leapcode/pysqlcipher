@@ -749,7 +749,7 @@ class IncomingMail(Service):
         for attachment in attachments:
             if MIME_KEY == attachment.get_content_type():
                 d = self._keymanager.put_raw_key(
-                    attachment.get_payload(),
+                    attachment.get_payload(decode=True),
                     OpenPGPKey,
                     address=address)
                 d.addCallbacks(log_key_added, failed_put_key)

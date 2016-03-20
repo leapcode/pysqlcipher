@@ -22,6 +22,7 @@ Bugfixes
 ~~~~~~~~
 - `#7861 <https://leap.se/code/issues/7861>`_: Use the right succeed function for passthrough encrypted email.
 - `#7898 <https://leap.se/code/issues/7898>`_: Fix IMAP fetch headers
+- `#7977 <https://leap.se/code/issues/7977>`_: Decode attached keys so they are recognized by keymanager.
 - Fix the get_body logic for corner-cases in which body is None (yet-to-be synced docs, mainly).
 
 - `#1235 <https://leap.se/code/issues/1235>`_: Description for the fixed stuff corresponding with issue #1235.
