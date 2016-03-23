@@ -29,6 +29,8 @@ from twisted.internet import defer, interfaces
 from twisted.mail.imap4 import IllegalClientResponse
 from twisted.mail.imap4 import LiteralString, LiteralFile
 
+from leap.common.events import emit_async, catalog
+
 
 def _getContentType(msg):
     """
@@ -609,7 +611,6 @@ class LEAPIMAPServer(imap4.IMAP4Server):
         d.addCallback(send_response)
         return d
         # XXX patched ---------------------------------
-
     # -----------------------------------------------------------------------
 
     auth_APPEND = (do_APPEND, arg_astring, imap4.IMAP4Server.opt_plist,
@@ -685,3 +686,9 @@ class LEAPIMAPServer(imap4.IMAP4Server):
     #############################################################
     # END of Twisted imap4 patch to support LITERAL+ extension
     #############################################################
+
+    def authenticateLogin(self, user, passwd):
+        result = imap4.IMAP4Server.authenticateLogin(self, user, passwd)
+        emit_async(catalog.IMAP_CLIENT_LOGIN, str(user))
+        return result
+
