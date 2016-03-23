@@ -746,7 +746,7 @@ class MessageCollection(object):
         :param unseen: number of unseen messages.
         :type unseen: int
         """
-        emit_async(catalog.MAIL_UNREAD_MESSAGES, str(unseen))
+        emit_async(catalog.MAIL_UNREAD_MESSAGES, self.store.uuid, str(unseen))
 
     def copy_msg(self, msg, new_mbox_uuid):
         """
