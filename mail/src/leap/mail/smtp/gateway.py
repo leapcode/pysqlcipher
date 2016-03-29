@@ -29,7 +29,6 @@ The following classes comprise the SMTP gateway service:
     * EncryptedMessage - An implementation of twisted.mail.smtp.IMessage that
       knows how to encrypt/sign itself before sending.
 """
-
 from email.Header import Header
 
 from zope.interface import implements
@@ -48,6 +47,7 @@ from leap.mail.cred import LocalSoledadTokenChecker
 from leap.mail.utils import validate_address
 from leap.mail.rfc3156 import RFC3156CompliantGenerator
 from leap.mail.outgoing.service import outgoingFactory
+from leap.mail.smtp.bounces import bouncerFactory
 from leap.keymanager.openpgp import OpenPGPKey
 from leap.keymanager.errors import KeyNotFound
 
@@ -65,7 +65,7 @@ class LocalSMTPRealm(object):
 
     _encoding = 'utf-8'
 
-    def __init__(self, keymanager_sessions, sendmail_opts,
+    def __init__(self, keymanager_sessions, soledad_sessions, sendmail_opts,
                  encrypted_only=False):
         """
         :param keymanager_sessions: a dict-like object, containing instances
@@ -73,21 +73,31 @@ class LocalSMTPRealm(object):
                                  userid.
         """
         self._keymanager_sessions = keymanager_sessions
+        self._soledad_sessions = soledad_sessions
         self._sendmail_opts = sendmail_opts
         self.encrypted_only = encrypted_only
 
     def requestAvatar(self, avatarId, mind, *interfaces):
+
         if isinstance(avatarId, str):
             avatarId = avatarId.decode(self._encoding)
 
-        def gotKeymanager(keymanager):
+        def gotKeymanagerAndSoledad(result):
+            keymanager, soledad = result
+            d = bouncerFactory(soledad)
+            d.addCallback(lambda bouncer: (keymanager, soledad, bouncer))
+            return d
 
+        def getMessageDelivery(result):
+            keymanager, soledad, bouncer = result
             # TODO use IMessageDeliveryFactory instead ?
             # it could reuse the connections.
             if smtp.IMessageDelivery in interfaces:
                 userid = avatarId
                 opts = self.getSendingOpts(userid)
-                outgoing = outgoingFactory(userid, keymanager, opts)
+
+                outgoing = outgoingFactory(
+                    userid, keymanager, opts, bouncer=bouncer)
                 avatar = SMTPDelivery(userid, keymanager, self.encrypted_only,
                                       outgoing)
 
@@ -96,10 +106,15 @@ class LocalSMTPRealm(object):
 
             raise NotImplementedError(self, interfaces)
 
-        return self.lookupKeymanagerInstance(avatarId).addCallback(
-            gotKeymanager)
+        d1 = self.lookupKeymanagerInstance(avatarId)
+        d2 = self.lookupSoledadInstance(avatarId)
+        d = defer.gatherResults([d1, d2])
+        d.addCallback(gotKeymanagerAndSoledad)
+        d.addCallback(getMessageDelivery)
+        return d
 
     def lookupKeymanagerInstance(self, userid):
+        print 'getting KM INSTNACE>>>'
         try:
             keymanager = self._keymanager_sessions[userid]
         except:
@@ -108,6 +123,16 @@ class LocalSMTPRealm(object):
                 % userid)
         # XXX this should return the instance after whenReady callback
         return defer.succeed(keymanager)
+
+    def lookupSoledadInstance(self, userid):
+        try:
+            soledad = self._soledad_sessions[userid]
+        except:
+            raise errors.AuthenticationError(
+                'No soledad session found for user %s. Is it authenticated?'
+                % userid)
+        # XXX this should return the instance after whenReady callback
+        return defer.succeed(soledad)
 
     def getSendingOpts(self, userid):
         try:
@@ -134,8 +159,9 @@ class LEAPInitMixin(object):
     """
     def __init__(self, soledad_sessions, keymanager_sessions, sendmail_opts,
                  encrypted_only=False):
-        realm = LocalSMTPRealm(keymanager_sessions, sendmail_opts,
-                               encrypted_only)
+        realm = LocalSMTPRealm(
+            keymanager_sessions, soledad_sessions, sendmail_opts,
+            encrypted_only)
         portal = Portal(realm)
 
         checker = SMTPTokenChecker(soledad_sessions)
@@ -161,6 +187,7 @@ class LocalSMTPServer(smtp.ESMTP, LEAPInitMixin):
         smtp.ESMTP.__init__(self, *args, **kw)
 
 
+# TODO implement retries -- see smtp.SenderMixin
 class SMTPFactory(protocol.ServerFactory):
     """
     Factory for an SMTP server with encrypted gatewaying capabilities.
@@ -171,7 +198,9 @@ class SMTPFactory(protocol.ServerFactory):
     timeout = 600
     encrypted_only = False
 
-    def __init__(self, soledad_sessions, keymanager_sessions, sendmail_opts):
+    def __init__(self, soledad_sessions, keymanager_sessions, sendmail_opts,
+                 deferred=None, retries=3):
+
         self._soledad_sessions = soledad_sessions
         self._keymanager_sessions = keymanager_sessions
         self._sendmail_opts = sendmail_opts

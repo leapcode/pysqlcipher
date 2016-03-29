@@ -73,7 +73,7 @@ class SSLContextFactory(ssl.ClientContextFactory):
         return ctx
 
 
-def outgoingFactory(userid, keymanager, opts, check_cert=True):
+def outgoingFactory(userid, keymanager, opts, check_cert=True, bouncer=None):
 
     cert = unicode(opts.cert)
     key = unicode(opts.key)
@@ -85,7 +85,9 @@ def outgoingFactory(userid, keymanager, opts, check_cert=True):
             raise errors.ConfigurationError(
                 'No valid SMTP certificate could be found for %s!' % userid)
 
-    return OutgoingMail(str(userid), keymanager, cert, key, hostname, port)
+    return OutgoingMail(
+        str(userid), keymanager, cert, key, hostname, port,
+        bouncer)
 
 
 class OutgoingMail(object):
@@ -93,7 +95,8 @@ class OutgoingMail(object):
     Sends Outgoing Mail, encrypting and signing if needed.
     """
 
-    def __init__(self, from_address, keymanager, cert, key, host, port):
+    def __init__(self, from_address, keymanager, cert, key, host, port,
+                 bouncer=None):
         """
         Initialize the outgoing mail service.
 
@@ -133,6 +136,7 @@ class OutgoingMail(object):
         self._cert = cert
         self._from_address = from_address
         self._keymanager = keymanager
+        self._bouncer = bouncer
 
     def send_message(self, raw, recipient):
         """
@@ -145,8 +149,8 @@ class OutgoingMail(object):
         :return: a deferred which delivers the message when fired
         """
         d = self._maybe_encrypt_and_sign(raw, recipient)
-        d.addCallback(self._route_msg)
-        d.addErrback(self.sendError)
+        d.addCallback(self._route_msg, raw)
+        d.addErrback(self.sendError, raw)
         return d
 
     def sendSuccess(self, smtp_sender_result):
@@ -163,21 +167,36 @@ class OutgoingMail(object):
         emit_async(catalog.SMTP_SEND_MESSAGE_SUCCESS,
                    fromaddr, dest_addrstr)
 
-    def sendError(self, failure):
+    def sendError(self, failure, origmsg):
         """
         Callback for an unsuccessfull send.
 
-        :param e: The result from the last errback.
-        :type e: anything
+        :param failure: The result from the last errback.
+        :type failure: anything
+        :param origmsg: the original, unencrypted, raw message, to be passed to
+                        the bouncer.
+        :type origmsg: str
         """
-        # XXX: need to get the address from the exception to send signal
+        # XXX: need to get the address from the original message to send signal
         # emit_async(catalog.SMTP_SEND_MESSAGE_ERROR, self._from_address,
         #   self._user.dest.addrstr)
+
+        # TODO when we implement outgoing queues/long-term-retries, we could
+        # examine the error *here* and delay the notification if it's just a
+        # temporal error. We might want to notify the permanent errors
+        # differently.
+
         err = failure.value
         log.err(err)
-        raise err
 
-    def _route_msg(self, encrypt_and_sign_result):
+        if self._bouncer:
+            self._bouncer.bounce_message(
+                err.message, to=self._from_address,
+                orig=origmsg)
+        else:
+            raise err
+
+    def _route_msg(self, encrypt_and_sign_result, raw):
         """
         Sends the msg using the ESMTPSenderFactory.
 
@@ -191,7 +210,8 @@ class OutgoingMail(object):
 
         # we construct a defer to pass to the ESMTPSenderFactory
         d = defer.Deferred()
-        d.addCallbacks(self.sendSuccess, self.sendError)
+        d.addCallback(self.sendSuccess)
+        d.addErrback(self.sendError, raw)
         # we don't pass an ssl context factory to the ESMTPSenderFactory
         # because ssl will be handled by reactor.connectSSL() below.
         factory = smtp.ESMTPSenderFactory(
