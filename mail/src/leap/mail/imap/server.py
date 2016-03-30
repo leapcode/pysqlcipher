@@ -691,4 +691,3 @@ class LEAPIMAPServer(imap4.IMAP4Server):
         result = imap4.IMAP4Server.authenticateLogin(self, user, passwd)
         emit_async(catalog.IMAP_CLIENT_LOGIN, str(user))
         return result
-
