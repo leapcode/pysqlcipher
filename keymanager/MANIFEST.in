@@ -2,3 +2,4 @@ include pkg/*
 include versioneer.py
 include LICENSE
 include CHANGELOG
+include src/leap/keymanager/_version.py
