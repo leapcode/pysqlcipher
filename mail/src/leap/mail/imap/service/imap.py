@@ -87,8 +87,10 @@ class LocalSoledadIMAPRealm(object):
 
 
 class IMAPTokenChecker(LocalSoledadTokenChecker):
-    """A credentials checker that will lookup a token for the IMAP service."""
-    service = 'imap'
+    """A credentials checker that will lookup a token for the IMAP service.
+    For now it will be using the same identifier than SMTPTokenChecker"""
+
+    service = 'mail_auth'
 
 
 class LocalSoledadIMAPServer(LEAPIMAPServer):

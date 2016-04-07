@@ -144,8 +144,10 @@ class LocalSMTPRealm(object):
 
 
 class SMTPTokenChecker(LocalSoledadTokenChecker):
-    """A credentials checker that will lookup a token for the SMTP service."""
-    service = 'smtp'
+    """A credentials checker that will lookup a token for the SMTP service.
+    For now it will be using the same identifier than IMAPTokenChecker"""
+
+    service = 'mail_auth'
 
     # TODO besides checking for token credential,
     # we could also verify the certificate here.
