@@ -680,7 +680,7 @@ class OpenPGPScheme(EncryptionScheme):
                 self._assert_gpg_result_ok(result)
                 defer.returnValue(result.data)
             except errors.GPGError as e:
-                logger.error('Failed to decrypt: %s.' % str(e))
+                logger.warning('Failed to encrypt: %s.' % str(e))
                 raise errors.EncryptError()
 
     @defer.inlineCallbacks
@@ -726,7 +726,7 @@ class OpenPGPScheme(EncryptionScheme):
 
                 defer.returnValue((result.data, sign_valid))
             except errors.GPGError as e:
-                logger.error('Failed to decrypt: %s.' % str(e))
+                logger.warning('Failed to decrypt: %s.' % str(e))
                 raise errors.DecryptError(str(e))
 
     def is_encrypted(self, data):
