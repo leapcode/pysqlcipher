@@ -921,6 +921,3 @@ def _get_domain(url):
     :rtype: str
     """
     return urlparse(url).hostname
-
-__version__ = get_versions()['version']
-del get_versions
