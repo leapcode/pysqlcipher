@@ -83,7 +83,8 @@ class Bouncer(object):
 
 
 def bouncerFactory(soledad):
-    acc = Account(soledad)
+    user_id = soledad.uuid
+    acc = Account(soledad, user_id)
     d = acc.callWhenReady(lambda _: acc.get_collection_by_mailbox(INBOX_NAME))
     d.addCallback(lambda inbox: Bouncer(inbox))
     return d

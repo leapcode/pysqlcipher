@@ -317,12 +317,12 @@ class AccountTestCase(SoledadTestMixin):
     """
     Tests for the Account class.
     """
-    def get_account(self):
+    def get_account(self, user_id):
         store = self._soledad
-        return Account(store)
+        return Account(store, user_id)
 
     def test_add_mailbox(self):
-        acc = self.get_account()
+        acc = self.get_account('some_user_id')
         d = acc.callWhenReady(lambda _: acc.add_mailbox("TestMailbox"))
         d.addCallback(lambda _: acc.list_all_mailbox_names())
         d.addCallback(self._test_add_mailbox_cb)
@@ -333,7 +333,7 @@ class AccountTestCase(SoledadTestMixin):
         self.assertItemsEqual(mboxes, expected)
 
     def test_delete_mailbox(self):
-        acc = self.get_account()
+        acc = self.get_account('some_user_id')
         d = acc.callWhenReady(lambda _: acc.delete_mailbox("Inbox"))
         d.addCallback(lambda _: acc.list_all_mailbox_names())
         d.addCallback(self._test_delete_mailbox_cb)
@@ -344,7 +344,7 @@ class AccountTestCase(SoledadTestMixin):
         self.assertItemsEqual(mboxes, expected)
 
     def test_rename_mailbox(self):
-        acc = self.get_account()
+        acc = self.get_account('some_user_id')
         d = acc.callWhenReady(lambda _: acc.add_mailbox("OriginalMailbox"))
         d.addCallback(lambda _: acc.rename_mailbox(
             "OriginalMailbox", "RenamedMailbox"))
@@ -357,7 +357,7 @@ class AccountTestCase(SoledadTestMixin):
         self.assertItemsEqual(mboxes, expected)
 
     def test_get_all_mailboxes(self):
-        acc = self.get_account()
+        acc = self.get_account('some_user_id')
         d = acc.callWhenReady(lambda _: acc.add_mailbox("OneMailbox"))
         d.addCallback(lambda _: acc.add_mailbox("TwoMailbox"))
         d.addCallback(lambda _: acc.add_mailbox("ThreeMailbox"))
@@ -374,7 +374,7 @@ class AccountTestCase(SoledadTestMixin):
         self.assertItemsEqual(names, expected)
 
     def test_get_collection_by_mailbox(self):
-        acc = self.get_account()
+        acc = self.get_account('some_user_id')
         d = acc.callWhenReady(lambda _: acc.get_collection_by_mailbox("INBOX"))
         d.addCallback(self._test_get_collection_by_mailbox_cb)
         return d

@@ -941,8 +941,9 @@ class Account(object):
     # tree we can let it be an instance attribute.
     _collection_mapping = defaultdict(weakref.WeakValueDictionary)
 
-    def __init__(self, store, ready_cb=None):
+    def __init__(self, store, user_id, ready_cb=None):
         self.store = store
+        self.user_id = user_id
         self.adaptor = self.adaptor_class()
 
         self.mbox_indexer = MailboxIndexer(self.store)
@@ -1077,7 +1078,7 @@ class Account(object):
         :rtype: deferred
         :return: a deferred that will fire with a MessageCollection
         """
-        collection = self._collection_mapping[self.store.userid].get(
+        collection = self._collection_mapping[self.user_id].get(
             name, None)
         if collection:
             return defer.succeed(collection)
@@ -1086,7 +1087,7 @@ class Account(object):
         def get_collection_for_mailbox(mbox_wrapper):
             collection = MessageCollection(
                 self.adaptor, self.store, self.mbox_indexer, mbox_wrapper)
-            self._collection_mapping[self.store.userid][name] = collection
+            self._collection_mapping[self.user_id][name] = collection
             return collection
 
         d = self.adaptor.get_or_create_mbox(self.store, name)

@@ -88,7 +88,7 @@ class IMAPAccount(object):
         # about user_id, only the client backend.
 
         self.user_id = user_id
-        self.account = Account(store, ready_cb=lambda: d.callback(self))
+        self.account = Account(store, user_id, ready_cb=lambda: d.callback(self))
 
     def end_session(self):
         """
