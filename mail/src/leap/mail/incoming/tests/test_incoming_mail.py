@@ -77,7 +77,7 @@ subject: independence of cyberspace
     def setUp(self):
         def getInbox(_):
             d = defer.Deferred()
-            theAccount = IMAPAccount(ADDRESS, self._soledad, d=d)
+            theAccount = IMAPAccount(self._soledad, ADDRESS, d=d)
             d.addCallback(
                 lambda _: theAccount.getMailbox(INBOX_NAME))
             return d

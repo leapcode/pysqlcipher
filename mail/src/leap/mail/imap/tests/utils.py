@@ -158,7 +158,7 @@ class IMAP4HelperMixin(SoledadTestMixin):
             self._soledad.sync = Mock()
 
             d = defer.Deferred()
-            self.acc = IMAPAccount(USERID, self._soledad, d=d)
+            self.acc = IMAPAccount(self._soledad, USERID, d=d)
             return d
 
         d = super(IMAP4HelperMixin, self).setUp()

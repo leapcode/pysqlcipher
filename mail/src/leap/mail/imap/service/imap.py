@@ -73,7 +73,7 @@ class LocalSoledadIMAPRealm(object):
         def gotSoledad(soledad):
             for iface in interfaces:
                 if iface is IAccount:
-                    avatar = IMAPAccount(avatarId, soledad)
+                    avatar = IMAPAccount(soledad, avatarId)
                     return (IAccount, avatar,
                             getattr(avatar, 'logout', lambda: None))
             raise NotImplementedError(self, interfaces)

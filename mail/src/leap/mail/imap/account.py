@@ -60,7 +60,7 @@ class IMAPAccount(object):
 
     selected = None
 
-    def __init__(self, user_id, store, d=defer.Deferred()):
+    def __init__(self, store, user_id, d=defer.Deferred()):
         """
         Keeps track of the mailboxes and subscriptions handled by this account.
 
@@ -69,12 +69,13 @@ class IMAPAccount(object):
         You can either pass a deferred to this constructor, or use
         `callWhenReady` method.
 
+        :param store: a Soledad instance.
+        :type store: Soledad
+
         :param user_id: The identifier of the user this account belongs to
                         (user id, in the form user@provider).
         :type user_id: str
 
-        :param store: a Soledad instance.
-        :type store: Soledad
 
         :param d: a deferred that will be fired with this IMAPAccount instance
                   when the account is ready to be used.
