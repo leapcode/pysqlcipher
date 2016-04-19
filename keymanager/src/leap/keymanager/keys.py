@@ -258,6 +258,20 @@ class EncryptionKey(object):
             KEY_TAGS_KEY: [KEYMANAGER_ACTIVE_TAG],
         })
 
+    def get_dict(self):
+        """
+        :return: a serializable dict representation of this key.
+        :rtype: dict
+        """
+        return {
+          KEY_ADDRESS_KEY: self.address,
+          KEY_UIDS_KEY: self.uids,
+          KEY_FINGERPRINT_KEY: self.fingerprint,
+          KEY_LENGTH_KEY: self.length,
+          KEY_EXPIRY_DATE_KEY: str(self.expiry_date),
+          KEY_DATA_KEY: self.key_data
+        }
+
     def __repr__(self):
         """
         Representation of this class
