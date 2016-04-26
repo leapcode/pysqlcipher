@@ -136,7 +136,7 @@ setup(
     maintainer_email='kali@leap.se',
     description='Mail Services provided by Bitmask, the LEAP Client.',
     long_description=open('README.rst').read() + '\n\n\n' +
-    open('CHANGELOG').read(),
+    open('CHANGELOG.rst').read(),
     classifiers=trove_classifiers,
     namespace_packages=["leap"],
     package_dir={'': 'src'},
