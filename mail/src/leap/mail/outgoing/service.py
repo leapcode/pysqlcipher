@@ -224,7 +224,7 @@ class OutgoingMail(object):
             heloFallback=True,
             requireAuthentication=False,
             requireTransportSecurity=True)
-        factory.domain = __version__
+        factory.domain = bytes('leap.mail-' + __version__)
         emit_async(catalog.SMTP_SEND_MESSAGE_START,
                    self._from_address, recipient.dest.addrstr)
         reactor.connectSSL(
