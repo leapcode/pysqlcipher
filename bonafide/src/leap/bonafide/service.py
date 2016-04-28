@@ -25,7 +25,6 @@ from leap.common.config import get_path_prefix
 from leap.common.service_hooks import HookableService
 from leap.bonafide._protocol import BonafideProtocol
 
-from twisted.application import service
 from twisted.internet import defer
 from twisted.python import log
 
@@ -33,7 +32,7 @@ from twisted.python import log
 _preffix = get_path_prefix()
 
 
-class BonafideService(service.Service, HookableService):
+class BonafideService(HookableService):
 
     def __init__(self, basedir=None):
         if not basedir:
