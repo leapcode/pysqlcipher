@@ -174,6 +174,22 @@ class Provider(object):
             self.ongoing_bootstrap[self._domain] = defer.succeed(
                 'already_initialized')
 
+    @property
+    def domain(self):
+        return self._domain
+
+    @property
+    def api_uri(self):
+        if not self._provider_config:
+            return 'https://api.%s:4430' % self._domain
+        return self._provider_config.api_uri
+
+    @property
+    def version(self):
+        if not self._provider_config:
+            return 1
+        return int(self._provider_config.api_version)
+
     def is_configured(self):
         provider_json = self._get_provider_json_path()
         # XXX check if all the services are there
@@ -472,9 +488,6 @@ class Provider(object):
     def _http_request(self, *args, **kw):
         # XXX pass if-modified-since header
         return httpRequest(self._agent, *args, **kw)
-
-    def _get_api_uri(self):
-        pass
 
 
 class Record(object):

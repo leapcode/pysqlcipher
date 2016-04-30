@@ -24,6 +24,12 @@ import re
 from urlparse import urlparse
 
 
+"""
+Maximum API version number supported by bonafide
+"""
+MAX_API_VERSION = 1
+
+
 class _MetaActionDispatcher(type):
 
     """
@@ -84,7 +90,10 @@ class BaseProvider(object):
             raise ValueError(
                 'ProviderApi needs to be passed a url with https scheme')
         self.netloc = parsed.netloc
+
         self.version = version
+        if version > MAX_API_VERSION:
+            self.version = MAX_API_VERSION
 
     def get_hostname(self):
         return urlparse(self._get_base_url()).hostname
