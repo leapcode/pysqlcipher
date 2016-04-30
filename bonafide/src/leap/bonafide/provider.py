@@ -160,19 +160,8 @@ class Discovery(BaseProvider):
         'configs': ('1/configs.json', 'GET'),
     }
 
-    api_uri = None
-    api_port = None
-
     def _get_base_url(self):
-        if self.api_uri:
-            base = self.api_uri
-        else:
-            base = self.netloc
-
-        uri = "https://{0}".format(base)
-        if self.api_port:
-            uri = uri + ':%s' % self.api_port
-        return uri
+        return "https://{0}".format(self.netloc)
 
     def get_base_uri(self):
         return self._get_base_url()

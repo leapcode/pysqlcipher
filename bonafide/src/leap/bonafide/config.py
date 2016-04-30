@@ -452,7 +452,7 @@ class Provider(object):
         api_uri = self._provider_config.api_uri
         if api_uri:
             parsed = urlparse(api_uri)
-            self._disco.api_uri = parsed.netloc
+            self._disco.netloc = parsed.netloc
 
     def _get_config_for_all_services(self, session):
         services_dict = self._load_provider_configs()
