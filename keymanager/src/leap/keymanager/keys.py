@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # keys.py
-# Copyright (C) 2013 LEAP
+# Copyright (C) 2013-2016 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -14,8 +14,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
-
-
 """
 Abstact key type and encryption scheme representations.
 """
@@ -116,9 +114,9 @@ def is_address(address):
     return bool(re.match('[\w.-]+@[\w.-]+', address))
 
 
-def build_key_from_dict(kClass, key, active=None):
+def build_key_from_dict(key, active=None):
     """
-    Build an C{kClass} key based on info in C{kdict}.
+    Build an OpenPGPKey key based on info in C{kdict}.
 
     :param key: Dictionary with key data.
     :type key: dict
@@ -148,7 +146,7 @@ def build_key_from_dict(kClass, key, active=None):
     expiry_date = _to_datetime(key[KEY_EXPIRY_DATE_KEY])
     refreshed_at = _to_datetime(key[KEY_REFRESHED_AT_KEY])
 
-    return kClass(
+    return OpenPGPKey(
         address=address,
         uids=key[KEY_UIDS_KEY],
         fingerprint=key[KEY_FINGERPRINT_KEY],

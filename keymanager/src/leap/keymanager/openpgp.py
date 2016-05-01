@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # openpgp.py
-# Copyright (C) 2013-2015 LEAP
+# Copyright (C) 2013-2016 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -232,8 +232,7 @@ class OpenPGPScheme(object):
                 'Wrong address in key %s. Expected %s, found %s.'
                 % (keydoc.content[KEY_FINGERPRINT_KEY], address,
                    keydoc.content[KEY_UIDS_KEY]))
-            key = build_key_from_dict(OpenPGPKey, keydoc.content,
-                                      activedoc.content)
+            key = build_key_from_dict(keydoc.content, activedoc.content)
             key._gpgbinary = self._gpgbinary
             return key
 
@@ -328,8 +327,7 @@ class OpenPGPScheme(object):
             active_content = None
             if activedoc:
                 active_content = activedoc.content
-            oldkey = build_key_from_dict(OpenPGPKey, keydoc.content,
-                                         active_content)
+            oldkey = build_key_from_dict(keydoc.content, active_content)
 
             key.merge(oldkey)
             keydoc.set_json(key.get_json())

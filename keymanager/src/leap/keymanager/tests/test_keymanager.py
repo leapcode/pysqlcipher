@@ -92,7 +92,7 @@ class KeyManagerUtilTestCase(unittest.TestCase):
             'encr_used': False,
             'sign_used': True,
         }
-        key = build_key_from_dict(OpenPGPKey, kdict, adict)
+        key = build_key_from_dict(kdict, adict)
         self.assertEqual(
             kdict['uids'], key.uids,
             'Wrong data in key.')

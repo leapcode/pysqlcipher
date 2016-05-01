@@ -81,7 +81,7 @@ from leap.keymanager.keys import (
     KEYMANAGER_KEY_TAG,
     TAGS_PRIVATE_INDEX,
 )
-from leap.keymanager.openpgp import OpenPGPKey, OpenPGPScheme
+from leap.keymanager.openpgp import OpenPGPScheme
 
 __version__ = get_versions()['version']
 del get_versions
@@ -434,7 +434,7 @@ class KeyManager(object):
         # TODO: should it be based on activedocs?
         def build_keys(docs):
             return map(
-                lambda doc: build_key_from_dict(OpenPGPKey, doc.content),
+                lambda doc: build_key_from_dict(doc.content),
                 docs)
 
         # XXX: there is no check that the soledad indexes are ready, as it
