@@ -26,7 +26,7 @@ from mock import Mock
 from twisted.internet.defer import succeed, inlineCallbacks
 
 from leap.keymanager.migrator import KeyDocumentsMigrator, KEY_ID_KEY
-from leap.keymanager.keys import (
+from leap.keymanager.documents import (
     TAGS_PRIVATE_INDEX,
     KEYMANAGER_ACTIVE_TAG,
     KEYMANAGER_KEY_TAG,

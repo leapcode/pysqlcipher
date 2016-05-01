@@ -36,10 +36,12 @@ from leap.keymanager import errors
 from leap.keymanager.wrapper import TempGPGWrapper
 from leap.keymanager.keys import (
     OpenPGPKey,
-    init_indexes,
     is_address,
     parse_address,
     build_key_from_dict,
+)
+from leap.keymanager.documents import (
+    init_indexes,
     TYPE_FINGERPRINT_PRIVATE_INDEX,
     TYPE_ADDRESS_PRIVATE_INDEX,
     KEY_UIDS_KEY,

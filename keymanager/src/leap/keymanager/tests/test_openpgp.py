@@ -29,7 +29,7 @@ from leap.keymanager import (
     KeyNotFound,
     openpgp,
 )
-from leap.keymanager.keys import (
+from leap.keymanager.documents import (
     TYPE_FINGERPRINT_PRIVATE_INDEX,
     TYPE_ADDRESS_PRIVATE_INDEX,
 )
@@ -57,7 +57,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
             self._soledad, gpgbinary=self.gpg_binary_path)
         yield self._assert_key_not_found(pgp, 'user@leap.se')
         key = yield pgp.gen_key('user@leap.se')
-        self.assertIsInstance(key, openpgp.OpenPGPKey)
+        self.assertIsInstance(key, OpenPGPKey)
         self.assertEqual(
             ['user@leap.se'], key.address, 'Wrong address bound to key.')
         self.assertEqual(
@@ -80,7 +80,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         yield self._assert_key_not_found(pgp, ADDRESS)
         yield pgp.put_raw_key(PUBLIC_KEY, ADDRESS)
         key = yield pgp.get_key(ADDRESS, private=False)
-        self.assertIsInstance(key, openpgp.OpenPGPKey)
+        self.assertIsInstance(key, OpenPGPKey)
         self.assertTrue(
             ADDRESS in key.address, 'Wrong address bound to key.')
         self.assertEqual(

@@ -76,11 +76,8 @@ from leap.keymanager.errors import (
 )
 from leap.keymanager.validation import ValidationLevels, can_upgrade
 
-from leap.keymanager.keys import (
-    build_key_from_dict,
-    KEYMANAGER_KEY_TAG,
-    TAGS_PRIVATE_INDEX,
-)
+from leap.keymanager.keys import build_key_from_dict
+from leap.keymanager.documents import KEYMANAGER_KEY_TAG, TAGS_PRIVATE_INDEX
 from leap.keymanager.openpgp import OpenPGPScheme
 
 __version__ = get_versions()['version']

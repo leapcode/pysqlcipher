@@ -26,21 +26,7 @@ Document migrator
 from collections import namedtuple
 from twisted.internet.defer import gatherResults, succeed
 
-from leap.keymanager.keys import (
-    TAGS_PRIVATE_INDEX,
-    KEYMANAGER_KEY_TAG,
-    KEYMANAGER_ACTIVE_TAG,
-
-    KEYMANAGER_DOC_VERSION,
-    KEY_ADDRESS_KEY,
-    KEY_UIDS_KEY,
-    KEY_VERSION_KEY,
-    KEY_FINGERPRINT_KEY,
-    KEY_VALIDATION_KEY,
-    KEY_LAST_AUDITED_AT_KEY,
-    KEY_ENCR_USED_KEY,
-    KEY_SIGN_USED_KEY,
-)
+from leap.keymanager import documents as doc
 from leap.keymanager.validation import ValidationLevels
 
 
@@ -70,12 +56,12 @@ class KeyDocumentsMigrator(object):
         private_value = '1' if private else '0'
 
         deferred_keys = self._soledad.get_from_index(
-            TAGS_PRIVATE_INDEX,
-            KEYMANAGER_KEY_TAG,
+            doc.TAGS_PRIVATE_INDEX,
+            doc.KEYMANAGER_KEY_TAG,
             private_value)
         deferred_active = self._soledad.get_from_index(
-            TAGS_PRIVATE_INDEX,
-            KEYMANAGER_ACTIVE_TAG,
+            doc.TAGS_PRIVATE_INDEX,
+            doc.KEYMANAGER_ACTIVE_TAG,
             private_value)
         return gatherResults([deferred_keys, deferred_active])
 
@@ -99,7 +85,7 @@ class KeyDocumentsMigrator(object):
 
     def _buildKeyDict(self, keys, actives):
         keydict = {
-            fp2id(key.content[KEY_FINGERPRINT_KEY]): KeyDocs(key, [])
+            fp2id(key.content[doc.KEY_FINGERPRINT_KEY]): KeyDocs(key, [])
             for key in keys}
 
         deferreds = []
@@ -119,7 +105,7 @@ class KeyDocumentsMigrator(object):
     def _filter_outdated(self, keydict):
         outdated = {}
         for key_id, docs in keydict.items():
-            if ((docs.key and KEY_VERSION_KEY not in docs.key.content) or
+            if ((docs.key and doc.KEY_VERSION_KEY not in docs.key.content) or
                     docs.active):
                 outdated[key_id] = docs
         return outdated
@@ -136,43 +122,43 @@ class KeyDocumentsMigrator(object):
         last_audited = 0
         encr_used = False
         sign_used = False
-        fingerprint = key.content[KEY_FINGERPRINT_KEY]
-        if len(actives) == 1 and KEY_VERSION_KEY not in key.content:
+        fingerprint = key.content[doc.KEY_FINGERPRINT_KEY]
+        if len(actives) == 1 and doc.KEY_VERSION_KEY not in key.content:
             # we can preserve the validation of the key if there is only one
             # active address for the key
-            validation = key.content[KEY_VALIDATION_KEY]
-            last_audited = key.content[KEY_LAST_AUDITED_AT_KEY]
-            encr_used = key.content[KEY_ENCR_USED_KEY]
-            sign_used = key.content[KEY_SIGN_USED_KEY]
+            validation = key.content[doc.KEY_VALIDATION_KEY]
+            last_audited = key.content[doc.KEY_LAST_AUDITED_AT_KEY]
+            encr_used = key.content[doc.KEY_ENCR_USED_KEY]
+            sign_used = key.content[doc.KEY_SIGN_USED_KEY]
 
         deferreds = []
         for active in actives:
-            if KEY_VERSION_KEY in active.content:
+            if doc.KEY_VERSION_KEY in active.content:
                 continue
 
-            active.content[KEY_VERSION_KEY] = KEYMANAGER_DOC_VERSION
-            active.content[KEY_FINGERPRINT_KEY] = fingerprint
-            active.content[KEY_VALIDATION_KEY] = validation
-            active.content[KEY_LAST_AUDITED_AT_KEY] = last_audited
-            active.content[KEY_ENCR_USED_KEY] = encr_used
-            active.content[KEY_SIGN_USED_KEY] = sign_used
+            active.content[doc.KEY_VERSION_KEY] = doc.KEYMANAGER_DOC_VERSION
+            active.content[doc.KEY_FINGERPRINT_KEY] = fingerprint
+            active.content[doc.KEY_VALIDATION_KEY] = validation
+            active.content[doc.KEY_LAST_AUDITED_AT_KEY] = last_audited
+            active.content[doc.KEY_ENCR_USED_KEY] = encr_used
+            active.content[doc.KEY_SIGN_USED_KEY] = sign_used
             del active.content[KEY_ID_KEY]
             d = self._soledad.put_doc(active)
             deferreds.append(d)
         return gatherResults(deferreds)
 
     def _migrate_key(self, key):
-        if not key or KEY_VERSION_KEY in key.content:
+        if not key or doc.KEY_VERSION_KEY in key.content:
             return succeed(None)
 
-        key.content[KEY_VERSION_KEY] = KEYMANAGER_DOC_VERSION
-        key.content[KEY_UIDS_KEY] = key.content[KEY_ADDRESS_KEY]
-        del key.content[KEY_ADDRESS_KEY]
+        key.content[doc.KEY_VERSION_KEY] = doc.KEYMANAGER_DOC_VERSION
+        key.content[doc.KEY_UIDS_KEY] = key.content[doc.KEY_ADDRESS_KEY]
+        del key.content[doc.KEY_ADDRESS_KEY]
         del key.content[KEY_ID_KEY]
-        del key.content[KEY_VALIDATION_KEY]
-        del key.content[KEY_LAST_AUDITED_AT_KEY]
-        del key.content[KEY_ENCR_USED_KEY]
-        del key.content[KEY_SIGN_USED_KEY]
+        del key.content[doc.KEY_VALIDATION_KEY]
+        del key.content[doc.KEY_LAST_AUDITED_AT_KEY]
+        del key.content[doc.KEY_ENCR_USED_KEY]
+        del key.content[doc.KEY_SIGN_USED_KEY]
         return self._soledad.put_doc(key)
 
 
