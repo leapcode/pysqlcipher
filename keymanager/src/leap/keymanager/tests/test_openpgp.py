@@ -33,7 +33,7 @@ from leap.keymanager.keys import (
     TYPE_FINGERPRINT_PRIVATE_INDEX,
     TYPE_ADDRESS_PRIVATE_INDEX,
 )
-from leap.keymanager.openpgp import OpenPGPKey
+from leap.keymanager.keys import OpenPGPKey
 from leap.keymanager.tests import (
     KeyManagerWithSoledadTestCase,
     ADDRESS,
