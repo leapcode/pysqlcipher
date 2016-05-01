@@ -22,6 +22,7 @@ import os
 import re
 import shutil
 import tempfile
+import traceback
 import io
 
 
@@ -36,13 +37,19 @@ from leap.common.check import leap_assert, leap_assert_type, leap_check
 from leap.keymanager import errors
 from leap.keymanager.keys import (
     EncryptionKey,
-    EncryptionScheme,
+    init_indexes,
     is_address,
     build_key_from_dict,
     TYPE_FINGERPRINT_PRIVATE_INDEX,
     TYPE_ADDRESS_PRIVATE_INDEX,
     KEY_UIDS_KEY,
     KEY_FINGERPRINT_KEY,
+    KEY_REFRESHED_AT_KEY,
+    KEY_LAST_AUDITED_AT_KEY,
+    KEY_SIGN_USED_KEY,
+    KEY_ENCR_USED_KEY,
+    KEY_ADDRESS_KEY,
+    KEY_TYPE_KEY,
     KEYMANAGER_ACTIVE_TYPE,
 )
 
@@ -256,7 +263,7 @@ class OpenPGPKey(EncryptionKey):
         self.refreshed_at = datetime.now()
 
 
-class OpenPGPScheme(EncryptionScheme):
+class OpenPGPScheme(object):
     """
     A wrapper for OpenPGP keys management and use (encryption, decyption,
     signing and verification).
@@ -275,9 +282,49 @@ class OpenPGPScheme(EncryptionScheme):
         :param gpgbinary: Name for GnuPG binary executable.
         :type gpgbinary: C{str}
         """
-        EncryptionScheme.__init__(self, soledad)
-        self._wait_indexes("get_key", "put_key")
+        self._soledad = soledad
         self._gpgbinary = gpgbinary
+        self.deferred_init = init_indexes(soledad)
+        self.deferred_init.addCallback(self._migrate_documents_schema)
+        self._wait_indexes("get_key", "put_key")
+
+    def _migrate_documents_schema(self, _):
+        from leap.keymanager.migrator import KeyDocumentsMigrator
+        migrator = KeyDocumentsMigrator(self._soledad)
+        return migrator.migrate()
+
+    def _wait_indexes(self, *methods):
+        """
+        Methods that need to wait for the indexes to be ready.
+
+        Heavily based on
+        http://blogs.fluidinfo.com/terry/2009/05/11/a-mixin-class-allowing-python-__init__-methods-to-work-with-twisted-deferreds/
+
+        :param methods: methods that need to wait for the indexes to be ready
+        :type methods: tuple(str)
+        """
+        self.waiting = []
+        self.stored = {}
+
+        def restore(_):
+            for method in self.stored:
+                setattr(self, method, self.stored[method])
+            for d in self.waiting:
+                d.callback(None)
+
+        def makeWrapper(method):
+            def wrapper(*args, **kw):
+                d = defer.Deferred()
+                d.addCallback(lambda _: self.stored[method](*args, **kw))
+                self.waiting.append(d)
+                return d
+            return wrapper
+
+        for method in methods:
+            self.stored[method] = getattr(self, method)
+            setattr(self, method, makeWrapper(method))
+
+        self.deferred_init.addCallback(restore)
 
     #
     # Keys management
@@ -848,6 +895,71 @@ class OpenPGPScheme(EncryptionScheme):
         elif len(doclist) > 1:
             return repair_func(doclist)
         return doclist[0]
+
+    def _repair_key_docs(self, doclist):
+        """
+        If there is more than one key for a key id try to self-repair it
+
+        :return: a Deferred that will be fired with the valid key doc once all
+                 the deletions are completed
+        :rtype: Deferred
+        """
+        def log_key_doc(doc):
+            logger.error("\t%s: %s" % (doc.content[KEY_UIDS_KEY],
+                                       doc.content[KEY_FINGERPRINT_KEY]))
+
+        def cmp_key(d1, d2):
+            return cmp(d1.content[KEY_REFRESHED_AT_KEY],
+                       d2.content[KEY_REFRESHED_AT_KEY])
+
+        return self._repair_docs(doclist, cmp_key, log_key_doc)
+
+    def _repair_active_docs(self, doclist):
+        """
+        If there is more than one active doc for an address try to self-repair
+        it
+
+        :return: a Deferred that will be fired with the valid active doc once
+                 all the deletions are completed
+        :rtype: Deferred
+        """
+        def log_active_doc(doc):
+            logger.error("\t%s: %s" % (doc.content[KEY_ADDRESS_KEY],
+                                       doc.content[KEY_FINGERPRINT_KEY]))
+
+        def cmp_active(d1, d2):
+            res = cmp(d1.content[KEY_LAST_AUDITED_AT_KEY],
+                      d2.content[KEY_LAST_AUDITED_AT_KEY])
+            if res != 0:
+                return res
+
+            used1 = (d1.content[KEY_SIGN_USED_KEY] +
+                     d1.content[KEY_ENCR_USED_KEY])
+            used2 = (d2.content[KEY_SIGN_USED_KEY] +
+                     d2.content[KEY_ENCR_USED_KEY])
+            return cmp(used1, used2)
+
+        return self._repair_docs(doclist, cmp_active, log_active_doc)
+
+    def _repair_docs(self, doclist, cmp_func, log_func):
+        logger.error("BUG ---------------------------------------------------")
+        logger.error("There is more than one doc of type %s:"
+                     % (doclist[0].content[KEY_TYPE_KEY],))
+
+        doclist.sort(cmp=cmp_func, reverse=True)
+        log_func(doclist[0])
+        deferreds = []
+        for doc in doclist[1:]:
+            log_func(doc)
+            d = self._soledad.delete_doc(doc)
+            deferreds.append(d)
+
+        logger.error("")
+        logger.error(traceback.extract_stack())
+        logger.error("BUG (please report above info) ------------------------")
+        d = defer.gatherResults(deferreds, consumeErrors=True)
+        d.addCallback(lambda _: doclist[0])
+        return d
 
 
 def process_key(key_data, gpgbinary, secret=False):

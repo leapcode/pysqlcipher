@@ -305,8 +305,8 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         pgp = openpgp.OpenPGPScheme(
             self._soledad, gpgbinary=self.gpg_binary_path)
         yield pgp.put_raw_key(PUBLIC_KEY, ADDRESS)
-        self.assertEqual(self.count, 2)
         self._soledad.delete_doc = delete_doc
+        self.assertEqual(self.count, 2)
 
     @inlineCallbacks
     def test_self_repair_five_active_docs(self):

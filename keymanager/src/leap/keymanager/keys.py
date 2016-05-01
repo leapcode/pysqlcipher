@@ -28,10 +28,9 @@ except ImportError:
 import logging
 import re
 import time
-import traceback
 
 
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta
 from datetime import datetime
 from leap.common.check import leap_assert
 from twisted.internet import defer
@@ -296,290 +295,32 @@ class EncryptionKey(object):
             "priv" if self.private else "publ")
 
 
-#
-# Encryption schemes
-#
-
-class EncryptionScheme(object):
+def init_indexes(soledad):
     """
-    Abstract class for Encryption Schemes.
-
-    A wrapper for a certain encryption schemes should know how to get and put
-    keys in local storage using Soledad, how to generate new keys and how to
-    find out about possibly encrypted content.
+    Initialize the database indexes.
     """
+    leap_assert(soledad is not None,
+                "Cannot init indexes with null soledad")
 
-    __metaclass__ = ABCMeta
-
-    def __init__(self, soledad):
-        """
-        Initialize this Encryption Scheme.
-
-        :param soledad: A Soledad instance for local storage of keys.
-        :type soledad: leap.soledad.Soledad
-        """
-        self._soledad = soledad
-        self.deferred_init = self._init_indexes()
-        self.deferred_init.addCallback(self._migrate_documents_schema)
-
-    def _init_indexes(self):
-        """
-        Initialize the database indexes.
-        """
-        leap_assert(self._soledad is not None,
-                    "Cannot init indexes with null soledad")
-
-        def init_idexes(indexes):
-            deferreds = []
-            db_indexes = dict(indexes)
-            # Loop through the indexes we expect to find.
-            for name, expression in INDEXES.items():
-                if name not in db_indexes:
-                    # The index does not yet exist.
-                    d = self._soledad.create_index(name, *expression)
-                    deferreds.append(d)
-                elif expression != db_indexes[name]:
-                    # The index exists but the definition is not what expected,
-                    # so we delete it and add the proper index expression.
-                    d = self._soledad.delete_index(name)
-                    d.addCallback(
-                        lambda _:
-                            self._soledad.create_index(name, *expression))
-                    deferreds.append(d)
-            return defer.gatherResults(deferreds, consumeErrors=True)
-
-        d = self._soledad.list_indexes()
-        d.addCallback(init_idexes)
-        return d
-
-    def _migrate_documents_schema(self, _):
-        from leap.keymanager.migrator import KeyDocumentsMigrator
-        migrator = KeyDocumentsMigrator(self._soledad)
-        return migrator.migrate()
-
-    def _wait_indexes(self, *methods):
-        """
-        Methods that need to wait for the indexes to be ready.
-
-        Heavily based on
-        http://blogs.fluidinfo.com/terry/2009/05/11/a-mixin-class-allowing-python-__init__-methods-to-work-with-twisted-deferreds/
-
-        :param methods: methods that need to wait for the indexes to be ready
-        :type methods: tuple(str)
-        """
-        self.waiting = []
-        self.stored = {}
-
-        def restore(_):
-            for method in self.stored:
-                setattr(self, method, self.stored[method])
-            for d in self.waiting:
-                d.callback(None)
-
-        def makeWrapper(method):
-            def wrapper(*args, **kw):
-                d = defer.Deferred()
-                d.addCallback(lambda _: self.stored[method](*args, **kw))
-                self.waiting.append(d)
-                return d
-            return wrapper
-
-        for method in methods:
-            self.stored[method] = getattr(self, method)
-            setattr(self, method, makeWrapper(method))
-
-        self.deferred_init.addCallback(restore)
-
-    @abstractmethod
-    def get_key(self, address, private=False):
-        """
-        Get key from local storage.
-
-        :param address: The address bound to the key.
-        :type address: str
-        :param private: Look for a private key instead of a public one?
-        :type private: bool
-
-        :return: A Deferred which fires with the EncryptionKey bound to
-                 address, or which fails with KeyNotFound if the key was not
-                 found on local storage.
-        :rtype: Deferred
-        """
-        pass
-
-    @abstractmethod
-    def put_key(self, key):
-        """
-        Put a key in local storage.
-
-        :param key: The key to be stored.
-        :type key: EncryptionKey
-
-        :return: A Deferred which fires when the key is in the storage.
-        :rtype: Deferred
-        """
-        pass
-
-    @abstractmethod
-    def gen_key(self, address):
-        """
-        Generate a new key.
-
-        :param address: The address bound to the key.
-        :type address: str
-
-        :return: The key bound to C{address}.
-        :rtype: EncryptionKey
-        """
-        pass
-
-    @abstractmethod
-    def delete_key(self, key):
-        """
-        Remove C{key} from storage.
-
-        :param key: The key to be removed.
-        :type key: EncryptionKey
-
-        :return: A Deferred which fires when the key is deleted, or which
-                 fails with KeyNotFound if the key was not found on local
-                 storage.
-        :rtype: Deferred
-        """
-        pass
-
-    @abstractmethod
-    def encrypt(self, data, pubkey, passphrase=None, sign=None):
-        """
-        Encrypt C{data} using public @{pubkey} and sign with C{sign} key.
-
-        :param data: The data to be encrypted.
-        :type data: str
-        :param pubkey: The key used to encrypt.
-        :type pubkey: EncryptionKey
-        :param sign: The key used for signing.
-        :type sign: EncryptionKey
-
-        :return: The encrypted data.
-        :rtype: str
-        """
-        pass
-
-    @abstractmethod
-    def decrypt(self, data, privkey, passphrase=None, verify=None):
-        """
-        Decrypt C{data} using private @{privkey} and verify with C{verify} key.
-
-        :param data: The data to be decrypted.
-        :type data: str
-        :param privkey: The key used to decrypt.
-        :type privkey: OpenPGPKey
-        :param verify: The key used to verify a signature.
-        :type verify: OpenPGPKey
-
-        :return: The decrypted data and if signature verifies
-        :rtype: (unicode, bool)
-
-        :raise DecryptError: Raised if failed decrypting for some reason.
-        """
-        pass
-
-    @abstractmethod
-    def sign(self, data, privkey):
-        """
-        Sign C{data} with C{privkey}.
-
-        :param data: The data to be signed.
-        :type data: str
-
-        :param privkey: The private key to be used to sign.
-        :type privkey: EncryptionKey
-
-        :return: The signed data.
-        :rtype: str
-        """
-        pass
-
-    @abstractmethod
-    def verify(self, data, pubkey, detached_sig=None):
-        """
-        Verify signed C{data} with C{pubkey}, eventually using
-        C{detached_sig}.
-
-        :param data: The data to be verified.
-        :type data: str
-        :param pubkey: The public key to be used on verification.
-        :type pubkey: EncryptionKey
-        :param detached_sig: A detached signature. If given, C{data} is
-                             verified against this sdetached signature.
-        :type detached_sig: str
-
-        :return: signature matches
-        :rtype: bool
-        """
-        pass
-
-    def _repair_key_docs(self, doclist):
-        """
-        If there is more than one key for a key id try to self-repair it
-
-        :return: a Deferred that will be fired with the valid key doc once all
-                 the deletions are completed
-        :rtype: Deferred
-        """
-        def log_key_doc(doc):
-            logger.error("\t%s: %s" % (doc.content[KEY_UIDS_KEY],
-                                       doc.content[KEY_FINGERPRINT_KEY]))
-
-        def cmp_key(d1, d2):
-            return cmp(d1.content[KEY_REFRESHED_AT_KEY],
-                       d2.content[KEY_REFRESHED_AT_KEY])
-
-        return self._repair_docs(doclist, cmp_key, log_key_doc)
-
-    def _repair_active_docs(self, doclist):
-        """
-        If there is more than one active doc for an address try to self-repair
-        it
-
-        :return: a Deferred that will be fired with the valid active doc once
-                 all the deletions are completed
-        :rtype: Deferred
-        """
-        def log_active_doc(doc):
-            logger.error("\t%s: %s" % (doc.content[KEY_ADDRESS_KEY],
-                                       doc.content[KEY_FINGERPRINT_KEY]))
-
-        def cmp_active(d1, d2):
-            res = cmp(d1.content[KEY_LAST_AUDITED_AT_KEY],
-                      d2.content[KEY_LAST_AUDITED_AT_KEY])
-            if res != 0:
-                return res
-
-            used1 = (d1.content[KEY_SIGN_USED_KEY] +
-                     d1.content[KEY_ENCR_USED_KEY])
-            used2 = (d2.content[KEY_SIGN_USED_KEY] +
-                     d2.content[KEY_ENCR_USED_KEY])
-            return cmp(used1, used2)
-
-        return self._repair_docs(doclist, cmp_active, log_active_doc)
-
-    def _repair_docs(self, doclist, cmp_func, log_func):
-        logger.error("BUG ---------------------------------------------------")
-        logger.error("There is more than one doc of type %s:"
-                     % (doclist[0].content[KEY_TYPE_KEY],))
-
-        doclist.sort(cmp=cmp_func, reverse=True)
-        log_func(doclist[0])
+    def create_idexes(indexes):
         deferreds = []
-        for doc in doclist[1:]:
-            log_func(doc)
-            d = self._soledad.delete_doc(doc)
-            deferreds.append(d)
+        db_indexes = dict(indexes)
+        # Loop through the indexes we expect to find.
+        for name, expression in INDEXES.items():
+            if name not in db_indexes:
+                # The index does not yet exist.
+                d = soledad.create_index(name, *expression)
+                deferreds.append(d)
+            elif expression != db_indexes[name]:
+                # The index exists but the definition is not what expected,
+                # so we delete it and add the proper index expression.
+                d = soledad.delete_index(name)
+                d.addCallback(
+                    lambda _:
+                        soledad.create_index(name, *expression))
+                deferreds.append(d)
+        return defer.gatherResults(deferreds, consumeErrors=True)
 
-        logger.error("")
-        logger.error(traceback.extract_stack())
-        logger.error("BUG (please report above info) ------------------------")
-        d = defer.gatherResults(deferreds, consumeErrors=True)
-        d.addCallback(lambda _: doclist[0])
-        return d
+    d = soledad.list_indexes()
+    d.addCallback(create_idexes)
+    return d
