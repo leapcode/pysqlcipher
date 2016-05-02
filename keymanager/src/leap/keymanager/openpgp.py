@@ -42,6 +42,7 @@ from leap.keymanager.keys import (
 )
 from leap.keymanager.documents import (
     init_indexes,
+    TAGS_PRIVATE_INDEX,
     TYPE_FINGERPRINT_PRIVATE_INDEX,
     TYPE_ADDRESS_PRIVATE_INDEX,
     KEY_UIDS_KEY,
@@ -53,6 +54,8 @@ from leap.keymanager.documents import (
     KEY_ADDRESS_KEY,
     KEY_TYPE_KEY,
     KEYMANAGER_ACTIVE_TYPE,
+    KEYMANAGER_KEY_TAG,
+    KEYMANAGER_ACTIVE_TAG,
 )
 
 
@@ -100,7 +103,7 @@ class OpenPGPScheme(object):
         self._gpgbinary = gpgbinary
         self.deferred_init = init_indexes(soledad)
         self.deferred_init.addCallback(self._migrate_documents_schema)
-        self._wait_indexes("get_key", "put_key")
+        self._wait_indexes("get_key", "put_key", "get_all_keys")
 
     def _migrate_documents_schema(self, _):
         from leap.keymanager.migrator import KeyDocumentsMigrator
@@ -241,6 +244,47 @@ class OpenPGPScheme(object):
         d = self._get_key_doc(address, private)
         d.addCallback(build_key)
         return d
+
+    @defer.inlineCallbacks
+    def get_all_keys(self, private=False):
+        """
+        Return all keys stored in local database.
+
+        :param private: Include private keys
+        :type private: bool
+
+        :return: A Deferred which fires with a list of all keys in local db.
+        :rtype: Deferred
+        """
+        HAS_ACTIVE = "has_active"
+
+        active_docs = yield self._soledad.get_from_index(
+            TAGS_PRIVATE_INDEX,
+            KEYMANAGER_ACTIVE_TAG,
+            '1' if private else '0')
+        key_docs = yield self._soledad.get_from_index(
+            TAGS_PRIVATE_INDEX,
+            KEYMANAGER_KEY_TAG,
+            '1' if private else '0')
+
+        keys = []
+        for active in active_docs:
+            fp = lambda doc: doc.content[KEY_FINGERPRINT_KEY]
+            fp_keys = filter(lambda k: fp(k) == fp(active), key_docs)
+
+            if len(fp_keys) == 0:
+                yield self._soledad.delete_doc(active)
+                continue
+            elif len(fp_keys) == 1:
+                key = fp_keys[0]
+            else:
+                key = yield self._repair_key_docs(fp_keys)
+            key.content[HAS_ACTIVE] = True
+            keys.append(build_key_from_dict(key.content, active.content))
+
+        unactive_keys = filter(lambda k: HAS_ACTIVE not in k.content, key_docs)
+        keys += map(lambda k: build_key_from_dict(k.content), unactive_keys)
+        defer.returnValue(keys)
 
     def parse_key(self, key_data, address=None):
         """

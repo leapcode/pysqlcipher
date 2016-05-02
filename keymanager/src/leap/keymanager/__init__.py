@@ -75,9 +75,6 @@ from leap.keymanager.errors import (
     InvalidSignature
 )
 from leap.keymanager.validation import ValidationLevels, can_upgrade
-
-from leap.keymanager.keys import build_key_from_dict
-from leap.keymanager.documents import KEYMANAGER_KEY_TAG, TAGS_PRIVATE_INDEX
 from leap.keymanager.openpgp import OpenPGPScheme
 
 __version__ = get_versions()['version']
@@ -428,23 +425,7 @@ class KeyManager(object):
         :return: A Deferred which fires with a list of all keys in local db.
         :rtype: Deferred
         """
-        # TODO: should it be based on activedocs?
-        def build_keys(docs):
-            return map(
-                lambda doc: build_key_from_dict(doc.content),
-                docs)
-
-        # XXX: there is no check that the soledad indexes are ready, as it
-        #      happens with EncryptionScheme.
-        #      The usecases right now are not problematic. This could be solve
-        #      adding a keytype to this funciont and moving the soledad request
-        #      to the EncryptionScheme.
-        d = self._soledad.get_from_index(
-            TAGS_PRIVATE_INDEX,
-            KEYMANAGER_KEY_TAG,
-            '1' if private else '0')
-        d.addCallback(build_keys)
-        return d
+        return self._openpgp.get_all_keys(private)
 
     def gen_key(self):
         """
