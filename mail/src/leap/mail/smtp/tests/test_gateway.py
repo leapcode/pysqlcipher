@@ -147,7 +147,7 @@ class TestSmtpGateway(TestCaseWithKeyManager):
         True.
         """
         # remove key from key manager
-        pubkey = yield self._km.get_key(ADDRESS, openpgp.OpenPGPKey)
+        pubkey = yield self._km.get_key(ADDRESS)
         pgp = openpgp.OpenPGPScheme(
             self._soledad, gpgbinary=self.GPG_BINARY_PATH)
         yield pgp.delete_key(pubkey)
@@ -178,7 +178,7 @@ class TestSmtpGateway(TestCaseWithKeyManager):
         False.
         """
         # remove key from key manager
-        pubkey = yield self._km.get_key(ADDRESS, openpgp.OpenPGPKey)
+        pubkey = yield self._km.get_key(ADDRESS)
         pgp = openpgp.OpenPGPScheme(
             self._soledad, gpgbinary=self.GPG_BINARY_PATH)
         yield pgp.delete_key(pubkey)

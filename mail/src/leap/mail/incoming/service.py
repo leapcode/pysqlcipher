@@ -40,7 +40,6 @@ from leap.common.events import emit_async, catalog
 from leap.common.check import leap_assert, leap_assert_type
 from leap.common.mail import get_email_charset
 from leap.keymanager import errors as keymanager_errors
-from leap.keymanager.openpgp import OpenPGPKey
 from leap.mail.adaptors import soledad_indexes as fields
 from leap.mail.generator import Generator
 from leap.mail.utils import json_loads, empty
@@ -340,9 +339,7 @@ class IncomingMail(Service):
                        "1" if success else "0")
             return self._process_decrypted_doc(doc, decrdata)
 
-        d = self._keymanager.decrypt(
-            doc.content[ENC_JSON_KEY],
-            self._userid, OpenPGPKey)
+        d = self._keymanager.decrypt(doc.content[ENC_JSON_KEY], self._userid)
         d.addErrback(self._errback)
         d.addCallback(process_decrypted)
         d.addCallback(lambda data: (doc, data))
@@ -525,8 +522,7 @@ class IncomingMail(Service):
             return (msg, signkey)
 
         d = self._keymanager.decrypt(
-            encdata, self._userid, OpenPGPKey,
-            verify=senderAddress)
+            encdata, self._userid, verify=senderAddress)
         d.addCallbacks(build_msg, self._decryption_error, errbackArgs=(msg,))
         return d
 
@@ -569,8 +565,7 @@ class IncomingMail(Service):
             end = data.find(PGP_END)
             pgp_message = data[begin:end + len(PGP_END)]
             d = self._keymanager.decrypt(
-                pgp_message, self._userid, OpenPGPKey,
-                verify=senderAddress)
+                pgp_message, self._userid, verify=senderAddress)
             d.addCallbacks(decrypted_data, self._decryption_error,
                            errbackArgs=(data,))
         else:
@@ -595,8 +590,7 @@ class IncomingMail(Service):
         msg = copy.deepcopy(origmsg)
         data = self._serialize_msg(msg.get_payload(0))
         detached_sig = self._extract_signature(msg)
-        d = self._keymanager.verify(data, sender_address, OpenPGPKey,
-                                    detached_sig)
+        d = self._keymanager.verify(data, sender_address, detached_sig)
 
         d.addCallback(lambda sign_key: (msg, sign_key))
         d.addErrback(lambda _: (msg, keymanager_errors.InvalidSignature()))
@@ -708,7 +702,7 @@ class IncomingMail(Service):
                     else:
                         return failure
 
-                d = self._keymanager.fetch_key(address, url, OpenPGPKey)
+                d = self._keymanager.fetch_key(address, url)
                 d.addCallback(
                     lambda _:
                     logger.info("Imported key from header %s" % (url,)))
@@ -749,9 +743,7 @@ class IncomingMail(Service):
         for attachment in attachments:
             if MIME_KEY == attachment.get_content_type():
                 d = self._keymanager.put_raw_key(
-                    attachment.get_payload(decode=True),
-                    OpenPGPKey,
-                    address=address)
+                    attachment.get_payload(decode=True), address=address)
                 d.addCallbacks(log_key_added, failed_put_key)
                 deferreds.append(d)
         d = defer.gatherResults(deferreds)

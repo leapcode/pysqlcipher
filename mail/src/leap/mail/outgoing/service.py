@@ -40,7 +40,6 @@ from twisted.python import log
 
 from leap.common.check import leap_assert_type, leap_assert
 from leap.common.events import emit_async, catalog
-from leap.keymanager.openpgp import OpenPGPKey
 from leap.keymanager.errors import KeyNotFound, KeyAddressMismatch
 from leap.mail import __version__
 from leap.mail import errors
@@ -328,8 +327,7 @@ class OutgoingMail(object):
             return get_key_and_attach(None)
 
         def get_key_and_attach(_):
-            d = self._keymanager.get_key(from_address, OpenPGPKey,
-                                         fetch_remote=False)
+            d = self._keymanager.get_key(from_address, fetch_remote=False)
             d.addCallback(attach_key)
             return d
 
@@ -348,8 +346,7 @@ class OutgoingMail(object):
             msg.attach(keymsg)
             return msg
 
-        d = self._keymanager.get_key(to_address, OpenPGPKey,
-                                     fetch_remote=False)
+        d = self._keymanager.get_key(to_address, fetch_remote=False)
         d.addCallbacks(attach_if_address_hasnt_encrypted, get_key_and_attach)
         d.addErrback(lambda _: origmsg)
         return d
@@ -375,7 +372,7 @@ class OutgoingMail(object):
             newmsg, origmsg = res
             d = self._keymanager.encrypt(
                 origmsg.as_string(unixfrom=False),
-                encrypt_address, OpenPGPKey, sign=sign_address)
+                encrypt_address, sign=sign_address)
             d.addCallback(lambda encstr: (newmsg, encstr))
             return d
 
@@ -440,7 +437,7 @@ class OutgoingMail(object):
             MultipartSigned('application/pgp-signature', 'pgp-sha512'),
             sign_address)
         ds = self._keymanager.sign(
-            msgtext, sign_address, OpenPGPKey, digest_algo='SHA512',
+            msgtext, sign_address, digest_algo='SHA512',
             clearsign=False, detach=True, binary=False)
         d = defer.gatherResults([dh, ds])
         d.addCallback(create_signed_message)
@@ -512,6 +509,6 @@ class OutgoingMail(object):
                 preference='signencrypt')
             return newmsg, origmsg
 
-        d = self._keymanager.get_key(sign_address, OpenPGPKey, private=True)
+        d = self._keymanager.get_key(sign_address, private=True)
         d.addCallback(add_openpgp_header)
         return d

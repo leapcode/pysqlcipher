@@ -26,7 +26,6 @@ from twisted.trial import unittest
 
 from leap.soledad.client import Soledad
 from leap.keymanager import KeyManager
-from leap.keymanager.openpgp import OpenPGPKey
 
 
 from leap.common.testing.basetest import BaseLeapTest
@@ -97,8 +96,8 @@ class TestCaseWithKeyManager(unittest.TestCase, BaseLeapTest):
         self._km._async_client.request = Mock(return_value="")
         self._km._async_client_pinned.request = Mock(return_value="")
 
-        d1 = self._km.put_raw_key(PRIVATE_KEY, OpenPGPKey, ADDRESS)
-        d2 = self._km.put_raw_key(PRIVATE_KEY_2, OpenPGPKey, ADDRESS_2)
+        d1 = self._km.put_raw_key(PRIVATE_KEY, ADDRESS)
+        d2 = self._km.put_raw_key(PRIVATE_KEY_2, ADDRESS_2)
         return gatherResults([d1, d2])
 
     def tearDown(self):

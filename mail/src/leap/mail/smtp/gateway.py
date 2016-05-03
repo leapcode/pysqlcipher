@@ -48,7 +48,6 @@ from leap.mail.utils import validate_address
 from leap.mail.rfc3156 import RFC3156CompliantGenerator
 from leap.mail.outgoing.service import outgoingFactory
 from leap.mail.smtp.bounces import bouncerFactory
-from leap.keymanager.openpgp import OpenPGPKey
 from leap.keymanager.errors import KeyNotFound
 
 # replace email generator with a RFC 3156 compliant one.
@@ -321,7 +320,7 @@ class SMTPDelivery(object):
         def encrypt_func(_):
             return lambda: EncryptedMessage(user, self._outgoing_mail)
 
-        d = self._km.get_key(address, OpenPGPKey)
+        d = self._km.get_key(address)
         d.addCallbacks(found, not_found)
         d.addCallback(encrypt_func)
         return d

@@ -31,7 +31,6 @@ from mock import Mock
 from twisted.internet import defer
 
 from leap.keymanager.errors import KeyAddressMismatch
-from leap.keymanager.openpgp import OpenPGPKey
 from leap.mail.adaptors import soledad_indexes as fields
 from leap.mail.constants import INBOX_NAME
 from leap.mail.imap.account import IMAPAccount
@@ -122,7 +121,7 @@ subject: independence of cyberspace
 
         def fetch_key_called(ret):
             self.fetcher._keymanager.fetch_key.assert_called_once_with(
-                ADDRESS_2, KEYURL, OpenPGPKey)
+                ADDRESS_2, KEYURL)
 
         d = self._create_incoming_email(message.as_string())
         d.addCallback(
@@ -167,7 +166,7 @@ subject: independence of cyberspace
 
         def put_raw_key_called(_):
             self.fetcher._keymanager.put_raw_key.assert_called_once_with(
-                KEY, OpenPGPKey, address=ADDRESS_2)
+                KEY, address=ADDRESS_2)
 
         d = self._do_fetch(message.as_string())
         d.addCallback(put_raw_key_called)
@@ -186,7 +185,7 @@ subject: independence of cyberspace
 
         def put_raw_key_called(_):
             self.fetcher._keymanager.put_raw_key.assert_called_once_with(
-                KEY, OpenPGPKey, address=ADDRESS_2)
+                KEY, address=ADDRESS_2)
 
         d = self._do_fetch(message.as_string())
         d.addCallback(put_raw_key_called)
@@ -210,7 +209,7 @@ subject: independence of cyberspace
 
         def put_raw_key_called(_):
             self.fetcher._keymanager.put_raw_key.assert_called_once_with(
-                KEY, OpenPGPKey, address=ADDRESS_2)
+                KEY, address=ADDRESS_2)
             self.assertFalse(self.fetcher._keymanager.fetch_key.called)
 
         d = self._do_fetch(message.as_string())
@@ -235,9 +234,9 @@ subject: independence of cyberspace
 
         def put_raw_key_called(_):
             self.fetcher._keymanager.put_raw_key.assert_called_once_with(
-                KEY, OpenPGPKey, address=ADDRESS_2)
+                KEY, address=ADDRESS_2)
             self.fetcher._keymanager.fetch_key.assert_called_once_with(
-                ADDRESS_2, KEYURL, OpenPGPKey)
+                ADDRESS_2, KEYURL)
 
         d = self._do_fetch(message.as_string())
         d.addCallback(put_raw_key_called)
@@ -286,9 +285,7 @@ subject: independence of cyberspace
             self.assertTrue(self.fetcher._add_decrypted_header.called,
                             "There was some errors with decryption")
 
-        d = self._km.encrypt(
-            self.EMAIL,
-            ADDRESS, OpenPGPKey, sign=ADDRESS_2)
+        d = self._km.encrypt(self.EMAIL, ADDRESS, sign=ADDRESS_2)
         d.addCallback(create_encrypted_message)
         d.addCallback(
             lambda message:
@@ -331,7 +328,7 @@ subject: independence of cyberspace
                 ENC_JSON_KEY: encr_data
             }
             return email
-        d = self._km.encrypt(data, ADDRESS, OpenPGPKey, fetch_remote=False)
+        d = self._km.encrypt(data, ADDRESS, fetch_remote=False)
         d.addCallback(set_email_content)
         return d
 

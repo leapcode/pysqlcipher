@@ -35,7 +35,7 @@ from leap.mail.tests import TestCaseWithKeyManager
 from leap.mail.tests import ADDRESS, ADDRESS_2, PUBLIC_KEY_2
 from leap.mail.smtp.tests.test_gateway import getSMTPFactory
 
-from leap.keymanager import openpgp, errors
+from leap.keymanager import errors
 
 
 BEGIN_PUBLIC_KEY = "-----BEGIN PGP PUBLIC KEY BLOCK-----"
@@ -101,7 +101,7 @@ class TestOutgoingMail(TestCaseWithKeyManager):
             self.outgoing_mail._maybe_encrypt_and_sign(self.raw, self.dest))
         d.addCallback(self._assert_encrypted)
         d.addCallback(lambda message: self._km.decrypt(
-            message.get_payload(1).get_payload(), ADDRESS, openpgp.OpenPGPKey))
+            message.get_payload(1).get_payload(), ADDRESS))
         d.addCallback(check_decryption)
         return d
 
@@ -125,8 +125,7 @@ class TestOutgoingMail(TestCaseWithKeyManager):
             self.outgoing_mail._maybe_encrypt_and_sign(self.raw, self.dest))
         d.addCallback(self._assert_encrypted)
         d.addCallback(lambda message: self._km.decrypt(
-            message.get_payload(1).get_payload(), ADDRESS, openpgp.OpenPGPKey,
-            verify=ADDRESS_2))
+            message.get_payload(1).get_payload(), ADDRESS, verify=ADDRESS_2))
         d.addCallback(check_decryption_and_verify)
         return d
 
@@ -181,7 +180,7 @@ class TestOutgoingMail(TestCaseWithKeyManager):
                                 'Signature could not be verified.')
 
             d = self._km.verify(
-                signed_text, ADDRESS_2, openpgp.OpenPGPKey,
+                signed_text, ADDRESS_2,
                 detached_sig=message.get_payload(1).get_payload())
             d.addCallback(assert_verify)
             return d
@@ -196,7 +195,7 @@ class TestOutgoingMail(TestCaseWithKeyManager):
         d.addCallback(self._assert_encrypted)
         d.addCallback(self._check_headers, self.lines[:4])
         d.addCallback(lambda message: self._km.decrypt(
-            message.get_payload(1).get_payload(), ADDRESS, openpgp.OpenPGPKey))
+            message.get_payload(1).get_payload(), ADDRESS))
         d.addCallback(lambda (decrypted, _):
                       self._check_key_attachment(Parser().parsestr(decrypted)))
         return d
@@ -238,7 +237,7 @@ class TestOutgoingMail(TestCaseWithKeyManager):
             key.sign_used = True
             return self._km.put_key(key)
 
-        d = self._km.get_key(address, openpgp.OpenPGPKey, fetch_remote=False)
+        d = self._km.get_key(address, fetch_remote=False)
         d.addCallback(set_sign)
         return d
 
