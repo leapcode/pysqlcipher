@@ -192,6 +192,11 @@ class EncryptionKey(object):
 
     __metaclass__ = ABCMeta
 
+    __slots__ = ('address', 'uids', 'fingerprint', 'key_data',
+                 'private', 'length', 'expiry_date', 'validation',
+                 'last_audited_at', 'refreshed_at',
+                 'encr_used', 'sign_used', '_index')
+
     def __init__(self, address=None, uids=[], fingerprint="",
                  key_data="", private=False, length=0, expiry_date=None,
                  validation=ValidationLevels.Weak_Chain, last_audited_at=None,
@@ -212,6 +217,7 @@ class EncryptionKey(object):
         self.refreshed_at = refreshed_at
         self.encr_used = encr_used
         self.sign_used = sign_used
+        self._index = len(self.__slots__)
 
     def get_json(self):
         """
@@ -257,6 +263,27 @@ class EncryptionKey(object):
             KEY_VERSION_KEY: KEYMANAGER_DOC_VERSION,
             KEY_TAGS_KEY: [KEYMANAGER_ACTIVE_TAG],
         })
+
+    def next(self):
+        if self._index == 0:
+            self._index = len(self.__slots__)
+            raise StopIteration
+
+        self._index -= 1
+        key = self.__slots__[self._index]
+
+        if key.startswith('_'):
+            return self.next()
+
+        value = getattr(self, key)
+        if key == "validation":
+            value = str(value)
+        elif key in ["expiry_date", "last_audited_at", "refreshed_at"]:
+            value = str(value)
+        return key, value
+
+    def __iter__(self):
+        return self
 
     def __repr__(self):
         """

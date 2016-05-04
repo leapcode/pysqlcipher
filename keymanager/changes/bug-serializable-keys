@@ -1,0 +1,1 @@
+- encryption keys can now be serialized to json using key.get_dict()
