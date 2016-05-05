@@ -1,3 +1,11 @@
+0.5.1 - 04 Apr, 2016
+++++++++++++++++++++
+
+Features
+~~~~~~~~
+-  Create an iterator on EncryptionKey to be able to represent it as a dict
+
+
 0.5.0 - 18 Apr, 2016
 ++++++++++++++++++++
 
@@ -8,6 +16,8 @@ Features
 - `#7500 <https://leap.se/code/issues/7500>`_: Use fingerprints instead of key ids.
 - `#7712 <https://leap.se/code/issues/7712>`_: Document the soledad docs fields.
 - Make EncryptionKey aware of the active address.
+- Defer encrypt, decrypt and gen_key operations from gnupg to external threads,
+  limited by cpu core amount.
 
 Bugfixes
 ~~~~~~~~
