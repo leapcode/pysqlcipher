@@ -371,11 +371,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         """
         km = self._key_manager()
 
-        class Response(object):
-            ok = True
-            content = ""
-
-        km._fetcher.get = Mock(return_value=Response())
+        km._async_client.request = Mock(return_value=defer.succeed(""))
         d = km.fetch_key(ADDRESS, "http://site.domain/key")
         return self.assertFailure(d, errors.KeyNotFound)
 

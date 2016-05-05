@@ -59,7 +59,6 @@ except (ImportError, AssertionError):
     sys.exit(1)
 
 import logging
-import requests
 
 from twisted.internet import defer
 from urlparse import urlparse
@@ -131,8 +130,6 @@ class KeyManager(object):
         self.api_version = api_version
         self.uid = uid
         self._openpgp = OpenPGPScheme(soledad, gpgbinary=gpgbinary)
-        # the following are used to perform https requests
-        self._fetcher = requests
         self._combined_ca_bundle = self._create_combined_bundle_file()
         self._async_client = HTTPClient(self._combined_ca_bundle)
         self._async_client_pinned = HTTPClient(self._ca_cert_path)

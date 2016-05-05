@@ -2,4 +2,3 @@
 # in keymanager.__init__
 gnupg>=1.4.0
 simplejson
-requests
