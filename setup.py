@@ -24,8 +24,6 @@
 import os
 import re
 import sys
-import urllib
-import zipfile
 
 from types import ListType, TupleType
 
@@ -39,6 +37,8 @@ import setuptools
 from setuptools import Extension, Command
 
 import cross_bdist_wininst
+
+from subprocess import call
 
 # If you need to change anything, it should be enough to change setup.cfg.
 
@@ -113,27 +113,10 @@ def get_amalgamation():
     """Download the SQLite amalgamation if it isn't there, already."""
     if os.path.exists(AMALGAMATION_ROOT):
         return
-    os.mkdir(AMALGAMATION_ROOT)
-    print "Downloading amalgation."
-
-    amalgamation_url = ("https://downloads.leap.se/libs/pysqlcipher/"
-                        "amalgamation-sqlcipher-2.1.0.zip")
-
-    # and download it
-    print 'amalgamation url: %s' % (amalgamation_url,)
-    urllib.urlretrieve(amalgamation_url, "tmp.zip")
-
-    zf = zipfile.ZipFile("tmp.zip")
-    files = ["sqlite3.c", "sqlite3.h"]
-    directory = zf.namelist()[0]
-
-    for fn in files:
-        print "Extracting", fn
-        outf = open(AMALGAMATION_ROOT + os.sep + fn, "wb")
-        outf.write(zf.read(directory + fn))
-        outf.close()
-    zf.close()
-    os.unlink("tmp.zip")
+    script_path = os.path.dirname(os.path.realpath(__file__))
+    get_amalgamation_script = os.path.join(
+        script_path, 'get_latest_amalgamation.sh')
+    call([get_amalgamation_script, AMALGAMATION_ROOT])
 
 
 class AmalgamationBuilder(build):
@@ -176,6 +159,10 @@ class MyBuildExt(build_ext):
                 ("SQLITE_HAS_CODEC", "1"))
             ext.define_macros.append(
                 ("SQLITE_TEMP_STORE", "2"))
+
+            # enable JSON1 extension
+            ext.define_macros.append(
+                ("SQLITE_ENABLE_JSON1", "1"))
 
             ext.sources.append(os.path.join(AMALGAMATION_ROOT, "sqlite3.c"))
             ext.include_dirs.append(AMALGAMATION_ROOT)
@@ -333,7 +320,7 @@ def get_setup_args():
         PYSQLITE_VERSION += "-%s" % PATCH_VERSION
 
     # Need to bump minor version, patch handled badly.
-    PYSQLCIPHER_VERSION = "2.6.4"
+    PYSQLCIPHER_VERSION = "2.6.5"
 
     setup_args = dict(
         name="pysqlcipher",
