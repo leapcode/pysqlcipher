@@ -91,6 +91,9 @@ def make_collection_listener(mailbox):
         def __init__(self, mbox):
             self.mbox = mbox
 
+            # See #8083, pixelated adaptor seems to be misusing this class.
+            self.mailbox_name = self.mbox.mbox_name
+
         def __hash__(self):
             return hash(self.mbox.mbox_name)
 
