@@ -1,4 +1,4 @@
-0.4.2 - xxx
+0.4.3 - xxx
 +++++++++++++++++++++++++++++++
 
 Please add lines to this file, they will be moved to the CHANGELOG.rst during
@@ -15,9 +15,6 @@ Features
 
 Bugfixes
 ~~~~~~~~
-- `#8083 <https://leap.se/code/issues/8083>`_: Allow pixelated UA not interfere with Thunderbird operation.
-- Cast local identity (version string) to bytes, avoid TLS transport raising exception.
-
 - `#1235 <https://leap.se/code/issues/1235>`_: Description for the fixed stuff corresponding with issue #1235.
 - Bugfix without related issue number.
 

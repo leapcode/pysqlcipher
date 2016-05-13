@@ -1,3 +1,12 @@
+0.4.2 - 13 May, 2016
++++++++++++++++++++++
+
+Bugfixes
+~~~~~~~~
+- `#8083 <https://leap.se/code/issues/8083>`_: Allow pixelated UA not interfere with Thunderbird operation.
+- Cast local identity (version string) to bytes, avoid TLS transport raising exception.
+
+
 0.4.1 - 18 Apr, 2016
 +++++++++++++++++++++
 
