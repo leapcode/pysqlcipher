@@ -524,10 +524,20 @@ class IncomingMail(Service):
             self._add_decrypted_header(msg)
             return (msg, signkey)
 
+        def verify_signature_after_decrypt_an_email(res):
+            decrdata, signkey = res
+            if not isinstance(signkey, OpenPGPKey):
+                try:
+                    return self._verify_signature_not_encrypted_msg(decrdata, senderAddress)
+                except:
+                    pass
+            return res
+
         d = self._keymanager.decrypt(
             encdata, self._userid, OpenPGPKey,
             verify=senderAddress)
         d.addCallbacks(build_msg, self._decryption_error, errbackArgs=(msg,))
+        d.addCallbacks(verify_signature_after_decrypt_an_email)
         return d
 
     def _maybe_decrypt_inline_encrypted_msg(self, origmsg, encoding,
