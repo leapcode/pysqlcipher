@@ -293,6 +293,8 @@ subject: independence of cyberspace
         d.addCallback(
             lambda message:
             self._do_fetch(message.as_string()))
+        d.addCallback(decryption_error_not_called)
+        d.addCallback(add_decrypted_header_called)
         return d
 
     def testListener(self):
