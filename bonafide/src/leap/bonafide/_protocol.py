@@ -127,7 +127,7 @@ class BonafideProtocol(object):
         d.addCallback(return_token_and_uuid, session)
         return d
 
-    def do_logout(self, full_id, password):
+    def do_logout(self, full_id):
         # XXX use the AVATAR here
         log.msg('LOGOUT for %s' % full_id)
         session = self._get_session(full_id)

@@ -89,7 +89,7 @@ class BonafideService(HookableService):
         d.addCallback(lambda response: {'signup': 'ok', 'user': response})
         return d
 
-    def do_logout(self, username, password):
+    def do_logout(self, username):
         if not username:
             username = self._active_user
 
@@ -97,7 +97,7 @@ class BonafideService(HookableService):
             self._active_user = None
             return passthrough
 
-        d = self._bonafide.do_logout(username, password)
+        d = self._bonafide.do_logout(username)
         d.addCallback(reset_active)
         d.addCallback(lambda response: {'logout': 'ok'})
         return d
