@@ -59,8 +59,9 @@ class BonafideService(HookableService):
 
         def notify_bonafide_auth(result):
             if not result:
-                log.msg("Authentication hook did not return anything")
-                return
+                msg = "Authentication hook did not return anything"
+                log.msg(msg)
+                raise RuntimeError(msg)
 
             token, uuid = result
             data = dict(username=username, token=token, uuid=uuid,
