@@ -136,7 +136,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
     @defer.inlineCallbacks
     def test_get_all_keys_in_db(self):
         km = self._key_manager()
-        yield km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
+        yield km._wrapper_map[OpenPGPKey].put_raw_key(PRIVATE_KEY, ADDRESS)
         # get public keys
         keys = yield km.get_all_keys(False)
         self.assertEqual(len(keys), 1, 'Wrong number of keys')
@@ -151,7 +151,20 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
     @defer.inlineCallbacks
     def test_get_public_key(self):
         km = self._key_manager()
-        yield km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
+        yield km._wrapper_map[OpenPGPKey].put_raw_key(PRIVATE_KEY, ADDRESS)
+        # get the key
+        key = yield km.get_key(ADDRESS, OpenPGPKey, private=False,
+                               fetch_remote=False)
+        self.assertTrue(key is not None)
+        self.assertTrue(ADDRESS in key.uids)
+        self.assertEqual(
+            key.fingerprint.lower(), KEY_FINGERPRINT.lower())
+        self.assertFalse(key.private)
+
+    @defer.inlineCallbacks
+    def test_get_public_key_with_binary_private_key(self):
+        km = self._key_manager()
+        yield km._wrapper_map[OpenPGPKey].put_raw_key(self.get_private_binary_key(), ADDRESS)
         # get the key
         key = yield km.get_key(ADDRESS, OpenPGPKey, private=False,
                                fetch_remote=False)
@@ -164,7 +177,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
     @defer.inlineCallbacks
     def test_get_private_key(self):
         km = self._key_manager()
-        yield km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
+        yield km._wrapper_map[OpenPGPKey].put_raw_key(PRIVATE_KEY, ADDRESS)
         # get the key
         key = yield km.get_key(ADDRESS, OpenPGPKey, private=True,
                                fetch_remote=False)
@@ -186,7 +199,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         """
         token = "mytoken"
         km = self._key_manager(token=token)
-        yield km._wrapper_map[OpenPGPKey].put_ascii_key(PUBLIC_KEY, ADDRESS)
+        yield km._wrapper_map[OpenPGPKey].put_raw_key(PUBLIC_KEY, ADDRESS)
         km._async_client_pinned.request = Mock(return_value=defer.succeed(''))
         # the following data will be used on the send
         km.ca_cert_path = 'capath'
@@ -279,6 +292,19 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         self.assertTrue(ADDRESS in key.uids)
 
     @defer.inlineCallbacks
+    def test_put_key_binary(self):
+        """
+        Test that putting binary key works
+        """
+        km = self._key_manager(url=NICKSERVER_URI)
+
+        yield km.put_raw_key(self.get_public_binary_key(), OpenPGPKey, ADDRESS)
+        key = yield km.get_key(ADDRESS, OpenPGPKey)
+
+        self.assertIsInstance(key, OpenPGPKey)
+        self.assertTrue(ADDRESS in key.uids)
+
+    @defer.inlineCallbacks
     def test_fetch_uri_ascii_key(self):
         """
         Test that fetch key downloads the ascii key and gets included in
@@ -287,6 +313,20 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         km = self._key_manager()
 
         km._async_client.request = Mock(return_value=defer.succeed(PUBLIC_KEY))
+
+        yield km.fetch_key(ADDRESS, "http://site.domain/key", OpenPGPKey)
+        key = yield km.get_key(ADDRESS, OpenPGPKey)
+        self.assertEqual(KEY_FINGERPRINT, key.fingerprint)
+
+    @defer.inlineCallbacks
+    def test_fetch_uri_binary_key(self):
+        """
+        Test that fetch key downloads the binary key and gets included in
+        the local storage
+        """
+        km = self._key_manager()
+
+        km._async_client.request = Mock(return_value=defer.succeed(self.get_public_binary_key()))
 
         yield km.fetch_key(ADDRESS, "http://site.domain/key", OpenPGPKey)
         key = yield km.get_key(ADDRESS, OpenPGPKey)
@@ -391,8 +431,8 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
     def test_decrypt_updates_sign_used_for_signer(self):
         # given
         km = self._key_manager()
-        yield km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
-        yield km._wrapper_map[OpenPGPKey].put_ascii_key(
+        yield km._wrapper_map[OpenPGPKey].put_raw_key(PRIVATE_KEY, ADDRESS)
+        yield km._wrapper_map[OpenPGPKey].put_raw_key(
             PRIVATE_KEY_2, ADDRESS_2)
         encdata = yield km.encrypt('data', ADDRESS, OpenPGPKey,
                                    sign=ADDRESS_2, fetch_remote=False)
@@ -409,9 +449,9 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
     def test_decrypt_does_not_update_sign_used_for_recipient(self):
         # given
         km = self._key_manager()
-        yield km._wrapper_map[OpenPGPKey].put_ascii_key(
+        yield km._wrapper_map[OpenPGPKey].put_raw_key(
             PRIVATE_KEY, ADDRESS)
-        yield km._wrapper_map[OpenPGPKey].put_ascii_key(
+        yield km._wrapper_map[OpenPGPKey].put_raw_key(
             PRIVATE_KEY_2, ADDRESS_2)
         encdata = yield km.encrypt('data', ADDRESS, OpenPGPKey,
                                    sign=ADDRESS_2, fetch_remote=False)
@@ -434,8 +474,8 @@ class KeyManagerCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_keymanager_openpgp_encrypt_decrypt(self):
         km = self._key_manager()
         # put raw private key
-        yield km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
-        yield km._wrapper_map[OpenPGPKey].put_ascii_key(
+        yield km._wrapper_map[OpenPGPKey].put_raw_key(PRIVATE_KEY, ADDRESS)
+        yield km._wrapper_map[OpenPGPKey].put_raw_key(
             PRIVATE_KEY_2, ADDRESS_2)
         # encrypt
         encdata = yield km.encrypt(self.RAW_DATA, ADDRESS, OpenPGPKey,
@@ -453,8 +493,8 @@ class KeyManagerCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_keymanager_openpgp_encrypt_decrypt_wrong_sign(self):
         km = self._key_manager()
         # put raw keys
-        yield km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
-        yield km._wrapper_map[OpenPGPKey].put_ascii_key(
+        yield km._wrapper_map[OpenPGPKey].put_raw_key(PRIVATE_KEY, ADDRESS)
+        yield km._wrapper_map[OpenPGPKey].put_raw_key(
             PRIVATE_KEY_2, ADDRESS_2)
         # encrypt
         encdata = yield km.encrypt(self.RAW_DATA, ADDRESS, OpenPGPKey,
@@ -470,7 +510,7 @@ class KeyManagerCryptoTestCase(KeyManagerWithSoledadTestCase):
     def test_keymanager_openpgp_sign_verify(self):
         km = self._key_manager()
         # put raw private keys
-        yield km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
+        yield km._wrapper_map[OpenPGPKey].put_raw_key(PRIVATE_KEY, ADDRESS)
         signdata = yield km.sign(self.RAW_DATA, ADDRESS, OpenPGPKey,
                                  detach=False)
         self.assertNotEqual(self.RAW_DATA, signdata)
@@ -483,7 +523,7 @@ class KeyManagerCryptoTestCase(KeyManagerWithSoledadTestCase):
 
     def test_keymanager_encrypt_key_not_found(self):
         km = self._key_manager()
-        d = km._wrapper_map[OpenPGPKey].put_ascii_key(PRIVATE_KEY, ADDRESS)
+        d = km._wrapper_map[OpenPGPKey].put_raw_key(PRIVATE_KEY, ADDRESS)
         d.addCallback(
             lambda _: km.encrypt(self.RAW_DATA, ADDRESS_2, OpenPGPKey,
                                  sign=ADDRESS, fetch_remote=False))

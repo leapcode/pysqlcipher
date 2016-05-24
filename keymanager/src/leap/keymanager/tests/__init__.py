@@ -29,6 +29,7 @@ from leap.soledad.client import Soledad
 from leap.keymanager import KeyManager
 from leap.keymanager.openpgp import OpenPGPKey
 
+PATH = os.path.dirname(os.path.realpath(__file__))
 
 ADDRESS = 'leap@leap.se'
 ADDRESS_2 = 'anotheruser@leap.se'
@@ -94,6 +95,14 @@ class KeyManagerWithSoledadTestCase(unittest.TestCase, BaseLeapTest):
             return os.path.realpath(gpg_path)
         else:
             return "/usr/bin/gpg"
+
+    def get_public_binary_key(self):
+        with open(PATH + '/fixtures/public_key.bin', 'r') as binary_public_key:
+            return binary_public_key.read()
+
+    def get_private_binary_key(self):
+        with open(PATH + '/fixtures/private_key.bin', 'r') as binary_private_key:
+            return binary_private_key.read()
 
 
 # key 24D18DDF: public key "Leap Test Key <leap@leap.se>"
