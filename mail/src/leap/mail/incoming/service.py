@@ -458,10 +458,8 @@ class IncomingMail(Service):
                     self.LEAP_SIGNATURE_HEADER,
                     self.LEAP_SIGNATURE_INVALID)
             else:
-                decrmsg.add_header(
-                    self.LEAP_SIGNATURE_HEADER,
-                    self.LEAP_SIGNATURE_VALID,
-                    pubkey=signkey.fingerprint)
+                self._add_verified_signature_header(decrmsg,
+                                                    signkey.fingerprint)
             return decrmsg.as_string()
 
         if msg.get_content_type() == MULTIPART_ENCRYPTED:
@@ -474,6 +472,12 @@ class IncomingMail(Service):
                 msg, encoding, senderAddress)
         d.addCallback(add_leap_header)
         return d
+
+    def _add_verified_signature_header(self, decrmsg, fingerprint):
+        decrmsg.add_header(
+            self.LEAP_SIGNATURE_HEADER,
+            self.LEAP_SIGNATURE_VALID,
+            pubkey=fingerprint)
 
     def _add_decrypted_header(self, msg):
         msg.add_header(self.LEAP_ENCRYPTION_HEADER,
