@@ -382,9 +382,9 @@ class OpenPGPScheme(EncryptionScheme):
         d.addCallback(build_key)
         return d
 
-    def parse_ascii_key(self, key_data, address=None):
+    def parse_key(self, key_data, address=None):
         """
-        Parses an ascii armored key (or key pair) data and returns
+        Parses a key (or key pair) data and returns
         the OpenPGPKey keys.
 
         :param key_data: the key data to be parsed.
@@ -400,9 +400,9 @@ class OpenPGPScheme(EncryptionScheme):
         # TODO: add more checks for correct key data.
         leap_assert(key_data is not None, 'Data does not represent a key.')
 
-        priv_info, privkey = process_ascii_key(
+        priv_info, privkey = process_key(
             key_data, self._gpgbinary, secret=True)
-        pub_info, pubkey = process_ascii_key(
+        pub_info, pubkey = process_key(
             key_data, self._gpgbinary, secret=False)
 
         if not pubkey:
@@ -421,9 +421,9 @@ class OpenPGPScheme(EncryptionScheme):
 
         return (openpgp_pubkey, openpgp_privkey)
 
-    def put_ascii_key(self, key_data, address):
+    def put_raw_key(self, key_data, address):
         """
-        Put key contained in ascii-armored C{key_data} in local storage.
+        Put key contained in C{key_data} in local storage.
 
         :param key_data: The key data to be stored.
         :type key_data: str or unicode
@@ -437,7 +437,7 @@ class OpenPGPScheme(EncryptionScheme):
 
         openpgp_privkey = None
         try:
-            openpgp_pubkey, openpgp_privkey = self.parse_ascii_key(
+            openpgp_pubkey, openpgp_privkey = self.parse_key(
                 key_data, address)
         except (errors.KeyAddressMismatch, errors.KeyFingerprintMismatch) as e:
             return defer.fail(e)
@@ -546,7 +546,7 @@ class OpenPGPScheme(EncryptionScheme):
         Build an OpenPGPKey for C{address} based on C{key} from
         local gpg storage.
 
-        ASCII armored GPG key data has to be queried independently in this
+        GPG key data has to be queried independently in this
         wrapper, so we receive it in C{key_data}.
 
         :param address: Active address for the key.
@@ -850,7 +850,7 @@ class OpenPGPScheme(EncryptionScheme):
         return doclist[0]
 
 
-def process_ascii_key(key_data, gpgbinary, secret=False):
+def process_key(key_data, gpgbinary, secret=False):
     with TempGPGWrapper(gpgbinary=gpgbinary) as gpg:
         try:
             gpg.import_keys(key_data)

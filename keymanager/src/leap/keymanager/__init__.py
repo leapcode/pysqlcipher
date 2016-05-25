@@ -831,7 +831,7 @@ class KeyManager(object):
         self._assert_supported_key_type(ktype)
         _keys = self._wrapper_map[ktype]
 
-        pubkey, privkey = _keys.parse_ascii_key(key, address)
+        pubkey, privkey = _keys.parse_key(key, address)
 
         if pubkey is None:
             return defer.fail(KeyNotFound(key))
@@ -875,7 +875,7 @@ class KeyManager(object):
         ascii_content = yield self._get_with_combined_ca_bundle(uri)
 
         # XXX parse binary keys
-        pubkey, _ = _keys.parse_ascii_key(ascii_content, address)
+        pubkey, _ = _keys.parse_key(ascii_content, address)
         if pubkey is None:
             raise KeyNotFound(uri)
 
