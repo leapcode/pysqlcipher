@@ -530,11 +530,9 @@ class IncomingMail(Service):
 
         def verify_signature_after_decrypt_an_email(res):
             decrdata, signkey = res
-            if not isinstance(signkey, OpenPGPKey):
-                try:
-                    return self._verify_signature_not_encrypted_msg(decrdata, senderAddress)
-                except:
-                    pass
+            if decrdata.get_content_type() == MULTIPART_SIGNED:
+                res = self._verify_signature_not_encrypted_msg(decrdata,
+                                                               senderAddress)
             return res
 
         d = self._keymanager.decrypt(
