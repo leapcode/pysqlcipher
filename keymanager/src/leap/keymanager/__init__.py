@@ -26,6 +26,8 @@ import json
 import urllib
 
 from leap.common import ca_bundle
+from twisted.web import client
+from twisted.web._responses import NOT_FOUND
 
 from ._version import get_versions
 
@@ -209,12 +211,12 @@ class KeyManager(object):
         """
         try:
             uri = self._nickserver_uri + '?address=' + address
-            content = yield self._async_client_pinned.request(str(uri), 'GET')
+            content = yield self._fetch_and_handle_404_from_nicknym(uri, address)
             json_content = json.loads(content)
+
+        except KeyNotFound:
+            raise
         except IOError as e:
-            # FIXME: 404 doesnt raise today, but it wont produce json anyway
-            # if e.response.status_code == 404:
-                # raise KeyNotFound(address)
             logger.warning("HTTP error retrieving key: %r" % (e,))
             logger.warning("%s" % (content,))
             raise KeyNotFound(e.message), None, sys.exc_info()[2]
@@ -231,6 +233,29 @@ class KeyManager(object):
         #     res.headers['content-type'].startswith('application/json'),
         #     'Content-type is not JSON.')
         defer.returnValue(json_content)
+
+    def _fetch_and_handle_404_from_nicknym(self, uri, address):
+        """
+        Send a GET request to C{uri} containing C{data}.
+
+        :param uri: The URI of the request.
+        :type uri: str
+        :param address: The email corresponding to the key.
+        :type address: str
+
+        :return: A deferred that will be fired with GET content as json (dict)
+        :rtype: Deferred
+        """
+        def check_404(response):
+            if response.code == NOT_FOUND:
+                message = '%s: %s key not found.' % (response.code, address)
+                logger.warning(message)
+                raise KeyNotFound(message), None, sys.exc_info()[2]
+            return response
+
+        d = self._async_client_pinned.request(str(uri), 'GET', callback=check_404)
+        d.addCallback(client.readBody)
+        return d
 
     @defer.inlineCallbacks
     def _get_with_combined_ca_bundle(self, uri, data=None):
