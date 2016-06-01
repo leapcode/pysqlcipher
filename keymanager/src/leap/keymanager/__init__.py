@@ -441,7 +441,7 @@ class KeyManager(object):
 
         emit_async(catalog.KEYMANAGER_STARTED_KEY_GENERATION, self._address)
 
-        d = self.openpg.gen_key(self._address)
+        d = self._openpgp.gen_key(self._address)
         d.addCallback(signal_finished)
         return d
 
