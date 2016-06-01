@@ -59,7 +59,7 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
         key = yield pgp.gen_key('user@leap.se')
         self.assertIsInstance(key, OpenPGPKey)
         self.assertEqual(
-            ['user@leap.se'], key.address, 'Wrong address bound to key.')
+            'user@leap.se', key.address, 'Wrong address bound to key.')
         self.assertEqual(
             4096, key.length, 'Wrong key length.')
 

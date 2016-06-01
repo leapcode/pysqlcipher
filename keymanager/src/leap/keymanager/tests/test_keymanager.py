@@ -134,6 +134,16 @@ class KeyManagerUtilTestCase(unittest.TestCase):
 class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
 
     @defer.inlineCallbacks
+    def _test_gen_key(self):
+        km = self._key_manager()
+        key = yield km.gen_key()
+        self.assertIsInstance(key, OpenPGPKey)
+        self.assertEqual(
+            'leap@leap.se', key.address, 'Wrong address bound to key.')
+        self.assertEqual(
+            4096, key.length, 'Wrong key length.')
+
+    @defer.inlineCallbacks
     def test_get_all_keys_in_db(self):
         km = self._key_manager()
         yield km._openpgp.put_raw_key(PRIVATE_KEY, ADDRESS)
