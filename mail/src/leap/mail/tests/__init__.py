@@ -91,8 +91,6 @@ class TestCaseWithKeyManager(unittest.TestCase, BaseLeapTest):
         nickserver_url = ''  # the url of the nickserver
         self._km = KeyManager(address, nickserver_url, self._soledad,
                               gpgbinary=self.GPG_BINARY_PATH)
-        self._km._fetcher.put = Mock()
-        self._km._fetcher.get = Mock(return_value=Response())
         self._km._async_client.request = Mock(return_value="")
         self._km._async_client_pinned.request = Mock(return_value="")
 
