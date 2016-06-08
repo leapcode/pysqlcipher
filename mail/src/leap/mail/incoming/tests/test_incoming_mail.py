@@ -22,6 +22,7 @@ Test case for leap.mail.incoming.service
 @license: GPLv3, see included LICENSE file
 """
 
+import os
 import json
 
 from email.mime.application import MIMEApplication
@@ -292,6 +293,23 @@ subject: independence of cyberspace
             self._do_fetch(message.as_string()))
         d.addCallback(decryption_error_not_called)
         d.addCallback(add_decrypted_header_called)
+        return d
+
+    def testValidateSignatureFromEncryptedEmailFromAppleMail(self):
+        CURRENT_PATH = os.path.split(os.path.abspath(__file__))[0]
+        enc_signed_file = os.path.join(CURRENT_PATH,
+                                       'rfc822.multi-encrypt-signed.message')
+        self.fetcher._add_verified_signature_header = Mock()
+
+        def add_verified_signature_header_called(_):
+            self.assertTrue(self.fetcher._add_verified_signature_header.called,
+                            "There was some errors verifying signature")
+
+        with open(enc_signed_file) as f:
+            enc_signed_raw = f.read()
+
+        d = self._do_fetch(enc_signed_raw)
+        d.addCallback(add_verified_signature_header_called)
         return d
 
     def testListener(self):

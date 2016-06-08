@@ -455,10 +455,8 @@ class IncomingMail(Service):
                     self.LEAP_SIGNATURE_HEADER,
                     self.LEAP_SIGNATURE_INVALID)
             else:
-                decrmsg.add_header(
-                    self.LEAP_SIGNATURE_HEADER,
-                    self.LEAP_SIGNATURE_VALID,
-                    pubkey=signkey.fingerprint)
+                self._add_verified_signature_header(decrmsg,
+                                                    signkey.fingerprint)
             return decrmsg.as_string()
 
         if msg.get_content_type() == MULTIPART_ENCRYPTED:
@@ -471,6 +469,12 @@ class IncomingMail(Service):
                 msg, encoding, senderAddress)
         d.addCallback(add_leap_header)
         return d
+
+    def _add_verified_signature_header(self, decrmsg, fingerprint):
+        decrmsg.add_header(
+            self.LEAP_SIGNATURE_HEADER,
+            self.LEAP_SIGNATURE_VALID,
+            pubkey=fingerprint)
 
     def _add_decrypted_header(self, msg):
         msg.add_header(self.LEAP_ENCRYPTION_HEADER,
@@ -521,9 +525,17 @@ class IncomingMail(Service):
             self._add_decrypted_header(msg)
             return (msg, signkey)
 
+        def verify_signature_after_decrypt_an_email(res):
+            decrdata, signkey = res
+            if decrdata.get_content_type() == MULTIPART_SIGNED:
+                res = self._verify_signature_not_encrypted_msg(decrdata,
+                                                               senderAddress)
+            return res
+
         d = self._keymanager.decrypt(
             encdata, self._userid, verify=senderAddress)
         d.addCallbacks(build_msg, self._decryption_error, errbackArgs=(msg,))
+        d.addCallbacks(verify_signature_after_decrypt_an_email)
         return d
 
     def _maybe_decrypt_inline_encrypted_msg(self, origmsg, encoding,
