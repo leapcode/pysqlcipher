@@ -259,7 +259,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
             check_404_callback = used_kwargs['callback']
             fake_response = Mock()
             fake_response.code = NOT_FOUND
-            with self.assertRaisesRegexp(KeyNotFound, '404: %s key not found.' % INVALID_MAIL_ADDRESS):
+            with self.assertRaisesRegexp(errors.KeyNotFound, '404: %s key not found.' % INVALID_MAIL_ADDRESS):
                 check_404_callback(fake_response)
 
         d.addCallback(check_key_not_found_is_raised_if_404)
@@ -270,7 +270,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         Test if key search requests throws KeyNotFound, the same error is raised.
         """
         km = self._key_manager(url=NICKSERVER_URI)
-        key_not_found_exception = KeyNotFound('some message')
+        key_not_found_exception = errors.KeyNotFound('some message')
         km._async_client_pinned.request = Mock(side_effect=key_not_found_exception)
 
         def assert_key_not_found_raised(error):
