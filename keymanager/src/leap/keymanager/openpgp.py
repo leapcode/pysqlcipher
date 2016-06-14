@@ -47,8 +47,8 @@ from leap.keymanager.documents import (
     TYPE_ADDRESS_PRIVATE_INDEX,
     KEY_UIDS_KEY,
     KEY_FINGERPRINT_KEY,
+    KEY_PRIVATE_KEY,
     KEY_REFRESHED_AT_KEY,
-    KEY_LAST_AUDITED_AT_KEY,
     KEY_SIGN_USED_KEY,
     KEY_ENCR_USED_KEY,
     KEY_ADDRESS_KEY,
@@ -268,8 +268,8 @@ class OpenPGPScheme(object):
             '1' if private else '0')
 
         keys = []
+        fp = lambda doc: doc.content[KEY_FINGERPRINT_KEY]
         for active in active_docs:
-            fp = lambda doc: doc.content[KEY_FINGERPRINT_KEY]
             fp_keys = filter(lambda k: fp(k) == fp(active), key_docs)
 
             if len(fp_keys) == 0:
@@ -770,6 +770,7 @@ class OpenPGPScheme(object):
 
         return self._repair_docs(doclist, cmp_key, log_key_doc)
 
+    @defer.inlineCallbacks
     def _repair_active_docs(self, doclist):
         """
         If there is more than one active doc for an address try to self-repair
@@ -779,23 +780,39 @@ class OpenPGPScheme(object):
                  all the deletions are completed
         :rtype: Deferred
         """
+        keys = {}
+        for doc in doclist:
+            fp = doc.content[KEY_FINGERPRINT_KEY]
+            private = doc.content[KEY_PRIVATE_KEY]
+            try:
+                key = yield self._get_key_doc_from_fingerprint(fp, private)
+                keys[fp] = key
+            except Exception:
+                pass
+
         def log_active_doc(doc):
             logger.error("\t%s: %s" % (doc.content[KEY_ADDRESS_KEY],
                                        doc.content[KEY_FINGERPRINT_KEY]))
 
         def cmp_active(d1, d2):
-            res = cmp(d1.content[KEY_LAST_AUDITED_AT_KEY],
-                      d2.content[KEY_LAST_AUDITED_AT_KEY])
-            if res != 0:
-                return res
-
+            # XXX: for private keys it will be nice to check which key is known
+            #      by the nicknym server and keep this one. But this needs a
+            #      refactor that might not be worth it.
             used1 = (d1.content[KEY_SIGN_USED_KEY] +
                      d1.content[KEY_ENCR_USED_KEY])
             used2 = (d2.content[KEY_SIGN_USED_KEY] +
                      d2.content[KEY_ENCR_USED_KEY])
-            return cmp(used1, used2)
+            res = cmp(used1, used2)
+            if res != 0:
+                return res
 
-        return self._repair_docs(doclist, cmp_active, log_active_doc)
+            key1 = keys[d1.content[KEY_FINGERPRINT_KEY]]
+            key2 = keys[d2.content[KEY_FINGERPRINT_KEY]]
+            return cmp(key1.content[KEY_REFRESHED_AT_KEY],
+                       key2.content[KEY_REFRESHED_AT_KEY])
+
+        doc = yield self._repair_docs(doclist, cmp_active, log_active_doc)
+        defer.returnValue(doc)
 
     def _repair_docs(self, doclist, cmp_func, log_func):
         logger.error("BUG ---------------------------------------------------")

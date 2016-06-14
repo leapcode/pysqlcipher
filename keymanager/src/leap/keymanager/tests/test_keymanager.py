@@ -237,7 +237,8 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
 
         def verify_the_call(_):
             used_kwargs = km._async_client_pinned.request.call_args[1]
-            km._async_client_pinned.request.assert_called_once_with(expected_url, 'GET', **used_kwargs)
+            km._async_client_pinned.request.assert_called_once_with(
+                expected_url, 'GET', **used_kwargs)
 
         d = self._fetch_key(km, ADDRESS_2, PUBLIC_KEY_2)
         d.addCallback(verify_the_call)
@@ -245,11 +246,13 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
 
     def test_key_not_found_is_raised_if_key_search_responds_404(self):
         """
-        Test if key search request comes back with a 404 response then KeyNotFound is raised, with corresponding error message.
+        Test if key search request comes back with a 404 response then
+        KeyNotFound is raised, with corresponding error message.
         """
         km = self._key_manager(url=NICKSERVER_URI)
         client.readBody = Mock(return_value=defer.succeed(None))
-        km._async_client_pinned.request = Mock(return_value=defer.succeed(None))
+        km._async_client_pinned.request = Mock(
+            return_value=defer.succeed(None))
         url = NICKSERVER_URI + '?address=' + INVALID_MAIL_ADDRESS
 
         d = km._fetch_and_handle_404_from_nicknym(url, INVALID_MAIL_ADDRESS)
@@ -259,7 +262,9 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
             check_404_callback = used_kwargs['callback']
             fake_response = Mock()
             fake_response.code = NOT_FOUND
-            with self.assertRaisesRegexp(errors.KeyNotFound, '404: %s key not found.' % INVALID_MAIL_ADDRESS):
+            with self.assertRaisesRegexp(
+                    errors.KeyNotFound,
+                    '404: %s key not found.' % INVALID_MAIL_ADDRESS):
                 check_404_callback(fake_response)
 
         d.addCallback(check_key_not_found_is_raised_if_404)
@@ -267,11 +272,13 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
 
     def test_non_existing_key_from_nicknym_is_relayed(self):
         """
-        Test if key search requests throws KeyNotFound, the same error is raised.
+        Test if key search requests throws KeyNotFound, the same error is
+        raised.
         """
         km = self._key_manager(url=NICKSERVER_URI)
         key_not_found_exception = errors.KeyNotFound('some message')
-        km._async_client_pinned.request = Mock(side_effect=key_not_found_exception)
+        km._async_client_pinned.request = Mock(
+            side_effect=key_not_found_exception)
 
         def assert_key_not_found_raised(error):
             self.assertEqual(error.value, key_not_found_exception)
@@ -312,7 +319,8 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         client.readBody = Mock(return_value=defer.succeed(data))
 
         # mock the fetcher so it returns the key for ADDRESS_2
-        km._async_client_pinned.request = Mock(return_value=defer.succeed(None))
+        km._async_client_pinned.request = Mock(
+            return_value=defer.succeed(None))
         km.ca_cert_path = 'cacertpath'
         # try to key get without fetching from server
         d_fail = km.get_key(address, fetch_remote=False)
