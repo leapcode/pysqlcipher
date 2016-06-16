@@ -376,7 +376,8 @@ class KeyManager(object):
 
         :return: A Deferred which fires with an EncryptionKey bound to address,
                  or which fails with KeyNotFound if no key was found neither
-                 locally or in keyserver.
+                 locally or in keyserver or fail with KeyVersionError if the
+                 key has a format not supported by this version of KeyManager
         :rtype: Deferred
 
         :raise UnsupportedKeyTypeError: if invalid key type
@@ -522,8 +523,9 @@ class KeyManager(object):
 
         :return: A Deferred which fires with the encrypted data as str, or
                  which fails with KeyNotFound if no keys were found neither
-                 locally or in keyserver or fails with EncryptError if failed
-                 encrypting for some reason.
+                 locally or in keyserver or fails with KeyVersionError if the
+                 key format is not supported or fails with EncryptError if
+                 failed encrypting for some reason.
         :rtype: Deferred
 
         :raise UnsupportedKeyTypeError: if invalid key type

@@ -28,6 +28,15 @@ class KeyNotFound(Exception):
     pass
 
 
+class KeyVersionError(KeyNotFound):
+    """
+    Raised when key was found in the keyring but the version is not supported.
+
+    It will usually mean that it was created by a newer version of KeyManager.
+    """
+    pass
+
+
 class KeyAlreadyExists(Exception):
     """
     Raised when attempted to create a key that already exists.

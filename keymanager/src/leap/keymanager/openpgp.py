@@ -53,6 +53,8 @@ from leap.keymanager.documents import (
     KEY_ENCR_USED_KEY,
     KEY_ADDRESS_KEY,
     KEY_TYPE_KEY,
+    KEY_VERSION_KEY,
+    KEYMANAGER_DOC_VERSION,
     KEYMANAGER_ACTIVE_TYPE,
     KEYMANAGER_KEY_TAG,
     KEYMANAGER_ACTIVE_TAG,
@@ -734,6 +736,7 @@ class OpenPGPScheme(object):
             address,
             '1' if private else '0')
         d.addCallback(self._repair_and_get_doc, self._repair_active_docs)
+        d.addCallback(self._check_version)
         return d
 
     def _get_key_doc_from_fingerprint(self, fingerprint, private):
@@ -743,6 +746,7 @@ class OpenPGPScheme(object):
             fingerprint,
             '1' if private else '0')
         d.addCallback(self._repair_and_get_doc, self._repair_key_docs)
+        d.addCallback(self._check_version)
         return d
 
     def _repair_and_get_doc(self, doclist, repair_func):
@@ -751,6 +755,13 @@ class OpenPGPScheme(object):
         elif len(doclist) > 1:
             return repair_func(doclist)
         return doclist[0]
+
+    def _check_version(self, doc):
+        if doc is not None:
+            version = doc.content[KEY_VERSION_KEY]
+            if version > KEYMANAGER_DOC_VERSION:
+                raise errors.KeyVersionError(str(version))
+        return doc
 
     def _repair_key_docs(self, doclist):
         """
