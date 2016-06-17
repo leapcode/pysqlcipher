@@ -24,10 +24,11 @@ from cryptography.hazmat.primitives import hashes
 
 from leap.mail.utils import first
 
+crypto_backend = MultiBackend([OpenSSLBackend()])
+
 
 def get_hash(s):
-    backend = MultiBackend([OpenSSLBackend()])
-    digest = hashes.Hash(hashes.SHA256(), backend)
+    digest = hashes.Hash(hashes.SHA256(), crypto_backend)
     digest.update(s)
     return digest.finalize().encode("hex").upper()
 
