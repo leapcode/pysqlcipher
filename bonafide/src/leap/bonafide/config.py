@@ -335,7 +335,7 @@ class Provider(object):
             if 'mx' in self._provider_config.services:
                 soledad_uri = '/1/config/soledad-service.json'
                 smtp_uri = '/1/config/smtp-service.json'
-                base = self._disco.api_uri
+                base = self._disco.netloc
 
                 fetch = self._fetch_provider_configs_unauthenticated
                 get_path = self._get_service_config_path
