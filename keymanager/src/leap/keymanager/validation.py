@@ -79,6 +79,9 @@ class _ValidationLevels(object):
         """
         return getattr(self, name)
 
+    def __iter__(self):
+        return iter(self._level_names)
+
 
 ValidationLevels = _ValidationLevels()
 
