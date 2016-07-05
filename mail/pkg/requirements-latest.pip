@@ -2,8 +2,8 @@
 
 https://launchpad.net/dirspec/stable-13-10/13.10/+download/dirspec-13.10.tar.gz
 https://launchpad.net/ubuntu/+archive/primary/+files/u1db_13.09.orig.tar.bz2
--e 'git+https://github.com/pixelated/leap_pycommon.git@develop#egg=leap.common'
--e 'git+https://github.com/pixelated/soledad.git@develop#egg=leap.soledad.common&subdirectory=common/'
--e 'git+https://github.com/pixelated/soledad.git@develop#egg=leap.soledad.client&subdirectory=client/'
--e 'git+https://github.com/pixelated/keymanager.git@develop#egg=leap.keymanager'
+-e 'git+https://github.com/leapcode/leap_pycommon.git@develop#egg=leap.common'
+-e 'git+https://github.com/leapcode/soledad.git@develop#egg=leap.soledad.common&subdirectory=common/'
+-e 'git+https://github.com/leapcode/soledad.git@develop#egg=leap.soledad.client&subdirectory=client/'
+-e 'git+https://github.com/leapcode/keymanager.git@develop#egg=leap.keymanager'
 -e .
