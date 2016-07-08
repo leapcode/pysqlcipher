@@ -410,10 +410,9 @@ class OpenPGPScheme(object):
             active_json = key.get_active_json()
             if activedoc:
                 activedoc.set_json(active_json)
-                d = self._soledad.put_doc(activedoc)
-            else:
-                d = self._soledad.create_doc_from_json(active_json)
-            return d
+                return self._soledad.put_doc(activedoc)
+            elif key.is_active():
+                return self._soledad.create_doc_from_json(active_json)
 
         def get_active_doc(keydoc):
             d = self._get_active_doc_from_address(key.address, key.private)
@@ -533,6 +532,14 @@ class OpenPGPScheme(object):
         d.addCallback(get_key_docs)
         d.addCallback(delete_key)
         return d
+
+    def unactivate_key(self, address):
+        """
+        Mark a active doc as deleted.
+        :param address: The unique address for the active content.
+        """
+        active_doc = self._get_active_doc_from_address(address, False)
+        yield self._soledad.delete_doc(active_doc)
 
     #
     # Data encryption, decryption, signing and verifying

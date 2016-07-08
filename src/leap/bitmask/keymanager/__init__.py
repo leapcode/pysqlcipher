@@ -22,8 +22,6 @@ import fileinput
 import os
 import sys
 import tempfile
-import json
-import urllib
 
 from urlparse import urlparse
 
@@ -34,9 +32,10 @@ from twisted.web._responses import NOT_FOUND
 
 from leap.common import ca_bundle
 from leap.common.check import leap_assert
+from leap.common.decorators import memoized_method
 from leap.common.http import HTTPClient
 from leap.common.events import emit_async, catalog
-from leap.common.decorators import memoized_method
+from leap.bitmask.keymanager.nicknym import Nicknym
 
 from leap.bitmask.keymanager.errors import (
     KeyNotFound,
@@ -105,11 +104,19 @@ class KeyManager(object):
             self._combined_ca_bundle = ''
 
         self._async_client = HTTPClient(self._combined_ca_bundle)
-        self._async_client_pinned = HTTPClient(self._ca_cert_path)
+        self._nicknym = Nicknym(self._nickserver_uri, self._ca_cert_path, self._token)
+        self.refresher = None
 
     #
     # utilities
     #
+
+    def start_refresher(self):
+        self.refresher = RandomRefreshPublicKey(self._openpgp, self)
+        self.refresher.start()
+
+    def stop_refresher(self):
+        self.refresher.stop()
 
     def _create_combined_bundle_file(self):
         leap_ca_bundle = ca_bundle.where()
@@ -303,14 +310,7 @@ class KeyManager(object):
         :raise UnsupportedKeyTypeError: if invalid key type
         """
         def send(pubkey):
-            data = {
-                self.PUBKEY_KEY: pubkey.key_data
-            }
-            uri = "%s/%s/users/%s.json" % (
-                self._api_uri,
-                self._api_version,
-                self._uid)
-            d = self._put(uri, data)
+            d = self._nicknym.put_key(self.uid, pubkey.key_data, self._api_uri, self._api_version)
             d.addCallback(lambda _:
                           emit_async(catalog.KEYMANAGER_DONE_UPLOADING_KEYS,
                                      self._address))
@@ -320,6 +320,36 @@ class KeyManager(object):
             self._address, private=False, fetch_remote=False)
         d.addCallback(send)
         return d
+
+    @defer.inlineCallbacks
+    def _fetch_keys_from_server_and_store_local(self, address):
+        """
+        Fetch keys  from nickserver and insert them in locale database.
+
+        :param address: The address bound to the keys.
+        :type address: str
+
+        :return: A Deferred which fires when the key is in the storage,
+                     or which fails with KeyNotFound if the key was not found on
+                     nickserver.
+            :rtype: Deferred
+
+        """
+        server_keys = yield self._nicknym.fetch_key_with_address(address)
+
+        # insert keys in local database
+        if self.OPENPGP_KEY in server_keys:
+            # nicknym server is authoritative for its own domain,
+            # for other domains the key might come from key servers.
+            validation_level = ValidationLevels.Weak_Chain
+            _, domain = _split_email(address)
+            if (domain == _get_domain(self._nickserver_uri)):
+                validation_level = ValidationLevels.Provider_Trust
+
+        yield self.put_raw_key(
+            server_keys['openpgp'],
+            address=address,
+            validation=validation_level)
 
     def get_key(self, address, private=False, fetch_remote=True):
         """
@@ -364,7 +394,7 @@ class KeyManager(object):
                 return failure
 
             emit_async(catalog.KEYMANAGER_LOOKING_FOR_KEY, address)
-            d = self._fetch_keys_from_server(address)
+            d = self._fetch_keys_from_server_and_store_local(address)
             d.addCallback(
                 lambda _: self._openpgp.get_key(address, private=False))
             d.addCallback(key_found)
@@ -396,7 +426,6 @@ class KeyManager(object):
 
         :raise UnsupportedKeyTypeError: if invalid key type
         """
-
         def signal_finished(key):
             emit_async(
                 catalog.KEYMANAGER_FINISHED_KEY_GENERATION, self._address)
@@ -636,7 +665,6 @@ class KeyManager(object):
 
         :raise UnsupportedKeyTypeError: if invalid key type
         """
-
         def verify(pubkey):
             signed = self._openpgp.verify(
                 data, pubkey, detached_sig=detached_sig)
@@ -686,7 +714,6 @@ class KeyManager(object):
 
         :raise UnsupportedKeyTypeError: if invalid key type
         """
-
         def old_key_not_found(failure):
             if failure.check(KeyNotFound):
                 return None

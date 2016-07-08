@@ -272,6 +272,28 @@ class OpenPGPKey(object):
             self.address,
             "priv" if self.private else "publ")
 
+    def is_active(self):
+        """
+        Indicates if a key is active.
+        :return: True if key is active.
+        :rtype: bool
+        """
+        return True if self.address is not None else False
+
+    def set_unactive(self):
+        """
+        Sets a key as unactive.
+        """
+        self.address = None
+
+    def is_expired(self):
+        """
+        Indicates if a key is expired.
+        :return: True if key expired.
+        :rtype: bool
+        """
+        return False if self.expiry_date is None else self.expiry_date < datetime.now()
+
 
 def parse_address(address):
     """
