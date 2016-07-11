@@ -42,7 +42,8 @@ from leap.keymanager.documents import (
     KEY_SIGN_USED_KEY,
 )
 from leap.keymanager.validation import ValidationLevels
-from leap.keymanager.tests import (
+
+from common import (
     KeyManagerWithSoledadTestCase,
     ADDRESS,
     ADDRESS_2,

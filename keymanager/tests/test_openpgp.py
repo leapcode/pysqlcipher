@@ -34,7 +34,8 @@ from leap.keymanager.documents import (
     TYPE_ADDRESS_PRIVATE_INDEX,
 )
 from leap.keymanager.keys import OpenPGPKey
-from leap.keymanager.tests import (
+
+from common import (
     KeyManagerWithSoledadTestCase,
     ADDRESS,
     ADDRESS_2,

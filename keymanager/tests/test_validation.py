@@ -22,10 +22,10 @@ import unittest
 from datetime import datetime
 from twisted.internet.defer import inlineCallbacks
 
-from leap.keymanager.errors import (
-    KeyNotValidUpgrade
-)
-from leap.keymanager.tests import (
+from leap.keymanager.errors import KeyNotValidUpgrade
+from leap.keymanager.validation import ValidationLevels
+
+from common import (
     KeyManagerWithSoledadTestCase,
     ADDRESS,
     PUBLIC_KEY,
@@ -34,7 +34,6 @@ from leap.keymanager.tests import (
     PRIVATE_KEY_2,
     KEY_FINGERPRINT
 )
-from leap.keymanager.validation import ValidationLevels
 
 
 class ValidationLevelsTestCase(KeyManagerWithSoledadTestCase):

@@ -100,7 +100,8 @@ class KeyManagerWithSoledadTestCase(unittest.TestCase, BaseLeapTest):
             return binary_public_key.read()
 
     def get_private_binary_key(self):
-        with open(PATH + '/fixtures/private_key.bin', 'r') as binary_private_key:
+        with open(
+                PATH + '/fixtures/private_key.bin', 'r') as binary_private_key:
             return binary_private_key.read()
 
 

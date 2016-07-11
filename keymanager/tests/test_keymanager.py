@@ -41,7 +41,8 @@ from leap.keymanager.keys import (
     build_key_from_dict,
 )
 from leap.keymanager.validation import ValidationLevels
-from leap.keymanager.tests import (
+
+from common import (
     KeyManagerWithSoledadTestCase,
     ADDRESS,
     ADDRESS_2,
