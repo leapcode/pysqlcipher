@@ -176,6 +176,8 @@ class MyBuildExt(build_ext):
                 ("SQLITE_HAS_CODEC", "1"))
             ext.define_macros.append(
                 ("SQLITE_TEMP_STORE", "2"))
+            ext.define_macros.append(
+                ("HAVE_USLEEP", "1"))
 
             ext.sources.append(os.path.join(AMALGAMATION_ROOT, "sqlite3.c"))
             ext.include_dirs.append(AMALGAMATION_ROOT)
@@ -330,7 +332,7 @@ def get_setup_args():
         PYSQLITE_VERSION += "-%s" % PATCH_VERSION
 
     # Need to bump minor version, patch handled badly.
-    PYSQLCIPHER_VERSION = "2.6.4"
+    PYSQLCIPHER_VERSION = "2.6.5"
 
     setup_args = dict(
         name="pysqlcipher",
