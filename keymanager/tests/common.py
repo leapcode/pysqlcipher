@@ -37,7 +37,6 @@ ADDRESS_2 = 'anotheruser@leap.se'
 class KeyManagerWithSoledadTestCase(unittest.TestCase, BaseLeapTest):
 
     def setUp(self):
-        self.setUpEnv()
         self.gpg_binary_path = self._find_gpg()
 
         self._soledad = Soledad(
@@ -57,7 +56,6 @@ class KeyManagerWithSoledadTestCase(unittest.TestCase, BaseLeapTest):
         # wait for the indexes to be ready for the tear down
         d = km._openpgp.deferred_init
         d.addCallback(lambda _: self.delete_all_keys(km))
-        d.addCallback(lambda _: self.tearDownEnv())
         d.addCallback(lambda _: self._soledad.close())
         return d
 
