@@ -11,7 +11,7 @@ code, using twisted.trial, for testing leap_mx.
 """
 
 import os
-import u1db
+from leap.soledad.common import l2db
 
 from leap.common.testing.basetest import BaseLeapTest
 
@@ -44,9 +44,9 @@ class BaseSoledadIMAPTest(BaseLeapTest):
         self.db2_file = os.path.join(
             self.tempdir, "db2.u1db")
 
-        self._db1 = u1db.open(self.db1_file, create=True,
+        self._db1 = l2db.open(self.db1_file, create=True,
                               document_factory=SoledadDocument)
-        self._db2 = u1db.open(self.db2_file, create=True,
+        self._db2 = l2db.open(self.db2_file, create=True,
                               document_factory=SoledadDocument)
 
         # soledad config info

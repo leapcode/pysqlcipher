@@ -25,7 +25,7 @@ from email import message_from_string
 from twisted.internet import defer
 from twisted.python import log
 from zope.interface import implements
-import u1db
+from leap.soledad.common import l2db
 
 from leap.common.check import leap_assert, leap_assert_type
 
@@ -76,7 +76,7 @@ class SoledadDocumentWrapper(models.DocumentWrapper):
     deletion.
     """
     # TODO we could also use a _dirty flag (in models)
-    # TODO add a get_count() method ??? -- that is extended over u1db.
+    # TODO add a get_count() method ??? -- that is extended over l2db.
 
     # We keep a dictionary with DeferredLocks, that will be
     # unique to every subclass of SoledadDocumentWrapper.
@@ -136,7 +136,7 @@ class SoledadDocumentWrapper(models.DocumentWrapper):
             # want to insert already exists. In this  case, putting it
             # and overwriting the document with that doc_id is the right thing
             # to do.
-            failure.trap(u1db.errors.RevisionConflict)
+            failure.trap(l2db.errors.RevisionConflict)
             self._doc_id = self.future_doc_id
             self._future_doc_id = None
             return self.update(store)
@@ -186,7 +186,7 @@ class SoledadDocumentWrapper(models.DocumentWrapper):
         # during a copy. Instead of catching and ignoring this
         # error, we should mark them in the copy so there is no attempt to
         # create/update them.
-        failure.trap(u1db.errors.RevisionConflict)
+        failure.trap(l2db.errors.RevisionConflict)
         logger.debug("Got conflict while putting %s" % doc_id)
 
     def delete(self, store):
@@ -724,7 +724,7 @@ class MailboxWrapper(SoledadDocumentWrapper):
 class SoledadIndexMixin(object):
     """
     This will need a class attribute `indexes`, that is a dictionary containing
-    the index definitions for the underlying u1db store underlying soledad.
+    the index definitions for the underlying l2db store underlying soledad.
 
     It needs to be in the following format:
     {'index-name': ['field1', 'field2']}
