@@ -19,10 +19,7 @@ Abstact key type and encryption scheme representations.
 """
 
 
-try:
-    import simplejson as json
-except ImportError:
-    import json  # noqa
+import json
 import logging
 import re
 import time
