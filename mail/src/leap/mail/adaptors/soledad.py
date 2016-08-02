@@ -1185,14 +1185,13 @@ def _split_into_parts(raw):
     # TODO populate Default FLAGS/TAGS (unseen?)
     # TODO seed propely the content_docs with defaults??
 
-    msg, parts, chash, multi = _parse_msg(raw)
+    msg, chash, multi = _parse_msg(raw)
     size = len(msg.as_string())
 
-    body_phash = walk.get_body_phash(msg)
-
-    parts_map = walk.walk_msg_tree(parts, body_phash=body_phash)
-    cdocs_list = list(walk.get_raw_docs(msg, parts))
+    parts_map = walk.get_tree(msg)
+    cdocs_list = list(walk.get_raw_docs(msg))
     cdocs_phashes = [c['phash'] for c in cdocs_list]
+    body_phash = walk.get_body_phash(msg)
 
     mdoc = _build_meta_doc(chash, cdocs_phashes)
     fdoc = _build_flags_doc(chash, size, multi)
@@ -1206,10 +1205,9 @@ def _split_into_parts(raw):
 
 def _parse_msg(raw):
     msg = message_from_string(raw)
-    parts = walk.get_parts(msg)
     chash = walk.get_hash(raw)
     multi = msg.is_multipart()
-    return msg, parts, chash, multi
+    return msg, chash, multi
 
 
 def _build_meta_doc(chash, cdocs_phashes):
@@ -1220,6 +1218,7 @@ def _build_meta_doc(chash, cdocs_phashes):
     _mdoc.fdoc = constants.FDOCID.format(mbox_uuid=INBOX_NAME, chash=chash)
     _mdoc.hdoc = constants.HDOCID.format(chash=chash)
     _mdoc.cdocs = [constants.CDOCID.format(phash=p) for p in cdocs_phashes]
+
     return _mdoc.serialize()
 
 
@@ -1259,8 +1258,8 @@ def _build_headers_doc(msg, chash, body_phash, parts_map):
     copy_attr(lower_headers, "date", _hdoc)
 
     hdoc = _hdoc.serialize()
-    # add parts map to header doc
-    # (body, multi, part_map)
+    # add some of the attr from the parts map to header doc
     for key in parts_map:
-        hdoc[key] = parts_map[key]
+        if key in ('body', 'multi', 'part_map'):
+            hdoc[key] = parts_map[key]
     return stringify_parts_map(hdoc)
