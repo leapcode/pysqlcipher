@@ -26,7 +26,7 @@ from leap.mail.adaptors import models
 from leap.mail.adaptors.soledad import SoledadDocumentWrapper
 from leap.mail.adaptors.soledad import SoledadIndexMixin
 from leap.mail.adaptors.soledad import SoledadMailAdaptor
-from leap.mail.tests.common import SoledadTestMixin
+from leap.mail.testing.common import SoledadTestMixin
 
 from email.MIMEMultipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -344,7 +344,7 @@ class SoledadMailAdaptorTestCase(SoledadTestMixin):
         self.assertEqual(
             'base64', msg.wrapper.cdocs[1].content_transfer_encoding)
         self.assertEqual(
-            'text/plain; charset="utf-8"', msg.wrapper.cdocs[1].content_type)
+            'text/plain', msg.wrapper.cdocs[1].content_type)
         self.assertEqual(
             'YSB1dGY4IG1lc3NhZ2U=\n', msg.wrapper.cdocs[1].raw)
 
