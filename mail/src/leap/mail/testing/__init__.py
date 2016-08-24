@@ -1,110 +1,141 @@
-# -*- encoding: utf-8 -*-
+# -*- coding: utf-8 -*-
+# __init__.py
+# Copyright (C) 2013 LEAP
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
 """
-leap/email/imap/tests/__init__.py
-----------------------------------
-Module intialization file for leap.mx.tests, a module containing unittesting
-code, using twisted.trial, for testing leap_mx.
-
-@authors: Kali Kaneko, <kali@leap.se>
-@license: GPLv3, see included LICENSE file
-@copyright: © 2013 Kali Kaneko, see COPYLEFT file
+Base classes and keys for leap.mail tests.
 """
-
 import os
-from leap.soledad.common import l2db
+import distutils.spawn
+from mock import Mock
+from twisted.internet.defer import gatherResults, succeed
+from twisted.trial import unittest
+from twisted.web.client import Response
+from twisted.internet import defer
+from twisted.python import log
+
+
+from leap.soledad.client import Soledad
+from leap.keymanager import KeyManager
+
 
 from leap.common.testing.basetest import BaseLeapTest
 
-from leap.soledad.client import Soledad
-from leap.soledad.common.document import SoledadDocument
+ADDRESS = 'leap@leap.se'
+ADDRESS_2 = 'anotheruser@leap.se'
 
-__all__ = ['test_imap']
+class defaultMockSharedDB(object):
+    get_doc = Mock(return_value=None)
+    put_doc = Mock(side_effect=None)
+    open = Mock(return_value=None)
+    close = Mock(return_value=None)
+    syncable = True
 
-
-def run():
-    """xxx fill me in"""
-    pass
-
-# -----------------------------------------------------------------------------
-# Some tests inherit from BaseSoledadTest in order to have a working Soledad
-# instance in each test.
-# -----------------------------------------------------------------------------
+    def __call__(self):
+        return self
 
 
-class BaseSoledadIMAPTest(BaseLeapTest):
-    """
-    Instantiates GPG and Soledad for usage in LeapIMAPServer tests.
-    Copied from BaseSoledadTest, but moving setup to classmethod
-    """
+class KeyManagerWithSoledadTestCase(unittest.TestCase, BaseLeapTest):
 
     def setUp(self):
-        # open test dbs
-        self.db1_file = os.path.join(
-            self.tempdir, "db1.u1db")
-        self.db2_file = os.path.join(
-            self.tempdir, "db2.u1db")
+        self.gpg_binary_path = self._find_gpg()
 
-        self._db1 = l2db.open(self.db1_file, create=True,
-                              document_factory=SoledadDocument)
-        self._db2 = l2db.open(self.db2_file, create=True,
-                              document_factory=SoledadDocument)
+        self._soledad = Soledad(
+            u"leap@leap.se",
+            u"123456",
+            secrets_path=self.tempdir + "/secret.gpg",
+            local_db_path=self.tempdir + "/soledad.u1db",
+            server_url='',
+            cert_file=None,
+            auth_token=None,
+            shared_db=defaultMockSharedDB(),
+            syncable=False)
 
-        # soledad config info
-        self.email = 'leap@leap.se'
-        secrets_path = os.path.join(
-            self.tempdir, Soledad.STORAGE_SECRETS_FILE_NAME)
-        local_db_path = os.path.join(
-            self.tempdir, Soledad.LOCAL_DATABASE_FILE_NAME)
-        server_url = ''
-        cert_file = None
+        self.km = self._key_manager()
 
-        self._soledad = self._soledad_instance(
-            self.email, '123',
-            secrets_path=secrets_path,
-            local_db_path=local_db_path,
-            server_url=server_url,
-            cert_file=cert_file)
+        class Response(object):
+            code = 200
+            phrase = ''
+            def deliverBody(self, x):
+                return ''
 
-    def _soledad_instance(self, uuid, passphrase, secrets_path, local_db_path,
-                          server_url, cert_file):
-        """
-        Return a Soledad instance for tests.
-        """
-        # mock key fetching and storing so Soledad doesn't fail when trying to
-        # reach the server.
-        Soledad._fetch_keys_from_shared_db = Mock(return_value=None)
-        Soledad._assert_keys_in_shared_db = Mock(return_value=None)
+        # XXX why the fuck is this needed? ------------------------
+        self.km._async_client_pinned.request = Mock(
+            return_value=defer.succeed(Response()))
+        #self.km._async_client.request = Mock(return_value='')
+        #self.km._async_client_pinned.request = Mock(
+            #return_value='')
+        # -------------------------------------------------------
 
-        # instantiate soledad
-        def _put_doc_side_effect(doc):
-            self._doc_put = doc
-
-        class MockSharedDB(object):
-
-            get_doc = Mock(return_value=None)
-            put_doc = Mock(side_effect=_put_doc_side_effect)
-
-            def __call__(self):
-                return self
-
-        Soledad._shared_db = MockSharedDB()
-
-        return Soledad(
-            uuid,
-            passphrase,
-            secrets_path=secrets_path,
-            local_db_path=local_db_path,
-            server_url=server_url,
-            cert_file=cert_file,
-        )
+        d1 = self.km.put_raw_key(PRIVATE_KEY, ADDRESS)
+        d2 = self.km.put_raw_key(PRIVATE_KEY_2, ADDRESS_2)
+        return gatherResults([d1, d2])
 
     def tearDown(self):
-        self._db1.close()
-        self._db2.close()
-        self._soledad.close()
+        km = self._key_manager()
+        # wait for the indexes to be ready for the tear down
+        d = km._openpgp.deferred_init
+        d.addCallback(lambda _: self.delete_all_keys(km))
+        d.addCallback(lambda _: self._soledad.close())
+        return d
+
+    def delete_all_keys(self, km):
+        def delete_keys(keys):
+            deferreds = []
+            for key in keys:
+                d = km._openpgp.delete_key(key)
+                deferreds.append(d)
+            return gatherResults(deferreds)
+
+        def check_deleted(_, private):
+            d = km.get_all_keys(private=private)
+            d.addCallback(lambda keys: self.assertEqual(keys, []))
+            return d
+
+        deferreds = []
+        for private in [True, False]:
+            d = km.get_all_keys(private=private)
+            d.addCallback(delete_keys)
+            d.addCallback(check_deleted, private)
+            deferreds.append(d)
+        return gatherResults(deferreds)
+
+    def _key_manager(self, user=ADDRESS, url='', token=None,
+                     ca_cert_path=None):
+        return KeyManager(user, url, self._soledad, token=token,
+                          gpgbinary=self.gpg_binary_path,
+                          ca_cert_path=ca_cert_path)
+
+    def _find_gpg(self):
+        gpg_path = distutils.spawn.find_executable('gpg')
+        if gpg_path is not None:
+            return os.path.realpath(gpg_path)
+        else:
+            return "/usr/bin/gpg"
+
+    def get_public_binary_key(self):
+        with open(PATH + '/fixtures/public_key.bin', 'r') as binary_public_key:
+            return binary_public_key.read()
+
+    def get_private_binary_key(self):
+        with open(
+                PATH + '/fixtures/private_key.bin', 'r') as binary_private_key:
+            return binary_private_key.read()
 
 
-# Key material for testing
+# key 24D18DDF: public key "Leap Test Key <leap@leap.se>"
 KEY_FINGERPRINT = "E36E738D69173C13D709E44F2F455E2824D18DDF"
 PUBLIC_KEY = """
 -----BEGIN PGP PUBLIC KEY BLOCK-----
@@ -264,5 +295,64 @@ GuDrwNKYj73C4MWyNnnUFyq8nDHJ/G1NpaF2hiof9RBL4PUU/f92JkceXPBXA8gL
 Mz2ig1OButwPPLFGQhWqxXAGrsS3Ny+BhTJfnfIbbkaLLphBpDZm1D9XKbAUvdd1
 RZXoH+FTg9UAW87eqU610npOkT6cRaBxaMK/mDtGNdc=
 =JTFu
+-----END PGP PRIVATE KEY BLOCK-----
+"""
+
+# key 7FEE575A: public key "anotheruser <anotheruser@leap.se>"
+PUBLIC_KEY_2 = """
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+Version: GnuPG v1.4.10 (GNU/Linux)
+
+mI0EUYwJXgEEAMbTKHuPJ5/Gk34l9Z06f+0WCXTDXdte1UBoDtZ1erAbudgC4MOR
+gquKqoj3Hhw0/ILqJ88GcOJmKK/bEoIAuKaqlzDF7UAYpOsPZZYmtRfPC2pTCnXq
+Z1vdeqLwTbUspqXflkCkFtfhGKMq5rH8GV5a3tXZkRWZhdNwhVXZagC3ABEBAAG0
+IWFub3RoZXJ1c2VyIDxhbm90aGVydXNlckBsZWFwLnNlPoi4BBMBAgAiBQJRjAle
+AhsDBgsJCAcDAgYVCAIJCgsEFgIDAQIeAQIXgAAKCRB/nfpof+5XWotuA/4tLN4E
+gUr7IfLy2HkHAxzw7A4rqfMN92DIM9mZrDGaWRrOn3aVF7VU1UG7MDkHfPvp/cFw
+ezoCw4s4IoHVc/pVlOkcHSyt4/Rfh248tYEJmFCJXGHpkK83VIKYJAithNccJ6Q4
+JE/o06Mtf4uh/cA1HUL4a4ceqUhtpLJULLeKo7iNBFGMCV4BBADsyQI7GR0wSAxz
+VayLjuPzgT+bjbFeymIhjuxKIEwnIKwYkovztW+4bbOcQs785k3Lp6RzvigTpQQt
+Z/hwcLOqZbZw8t/24+D+Pq9mMP2uUvCFFqLlVvA6D3vKSQ/XNN+YB919WQ04jh63
+yuRe94WenT1RJd6xU1aaUff4rKizuQARAQABiJ8EGAECAAkFAlGMCV4CGwwACgkQ
+f536aH/uV1rPZQQAqCzRysOlu8ez7PuiBD4SebgRqWlxa1TF1ujzfLmuPivROZ2X
+Kw5aQstxgGSjoB7tac49s0huh4X8XK+BtJBfU84JS8Jc2satlfwoyZ35LH6sDZck
+I+RS/3we6zpMfHs3vvp9xgca6ZupQxivGtxlJs294TpJorx+mFFqbV17AzQ=
+=Thdu
+-----END PGP PUBLIC KEY BLOCK-----
+"""
+
+PRIVATE_KEY_2 = """
+-----BEGIN PGP PRIVATE KEY BLOCK-----
+Version: GnuPG v1.4.10 (GNU/Linux)
+
+lQHYBFGMCV4BBADG0yh7jyefxpN+JfWdOn/tFgl0w13bXtVAaA7WdXqwG7nYAuDD
+kYKriqqI9x4cNPyC6ifPBnDiZiiv2xKCALimqpcwxe1AGKTrD2WWJrUXzwtqUwp1
+6mdb3Xqi8E21LKal35ZApBbX4RijKuax/BleWt7V2ZEVmYXTcIVV2WoAtwARAQAB
+AAP7BLuSAx7tOohnimEs74ks8l/L6dOcsFQZj2bqs4AoY3jFe7bV0tHr4llypb/8
+H3/DYvpf6DWnCjyUS1tTnXSW8JXtx01BUKaAufSmMNg9blKV6GGHlT/Whe9uVyks
+7XHk/+9mebVMNJ/kNlqq2k+uWqJohzC8WWLRK+d1tBeqDsECANZmzltPaqUsGV5X
+C3zszE3tUBgptV/mKnBtopKi+VH+t7K6fudGcG+bAcZDUoH/QVde52mIIjjIdLje
+uajJuHUCAO1mqh+vPoGv4eBLV7iBo3XrunyGXiys4a39eomhxTy3YktQanjjx+ty
+GltAGCs5PbWGO6/IRjjvd46wh53kzvsCAO0J97gsWhzLuFnkxFAJSPk7RRlyl7lI
+1XS/x0Og6j9XHCyY1OYkfBm0to3UlCfkgirzCYlTYObCofzdKFIPDmSqHbQhYW5v
+dGhlcnVzZXIgPGFub3RoZXJ1c2VyQGxlYXAuc2U+iLgEEwECACIFAlGMCV4CGwMG
+CwkIBwMCBhUIAgkKCwQWAgMBAh4BAheAAAoJEH+d+mh/7ldai24D/i0s3gSBSvsh
+8vLYeQcDHPDsDiup8w33YMgz2ZmsMZpZGs6fdpUXtVTVQbswOQd8++n9wXB7OgLD
+izgigdVz+lWU6RwdLK3j9F+Hbjy1gQmYUIlcYemQrzdUgpgkCK2E1xwnpDgkT+jT
+oy1/i6H9wDUdQvhrhx6pSG2kslQst4qjnQHYBFGMCV4BBADsyQI7GR0wSAxzVayL
+juPzgT+bjbFeymIhjuxKIEwnIKwYkovztW+4bbOcQs785k3Lp6RzvigTpQQtZ/hw
+cLOqZbZw8t/24+D+Pq9mMP2uUvCFFqLlVvA6D3vKSQ/XNN+YB919WQ04jh63yuRe
+94WenT1RJd6xU1aaUff4rKizuQARAQABAAP9EyElqJ3dq3EErXwwT4mMnbd1SrVC
+rUJrNWQZL59mm5oigS00uIyR0SvusOr+UzTtd8ysRuwHy5d/LAZsbjQStaOMBILx
+77TJveOel0a1QK0YSMF2ywZMCKvquvjli4hAtWYz/EwfuzQN3t23jc5ny+GqmqD2
+3FUxLJosFUfLNmECAO9KhVmJi+L9dswIs+2Dkjd1eiRQzNOEVffvYkGYZyKxNiXF
+UA5kvyZcB4iAN9sWCybE4WHZ9jd4myGB0MPDGxkCAP1RsXJbbuD6zS7BXe5gwunO
+2q4q7ptdSl/sJYQuTe1KNP5d/uGsvlcFfsYjpsopasPjFBIncc/2QThMKlhoEaEB
+/0mVAxpT6SrEvUbJ18z7kna24SgMPr3OnPMxPGfvNLJY/Xv/A17YfoqjmByCvsKE
+JCDjopXtmbcrZyoEZbEht9mko4ifBBgBAgAJBQJRjAleAhsMAAoJEH+d+mh/7lda
+z2UEAKgs0crDpbvHs+z7ogQ+Enm4EalpcWtUxdbo83y5rj4r0TmdlysOWkLLcYBk
+o6Ae7WnOPbNIboeF/FyvgbSQX1POCUvCXNrGrZX8KMmd+Sx+rA2XJCPkUv98Hus6
+THx7N776fcYHGumbqUMYrxrcZSbNveE6SaK8fphRam1dewM0
+=a5gs
 -----END PGP PRIVATE KEY BLOCK-----
 """

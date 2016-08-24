@@ -33,7 +33,7 @@ from zope.interface import implementer
 from leap.mail.adaptors import soledad as soledad_adaptor
 from leap.mail.imap.account import IMAPAccount
 from leap.mail.imap.server import LEAPIMAPServer
-from leap.mail.tests.common import SoledadTestMixin
+from leap.mail.testing.common import SoledadTestMixin
 
 TEST_USER = "testuser@leap.se"
 TEST_PASSWD = "1234"

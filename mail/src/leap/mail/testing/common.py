@@ -18,7 +18,6 @@
 Common utilities for testing Soledad.
 """
 import os
-import shutil
 import tempfile
 
 from twisted.internet import defer
@@ -70,8 +69,12 @@ class SoledadTestMixin(unittest.TestCase, BaseLeapTest):
 
     def setUp(self):
         self.results = []
-
         self.setUpEnv()
+
+        # pytest handles correctly the setupEnv for the class,
+        # but trial ignores it.
+        if not getattr(self, 'tempdir', None):
+            self.tempdir = tempfile.gettempdir()
 
         # Soledad: config info
         self.gnupg_home = "%s/gnupg" % self.tempdir
@@ -95,5 +98,12 @@ class SoledadTestMixin(unittest.TestCase, BaseLeapTest):
         except Exception:
             print "ERROR WHILE CLOSING SOLEDAD"
             # logging.exception(exc)
-        finally:
-            self.tearDownEnv()
+        self.tearDownEnv()
+
+    @classmethod
+    def setUpClass(self):
+        pass
+
+    @classmethod
+    def tearDownClass(self):
+        pass
