@@ -28,7 +28,7 @@ from email.Utils import formatdate
 from leap.mail.adaptors.soledad import SoledadMailAdaptor
 from leap.mail.mail import MessageCollection, Account, _unpack_headers
 from leap.mail.mailbox_indexer import MailboxIndexer
-from leap.mail.tests.common import SoledadTestMixin
+from leap.mail.testing.common import SoledadTestMixin
 
 HERE = os.path.split(os.path.abspath(__file__))[0]
 

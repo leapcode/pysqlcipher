@@ -21,7 +21,7 @@ import uuid
 from functools import partial
 
 from leap.mail import mailbox_indexer as mi
-from leap.mail.tests.common import SoledadTestMixin
+from leap.mail.testing.common import SoledadTestMixin
 
 hash_test0 = '590c9f8430c7435807df8ba9a476e3f1295d46ef210f6efae2043a4c085a569e'
 hash_test1 = '1b4f0e9851971998e732078544c96b36c3d01cedf7caa332359d6f1d83567014'
