@@ -119,7 +119,6 @@ class IncomingMail(Service):
         :param check_period: the period to fetch new mail, in seconds.
         :type check_period: int
         """
-
         leap_assert(keymanager, "need a keymanager to initialize")
         leap_assert_type(soledad, Soledad)
         leap_assert(check_period, "need a period to check incoming mail")
@@ -159,8 +158,7 @@ class IncomingMail(Service):
         """
         Fetch incoming mail, to be called periodically.
 
-        Calls a deferred that will execute the fetch callback
-        in a separate thread
+        Calls a deferred that will execute the fetch callback.
         """
         def _sync_errback(failure):
             log.err(failure)
@@ -295,6 +293,7 @@ class IncomingMail(Service):
             # This should be removed in 0.7
 
             has_errors = doc.content.get(fields.ERROR_DECRYPTING_KEY, None)
+
             if has_errors is None:
                 warnings.warn("JUST_MAIL_COMPAT_IDX will be deprecated!",
                               DeprecationWarning)
@@ -302,10 +301,12 @@ class IncomingMail(Service):
             if has_errors:
                 logger.debug("skipping msg with decrypting errors...")
             elif self._is_msg(keys):
+                # TODO this pipeline is a bit obscure!
                 d = self._decrypt_doc(doc)
                 d.addCallback(self._maybe_extract_keys)
                 d.addCallbacks(self._add_message_locally, self._errback)
                 deferreds.append(d)
+
         d = defer.gatherResults(deferreds, consumeErrors=True)
         d.addCallback(lambda _: doclist)
         return d
@@ -798,7 +799,8 @@ class IncomingMail(Service):
             return d
 
         d = self._inbox_collection.add_msg(
-            raw_data, (self.RECENT_FLAG,), date=insertion_date)
+            raw_data, (self.RECENT_FLAG,), date=insertion_date,
+            notify_just_mdoc=True)
         d.addCallbacks(msgSavedCallback, self._errback)
         return d
 

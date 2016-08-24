@@ -22,26 +22,33 @@ Test case for leap.mail.incoming.service
 @license: GPLv3, see included LICENSE file
 """
 
-import os
 import json
+import os
+import tempfile
+import uuid
 
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.parser import Parser
 from mock import Mock
+
 from twisted.internet import defer
+from twisted.python import log
 
 from leap.keymanager.errors import KeyAddressMismatch
 from leap.mail.adaptors import soledad_indexes as fields
+from leap.mail.adaptors.soledad import cleanup_deferred_locks
+from leap.mail.adaptors.soledad import SoledadMailAdaptor
 from leap.mail.constants import INBOX_NAME
+from leap.mail.mail import MessageCollection
+from leap.mail.mailbox_indexer import MailboxIndexer
+
 from leap.mail.imap.account import IMAPAccount
 from leap.mail.incoming.service import IncomingMail
 from leap.mail.rfc3156 import MultipartEncrypted, PGPEncrypted
-from leap.mail.tests import (
-    TestCaseWithKeyManager,
-    ADDRESS,
-    ADDRESS_2,
-)
+from leap.mail.testing import KeyManagerWithSoledadTestCase
+from leap.mail.testing import ADDRESS, ADDRESS_2
+from leap.mail import testing
 from leap.soledad.common.document import SoledadDocument
 from leap.soledad.common.crypto import (
     EncryptionSchemes,
@@ -52,7 +59,7 @@ from leap.soledad.common.crypto import (
 # TODO: add some tests for encrypted, unencrypted, signed and unsgined messages
 
 
-class IncomingMailTestCase(TestCaseWithKeyManager):
+class IncomingMailTestCase(KeyManagerWithSoledadTestCase):
     """
     Tests for the incoming mail parser
     """
@@ -75,38 +82,63 @@ subject: independence of cyberspace
     }
 
     def setUp(self):
-        def getInbox(_):
-            d = defer.Deferred()
-            theAccount = IMAPAccount(self._soledad, ADDRESS, d=d)
-            d.addCallback(
-                lambda _: theAccount.getMailbox(INBOX_NAME))
+        cleanup_deferred_locks()
+        try:
+            del self._soledad
+            del self.km
+        except AttributeError:
+            pass
+
+        # pytest handles correctly the setupEnv for the class,
+        # but trial ignores it.
+        if not getattr(self, 'tempdir', None):
+            self.tempdir = tempfile.mkdtemp()
+
+        def getCollection(_):
+            #d = defer.Deferred()
+            #acct = IMAPAccount(self._soledad, ADDRESS, d=d)
+            #d.addCallback(
+                #lambda _: acct.getMailbox(INBOX_NAME))
+            #return d
+            adaptor = SoledadMailAdaptor()
+            store = self._soledad
+            adaptor.store = store
+            mbox_indexer = MailboxIndexer(store)
+            mbox_name = "INBOX"
+            mbox_uuid = str(uuid.uuid4())
+
+            def get_collection_from_mbox_wrapper(wrapper):
+                wrapper.uuid = mbox_uuid
+                return MessageCollection(
+                    adaptor, store,
+                    mbox_indexer=mbox_indexer, mbox_wrapper=wrapper)
+
+            d = adaptor.initialize_store(store)
+            d.addCallback(lambda _: mbox_indexer.create_table(mbox_uuid))
+            d.addCallback(lambda _: adaptor.get_or_create_mbox(store, mbox_name))
+            d.addCallback(get_collection_from_mbox_wrapper)
             return d
 
-        def setUpFetcher(inbox):
-            # Soledad sync makes trial block forever. The sync it's mocked to
-            # fix this problem. _mock_soledad_get_from_index can be used from
-            # the tests to provide documents.
-            # TODO ---- see here http://www.pythoneye.com/83_20424875/
-            self._soledad.sync = Mock(return_value=defer.succeed(None))
-
+        def setUpFetcher(inbox_collection):
             self.fetcher = IncomingMail(
-                self._km,
+                self.km,
                 self._soledad,
-                inbox.collection,
+                inbox_collection,
                 ADDRESS)
 
             # The messages don't exist on soledad will fail on deletion
             self.fetcher._delete_incoming_message = Mock(
                 return_value=defer.succeed(None))
 
-        d = super(IncomingMailTestCase, self).setUp()
-        d.addCallback(getInbox)
+        d = KeyManagerWithSoledadTestCase.setUp(self)
+        d.addCallback(getCollection)
         d.addCallback(setUpFetcher)
+        d.addErrback(log.err)
         return d
 
     def tearDown(self):
-        del self.fetcher
-        return super(IncomingMailTestCase, self).tearDown()
+        d = KeyManagerWithSoledadTestCase.tearDown(self)
+        return d
 
     def testExtractOpenPGPHeader(self):
         """
@@ -190,6 +222,7 @@ subject: independence of cyberspace
 
         d = self._do_fetch(message.as_string())
         d.addCallback(put_raw_key_called)
+        d.addErrback(log.err)
         return d
 
     def testExtractAttachedKeyAndNotOpenPGPHeader(self):
@@ -257,6 +290,7 @@ subject: independence of cyberspace
         self.assertEquals(msg.headers['X-Leap-Encryption'], 'decrypted')
 
     def testDecryptEmail(self):
+
         self.fetcher._decryption_error = Mock()
         self.fetcher._add_decrypted_header = Mock()
 
@@ -280,13 +314,13 @@ subject: independence of cyberspace
 
         def decryption_error_not_called(_):
             self.assertFalse(self.fetcher._decryption_error.called,
-                             "There was some errors with decryption")
+                            "There was some errors with decryption")
 
         def add_decrypted_header_called(_):
             self.assertTrue(self.fetcher._add_decrypted_header.called,
                             "There was some errors with decryption")
 
-        d = self._km.encrypt(self.EMAIL, ADDRESS, sign=ADDRESS_2)
+        d = self.km.encrypt(self.EMAIL, ADDRESS, sign=ADDRESS_2)
         d.addCallback(create_encrypted_message)
         d.addCallback(
             lambda message:
@@ -296,9 +330,9 @@ subject: independence of cyberspace
         return d
 
     def testValidateSignatureFromEncryptedEmailFromAppleMail(self):
-        CURRENT_PATH = os.path.split(os.path.abspath(__file__))[0]
-        enc_signed_file = os.path.join(CURRENT_PATH,
-                                       'rfc822.multi-encrypt-signed.message')
+        testing_path = os.path.abspath(testing.__path__[0])
+        enc_signed_file = os.path.join(
+            testing_path, 'rfc822.multi-encrypt-signed.message')
         self.fetcher._add_verified_signature_header = Mock()
 
         def add_verified_signature_header_called(_):
@@ -348,7 +382,7 @@ subject: independence of cyberspace
                 ENC_JSON_KEY: encr_data
             }
             return email
-        d = self._km.encrypt(data, ADDRESS, fetch_remote=False)
+        d = self.km.encrypt(data, ADDRESS, fetch_remote=False)
         d.addCallback(set_email_content)
         return d
 
