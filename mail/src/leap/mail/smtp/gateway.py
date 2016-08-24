@@ -113,7 +113,6 @@ class LocalSMTPRealm(object):
         return d
 
     def lookupKeymanagerInstance(self, userid):
-        print 'getting KM INSTNACE>>>'
         try:
             keymanager = self._keymanager_sessions[userid]
         except:
