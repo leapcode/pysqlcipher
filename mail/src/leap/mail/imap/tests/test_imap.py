@@ -39,7 +39,7 @@ from twisted import cred
 
 from leap.mail.imap.mailbox import IMAPMailbox
 from leap.mail.imap.messages import CaseInsensitiveDict
-from leap.mail.imap.tests.utils import IMAP4HelperMixin
+from leap.mail.testing.imap import IMAP4HelperMixin
 
 
 TEST_USER = "testuser@leap.se"
