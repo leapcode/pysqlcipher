@@ -39,22 +39,21 @@ from leap.keymanager.errors import KeyAddressMismatch
 from leap.mail.adaptors import soledad_indexes as fields
 from leap.mail.adaptors.soledad import cleanup_deferred_locks
 from leap.mail.adaptors.soledad import SoledadMailAdaptor
-from leap.mail.constants import INBOX_NAME
 from leap.mail.mail import MessageCollection
 from leap.mail.mailbox_indexer import MailboxIndexer
 
-from leap.mail.imap.account import IMAPAccount
 from leap.mail.incoming.service import IncomingMail
 from leap.mail.rfc3156 import MultipartEncrypted, PGPEncrypted
 from leap.mail.testing import KeyManagerWithSoledadTestCase
 from leap.mail.testing import ADDRESS, ADDRESS_2
-from leap.mail import testing
 from leap.soledad.common.document import SoledadDocument
 from leap.soledad.common.crypto import (
     EncryptionSchemes,
     ENC_JSON_KEY,
     ENC_SCHEME_KEY,
 )
+
+HERE = os.path.split(os.path.abspath(__file__))[0]
 
 # TODO: add some tests for encrypted, unencrypted, signed and unsgined messages
 
@@ -330,9 +329,8 @@ subject: independence of cyberspace
         return d
 
     def testValidateSignatureFromEncryptedEmailFromAppleMail(self):
-        testing_path = os.path.abspath(testing.__path__[0])
         enc_signed_file = os.path.join(
-            testing_path, 'rfc822.multi-encrypt-signed.message')
+            HERE, 'rfc822.multi-encrypt-signed.message')
         self.fetcher._add_verified_signature_header = Mock()
 
         def add_verified_signature_header_called(_):
