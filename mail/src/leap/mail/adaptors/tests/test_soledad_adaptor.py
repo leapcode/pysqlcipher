@@ -278,7 +278,7 @@ class SoledadDocWrapperTestCase(SoledadTestMixin):
 HERE = os.path.split(os.path.abspath(__file__))[0]
 
 
-class TestMessageClass(object):
+class MessageClass(object):
     def __init__(self, wrapper, uid):
         self.wrapper = wrapper
         self.uid = uid
@@ -313,7 +313,7 @@ class SoledadMailAdaptorTestCase(SoledadTestMixin):
         with open(os.path.join(HERE, "rfc822.message")) as f:
             raw = f.read()
 
-        msg = adaptor.get_msg_from_string(TestMessageClass, raw)
+        msg = adaptor.get_msg_from_string(MessageClass, raw)
 
         chash = ("D27B2771C0DCCDCB468EE65A4540438"
                  "09DBD11588E87E951545BE0CBC321C308")
@@ -339,7 +339,7 @@ class SoledadMailAdaptorTestCase(SoledadTestMixin):
         msg.attach(MIMEText(u'a utf8 message', _charset='utf-8'))
         adaptor = self.get_adaptor()
 
-        msg = adaptor.get_msg_from_string(TestMessageClass, msg.as_string())
+        msg = adaptor.get_msg_from_string(MessageClass, msg.as_string())
 
         self.assertEqual(
             'base64', msg.wrapper.cdocs[1].content_transfer_encoding)
@@ -368,7 +368,7 @@ class SoledadMailAdaptorTestCase(SoledadTestMixin):
                 raw='This is a test message')}
 
         msg = adaptor.get_msg_from_docs(
-            TestMessageClass, mdoc, fdoc, hdoc, cdocs=cdocs)
+            MessageClass, mdoc, fdoc, hdoc, cdocs=cdocs)
         self.assertEqual(msg.wrapper.fdoc.flags,
                          ('\Seen', '\Nice'))
         self.assertEqual(msg.wrapper.fdoc.tags,
@@ -391,7 +391,7 @@ class SoledadMailAdaptorTestCase(SoledadTestMixin):
 
         with open(os.path.join(HERE, "rfc822.message")) as f:
             raw = f.read()
-        msg = adaptor.get_msg_from_string(TestMessageClass, raw)
+        msg = adaptor.get_msg_from_string(MessageClass, raw)
 
         def check_create_result(created):
             # that's one mdoc, one hdoc, one fdoc, one cdoc
@@ -436,7 +436,7 @@ class SoledadMailAdaptorTestCase(SoledadTestMixin):
             d.addCallback(assert_doc_has_flags)
             return d
 
-        msg = adaptor.get_msg_from_string(TestMessageClass, raw)
+        msg = adaptor.get_msg_from_string(MessageClass, raw)
         d = adaptor.create_msg(adaptor.store, msg)
         d.addCallback(lambda _: adaptor.store.get_all_docs())
         d.addCallback(partial(self.assert_num_docs, 4))
