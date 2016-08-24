@@ -508,7 +508,7 @@ class MessageWrapper(object):
                 log.msg("Empty raw field in cdoc %s" % doc_id)
             cdoc.set_future_doc_id(doc_id)
 
-    def create(self, store, notify_just_mdoc=False, pending_inserts_dict={}):
+    def create(self, store, notify_just_mdoc=False, pending_inserts_dict=None):
         """
         Create all the parts for this message in the store.
 
@@ -539,6 +539,9 @@ class MessageWrapper(object):
                  depending on the value of the notify_just_mdoc flag
         :rtype: defer.Deferred
         """
+        if pending_inserts_dict is None:
+            pending_inserts_dict = {}
+
         leap_assert(self.cdocs,
                     "Need non empty cdocs to create the "
                     "MessageWrapper documents")
