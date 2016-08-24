@@ -230,7 +230,7 @@ class OutgoingMail(object):
             self._host, self._port, factory,
             contextFactory=SSLContextFactory(self._cert, self._key))
 
-    def _maybe_encrypt_and_sign(self, raw, recipient):
+    def _maybe_encrypt_and_sign(self, raw, recipient, fetch_remote=True):
         """
         Attempt to encrypt and sign the outgoing message.
 
@@ -280,7 +280,9 @@ class OutgoingMail(object):
         to_address = validate_address(recipient.dest.addrstr)
 
         def maybe_encrypt_and_sign(message):
-            d = self._encrypt_and_sign(message, to_address, from_address)
+            d = self._encrypt_and_sign(
+                message, to_address, from_address,
+                fetch_remote=fetch_remote)
             d.addCallbacks(signal_encrypt_sign,
                            if_key_not_found_send_unencrypted,
                            errbackArgs=(message,))
@@ -351,7 +353,8 @@ class OutgoingMail(object):
         d.addErrback(lambda _: origmsg)
         return d
 
-    def _encrypt_and_sign(self, origmsg, encrypt_address, sign_address):
+    def _encrypt_and_sign(self, origmsg, encrypt_address, sign_address,
+            fetch_remote=True):
         """
         Create an RFC 3156 compliang PGP encrypted and signed message using
         C{encrypt_address} to encrypt and C{sign_address} to sign.
@@ -372,7 +375,8 @@ class OutgoingMail(object):
             newmsg, origmsg = res
             d = self._keymanager.encrypt(
                 origmsg.as_string(unixfrom=False),
-                encrypt_address, sign=sign_address)
+                encrypt_address, sign=sign_address,
+                fetch_remote=fetch_remote)
             d.addCallback(lambda encstr: (newmsg, encstr))
             return d
 
