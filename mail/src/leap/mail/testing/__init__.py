@@ -20,11 +20,9 @@ Base classes and keys for leap.mail tests.
 import os
 import distutils.spawn
 from mock import Mock
-from twisted.internet.defer import gatherResults, succeed
+from twisted.internet.defer import gatherResults
 from twisted.trial import unittest
-from twisted.web.client import Response
 from twisted.internet import defer
-from twisted.python import log
 
 
 from leap.soledad.client import Soledad
@@ -35,6 +33,7 @@ from leap.common.testing.basetest import BaseLeapTest
 
 ADDRESS = 'leap@leap.se'
 ADDRESS_2 = 'anotheruser@leap.se'
+
 
 class defaultMockSharedDB(object):
     get_doc = Mock(return_value=None)
@@ -68,16 +67,12 @@ class KeyManagerWithSoledadTestCase(unittest.TestCase, BaseLeapTest):
         class Response(object):
             code = 200
             phrase = ''
+
             def deliverBody(self, x):
                 return ''
 
-        # XXX why the fuck is this needed? ------------------------
         self.km._async_client_pinned.request = Mock(
             return_value=defer.succeed(Response()))
-        #self.km._async_client.request = Mock(return_value='')
-        #self.km._async_client_pinned.request = Mock(
-            #return_value='')
-        # -------------------------------------------------------
 
         d1 = self.km.put_raw_key(PRIVATE_KEY, ADDRESS)
         d2 = self.km.put_raw_key(PRIVATE_KEY_2, ADDRESS_2)

@@ -354,7 +354,7 @@ class OutgoingMail(object):
         return d
 
     def _encrypt_and_sign(self, origmsg, encrypt_address, sign_address,
-            fetch_remote=True):
+                          fetch_remote=True):
         """
         Create an RFC 3156 compliang PGP encrypted and signed message using
         C{encrypt_address} to encrypt and C{sign_address} to sign.

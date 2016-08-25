@@ -94,11 +94,6 @@ subject: independence of cyberspace
             self.tempdir = tempfile.mkdtemp()
 
         def getCollection(_):
-            #d = defer.Deferred()
-            #acct = IMAPAccount(self._soledad, ADDRESS, d=d)
-            #d.addCallback(
-                #lambda _: acct.getMailbox(INBOX_NAME))
-            #return d
             adaptor = SoledadMailAdaptor()
             store = self._soledad
             adaptor.store = store
@@ -114,7 +109,8 @@ subject: independence of cyberspace
 
             d = adaptor.initialize_store(store)
             d.addCallback(lambda _: mbox_indexer.create_table(mbox_uuid))
-            d.addCallback(lambda _: adaptor.get_or_create_mbox(store, mbox_name))
+            d.addCallback(
+                lambda _: adaptor.get_or_create_mbox(store, mbox_name))
             d.addCallback(get_collection_from_mbox_wrapper)
             return d
 
@@ -277,6 +273,7 @@ subject: independence of cyberspace
 
     def testAddDecryptedHeader(self):
         class DummyMsg():
+
             def __init__(self):
                 self.headers = {}
 
@@ -313,7 +310,7 @@ subject: independence of cyberspace
 
         def decryption_error_not_called(_):
             self.assertFalse(self.fetcher._decryption_error.called,
-                            "There was some errors with decryption")
+                             "There was some errors with decryption")
 
         def add_decrypted_header_called(_):
             self.assertTrue(self.fetcher._add_decrypted_header.called,
