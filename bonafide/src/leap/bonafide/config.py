@@ -227,13 +227,11 @@ class Provider(object):
     def callWhenMainConfigReady(self, cb, *args, **kw):
         d = self.first_bootstrap[self._domain]
         d.addCallback(lambda _: cb(*args, **kw))
-        d.addErrback(log.err)
         return d
 
     def callWhenReady(self, cb, *args, **kw):
         d = self.ongoing_bootstrap[self._domain]
         d.addCallback(lambda _: cb(*args, **kw))
-        d.addErrback(log.err)
         return d
 
     def has_valid_certificate(self):
