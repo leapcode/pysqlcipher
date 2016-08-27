@@ -70,6 +70,11 @@ class BonafideProtocol(object):
         self._sessions[full_id] = session
         return session
 
+    def _del_session_errback(self, failure, full_id):
+        if full_id in self._sessions:
+            del self._sessions[full_id]
+        return failure
+
     # Service public methods
 
     def do_signup(self, full_id, password):
@@ -94,6 +99,7 @@ class BonafideProtocol(object):
         session = self._get_session(provider, full_id, password)
         d = session.signup(username, password)
         d.addCallback(return_user, session)
+        d.addErrback(self._del_session_errback, full_id)
         return d
 
     def do_authenticate(self, full_id, password):
@@ -125,6 +131,7 @@ class BonafideProtocol(object):
         session = self._get_session(provider, full_id, password)
         d = session.authenticate()
         d.addCallback(return_token_and_uuid, session)
+        d.addErrback(self._del_session_errback, full_id)
         return d
 
     def do_logout(self, full_id):
