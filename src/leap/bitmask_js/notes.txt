@@ -1,0 +1,173 @@
+
+
+# BITMASK API
+
+https://0xacab.org/leap/leap_pycommon/blob/develop/src/leap/common/events/catalog.py
+
+
+
+
+https://github.com/rofrischmann/react-layout-components/blob/develop/modules/components/Box.jsx
+https://github.com/tastejs/todomvc/tree/master/examples
+
+ES6
+
+  https://github.com/DrkSephy/es6-cheatsheet
+  http://egorsmirnov.me/2015/06/14/react-and-es6-part2.html
+
+React component examples
+
+  https://github.com/Khan/perseus/tree/master/src/components
+  https://react.parts/web
+
+Props versus States
+
+  https://github.com/uberVU/react-guide/blob/master/props-vs-state.md
+
+
+Localization
+
+  https://github.com/martinandert/counterpart
+  http://www.localeplanet.com/
+
+Flexbox
+
+  https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Flexible_Box_Layout/Using_CSS_flexible_boxes
+
+Style
+
+  Flat/Low Saturation visual language: https://www.youtube.com/watch?v=jAhjPd4uNFY
+
+
+testing
+-----------------------------------------
+
+https://github.com/airbnb/enzyme
+
+
+webpack
+------------------------------------------
+
+https://github.com/webpack/docs/wiki/optimization
+
+https://github.com/rauschma/webpack-es6-demo
+
+https://github.com/shakacode/react-webpack-rails-tutorial
+
+https://stackoverflow.com/questions/27639005/how-to-copy-static-files-to-build-directory-with-webpack#27651720
+
+react ui components
+--------------------------------------------
+
+material design
+
+  material-ui
+    http://www.material-ui.com
+  materialize
+    materialize looks to have the best css
+    https://react-materialize.github.io
+    http://materializecss.com
+  mui
+    https://www.muicss.com
+  react-material
+  react-polymer
+
+elemental
+  http://elemental-ui.com/
+  react-only toolkit
+
+foundation
+  used by pixelated user agent
+
+grommet.io
+
+topcoat
+  react-topui
+
+belle
+  "configurable react components with great UX"
+  use belle or bootstrap theme
+  nikgraf.github.com/belle
+
+react-islands
+  react implementation of yandex's islands design
+  github.com/narqo/react-islands
+
+Pivotol UI
+  react ui components styles for the Pivotal brand
+  http://styleguide.pivotal.io
+
+react
+------------------------
+
+react with es6 classes:
+
+https://facebook.github.io/react/docs/reusable-components.html#es6-classes
+
+
+redux
+-----------------
+
+http://redux.js.org/
+https://github.com/reactjs/redux
+  Redux is a predictable state container for JavaScript apps.
+  functional programming
+
+  oop with redux
+    https://github.com/newtoncodes/react-redux-oop
+    https://github.com/ddsol/redux-schema
+
+  boilerplates
+    https://github.com/markerikson/react-redux-links/blob/master/boilerplates-and-starter-kits.md
+    https://github.com/tsaiDavid/simple-redux-boilerplate
+
+ec6
+------------------
+
+  http://frontendjournal.com/javascript-es6-learn-important-features-in-a-few-minutes/
+  https://www.infoq.com/news/2015/03/react-es6-classes
+  https://github.com/google/traceur-compiler/wiki/Getting-Started
+  http://www.developerdrive.com/2011/08/top-10-must-follow-javascript-best-practices-2/
+
+
+react templates
+---------------------------------
+
+https://wix.github.io/react-templates/
+
+
+Toolchain
+-------------------
+
+processors
+  traceur
+  babel
+
+front-end package management
+  bower - https://bower.io/
+  component
+  npm + browserify
+    http://browserify.org/
+  and many others
+  https://github.com/wilmoore/frontend-packagers
+
+module builder
+  browserify
+  webpack
+
+testing framework
+  https://github.com/karma-runner/karma
+
+full frameworks
+------------------------
+
+http://aurelia.io/
+
+
+watcherify
+----------------------------
+
+
+#!/bin/bash
+watchify client/main.js -o public/bundle.js -dv &
+nodemon --exec npm run babel-node -- app.js
