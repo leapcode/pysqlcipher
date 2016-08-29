@@ -115,5 +115,6 @@ class BonafideService(HookableService):
         return d
 
     def do_get_active_user(self):
-        user = self._active_user
-        return defer.succeed(user)
+        user = self._active_user or '<none>'
+        info = {'user': user}
+        return defer.succeed(info)
