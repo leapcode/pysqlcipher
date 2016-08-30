@@ -1,0 +1,11 @@
+mock
+setuptools-trial
+pep8
+
+#-----------------------------------------------------------------------------
+#Although it's not a package dependency, tests also depend on having
+#soledad client installed. Commenting to avoid versioning problem, you should
+#know what you are testing against :)
+#-----------------------------------------------------------------------------
+
+#leap.soledad.client
