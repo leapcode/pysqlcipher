@@ -1,0 +1,2 @@
+include versioneer.py
+include src/leap/bonafide/_version.py

@@ -1,0 +1,11 @@
+*.pyc
+*.egg
+*.egg-info
+*.swp
+*.swo
+.project
+*.pid
+dist/
+build/
+MANIFEST
+_trial_temp
