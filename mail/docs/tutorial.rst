@@ -1,3 +1,0 @@
-Tutorial
-========
-`leap.mail` tutorial
