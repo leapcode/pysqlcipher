@@ -1,3 +1,0 @@
-# if we bump the gnupg version, bump also the sanity check
-# in keymanager.__init__
-gnupg>=1.4.0
