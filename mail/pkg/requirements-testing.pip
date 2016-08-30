@@ -1,0 +1,7 @@
+setuptools-trial
+mock
+nose
+rednose
+nose-progressive
+coverage
+pep8>=1.1

@@ -1,0 +1,179 @@
+0.4.0 Oct 28, 2015:
+  o Expose generic and protocol-agnostic public mail API.
+  o Make use of the twisted-based, async soledad API.
+  o Create a OutgoingMail class that has the logic for encrypting, signing and
+    sending messages. Factors that logic out of EncryptedMessage so it can be
+    used by other clients. Closes: #6357.
+  o Refactor email fetching outside IMAP to its own independient IncomingMail
+    class. Closes: #6361.
+  o Adapt to new events api on leap.common. Related to #5359.
+  o Discover public keys via attachment. Closes: #5937.
+  o Add public key as attachment. Closes: #6617.
+  o Parse OpenPGP header and import keys from it. Closes: #3879.
+  o Don't add any footer to the emails. Closes: #4692.
+  o Add listener for each email added to inbox in IncomingMail. Closes: #6742.
+  o Ability to reindex local UIDs after a soledad sync. Closes: #6996.
+  o Feature: add very basic support for message sequence numbers.
+  o Send a BYE command to all open connections, so that the MUA is notified
+    when the server is shutted down.
+  o Fix nested multipart rendering. Closes: #7244
+  o Update SMTP gateway docs. Closes #7169.
+  o Bugfix: fix keyerror when inserting msg on pending_inserts dict.
+  o Bugfix: Return the first cdoc if no body found
+  o Lots of style fixes and tests updates.
+  o If the auth token has expired signal the GUI to request her to log in again
+    (Closes: #7430)
+  o don't extract openpgp header if valid attached key (Closes: #7480)
+  o disable local only tcp bind on docker containers to allow access to IMAP
+    and SMTP. Related to #7471.
+
+0.3.10 Sept 26, 2014:
+  o MessageCollection iterator now creates the LeapMessage with the
+    collection reference, so setFlags will work properly.
+  o account#addMailbox can't allow empty mailbox names since it makes
+    it impossible to create it later (mailbox#__init__ will throw an
+    error), which makes it impossible to getMailbox or even delete it.
+
+0.3.9 Apr 4, 2014:
+  o Footer url shouldn't end in period. Closes #4791.
+  o Handle non-ascii headers. Closes #5021.
+  o Soledad writer consumes messages eagerly. Fixes failing
+    tests. Closes #4715.
+  o Convert unicode to str when raising exceptions in IMAP server.
+    Fixes #4830.
+  o Remove conversion of IMAP folder names to string. This makes the
+    IMAP server use twisted's transparent 7bit conversion. Fixes
+    #4830.
+  o Add a flag to be able to reset the session. Closes #4925.
+  o Check for none in payload detection. Closes #4933.
+  o Check for flags doc uniqueness before adding a message. Avoids
+    duplicates of a single message in the same mailbox while copying
+    or moving. Closes #4949.
+  o Correctly process attachments when signing. Fixes #5014.
+  o Fix bug in which destination folder sometimes was not showing
+    messages after copy/append. Closes #5167.
+  o Fix unread notifications to client UI. Only INBOX is
+    notified. Closes #5177.
+  o Fix bug in which deleted folder wouldn't show its messages
+    inside. Closes #5179.
+  o Keep processing after a decryption error. Closes #5307.
+  o Enqueue unsetting of recent flag. this was holding the new mails
+    from being displayed soonish.
+  o Properly parse emails crafted by Mail.app. Fixes #5013.
+  o Restrict adding outgoing footer to text/plain messages.
+  o Sanity check on last_uid setter. Avoids incomplete fetches.
+  o Stop providing hostname for helo in smtp gateway. Fixes #4335.
+  o Only try to fetch keys for multipart signed or encrypted emails.
+    Fixes #4671.
+  o Add a flag for offline mode in imap. Related to #4943.
+  o Flush IMAP data to disk when stopping. Closes #5095.
+  o Signal the client when auth token is invalid for syncing Soledad.
+    Fixes #5191.
+  o Ability to support SEARCH Commands, limited to HEADER Message-ID.
+    This is a quick workaround for avoiding duplicate saves in Drafts
+    Folder. Closes #4209.
+  o Use a memory store as write-buffer and read-cache.
+  o Implement IMAP4 non-synchronizing literals (rfc2088), so APPENDs
+    can be made in a single round-trip. Closes #5190.
+  o Defer costly operations to a pool of threads.
+  o Split the internal representation of messages into three distinct
+    documents: 1) Flags 2) Headers 3) Content.
+  o Make use of the Twisted MIME interface.
+  o Add deduplication ability to the save operation, for body and
+    attachments.
+  o Add IMessageCopier interface to mailbox implementation, so bulk
+    moves are costless. Closes #4654.
+  o Makes efficient use of indexes and count method. Closes #4616.
+  o Handle correctly unicode characters in emails. Closes #4838.
+
+0.3.8 Dec 6, 2013:
+  o Fail gracefully when failing to decrypt incoming messages. Closes
+    #4589.
+  o Fix a bug when adding a message with empty flags. Closes #4496
+  o Allow to iterate in an empty mailbox during fetch. Closes #4603
+  o Add 'signencrypt' preference to OpenPGP header on outgoing
+    email. Closes #3878.
+  o Add a header to incoming emails that reflects if a valid signature
+    was found when decrypting. Closes #4354.
+  o Add a footer to outgoing email pointing to the address where
+    sender keys can be fetched. Closes #4526.
+  o Serialize Soledad Writes for new messages. Fixes segmentation
+    fault when sqlcipher was been concurrently accessed from many
+    threads. Closes #4606
+  o Set remote mail polling time to 60 seconds. Closes #4499
+
+0.3.7 Nov 15, 2013:
+  o Uses deferToThread for sendMail. Closes #3937
+  o Update pkey to allow multiple accounts. Solves: #4394
+  o Change SMTP service name from "relay" to "gateway". Closes #4416.
+  o Identify ourselves with a fqdn, always. Closes: #4441
+  o Remove 'multipart/encrypted' header after decrypting incoming
+    mail. Closes #4454.
+  o Fix several bugs with imap mailbox getUIDNext and notifiers that
+    were breaking the mail indexing after message deletion. This
+    solves also the perceived mismatch between the number of unread
+    mails reported by bitmask_client and the number reported by
+    MUAs. Closes: #4461
+  o Check username in authentications. Closes: #4299
+  o Reject senders that aren't the user that is currently logged
+    in. Fixes #3952.
+  o Prevent already encrypted outgoing messages from being encrypted
+    again. Closes #4324.
+  o Correctly handle email headers when gatewaying messages. Also add
+    OpenPGP header. Closes #4322 and #4447.
+
+0.3.6 Nov 1, 2013:
+  o Add support for non-ascii characters in emails. Closes #4000.
+  o Default to UTF-8 when there is no charset parsed from the mail
+    contents.
+  o Refactor get_email_charset to leap.common.
+  o Return the necessary references (factory, port) from IMAP4 launch
+    in order to be able to properly stop it. Related to #4199.
+  o Notify MUA of new mail, using IDLE as advertised. Closes: #3671
+  o Use TLS wrapper mode instead of STARTTLS. Closes #3637.
+
+0.3.5 Oct 18, 2013:
+  o Do not log mail doc contents.
+  o Comply with RFC 3156. Closes #4029.
+
+0.3.4 Oct 4, 2013:
+  o Improve charset handling when exposing mails to the mail
+    client. Related to #3660.
+  o Return Twisted's smtp Port object to be able to stop listening to
+    it whenever we want. Related to #3873.
+
+0.3.3 Sep 20, 2013:
+  o Remove cleartext mail from logs. Closes: #3877.
+
+0.3.2 Sep 6, 2013:
+  o Make mail services bind to 127.0.0.1. Closes: #3627.
+  o Signal unread message to UI when message is saved locally. Closes:
+    #3654.
+  o Signal unread to UI when flag in message change. Closes: #3662.
+  o Use dirspec instead of plain xdg. Closes #3574.
+  o SMTP service invocation returns factory instance.
+
+0.3.1 Aug 23, 2013:
+  o Avoid logging dummy password on imap server. Closes: #3416
+  o Do not fail while processing an empty mail, just skip it. Fixes
+    #3457.
+  o Notify of unread email explicitly every time the mailbox is
+    sync'ed.
+  o Fix signals to emit only string in the contents instead of bool or
+    int values.
+  o Improve unseen filter of email.
+  o Make default imap fetch period 5 minutes. Client can config it via
+    environment variable for debug. Closes: #3409
+  o Refactor imap fetch code for better defer handling. Closes: #3423
+  o Emit signals to notify UI for SMTP relay events. Closes #3464.
+  o Add events for notifications about imap activity. Closes: #3480
+  o Update to new soledad package scheme (common, client and
+    server). Closes #3487.
+  o Improve packaging: add versioneer, parse_requirements,
+    classifiers.
+
+0.3.0 Aug 9, 2013:
+  o Add dependency for leap.keymanager.
+  o User 1984 default port for imap.
+  o Add client certificate authentication. Closes #3376.
+  o SMTP relay signs outgoing messages.
