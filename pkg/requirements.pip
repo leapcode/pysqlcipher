@@ -3,3 +3,5 @@ colorama
 zope.interface
 service-identity
 leap.common
+leap.soledad.client
+vext.pyqt5
