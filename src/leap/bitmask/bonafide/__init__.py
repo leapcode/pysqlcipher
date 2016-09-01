@@ -1,4 +1,10 @@
+# XXX just to make submodules appear in the
+# coverage report. you can delete the imports when the tests
+# exersise the codebase.
 
-from ._version import get_versions
-__version__ = get_versions()['version']
-del get_versions
+import config
+import bootstrap
+import session
+import provider
+import service
+import cred_srp
