@@ -26,7 +26,7 @@ var/
 *.egg
 
 # Unit test / coverage reports
-cov_html/
+docs/cov_html/
 .tox/
 .coverage
 .coverage.*
@@ -42,6 +42,6 @@ docs/_build/
 venv/
 ENV/
 
-# Javascript stuff for the www ui
-node_modules
+# Javascript, web-ui
+www/node_modules
 www/public
