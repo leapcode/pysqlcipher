@@ -12,7 +12,7 @@ import versioneer
 # Note that here we can specify ranges.
 
 required = [
-    'twisted',  # 14.0.0
+    'twisted>=14.0.0',
     'zope.interface',
     'service-identity',
     'colorama',
@@ -26,10 +26,10 @@ extras = {
         'gnupg',
     ],
     'gui': [
-        'PyQt',
+        'vext.pyqt5',
     ],
     'all': [
-        'PyQt',
+        'vext.pyqt5',
         'leap.soledad.client',
         'gnupg',
     ]
