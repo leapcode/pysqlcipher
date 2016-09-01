@@ -29,35 +29,6 @@ from leap.common import ca_bundle
 from twisted.web import client
 from twisted.web._responses import NOT_FOUND
 
-from ._version import get_versions
-
-try:
-    from gnupg.gnupg import GPGUtilities
-    assert(GPGUtilities)  # pyflakes happy
-    from gnupg import __version__ as _gnupg_version
-    if '-' in _gnupg_version:
-        # avoid Parsing it as LegacyVersion, get just
-        # the release numbers:
-        _gnupg_version = _gnupg_version.split('-')[0]
-    from pkg_resources import parse_version
-    # We need to make sure that we're not colliding with the infamous
-    # python-gnupg
-    assert(parse_version(_gnupg_version) >= parse_version('1.4.0'))
-
-except (ImportError, AssertionError):
-    print "*******"
-    print "Ooops! It looks like there is a conflict in the installed version "
-    print "of gnupg."
-    print "GNUPG_VERSION:", _gnupg_version
-    print
-    print "Disclaimer: Ideally, we would need to work a patch and propose the "
-    print "merge to upstream. But until then do: "
-    print
-    print "% pip uninstall python-gnupg"
-    print "% pip install gnupg"
-    print "*******"
-    sys.exit(1)
-
 import logging
 
 from twisted.internet import defer
@@ -68,16 +39,13 @@ from leap.common.http import HTTPClient
 from leap.common.events import emit_async, catalog
 from leap.common.decorators import memoized_method
 
-from leap.keymanager.errors import (
+from leap.bitmask.keymanager.errors import (
     KeyNotFound,
     KeyNotValidUpgrade,
     InvalidSignature
 )
-from leap.keymanager.validation import ValidationLevels, can_upgrade
-from leap.keymanager.openpgp import OpenPGPScheme
-
-__version__ = get_versions()['version']
-del get_versions
+from leap.bitmask.keymanager.validation import ValidationLevels, can_upgrade
+from leap.bitmask.keymanager.openpgp import OpenPGPScheme
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +150,8 @@ class KeyManager(object):
         """
         try:
             uri = self._nickserver_uri + '?address=' + address
-            content = yield self._fetch_and_handle_404_from_nicknym(uri, address)
+            content = yield self._fetch_and_handle_404_from_nicknym(
+                uri, address)
             json_content = json.loads(content)
 
         except KeyNotFound:
@@ -224,7 +193,8 @@ class KeyManager(object):
                 raise KeyNotFound(message), None, sys.exc_info()[2]
             return response
 
-        d = self._async_client_pinned.request(str(uri), 'GET', callback=check_404)
+        d = self._async_client_pinned.request(
+            str(uri), 'GET', callback=check_404)
         d.addCallback(client.readBody)
         return d
 

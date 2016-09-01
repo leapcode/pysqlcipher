@@ -14,13 +14,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-
 """
 Client mail bits.
 """
-
-
-from ._version import get_versions
-__version__ = get_versions()['version']
-del get_versions
