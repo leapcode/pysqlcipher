@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # service.py
-# Copyright (C) 2015 LEAP
+# Copyright (C) 2015-2016 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -14,7 +14,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 """
 Bonafide Service.
 """
@@ -23,7 +22,7 @@ from collections import defaultdict
 
 from leap.common.config import get_path_prefix
 from leap.common.service_hooks import HookableService
-from leap.bonafide._protocol import BonafideProtocol
+from leap.bitmask.bonafide._protocol import BonafideProtocol
 
 from twisted.internet import defer
 from twisted.python import log

@@ -39,10 +39,10 @@ from twisted.internet.task import deferLater
 from leap.common.events import emit_async, catalog
 from leap.common.check import leap_assert, leap_assert_type
 from leap.common.mail import get_email_charset
-from leap.keymanager import errors as keymanager_errors
-from leap.mail.adaptors import soledad_indexes as fields
-from leap.mail.generator import Generator
-from leap.mail.utils import json_loads, empty
+from leap.bitmask.keymanager import errors as keymanager_errors
+from leap.bitmask.mail.adaptors import soledad_indexes as fields
+from leap.bitmask.mail.generator import Generator
+from leap.bitmask.mail.utils import json_loads, empty
 from leap.soledad.client import Soledad
 from leap.soledad.common.crypto import ENC_SCHEME_KEY, ENC_JSON_KEY
 from leap.soledad.common.errors import InvalidAuthTokenError

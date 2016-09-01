@@ -40,16 +40,16 @@ from twisted.python import log
 
 from leap.common.check import leap_assert_type, leap_assert
 from leap.common.events import emit_async, catalog
-from leap.keymanager.errors import KeyNotFound, KeyAddressMismatch
-from leap.mail import __version__
-from leap.mail import errors
-from leap.mail.utils import validate_address
-from leap.mail.rfc3156 import MultipartEncrypted
-from leap.mail.rfc3156 import MultipartSigned
-from leap.mail.rfc3156 import encode_base64_rec
-from leap.mail.rfc3156 import RFC3156CompliantGenerator
-from leap.mail.rfc3156 import PGPSignature
-from leap.mail.rfc3156 import PGPEncrypted
+from leap.bitmask import __version__
+from leap.bitmask.keymanager.errors import KeyNotFound, KeyAddressMismatch
+from leap.bitmask.mail import errors
+from leap.bitmask.mail.utils import validate_address
+from leap.bitmask.mail.rfc3156 import MultipartEncrypted
+from leap.bitmask.mail.rfc3156 import MultipartSigned
+from leap.bitmask.mail.rfc3156 import encode_base64_rec
+from leap.bitmask.mail.rfc3156 import RFC3156CompliantGenerator
+from leap.bitmask.mail.rfc3156 import PGPSignature
+from leap.bitmask.mail.rfc3156 import PGPEncrypted
 
 # TODO
 # [ ] rename this module to something else, service should be the implementor
@@ -223,7 +223,7 @@ class OutgoingMail(object):
             heloFallback=True,
             requireAuthentication=False,
             requireTransportSecurity=True)
-        factory.domain = bytes('leap.mail-' + __version__)
+        factory.domain = bytes('leap.bitmask.mail-' + __version__)
         emit_async(catalog.SMTP_SEND_MESSAGE_START,
                    self._from_address, recipient.dest.addrstr)
         reactor.connectSSL(

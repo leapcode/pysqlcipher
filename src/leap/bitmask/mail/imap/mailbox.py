@@ -36,8 +36,8 @@ from zope.interface import implements
 
 from leap.common.check import leap_assert
 from leap.common.check import leap_assert_type
-from leap.mail.constants import INBOX_NAME, MessageFlags
-from leap.mail.imap.messages import IMAPMessage
+from leap.bitmask.mail.constants import INBOX_NAME, MessageFlags
+from leap.bitmask.mail.imap.messages import IMAPMessage
 
 logger = logging.getLogger(__name__)
 

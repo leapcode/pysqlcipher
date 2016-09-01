@@ -28,10 +28,9 @@ from twisted.python import log
 from zope.interface import implements
 
 from leap.common.check import leap_assert, leap_assert_type
-
-from leap.mail.constants import MessageFlags
-from leap.mail.mail import Account
-from leap.mail.imap.mailbox import IMAPMailbox, normalize_mailbox
+from leap.bitmask.mail.constants import MessageFlags
+from leap.bitmask.mail.mail import Account
+from leap.bitmask.mail.imap.mailbox import IMAPMailbox, normalize_mailbox
 from leap.soledad.client import Soledad
 
 logger = logging.getLogger(__name__)

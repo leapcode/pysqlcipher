@@ -17,8 +17,6 @@
 """
 Abstact key type and encryption scheme representations.
 """
-
-
 import json
 import logging
 import re
@@ -26,10 +24,10 @@ import time
 
 from datetime import datetime
 
-from leap.keymanager import errors
-from leap.keymanager.wrapper import TempGPGWrapper
-from leap.keymanager.validation import ValidationLevels
-from leap.keymanager import documents as doc
+from leap.bitmask.keymanager import errors
+from leap.bitmask.keymanager.wrapper import TempGPGWrapper
+from leap.bitmask.keymanager.validation import ValidationLevels
+from leap.bitmask.keymanager import documents as doc
 
 logger = logging.getLogger(__name__)
 

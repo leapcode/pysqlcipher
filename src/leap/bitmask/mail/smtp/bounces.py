@@ -21,8 +21,8 @@ import time
 from email.message import Message
 from email.utils import formatdate
 
-from leap.mail.constants import INBOX_NAME
-from leap.mail.mail import Account
+from leap.bitmask.mail.constants import INBOX_NAME
+from leap.bitmask.mail.mail import Account
 
 
 # TODO implement localization for this template.

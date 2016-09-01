@@ -31,7 +31,7 @@ from twisted.cred import portal, credentials, error as credError
 from twisted.cred.checkers import ICredentialsChecker
 from twisted.internet import defer, reactor
 
-from leap.bonafide.session import Session
+from leap.bitmask.bonafide.session import Session
 
 
 @implementer(ICredentialsChecker)
@@ -126,26 +126,10 @@ class LeapAuthRealm(object):
 
 if __name__ == '__main__':
 
-    # from the browser-id implementation
-    #import sys
-    #def _done(res):
-        #print res
-        #reactor.stop()
-    #assertion = sys.argv[1]
-    #d = defer.Deferred()
-    #reactor.callLater(0, d.callback, "http://localhost:8081")
-    #d.addCallback(SRPCredentialsChecker)
-    #d.addCallback(lambda c: c.requestAvatarId(assertion))
-    #d.addBoth(_done)
-    #reactor.run()
-
     # XXX move boilerplate to some bitmask-core template.
-
     leap_realm = LeapAuthRealm()
     # XXX should pass a provider mapping to realm too?
-
     leap_portal = portal.Portal(leap_realm)
-
     # XXX should we add an offline credentials checker, that's able
     # to unlock local soledad sqlcipher backend?
     # XXX should pass a provider mapping to credentials checker too?

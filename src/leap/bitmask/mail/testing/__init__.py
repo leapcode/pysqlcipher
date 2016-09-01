@@ -24,12 +24,9 @@ from twisted.internet.defer import gatherResults
 from twisted.trial import unittest
 from twisted.internet import defer
 
-
-from leap.soledad.client import Soledad
-from leap.keymanager import KeyManager
-
-
 from leap.common.testing.basetest import BaseLeapTest
+from leap.bitmask.keymanager import KeyManager
+from leap.soledad.client import Soledad
 
 ADDRESS = 'leap@leap.se'
 ADDRESS_2 = 'anotheruser@leap.se'

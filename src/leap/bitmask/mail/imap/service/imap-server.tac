@@ -28,19 +28,18 @@ userid = 'user@provider'
 uuid = 'deadbeefdeadabad'
 passwd = 'supersecret' # optional, will get prompted if not found.
 """
-
 # TODO -- this .tac file should be deprecated in favor of bitmask.core.bitmaskd
-
 import ConfigParser
 import getpass
 import os
 import sys
 
-from leap.keymanager import KeyManager
-from leap.mail.imap.service import imap
+from twisted.application import service, internet
+
+from leap.bitmask.keymanager import KeyManager
+from leap.bitmask.mail.imap.service import imap
 from leap.soledad.client import Soledad
 
-from twisted.application import service, internet
 
 
 # TODO should get this initializers from some authoritative mocked source

@@ -26,8 +26,8 @@ Document migrator
 from collections import namedtuple
 from twisted.internet.defer import gatherResults, succeed
 
-from leap.keymanager import documents as doc
-from leap.keymanager.validation import ValidationLevels
+from leap.bitmask.keymanager import documents as doc
+from leap.bitmask.keymanager.validation import ValidationLevels
 
 
 KEY_ID_KEY = 'key_id'

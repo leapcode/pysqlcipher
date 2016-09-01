@@ -37,13 +37,13 @@ from twisted.python import log
 from leap.common.check import leap_assert_type
 from leap.common.events import emit_async, catalog
 
-from leap.mail.adaptors.soledad import SoledadMailAdaptor
-from leap.mail.constants import INBOX_NAME
-from leap.mail.constants import MessageFlags
-from leap.mail.mailbox_indexer import MailboxIndexer
-from leap.mail.plugins import soledad_sync_hooks
-from leap.mail.utils import find_charset, CaseInsensitiveDict
-from leap.mail.utils import lowerdict
+from leap.bitmask.mail.adaptors.soledad import SoledadMailAdaptor
+from leap.bitmask.mail.constants import INBOX_NAME
+from leap.bitmask.mail.constants import MessageFlags
+from leap.bitmask.mail.mailbox_indexer import MailboxIndexer
+from leap.bitmask.mail.plugins import soledad_sync_hooks
+from leap.bitmask.mail.utils import find_charset, CaseInsensitiveDict
+from leap.bitmask.mail.utils import lowerdict
 
 logger = logging.getLogger(name=__name__)
 
@@ -870,7 +870,7 @@ class Account(object):
     basic collection handled by traditional MUAs, but it can also handle other
     types of Collections (tag based, for instance).
 
-    leap.mail.imap.IMAPAccount partially proxies methods in this
+    leap.bitmask.mail.imap.IMAPAccount partially proxies methods in this
     class.
     """
 

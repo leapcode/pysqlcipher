@@ -22,7 +22,7 @@ from twisted.mail import imap4
 from twisted.internet import defer
 from zope.interface import implements
 
-from leap.mail.utils import find_charset, CaseInsensitiveDict
+from leap.bitmask.mail.utils import find_charset, CaseInsensitiveDict
 
 
 logger = logging.getLogger(__name__)

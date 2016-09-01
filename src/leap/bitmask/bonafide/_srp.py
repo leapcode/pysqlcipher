@@ -143,5 +143,6 @@ class SRPAuthNoB(SRPAuthError):
 class SRPAuthBadDataFromServer(SRPAuthError):
     pass
 
+
 class SRPRegistrationError(Exception):
     pass

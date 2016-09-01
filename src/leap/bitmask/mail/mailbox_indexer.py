@@ -22,7 +22,7 @@ Local tables to store the message Unique Identifiers for a given mailbox.
 import re
 import uuid
 
-from leap.mail.constants import METAMSGID_RE
+from leap.bitmask.mail.constants import METAMSGID_RE
 
 
 def _maybe_first_query_item(thing):

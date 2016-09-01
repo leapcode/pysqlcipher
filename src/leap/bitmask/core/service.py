@@ -35,7 +35,7 @@ backend = flags.BACKEND
 
 if backend == 'default':
     from leap.bitmask.core import mail_services
-    from leap.bonafide.service import BonafideService
+    from leap.bitmask.bonafide.service import BonafideService
 elif backend == 'dummy':
     from leap.bitmask.core.dummy import mail_services
     from leap.bitmask.core.dummy import BonafideService

@@ -29,15 +29,15 @@ from leap.soledad.common import l2db
 
 from leap.common.check import leap_assert, leap_assert_type
 
-from leap.mail import constants
-from leap.mail import walk
-from leap.mail.adaptors import soledad_indexes as indexes
-from leap.mail.constants import INBOX_NAME
-from leap.mail.adaptors import models
-from leap.mail.imap.mailbox import normalize_mailbox
-from leap.mail.utils import lowerdict, first
-from leap.mail.utils import stringify_parts_map
-from leap.mail.interfaces import IMailAdaptor, IMessageWrapper
+from leap.bitmask.mail import constants
+from leap.bitmask.mail import walk
+from leap.bitmask.mail.adaptors import soledad_indexes as indexes
+from leap.bitmask.mail.constants import INBOX_NAME
+from leap.bitmask.mail.adaptors import models
+from leap.bitmask.mail.imap.mailbox import normalize_mailbox
+from leap.bitmask.mail.utils import lowerdict, first
+from leap.bitmask.mail.utils import stringify_parts_map
+from leap.bitmask.mail.interfaces import IMailAdaptor, IMessageWrapper
 
 from leap.soledad.common.document import SoledadDocument
 

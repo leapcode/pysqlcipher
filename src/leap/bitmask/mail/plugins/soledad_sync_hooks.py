@@ -15,5 +15,5 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from leap.mail.sync_hooks import MailProcessingPostSyncHook
+from leap.bitmask.mail.sync_hooks import MailProcessingPostSyncHook
 post_sync_uid_reindexer = MailProcessingPostSyncHook()

@@ -29,6 +29,7 @@ The following classes comprise the SMTP gateway service:
     * EncryptedMessage - An implementation of twisted.mail.smtp.IMessage that
       knows how to encrypt/sign itself before sending.
 """
+from email import generator
 from email.Header import Header
 
 from zope.interface import implements
@@ -42,19 +43,16 @@ from twisted.python import log
 
 from leap.common.check import leap_assert_type
 from leap.common.events import emit_async, catalog
-from leap.mail import errors
-from leap.mail.cred import LocalSoledadTokenChecker
-from leap.mail.utils import validate_address
-from leap.mail.rfc3156 import RFC3156CompliantGenerator
-from leap.mail.outgoing.service import outgoingFactory
-from leap.mail.smtp.bounces import bouncerFactory
-from leap.keymanager.errors import KeyNotFound
+from leap.bitmask.mail import errors
+from leap.bitmask.mail.cred import LocalSoledadTokenChecker
+from leap.bitmask.mail.utils import validate_address
+from leap.bitmask.mail.rfc3156 import RFC3156CompliantGenerator
+from leap.bitmask.mail.outgoing.service import outgoingFactory
+from leap.bitmask.mail.smtp.bounces import bouncerFactory
+from leap.bitmask.keymanager.errors import KeyNotFound
 
 # replace email generator with a RFC 3156 compliant one.
-from email import generator
-
 generator.Generator = RFC3156CompliantGenerator
-
 
 LOCAL_FQDN = "bitmask.local"
 
@@ -237,7 +235,7 @@ class SMTPDelivery(object):
                                mail or not.
         :type encrypted_only: bool
         :param outgoing_mail: The outgoing mail to send the message
-        :type outgoing_mail: leap.mail.outgoing.service.OutgoingMail
+        :type outgoing_mail: leap.bitmask.mail.outgoing.service.OutgoingMail
         """
         self._userid = userid
         self._outgoing_mail = outgoing_mail
@@ -368,7 +366,7 @@ class EncryptedMessage(object):
         :param user: The recipient of this message.
         :type user: twisted.mail.smtp.User
         :param outgoing_mail: The outgoing mail to send the message
-        :type outgoing_mail: leap.mail.outgoing.service.OutgoingMail
+        :type outgoing_mail: leap.bitmask.mail.outgoing.service.OutgoingMail
         """
         # assert params
         leap_assert_type(user, smtp.User)

@@ -30,13 +30,12 @@ from twisted.internet.ssl import ClientContextFactory
 from twisted.python import log
 from twisted.web.client import Agent, downloadPage
 
-from leap.bonafide._http import httpRequest
-from leap.bonafide.provider import Discovery
-
 from leap.common.check import leap_assert
 from leap.common.config import get_path_prefix as common_get_path_prefix
 from leap.common.files import mkdir_p
 # check_and_fix_urw_only, get_mtime
+from leap.bitmask.bonafide._http import httpRequest
+from leap.bitmask.bonafide.provider import Discovery
 
 
 APPNAME = "bonafide"

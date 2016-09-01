@@ -25,7 +25,7 @@ from cryptography.hazmat.backends.openssl.backend import (
     Backend as OpenSSLBackend)
 from cryptography.hazmat.primitives import hashes
 
-from leap.mail.utils import first
+from leap.bitmask.mail.utils import first
 
 crypto_backend = MultiBackend([OpenSSLBackend()])
 

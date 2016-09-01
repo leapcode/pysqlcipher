@@ -21,10 +21,10 @@ import os
 import resource
 from collections import defaultdict
 
-from leap.bonafide import config
-from leap.bonafide.provider import Api
-from leap.bonafide.session import Session, OK
 from leap.common.config import get_path_prefix
+from leap.bitmask.bonafide import config
+from leap.bitmask.bonafide.provider import Api
+from leap.bitmask.bonafide.session import Session, OK
 
 from twisted.cred.credentials import UsernamePassword
 from twisted.internet.defer import fail

@@ -41,4 +41,4 @@ Running tests
 
 Tests are run using Twisted's Trial API, like this::
 
-    python setup.py test -s leap.mail.gateway.tests
+    python setup.py test -s leap.bitmask.mail.gateway.tests

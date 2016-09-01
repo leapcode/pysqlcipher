@@ -29,8 +29,8 @@ from twisted.internet import defer
 from twisted.plugin import IPlugin
 from twisted.python import log
 
+from leap.bitmask.mail import constants
 from leap.soledad.client.interfaces import ISoledadPostSyncPlugin
-from leap.mail import constants
 
 logger = logging.getLogger(__name__)
 

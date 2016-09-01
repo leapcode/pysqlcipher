@@ -29,17 +29,19 @@ from twisted.application import service
 from twisted.internet import defer
 from twisted.python import log
 
-from leap.bonafide import config
+# TODO move to bitmask.common
 from leap.common.service_hooks import HookableService
-from leap.keymanager import KeyManager
-from leap.keymanager.errors import KeyNotFound
-from leap.keymanager.validation import ValidationLevels
+from leap.bitmask.bonafide import config
+from leap.bitmask.keymanager import KeyManager
+from leap.bitmask.keymanager.errors import KeyNotFound
+from leap.bitmask.keymanager.validation import ValidationLevels
+from leap.bitmask.mail.constants import INBOX_NAME
+from leap.bitmask.mail.mail import Account
+from leap.bitmask.mail.imap.service import imap
+from leap.bitmask.mail.incoming.service import IncomingMail
+from leap.bitmask.mail.incoming.service import INCOMING_CHECK_PERIOD
+from leap.bitmask.mail import smtp
 from leap.soledad.client.api import Soledad
-from leap.mail.constants import INBOX_NAME
-from leap.mail.mail import Account
-from leap.mail.imap.service import imap
-from leap.mail.incoming.service import IncomingMail, INCOMING_CHECK_PERIOD
-from leap.mail import smtp
 
 from leap.bitmask.core.uuid_map import UserMap
 from leap.bitmask.core.configurable import DEFAULT_BASEDIR

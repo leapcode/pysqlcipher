@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # utils.py
-# Copyright (C) 2014, 2015 LEAP
+# Copyright (C) 2014-2016 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -30,10 +30,10 @@ from twisted.protocols import loopback
 from twisted.python import log
 from zope.interface import implementer
 
-from leap.mail.adaptors import soledad as soledad_adaptor
-from leap.mail.imap.account import IMAPAccount
-from leap.mail.imap.server import LEAPIMAPServer
-from leap.mail.testing.common import SoledadTestMixin
+from leap.bitmask.mail.adaptors import soledad as soledad_adaptor
+from leap.bitmask.mail.imap.account import IMAPAccount
+from leap.bitmask.mail.imap.server import LEAPIMAPServer
+from leap.bitmask.mail.testing.common import SoledadTestMixin
 
 TEST_USER = "testuser@leap.se"
 TEST_PASSWD = "1234"

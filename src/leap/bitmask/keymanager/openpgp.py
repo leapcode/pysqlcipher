@@ -32,15 +32,15 @@ from twisted.internet import defer
 from twisted.internet.threads import deferToThread
 
 from leap.common.check import leap_assert, leap_assert_type, leap_check
-from leap.keymanager import errors
-from leap.keymanager.wrapper import TempGPGWrapper
-from leap.keymanager.keys import (
+from leap.bitmask.keymanager import errors
+from leap.bitmask.keymanager.wrapper import TempGPGWrapper
+from leap.bitmask.keymanager.keys import (
     OpenPGPKey,
     is_address,
     parse_address,
     build_key_from_dict,
 )
-from leap.keymanager.documents import (
+from leap.bitmask.keymanager.documents import (
     init_indexes,
     TAGS_PRIVATE_INDEX,
     TYPE_FINGERPRINT_PRIVATE_INDEX,
@@ -108,7 +108,7 @@ class OpenPGPScheme(object):
         self._wait_indexes("get_key", "put_key", "get_all_keys")
 
     def _migrate_documents_schema(self, _):
-        from leap.keymanager.migrator import KeyDocumentsMigrator
+        from leap.bitmask.keymanager.migrator import KeyDocumentsMigrator
         migrator = KeyDocumentsMigrator(self._soledad)
         return migrator.migrate()
 

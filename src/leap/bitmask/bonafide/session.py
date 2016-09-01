@@ -20,9 +20,9 @@ LEAP Session management.
 from twisted.internet import defer, reactor
 from twisted.python import log
 
-from leap.bonafide import _srp
-from leap.bonafide import provider
-from leap.bonafide._http import httpRequest, cookieAgentFactory
+from leap.bitmask.bonafide import _srp
+from leap.bitmask.bonafide import provider
+from leap.bitmask.bonafide._http import httpRequest, cookieAgentFactory
 
 OK = 'ok'
 
@@ -209,7 +209,7 @@ if __name__ == "__main__":
     d.addErrback(auth_eb)
 
     d.addCallback(lambda _: session.get_smtp_cert())
-    #d.addCallback(lambda _: session.get_vpn_cert())
+    # d.addCallback(lambda _: session.get_vpn_cert())
     d.addCallback(print_result)
     d.addErrback(auth_eb)
 

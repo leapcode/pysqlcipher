@@ -32,9 +32,9 @@ from twisted.python import log
 from zope.interface import implementer
 
 from leap.common.events import emit_async, catalog
-from leap.mail.cred import LocalSoledadTokenChecker
-from leap.mail.imap.account import IMAPAccount
-from leap.mail.imap.server import LEAPIMAPServer
+from leap.bitmask.mail.cred import LocalSoledadTokenChecker
+from leap.bitmask.mail.imap.account import IMAPAccount
+from leap.bitmask.mail.imap.server import LEAPIMAPServer
 
 # TODO: leave only an implementor of IService in here
 
@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 DO_MANHOLE = os.environ.get("LEAP_MAIL_MANHOLE", None)
 if DO_MANHOLE:
-    from leap.mail.imap.service import manhole
+    from leap.bitmask.mail.imap.service import manhole
 
 # The default port in which imap service will run
 

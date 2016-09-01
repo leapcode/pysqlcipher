@@ -1,8 +1,8 @@
 from twisted.mail import smtp
 
-from leap.mail.smtp.gateway import SMTPFactory, LOCAL_FQDN
-from leap.mail.smtp.gateway import SMTPDelivery
-from leap.mail.outgoing.service import outgoingFactory
+from leap.bitmask.mail.smtp.gateway import SMTPFactory, LOCAL_FQDN
+from leap.bitmask.mail.smtp.gateway import SMTPDelivery
+from leap.bitmask.mail.outgoing.service import outgoingFactory
 
 TEST_USER = u'anotheruser@leap.se'
 
