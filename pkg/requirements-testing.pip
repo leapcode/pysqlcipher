@@ -1,0 +1,7 @@
+mock
+pep8
+flake8
+coverage
+pytest
+pytest-pep8
+pytest-cov

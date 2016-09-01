@@ -2,12 +2,38 @@
 Setup file for leap.bitmask
 """
 from setuptools import setup, find_packages
+
 import versioneer
 
-# This requirements list is curated by hand. Here we can specify ranges.
-requirements =  [
-    "twisted",
-    "colorama"]
+
+# This requirements list is curated by hand, and
+# needs to be updated every time that requirements.pip
+# changes.
+# Note that here we can specify ranges.
+
+required = [
+    'twisted',  # 14.0.0
+    'zope.interface',
+    'service-identity',
+    'colorama',
+    'srp',
+    'leap.common',
+]
+
+extras = {
+    'mail': [
+        'leap.soledad.client',
+        'gnupg',
+    ],
+    'gui': [
+        'PyQt',
+    ],
+    'all': [
+        'PyQt',
+        'leap.soledad.client',
+        'gnupg',
+    ]
+}
 
 
 trove_classifiers = [
@@ -25,14 +51,13 @@ trove_classifiers = [
     "Topic :: Utilities"
 ]
 
+VERSION = versioneer.get_version()
 DOWNLOAD_BASE = ('https://github.com/leapcode/bitmask-dev/'
                  'archive/%s.tar.gz')
-
-VERSION = versioneer.get_version()
 DOWNLOAD_URL = DOWNLOAD_BASE % VERSION
 
 
-
+# Entry points
 gui_launcher = 'bitmask=leap.bitmask.gui.app:start_app'
 bitmask_cli = 'bitmaskctl=leap.bitmask.cli.bitmask_cli:main'
 bitmaskd = 'bitmaskd=leap.bitmask.core.launcher:run_bitmaskd'
@@ -41,7 +66,7 @@ bitmaskd = 'bitmaskd=leap.bitmask.core.launcher:run_bitmaskd'
 setup(
     name='leap.bitmask',
     version=VERSION,
-    cmdclass = versioneer.get_cmdclass(),
+    cmdclass=versioneer.get_cmdclass(),
     url='https://leap.se/',
     download_url=DOWNLOAD_URL,
     license='GPLv3+',
@@ -51,16 +76,17 @@ setup(
     maintainer_email='kali@leap.se',
     description=("The Internet Encryption Toolkit: "
                  "Encrypted Internet Proxy and Encrypted Mail."),
-    long_description = open('README.rst').read(),
+    long_description=open('README.rst').read(),
     classifiers=trove_classifiers,
-    namespace_packages=["leap"],
+    namespace_packages=['leap'],
     package_dir={'': 'src'},
     package_data={'': ['*.pem']},
     packages=find_packages('src'),
-    install_requires=requirements,
     include_package_data=True,
     zip_safe=True,
     entry_points={
         'console_scripts': [gui_launcher, bitmask_cli, bitmaskd]
     },
+    install_requires=required,
+    extras_require=extras,
 )

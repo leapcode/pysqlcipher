@@ -1,2 +1,5 @@
 twisted
 colorama
+zope.interface
+service-identity
+leap.common
