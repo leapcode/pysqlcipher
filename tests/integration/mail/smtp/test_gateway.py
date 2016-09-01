@@ -28,10 +28,10 @@ from twisted.test import proto_helpers
 
 from mock import Mock
 
-from leap.keymanager import openpgp, errors
-from leap.mail.testing import KeyManagerWithSoledadTestCase
-from leap.mail.testing import ADDRESS, ADDRESS_2
-from leap.mail.testing.smtp import getSMTPFactory, TEST_USER
+from leap.bitmask.keymanager import openpgp, errors
+from leap.bitmask.mail.testing import KeyManagerWithSoledadTestCase
+from leap.bitmask.mail.testing import ADDRESS, ADDRESS_2
+from leap.bitmask.mail.testing.smtp import getSMTPFactory, TEST_USER
 
 
 # some regexps

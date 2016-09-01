@@ -37,13 +37,15 @@ from twisted.python import failure
 
 from twisted import cred
 
-from leap.mail.imap.mailbox import IMAPMailbox
-from leap.mail.imap.messages import CaseInsensitiveDict
-from leap.mail.testing.imap import IMAP4HelperMixin
+from leap.bitmask.mail.imap.mailbox import IMAPMailbox
+from leap.bitmask.mail.imap.messages import CaseInsensitiveDict
+from leap.bitmask.mail.testing.imap import IMAP4HelperMixin
 
 
 TEST_USER = "testuser@leap.se"
 TEST_PASSWD = "1234"
+
+HERE = os.path.split(os.path.abspath(__file__))[0]
 
 
 def strip(f):
@@ -85,8 +87,8 @@ class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
     Tests for the generic behavior of the LEAPIMAP4Server
     which, right now, it's just implemented in this test file as
     LEAPIMAPServer. We will move the implementation, together with
-    authentication bits, to leap.mail.imap.server so it can be instantiated
-    from the tac file.
+    authentication bits, to leap.bitmask.mail.imap.server so it can be
+    instantiated from the tac file.
 
     Right now this TestCase tries to mimmick as close as possible the
     organization from the twisted.mail.imap tests so we can achieve
@@ -816,7 +818,7 @@ class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
         """
         Test appending a full message to the mailbox
         """
-        infile = util.sibpath(__file__, 'rfc822.message')
+        infile = os.path.join(HERE, '..', 'rfc822.message')
         message = open(infile)
         acc = self.server.theAccount
         mailbox_name = "appendmbox/subthing"
@@ -892,7 +894,7 @@ class LEAPIMAP4ServerTestCase(IMAP4HelperMixin):
         Test partially appending a message to the mailbox
         """
         # TODO this test sometimes will fail because of the notify_just_mdoc
-        infile = util.sibpath(__file__, 'rfc822.message')
+        infile = os.path.join(HERE, '..', 'rfc822.message')
 
         acc = self.server.theAccount
 

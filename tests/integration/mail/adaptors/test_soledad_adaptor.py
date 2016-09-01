@@ -15,18 +15,18 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-Tests for the Soledad Adaptor module - leap.mail.adaptors.soledad
+Tests for the Soledad Adaptor module - leap.bitmask.mail.adaptors.soledad
 """
 import os
 from functools import partial
 
 from twisted.internet import defer
 
-from leap.mail.adaptors import models
-from leap.mail.adaptors.soledad import SoledadDocumentWrapper
-from leap.mail.adaptors.soledad import SoledadIndexMixin
-from leap.mail.adaptors.soledad import SoledadMailAdaptor
-from leap.mail.testing.common import SoledadTestMixin
+from leap.bitmask.mail.adaptors import models
+from leap.bitmask.mail.adaptors.soledad import SoledadDocumentWrapper
+from leap.bitmask.mail.adaptors.soledad import SoledadIndexMixin
+from leap.bitmask.mail.adaptors.soledad import SoledadMailAdaptor
+from leap.bitmask.mail.testing.common import SoledadTestMixin
 
 from email.MIMEMultipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -34,6 +34,8 @@ from email.mime.text import MIMEText
 # DEBUG
 # import logging
 # logging.basicConfig(level=logging.DEBUG)
+
+HERE = os.path.split(os.path.abspath(__file__))[0]
 
 
 class CounterWrapper(SoledadDocumentWrapper):
@@ -275,8 +277,6 @@ class SoledadDocWrapperTestCase(SoledadTestMixin):
         d.addCallback(assert_actor_list_is_expected)
         return d
 
-HERE = os.path.split(os.path.abspath(__file__))[0]
-
 
 class MessageClass(object):
     def __init__(self, wrapper, uid):
@@ -310,7 +310,7 @@ class SoledadMailAdaptorTestCase(SoledadTestMixin):
     def test_get_msg_from_string(self):
         adaptor = self.get_adaptor()
 
-        with open(os.path.join(HERE, "rfc822.message")) as f:
+        with open(os.path.join(HERE, '..', 'rfc822.message')) as f:
             raw = f.read()
 
         msg = adaptor.get_msg_from_string(MessageClass, raw)
@@ -389,7 +389,7 @@ class SoledadMailAdaptorTestCase(SoledadTestMixin):
     def test_create_msg(self):
         adaptor = self.get_adaptor()
 
-        with open(os.path.join(HERE, "rfc822.message")) as f:
+        with open(os.path.join(HERE, '..', 'rfc822.message')) as f:
             raw = f.read()
         msg = adaptor.get_msg_from_string(MessageClass, raw)
 
@@ -407,7 +407,7 @@ class SoledadMailAdaptorTestCase(SoledadTestMixin):
 
     def test_update_msg(self):
         adaptor = self.get_adaptor()
-        with open(os.path.join(HERE, "rfc822.message")) as f:
+        with open(os.path.join(HERE, '..', 'rfc822.message')) as f:
             raw = f.read()
 
         def assert_msg_has_doc_id(ignored, msg):

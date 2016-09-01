@@ -14,33 +14,30 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
-
-
 """
-Tests for the Key Manager.
+Tests for the KeyManager.
 """
-
-from os import path
 import json
 import urllib
-from datetime import datetime
 import tempfile
 import pkg_resources
-from leap.common import ca_bundle
-from mock import Mock, MagicMock, patch
+from datetime import datetime
+from os import path
+
 from twisted.internet import defer
 from twisted.trial import unittest
 from twisted.web._responses import NOT_FOUND
+import mock
 
-from leap.keymanager import client
-
-from leap.keymanager import errors
-from leap.keymanager.keys import (
+from leap.common import ca_bundle
+from leap.bitmask.keymanager import client
+from leap.bitmask.keymanager import errors
+from leap.bitmask.keymanager.keys import (
     OpenPGPKey,
     is_address,
     build_key_from_dict,
 )
-from leap.keymanager.validation import ValidationLevels
+from leap.bitmask.keymanager.validation import ValidationLevels
 
 from common import (
     KeyManagerWithSoledadTestCase,
@@ -208,7 +205,8 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         token = "mytoken"
         km = self._key_manager(token=token)
         yield km._openpgp.put_raw_key(PUBLIC_KEY, ADDRESS)
-        km._async_client_pinned.request = Mock(return_value=defer.succeed(''))
+        km._async_client_pinned.request = mock.Mock(
+            return_value=defer.succeed(''))
         # the following data will be used on the send
         km.ca_cert_path = 'capath'
         km.session_id = 'sessionid'
@@ -251,8 +249,8 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         KeyNotFound is raised, with corresponding error message.
         """
         km = self._key_manager(url=NICKSERVER_URI)
-        client.readBody = Mock(return_value=defer.succeed(None))
-        km._async_client_pinned.request = Mock(
+        client.readBody = mock.Mock(return_value=defer.succeed(None))
+        km._async_client_pinned.request = mock.Mock(
             return_value=defer.succeed(None))
         url = NICKSERVER_URI + '?address=' + INVALID_MAIL_ADDRESS
 
@@ -261,7 +259,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         def check_key_not_found_is_raised_if_404(_):
             used_kwargs = km._async_client_pinned.request.call_args[1]
             check_404_callback = used_kwargs['callback']
-            fake_response = Mock()
+            fake_response = mock.Mock()
             fake_response.code = NOT_FOUND
             with self.assertRaisesRegexp(
                     errors.KeyNotFound,
@@ -278,7 +276,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         """
         km = self._key_manager(url=NICKSERVER_URI)
         key_not_found_exception = errors.KeyNotFound('some message')
-        km._async_client_pinned.request = Mock(
+        km._async_client_pinned.request = mock.Mock(
             side_effect=key_not_found_exception)
 
         def assert_key_not_found_raised(error):
@@ -317,10 +315,10 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         """
         data = json.dumps({'address': address, 'openpgp': key})
 
-        client.readBody = Mock(return_value=defer.succeed(data))
+        client.readBody = mock.Mock(return_value=defer.succeed(data))
 
         # mock the fetcher so it returns the key for ADDRESS_2
-        km._async_client_pinned.request = Mock(
+        km._async_client_pinned.request = mock.Mock(
             return_value=defer.succeed(None))
         km.ca_cert_path = 'cacertpath'
         # try to key get without fetching from server
@@ -363,7 +361,8 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         """
         km = self._key_manager()
 
-        km._async_client.request = Mock(return_value=defer.succeed(PUBLIC_KEY))
+        km._async_client.request = mock.Mock(
+            return_value=defer.succeed(PUBLIC_KEY))
 
         yield km.fetch_key(ADDRESS, "http://site.domain/key")
         key = yield km.get_key(ADDRESS)
@@ -377,7 +376,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         """
         km = self._key_manager()
 
-        km._async_client.request = Mock(
+        km._async_client.request = mock.Mock(
             return_value=defer.succeed(self.get_public_binary_key()))
 
         yield km.fetch_key(ADDRESS, "http://site.domain/key")
@@ -390,7 +389,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         """
         km = self._key_manager()
 
-        km._async_client.request = Mock(return_value=defer.succeed(""))
+        km._async_client.request = mock.Mock(return_value=defer.succeed(""))
         d = km.fetch_key(ADDRESS, "http://site.domain/key")
         return self.assertFailure(d, errors.KeyNotFound)
 
@@ -401,12 +400,14 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         """
         km = self._key_manager()
 
-        km._async_client.request = Mock(return_value=defer.succeed(PUBLIC_KEY))
+        km._async_client.request = mock.Mock(
+            return_value=defer.succeed(PUBLIC_KEY))
         d = km.fetch_key(ADDRESS_2, "http://site.domain/key")
         return self.assertFailure(d, errors.KeyAddressMismatch)
 
     def _mock_get_response(self, km, body):
-        km._async_client.request = MagicMock(return_value=defer.succeed(body))
+        km._async_client.request = mock.MagicMock(
+            return_value=defer.succeed(body))
 
         return km._async_client.request
 
@@ -449,8 +450,9 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
             ca_cert_path = tmp_input.name
             self._dump_to_file(ca_cert_path, ca_content)
 
-            with patch('leap.keymanager.tempfile.NamedTemporaryFile') as mock:
-                mock.return_value = tmp_output
+            pth = 'leap.bitmask.keymanager.tempfile.NamedTemporaryFile'
+            with mock.patch(pth) as mocked:
+                mocked.return_value = tmp_output
                 km = self._key_manager(ca_cert_path=ca_cert_path)
                 get_mock = self._mock_get_response(km, PUBLIC_KEY_OTHER)
 

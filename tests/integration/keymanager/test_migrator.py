@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # test_migrator.py
-# Copyright (C) 2015 LEAP
+# Copyright (C) 2015-2016 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -14,19 +14,15 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
-
-
 """
 Tests for the migrator.
 """
-
-
 from collections import namedtuple
 from mock import Mock
 from twisted.internet.defer import succeed, inlineCallbacks
 
-from leap.keymanager.migrator import KeyDocumentsMigrator, KEY_ID_KEY
-from leap.keymanager.documents import (
+from leap.bitmask.keymanager.migrator import KeyDocumentsMigrator, KEY_ID_KEY
+from leap.bitmask.keymanager.documents import (
     TAGS_PRIVATE_INDEX,
     KEYMANAGER_ACTIVE_TAG,
     KEYMANAGER_KEY_TAG,
@@ -41,7 +37,7 @@ from leap.keymanager.documents import (
     KEY_ENCR_USED_KEY,
     KEY_SIGN_USED_KEY,
 )
-from leap.keymanager.validation import ValidationLevels
+from leap.bitmask.keymanager.validation import ValidationLevels
 
 from common import (
     KeyManagerWithSoledadTestCase,

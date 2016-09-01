@@ -4,7 +4,7 @@ Tests for leap.mail.walk module
 import os.path
 from email.parser import Parser
 
-from leap.mail import walk
+from leap.bitmask.mail import walk
 
 CORPUS = {
     'simple': 'rfc822.message',

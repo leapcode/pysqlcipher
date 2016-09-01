@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # test_models.py
-# Copyright (C) 2014 LEAP
+# Copyright (C) 2014-2016 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@ Tests for the leap.mail.adaptors.models module.
 """
 from twisted.trial import unittest
 
-from leap.mail.adaptors import models
+from leap.bitmask.mail.adaptors import models
 
 
 class SerializableModelsTestCase(unittest.TestCase):

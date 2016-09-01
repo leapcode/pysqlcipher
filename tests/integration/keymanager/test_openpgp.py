@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # test_keymanager.py
-# Copyright (C) 2014 LEAP
+# Copyright (C) 2014-2016 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -14,26 +14,22 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
-
-
 """
 Tests for the OpenPGP support on Key Manager.
 """
-
-
 from datetime import datetime
 from mock import Mock
 from twisted.internet.defer import inlineCallbacks, gatherResults, succeed
 
-from leap.keymanager import (
+from leap.bitmask.keymanager import (
     KeyNotFound,
     openpgp,
 )
-from leap.keymanager.documents import (
+from leap.bitmask.keymanager.documents import (
     TYPE_FINGERPRINT_PRIVATE_INDEX,
     TYPE_ADDRESS_PRIVATE_INDEX,
 )
-from leap.keymanager.keys import OpenPGPKey
+from leap.bitmask.keymanager.keys import OpenPGPKey
 
 from common import (
     KeyManagerWithSoledadTestCase,

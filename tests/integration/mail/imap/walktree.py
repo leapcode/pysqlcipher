@@ -22,7 +22,7 @@ import sys
 import pprint
 from email import parser
 
-from leap.mail import walk as W
+from leap.bitmask.mail import walk as W
 
 DEBUG = os.environ.get("BITMASK_MAIL_DEBUG")
 

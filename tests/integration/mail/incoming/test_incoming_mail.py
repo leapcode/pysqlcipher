@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # test_incoming_mail.py
-# Copyright (C) 2015 LEAP
+# Copyright (C) 2015-2016 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,13 +15,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-Test case for leap.mail.incoming.service
+Test case for leap.bitmask.mail.incoming.service
 
 @authors: Ruben Pollan, <meskio@sindominio.net>
 
 @license: GPLv3, see included LICENSE file
 """
-
 import json
 import os
 import tempfile
@@ -35,17 +34,17 @@ from mock import Mock
 from twisted.internet import defer
 from twisted.python import log
 
-from leap.keymanager.errors import KeyAddressMismatch
-from leap.mail.adaptors import soledad_indexes as fields
-from leap.mail.adaptors.soledad import cleanup_deferred_locks
-from leap.mail.adaptors.soledad import SoledadMailAdaptor
-from leap.mail.mail import MessageCollection
-from leap.mail.mailbox_indexer import MailboxIndexer
+from leap.bitmask.keymanager.errors import KeyAddressMismatch
+from leap.bitmask.mail.adaptors import soledad_indexes as fields
+from leap.bitmask.mail.adaptors.soledad import cleanup_deferred_locks
+from leap.bitmask.mail.adaptors.soledad import SoledadMailAdaptor
+from leap.bitmask.mail.mail import MessageCollection
+from leap.bitmask.mail.mailbox_indexer import MailboxIndexer
 
-from leap.mail.incoming.service import IncomingMail
-from leap.mail.rfc3156 import MultipartEncrypted, PGPEncrypted
-from leap.mail.testing import KeyManagerWithSoledadTestCase
-from leap.mail.testing import ADDRESS, ADDRESS_2
+from leap.bitmask.mail.incoming.service import IncomingMail
+from leap.bitmask.mail.rfc3156 import MultipartEncrypted, PGPEncrypted
+from leap.bitmask.mail.testing import KeyManagerWithSoledadTestCase
+from leap.bitmask.mail.testing import ADDRESS, ADDRESS_2
 from leap.soledad.common.document import SoledadDocument
 from leap.soledad.common.crypto import (
     EncryptionSchemes,

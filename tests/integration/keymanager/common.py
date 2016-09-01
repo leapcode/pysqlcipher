@@ -17,7 +17,6 @@
 """
 Base classes for the Key Manager tests.
 """
-
 import distutils.spawn
 import os.path
 
@@ -25,8 +24,8 @@ from twisted.internet.defer import gatherResults
 from twisted.trial import unittest
 
 from leap.common.testing.basetest import BaseLeapTest
+from leap.bitmask.keymanager import KeyManager
 from leap.soledad.client import Soledad
-from leap.keymanager import KeyManager
 
 PATH = os.path.dirname(os.path.realpath(__file__))
 

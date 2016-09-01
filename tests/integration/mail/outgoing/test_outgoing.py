@@ -30,12 +30,12 @@ from twisted.python import log
 
 from mock import Mock
 
-from leap.mail.rfc3156 import RFC3156CompliantGenerator
-from leap.mail.outgoing.service import OutgoingMail
-from leap.mail.testing import ADDRESS, ADDRESS_2, PUBLIC_KEY_2
-from leap.mail.testing import KeyManagerWithSoledadTestCase
-from leap.mail.testing.smtp import getSMTPFactory
-from leap.keymanager import errors
+from leap.bitmask.mail.rfc3156 import RFC3156CompliantGenerator
+from leap.bitmask.mail.outgoing.service import OutgoingMail
+from leap.bitmask.mail.testing import ADDRESS, ADDRESS_2, PUBLIC_KEY_2
+from leap.bitmask.mail.testing import KeyManagerWithSoledadTestCase
+from leap.bitmask.mail.testing.smtp import getSMTPFactory
+from leap.bitmask.keymanager import errors
 
 
 BEGIN_PUBLIC_KEY = "-----BEGIN PGP PUBLIC KEY BLOCK-----"
@@ -214,7 +214,7 @@ class TestOutgoingMail(KeyManagerWithSoledadTestCase):
         dest = User(unknown_address, 'gateway.leap.se', self.proto, ADDRESS_2)
 
         d = self.outgoing_mail._maybe_encrypt_and_sign(
-                raw, dest, fetch_remote=False)
+            raw, dest, fetch_remote=False)
         d.addCallback(lambda (message, _):
                       self._check_headers(message, lines[:4]))
         d.addCallback(self._check_key_attachment)

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # test_mail.py
-# Copyright (C) 2014 LEAP
+# Copyright (C) 2014-2016 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -25,10 +25,10 @@ from functools import partial
 from email.parser import Parser
 from email.Utils import formatdate
 
-from leap.mail.adaptors.soledad import SoledadMailAdaptor
-from leap.mail.mail import MessageCollection, Account, _unpack_headers
-from leap.mail.mailbox_indexer import MailboxIndexer
-from leap.mail.testing.common import SoledadTestMixin
+from leap.bitmask.mail.adaptors.soledad import SoledadMailAdaptor
+from leap.bitmask.mail.mail import MessageCollection, Account, _unpack_headers
+from leap.bitmask.mail.mailbox_indexer import MailboxIndexer
+from leap.bitmask.mail.testing.common import SoledadTestMixin
 
 HERE = os.path.split(os.path.abspath(__file__))[0]
 

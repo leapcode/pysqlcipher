@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# __init__.py
-# Copyright (C) 2014 LEAP
+# test_validation.py
+# Copyright (C) 2014-2016 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,13 +17,12 @@
 """
 Tests for the Validation Levels
 """
-
 import unittest
 from datetime import datetime
 from twisted.internet.defer import inlineCallbacks
 
-from leap.keymanager.errors import KeyNotValidUpgrade
-from leap.keymanager.validation import ValidationLevels
+from leap.bitmask.keymanager.errors import KeyNotValidUpgrade
+from leap.bitmask.keymanager.validation import ValidationLevels
 
 from common import (
     KeyManagerWithSoledadTestCase,
