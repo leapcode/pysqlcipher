@@ -41,3 +41,7 @@ docs/_build/
 .venv/
 venv/
 ENV/
+
+# Javascript stuff for the www ui
+node_modules
+www/public
