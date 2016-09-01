@@ -10,8 +10,8 @@ If you want to develop for the encrypted mail service, execute inside your virtu
   make dev-mail
 
 If you want to develop for the gui client too, you have to have installed the
-python2 bindings for Qt5 in your system (in debian is python-pyqt5). After
-ensuring this, you can do::
+python2 bindings for Qt5 in your system (in debian this is python-pyqt5,
+python-pyqt5.qtwebkit). After ensuring this, you can do::
 
   make dev-all
 
