@@ -37,3 +37,4 @@ ENV/
 # Javascript, web-ui
 www/node_modules
 www/public
+www/npm-debug.log
