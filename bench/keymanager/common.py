@@ -1,109 +1,49 @@
-# -*- coding: utf-8 -*-
-# test_keymanager.py
-# Copyright (C) 2013 LEAP
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program. If not, see <http://www.gnu.org/licenses/>.
-"""
-Base classes for the Key Manager tests.
-"""
-import distutils.spawn
-import os.path
-
-from twisted.internet.defer import gatherResults
-from twisted.trial import unittest
-
-from leap.common.testing.basetest import BaseLeapTest
-from leap.bitmask.keymanager import KeyManager
-from leap.soledad.client import Soledad
-
-PATH = os.path.dirname(os.path.realpath(__file__))
-
 ADDRESS = 'leap@leap.se'
 ADDRESS_2 = 'anotheruser@leap.se'
 
-
-class KeyManagerWithSoledadTestCase(unittest.TestCase, BaseLeapTest):
-
-    def setUp(self):
-        self.gpg_binary_path = self._find_gpg()
-
-        self._soledad = Soledad(
-            u"leap@leap.se",
-            u"123456",
-            secrets_path=self.tempdir + "/secret.gpg",
-            local_db_path=self.tempdir + "/soledad.u1db",
-            server_url='',
-            cert_file=None,
-            auth_token=None,
-            syncable=False
-        )
-
-    def tearDown(self):
-        km = self._key_manager()
-
-        # wait for the indexes to be ready for the tear down
-        d = km._openpgp.deferred_init
-        d.addCallback(lambda _: self.delete_all_keys(km))
-        d.addCallback(lambda _: self._soledad.close())
-        return d
-
-    def delete_all_keys(self, km):
-        def delete_keys(keys):
-            deferreds = []
-            for key in keys:
-                d = km._openpgp.delete_key(key)
-                deferreds.append(d)
-            return gatherResults(deferreds)
-
-        def check_deleted(_, private):
-            d = km.get_all_keys(private=private)
-            d.addCallback(lambda keys: self.assertEqual(keys, []))
-            return d
-
-        deferreds = []
-        for private in [True, False]:
-            d = km.get_all_keys(private=private)
-            d.addCallback(delete_keys)
-            d.addCallback(check_deleted, private)
-            deferreds.append(d)
-        return gatherResults(deferreds)
-
-    def _key_manager(self, user=ADDRESS, url='', token=None,
-                     ca_cert_path=None):
-        return KeyManager(user, url, self._soledad, token=token,
-                          gpgbinary=self.gpg_binary_path,
-                          ca_cert_path=ca_cert_path)
-
-    def _find_gpg(self):
-        gpg_path = distutils.spawn.find_executable('gpg')
-        if gpg_path is not None:
-            return os.path.realpath(gpg_path)
-        else:
-            return "/usr/bin/gpg"
-
-    def get_public_binary_key(self):
-        with open(PATH + '/fixtures/public_key.bin', 'r') as binary_public_key:
-            return binary_public_key.read()
-
-    def get_private_binary_key(self):
-        with open(
-                PATH + '/fixtures/private_key.bin', 'r') as binary_private_key:
-            return binary_private_key.read()
-
-
-# key 24D18DDF: public key "Leap Test Key <leap@leap.se>"
 KEY_FINGERPRINT = "E36E738D69173C13D709E44F2F455E2824D18DDF"
+
+CIPHERTEXT = """
+-----BEGIN PGP MESSAGE-----
+Version: GnuPG v1
+hQIMAyj9aG/xtZOwAQ/+OtgYlCULNaCqSnzDIAIO5Swsg7fLFIErSWF/4ngkNxPk
+GqL3/2/HvlLY6blsmn5RU2AK4vo5Dc5s2lQU3PwqsaVKNoqkn1G9bMqsoIQhP4vW
+M6c+KdxtA8cQggENpx0kF8FXdvV+GclChfK38TDJUrJLnksfo+UP9rI2BsIpHpiS
+sfikVLuUc83+2hTozuTOVARNG7x58hhnR7wPtbgm/6AwVNvU0SQDEDJXi43MFRbP
+9VboUHIRZLbeIwlxFHj3umh4f8rca4jSwiWxDna2YRAFBZrFiyiGAnISZQc9Nh4d
+jLqa7rMeLSfTigkOXVYdVjEgx/wsbsDjgJ2f6TUrfP6RWen3/4223ctfeL2x4r2V
+6ej2cbbR61qQx2FR4HV4XRaSg3tV+Ytz0dklrvcL0PQVdSsJhDmRV4pNgLSt0/bA
+E6F2hk/S3sjnXZRMvXNb3SRQk2R0Svn4j/8ft/8VC+h5jkHO2G5K3DbAHkS2MPJm
+bLwx4LMPohZstS75OFKZv63nzdOYIz5gPSy9A4IC1VHqM4d3T99cqY8XOJOqRkr5
+TCYOxOHF4z6N2nRkzVXoDoTfC6+qx9bWuvGhoj5WjFG1I19e+L1IVVvpYKo6LAOa
+7Dn+IXe3XnCGGHn3AusJgyeqt/3Z5HgzsSPMKIh2WfUKERZZ+vrxTXIf4Ko+2tbS
+aQEpuiQUr9zE4z8eT+brGJNl5mx9c1qYCSPjGIGUCt8fTOKruMEkWBQHMln05qpF
+nFMYk7JXtYaArGrC1QPRVHOvgUTB6Vx7KVHikzsEXGLF6ywBnZYzeh8ah/FtxHG9
+o+vTTcScQkxVcw==
+=qYFS
+-----END PGP MESSAGE-----
+"""
+SIGNEDTEXT = """
+-----BEGIN PGP MESSAGE-----
+Version: GnuPG v1
+owHtwYszEwAcAOBtbMxrxOWRhp2aIq/Ligubt2Ynbh45c6Sb6mZbmeFY18qi7lY4
+VHMlXENey2M9PCKvW5FHpesKXSycavNcxOr/6H7fV2Ssg0Ah3YKTnBwnxLPIJqLd
+GSyXlXKe7crL5sU1I6j2AAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAf+AGylYXgUQh
+MGhUXDOCijDAmroFJzk5TohnsZm4v7GUm3nKlmm81iD29kxTiej+o721Di7tHisO
+RQNzteoFD7aa5r8tfnUnptG7YHjV10I7mKLYnuDFCJJxrPxmUo7v0haOsKS4GqYe
+snts8+eyUaU/rjVh/Z5ygNnEovajBQGWeYnTpLcc6fsF7a7TmNzQndW3FjKnUitb
+P0lGTGQ1kfV0RdakLsOYpNAU8qNWZTYSVcimX9kHhlliY8WQXUMEVn9/GMEkXPV5
+5GLQiuVAYXqQ9YPXmJ64UYOds8Nzxpe62vu2enMwSLQ3Odo8p1CJiBqjOAtSnegs
+2sM1T1odsnqFk3zUiO2bwRfqdS40qNjX5vkbZBceiXM9mRedWaXRHE6L9PMpDnhK
+iTY5Hag99XXq25v1Y0gmt2aPWnXrOyNUKuo9UrrzrlhhvxyJo3Xhmi70SbKJ83KZ
+F+rkogA/nM/8GKWT4VkQLw/16KKmM8q8pjpGB3UtDsV3L1df6UnlL5LN+lOFL0QO
+AZQDXE3aL8fy8B9aeri4CJmLrxvElwhH3Ad2Kp6XykVZnc8wT1q39OTFS8tfXsb8
+lKyZcmy47m2x5TKf+LpAqxKNraHf+CS+xiS7Et0gvbtrNSNN26ffprRdtWZFdByX
+H0SiTbvNExzL8zhEXo/QldiyWT+e6GwpOadPGL9xIpe8Uc0k/A6uonvy8f8A
+=wZ2N
+-----END PGP MESSAGE-----
+"""
+
 PUBLIC_KEY = """
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 Version: GnuPG v1.4.10 (GNU/Linux)
