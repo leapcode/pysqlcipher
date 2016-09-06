@@ -21,6 +21,9 @@ pydist-clean:
 	rm -rf build dist
 	rm -rf leap/bitmask_www/*
 
+uninstall:
+	pip uninstall leap.bitmask_www
+
 all: clean build pydist
 
 .PHONY: clean build install all

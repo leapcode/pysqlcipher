@@ -28,7 +28,7 @@
  * strings.
  */
 
-import Promise from 'promise'
+import "babel-polyfill";
 
 var bitmask = function(){
     var event_handlers = {};
