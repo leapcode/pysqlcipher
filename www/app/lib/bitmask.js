@@ -33,8 +33,13 @@ import "babel-polyfill";
 var bitmask = function(){
     var event_handlers = {};
 
+    var api_url = '/API/';
+    if (window.location.protocol === "file:") {
+        api_url = 'http://localhost:7070/API/';
+    }
+
     function call(command) {
-        var url = '/API/' + command.slice(0, 2).join('/');
+        var url = api_url + command.slice(0, 2).join('/');
         var data = JSON.stringify(command.slice(2));
 
         return new Promise(function(resolve, reject) {
