@@ -161,7 +161,7 @@ var bitmask = function(){
              * @return {Promise<string>} The token
              */
             get_token: function() {
-                return call(['mail', 'get-token']);
+                return call(['mail', 'get_token']);
             }
         },
 
