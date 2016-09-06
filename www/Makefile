@@ -9,12 +9,14 @@ clean:
 	rm -rf public
 	rm -rf node_modules
 
-pydist: pydist-clean build
+py-pkg:
 	touch leap/bitmask_www/__init__.py
 	cp -r public/ leap/bitmask_www
+
+pydist: pydist-clean build py-pkg
 	python setup.py bdist_wheel
 
-pydist-dev:
+pydist-dev: pydist-clean build py-pkg
 	pip install -e .
 
 pydist-clean:
