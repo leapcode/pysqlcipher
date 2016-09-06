@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # service.py
-# Copyright (C) 2015-2016 LEAP
+# Copyright (C) 2015 LEAP
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -14,6 +14,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 """
 Bonafide Service.
 """
@@ -50,7 +51,7 @@ class BonafideService(HookableService):
 
     # Commands
 
-    def do_authenticate(self, username, password):
+    def do_authenticate(self, username, password, autoconf=False):
 
         def notify_passphrase_entry(username, password):
             data = dict(username=username, password=password)
@@ -78,14 +79,14 @@ class BonafideService(HookableService):
 
         notify_passphrase_entry(username, password)
 
-        d = self._bonafide.do_authenticate(username, password)
+        d = self._bonafide.do_authenticate(username, password, autoconf)
         d.addCallback(notify_bonafide_auth)
         d.addCallback(lambda response: {
             'srp_token': response[0], 'uuid': response[1]})
         return d
 
-    def do_signup(self, username, password):
-        d = self._bonafide.do_signup(username, password)
+    def do_signup(self, username, password, autoconf=False):
+        d = self._bonafide.do_signup(username, password, autoconf)
         d.addCallback(lambda response: {'signup': 'ok', 'user': response})
         return d
 
@@ -101,6 +102,18 @@ class BonafideService(HookableService):
         d.addCallback(reset_active)
         d.addCallback(lambda response: {'logout': 'ok'})
         return d
+
+    def do_provider_create(self, domain):
+        return self._bonafide.do_get_provider(domain, autoconf=True)
+
+    def do_provider_read(self, domain):
+        return self._bonafide.do_get_provider(domain)
+
+    def do_provider_delete(self, domain):
+        return self._bonafide.do_provider_delete(domain)
+
+    def do_provider_list(self, seeded=False):
+        return self._bonafide.do_provider_list(seeded)
 
     def do_get_smtp_cert(self, username=None):
         if not username:

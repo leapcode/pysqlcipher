@@ -46,23 +46,71 @@ class SubCommand(object):
             _method = None
 
         if not _method:
-            raise RuntimeError('No such subcommand')
+            raise RuntimeError('No such subcommand: ' + subcmd)
         return defer.maybeDeferred(_method, service, *parts, **kw)
+
+
+class BonafideCmd(SubCommand):
+
+    label = 'bonafide'
+
+    def __init__(self):
+        self.subcommand_user = UserCmd()
+        self.subcommand_provider = ProviderCmd()
+
+    def do_USER(self, bonafide, *parts):
+        return self.subcommand_user.dispatch(bonafide, *parts[1:])
+
+    def do_PROVIDER(self, bonafide, *parts):
+        return self.subcommand_provider.dispatch(bonafide, *parts[1:])
+
+
+class ProviderCmd(SubCommand):
+
+    label = 'bonafide.provider'
+
+    @register_method("{'domain': str, 'api_uri': str, 'api_version': str}")
+    def do_CREATE(self, bonafide, *parts):
+        domain = parts[2]
+        return bonafide.do_provider_create(domain)
+
+    @register_method("{'domain': str, 'api_uri': str, 'api_version': str}")
+    def do_READ(self, bonafide, *parts):
+        domain = parts[2]
+        return bonafide.do_provider_read(domain)
+
+    @register_method("")
+    def do_DELETE(self, bonafide, *parts):
+        domain = parts[2]
+        bonafide.do_provider_delete(domain)
+
+    @register_method("[{'domain': str}]")
+    def do_LIST(self, bonafide, *parts):
+        seeded = False
+        if len(parts) > 2:
+            seeded = parts[2]
+        return bonafide.do_provider_list(seeded)
 
 
 class UserCmd(SubCommand):
 
-    label = 'user'
+    label = 'bonafide.user'
 
     @register_method("{'srp_token': unicode, 'uuid': unicode}")
     def do_AUTHENTICATE(self, bonafide, *parts):
         user, password = parts[2], parts[3]
-        return bonafide.do_authenticate(user, password)
+        autoconf = False
+        if len(parts) > 4:
+            autoconf = parts[4]
+        return bonafide.do_authenticate(user, password, autoconf)
 
     @register_method("{'signup': 'ok', 'user': str}")
     def do_SIGNUP(self, bonafide, *parts):
         user, password = parts[2], parts[3]
-        return bonafide.do_signup(user, password)
+        autoconf = False
+        if len(parts) > 4:
+            autoconf = parts[4]
+        return bonafide.do_signup(user, password, autoconf)
 
     @register_method("{'logout': 'ok'}")
     def do_LOGOUT(self, bonafide, *parts):
@@ -286,7 +334,7 @@ class CommandDispatcher(object):
     def __init__(self, core):
 
         self.core = core
-        self.subcommand_user = UserCmd()
+        self.subcommand_bonafide = BonafideCmd()
         self.subcommand_eip = EIPCmd()
         self.subcommand_mail = MailCmd()
         self.subcommand_keys = KeysCmd()
@@ -314,9 +362,9 @@ class CommandDispatcher(object):
 
     # -----------------------------------------------
 
-    def do_USER(self, *parts):
+    def do_BONAFIDE(self, *parts):
         bonafide = self._get_service('bonafide')
-        d = self.subcommand_user.dispatch(bonafide, *parts)
+        d = self.subcommand_bonafide.dispatch(bonafide, *parts)
         d.addCallbacks(_format_result, _format_error)
         return d
 

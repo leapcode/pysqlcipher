@@ -25,7 +25,7 @@ from leap.bitmask.cli import command
 
 
 class User(command.Command):
-    service = 'user'
+    service = 'bonafide'
     usage = '''{name} user <subcommand>
 
 Bitmask account service
@@ -41,16 +41,20 @@ SUBCOMMANDS:
 
     commands = ['active']
 
+    def __init__(self):
+        super(User, self).__init__()
+        self.data.append('user')
+
     def create(self, raw_args):
         username = self.username(raw_args)
         passwd = getpass.getpass()
-        self.data += ['signup', username, passwd]
+        self.data += ['signup', username, passwd, True]
         return self._send(printer=command.default_dict_printer)
 
     def auth(self, raw_args):
         username = self.username(raw_args)
         passwd = getpass.getpass()
-        self.data += ['authenticate', username, passwd]
+        self.data += ['authenticate', username, passwd, True]
         return self._send(printer=command.default_dict_printer)
 
     def logout(self, raw_args):

@@ -12,10 +12,57 @@
             bitmask.events.register("KEYMANAGER_KEY_FOUND", event_handler);
          };
 
+        function configure() {
+            var domain = document.getElementById('domain').value;
+            bitmask.bonafide.provider.create(domain).then(function(response) {
+                log("Provider configured: ");
+                for (k in response) {
+                    log("    " + k + ": " + response[k]);
+                }
+            }, function(error) {
+                log("Some error ocurred: " + error);
+            });
+        };
+
+        function read() {
+            var domain = document.getElementById('domain').value;
+            bitmask.bonafide.provider.read(domain).then(function(response) {
+                log("Provider configuration: ");
+                for (k in response) {
+                    log("    " + k + ": " + response[k]);
+                }
+            }, function(error) {
+                log("Some error ocurred: " + error);
+            });
+        };
+
+        function del() {
+            var domain = document.getElementById('domain').value;
+            bitmask.bonafide.provider.delete(domain).then(function(response) {
+                log("Provider deleted: ");
+                for (k in response) {
+                    log("    " + k + ": " + response[k]);
+                }
+            }, function(error) {
+                log("Some error ocurred: " + error);
+            });
+        };
+
+        function list() {
+            bitmask.bonafide.provider.list().then(function(response) {
+                log("List providers: ");
+                for (k in response) {
+                    log("    domain: " + response[k]["domain"]);
+                }
+            }, function(error) {
+                log("Some error ocurred: " + error);
+            });
+        };
+
          function login() {
             var email = document.getElementById('email').value;
             var password = document.getElementById('password').value;
-            bitmask.user.auth(email, password).then(function(response) {
+            bitmask.bonafide.user.auth(email, password).then(function(response) {
                 log("We are logged in: ");
                 for (k in response) {
                     log("    " + k + ": " + response[k]);
@@ -26,11 +73,24 @@
          };
 
          function logout() {
-            bitmask.user.logout().then(function(response) {
+            bitmask.bonafide.user.logout().then(function(response) {
                 log("We are logged out: ");
                 for (k in response) {
                     log("    " + k + ": " + response[k]);
                 }
+            }, function(error) {
+                log("Some error ocurred: " + error);
+            });
+	 };
+
+         function user() {
+            bitmask.bonafide.user.active().then(function(response) {
+                log("The active user is: " + response);
+            }, function(error) {
+                log("Some error ocurred: " + error);
+            });
+            bitmask.mail.get_token().then(function(response) {
+                log("The token is: " + response);
             }, function(error) {
                 log("Some error ocurred: " + error);
             });
@@ -53,11 +113,19 @@
       <h1>Bitmask Control Panel</h1>
       <noscript>You must enable JavaScript</noscript>
       <form>
+         <p>Provider: <input id="domain" type="text" size="50" maxlength="50" value="mail.bitmask.net"></p>
+      </form>
+      <button onclick='configure();'>Configure provider</button>
+      <button onclick='read();'>Read providers</button>
+      <button onclick='del();'>Delete providers</button>
+      <button onclick='list();'>List providers</button>
+      <form>
          <p>Email address: <input id="email" type="text" size="50" maxlength="50" value="user@mail.bitmask.net"></p>
          <p>Password: <input id="password" type="password" size="50" maxlength="50" ></p>
       </form>
       <button onclick='login();'>Log In</button>
       <button onclick='logout();'>Log Out</button>
+      <button onclick='user();'>User</button>
       <pre id="log" style="height: 20em; overflow-y: scroll; background-color: #faa;"></pre>
    </body>
 </html>

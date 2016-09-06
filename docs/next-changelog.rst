@@ -12,6 +12,7 @@ Features
 ~~~~~~~~
 - `#7965 <https://leap.se/code/issues/7965>`_: Add basic keymanagement to the cli.
 - `#8265 <https://leap.se/code/issues/8265>`_: Add a REST API and bitmask.js library for it.
+- `#8400 <https://leap.se/code/issues/8265>`_: Add manual provider registration.
 - Use mail_auth token in the core instead of imap/smtp tokens.
 
 - `#1234 <https://leap.se/code/issues/1234>`_: Description of the new feature corresponding with issue #1234.

@@ -20,6 +20,7 @@ Configuration for a LEAP provider.
 import datetime
 import json
 import os
+import shutil
 import sys
 
 from collections import defaultdict
@@ -30,12 +31,14 @@ from twisted.internet.ssl import ClientContextFactory
 from twisted.python import log
 from twisted.web.client import Agent, downloadPage
 
+from leap.bitmask.bonafide._http import httpRequest
+from leap.bitmask.bonafide.provider import Discovery
+from leap.bitmask.bonafide.errors import NotConfiguredError
+
 from leap.common.check import leap_assert
 from leap.common.config import get_path_prefix as common_get_path_prefix
 from leap.common.files import mkdir_p
 # check_and_fix_urw_only, get_mtime
-from leap.bitmask.bonafide._http import httpRequest
-from leap.bitmask.bonafide.provider import Discovery
 
 
 APPNAME = "bonafide"
@@ -126,6 +129,27 @@ def get_username_and_provider(full_id):
     return full_id.split('@')
 
 
+def list_providers():
+    path = os.path.join(_preffix, "leap", "providers")
+    path = os.path.expanduser(path)
+    return os.listdir(path)
+
+
+def delete_provider(domain):
+    path = os.path.join(_preffix, "leap", "providers", domain)
+    path = os.path.expanduser(path)
+    if not os.path.exists(path):
+        raise NotConfiguredError("Provider %s is not configured, can't be "
+                                 "deleted" % (domain,))
+    shutil.rmtree(path)
+
+    # FIXME: this feels hacky, can we find a better way??
+    if domain in Provider.first_bootstrap:
+        del Provider.first_bootstrap[domain]
+    if domain in Provider.ongoing_bootstrap:
+        del Provider.ongoing_bootstrap[domain]
+
+
 class Provider(object):
     # TODO add validation
 
@@ -137,8 +161,9 @@ class Provider(object):
     ongoing_bootstrap = defaultdict(None)
     stuck_bootstrap = defaultdict(None)
 
-    def __init__(self, domain, autoconf=True, basedir=None,
+    def __init__(self, domain, autoconf=False, basedir=None,
                  check_certificate=True):
+        # TODO: I need a way to know if it was already configured
         if not basedir:
             basedir = os.path.join(_preffix, 'leap')
         self._basedir = os.path.expanduser(basedir)
@@ -162,10 +187,14 @@ class Provider(object):
 
         self._load_provider_json()
 
-        if not is_configured and autoconf:
-            log.msg('provider %s not configured: downloading files...' %
-                    domain)
-            self.bootstrap()
+        if not is_configured:
+            if autoconf:
+                log.msg('provider %s not configured: downloading files...' %
+                        domain)
+                self.bootstrap()
+            else:
+                raise NotConfiguredError("Provider %s is not configured"
+                                         % (domain,))
         else:
             log.msg('Provider already initialized')
             self.first_bootstrap[self._domain] = defer.succeed(
@@ -191,14 +220,16 @@ class Provider(object):
 
     def is_configured(self):
         provider_json = self._get_provider_json_path()
-        # XXX check if all the services are there
         if not is_file(provider_json):
             return False
         if not is_file(self._get_ca_cert_path()):
             return False
-        if not self.has_config_for_all_services():
-            return False
         return True
+
+    def config(self):
+        if not self._provider_config:
+            self._load_provider_json()
+        return self._provider_config.dict()
 
     def bootstrap(self):
         domain = self._domain
@@ -490,6 +521,9 @@ class Provider(object):
 class Record(object):
     def __init__(self, **kw):
         self.__dict__.update(kw)
+
+    def dict(self):
+        return self.__dict__
 
 
 class WebClientContextFactory(ClientContextFactory):
