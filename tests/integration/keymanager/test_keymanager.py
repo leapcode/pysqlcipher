@@ -38,9 +38,9 @@ from leap.bitmask.keymanager.keys import (
     build_key_from_dict,
 )
 from leap.bitmask.keymanager.validation import ValidationLevels
+from leap.bitmask.keymanager.testing import KeyManagerWithSoledadTestCase
 
 from common import (
-    KeyManagerWithSoledadTestCase,
     ADDRESS,
     ADDRESS_2,
     KEY_FINGERPRINT,

@@ -1,22 +1,3 @@
-# -*- coding: utf-8 -*-
-# test_keymanager.py
-# Copyright (C) 2013 LEAP
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program. If not, see <http://www.gnu.org/licenses/>.
-"""
-Base classes for the Key Manager tests.
-"""
 import distutils.spawn
 import os.path
 
@@ -31,6 +12,7 @@ PATH = os.path.dirname(os.path.realpath(__file__))
 
 ADDRESS = 'leap@leap.se'
 ADDRESS_2 = 'anotheruser@leap.se'
+
 
 # key 24D18DDF: public key "Leap Test Key <leap@leap.se>"
 KEY_FINGERPRINT = "E36E738D69173C13D709E44F2F455E2824D18DDF"
@@ -254,3 +236,72 @@ THx7N776fcYHGumbqUMYrxrcZSbNveE6SaK8fphRam1dewM0
 =a5gs
 -----END PGP PRIVATE KEY BLOCK-----
 """
+
+
+class KeyManagerWithSoledadTestCase(unittest.TestCase, BaseLeapTest):
+
+    def setUp(self):
+        self.gpg_binary_path = self._find_gpg()
+
+        self._soledad = Soledad(
+            u"leap@leap.se",
+            u"123456",
+            secrets_path=self.tempdir + "/secret.gpg",
+            local_db_path=self.tempdir + "/soledad.u1db",
+            server_url='',
+            cert_file=None,
+            auth_token=None,
+            syncable=False
+        )
+
+    def tearDown(self):
+        km = self._key_manager()
+
+        # wait for the indexes to be ready for the tear down
+        d = km._openpgp.deferred_init
+        d.addCallback(lambda _: self.delete_all_keys(km))
+        d.addCallback(lambda _: self._soledad.close())
+        return d
+
+    def delete_all_keys(self, km):
+        def delete_keys(keys):
+            deferreds = []
+            for key in keys:
+                d = km._openpgp.delete_key(key)
+                deferreds.append(d)
+            return gatherResults(deferreds)
+
+        def check_deleted(_, private):
+            d = km.get_all_keys(private=private)
+            d.addCallback(lambda keys: self.assertEqual(keys, []))
+            return d
+
+        deferreds = []
+        for private in [True, False]:
+            d = km.get_all_keys(private=private)
+            d.addCallback(delete_keys)
+            d.addCallback(check_deleted, private)
+            deferreds.append(d)
+        return gatherResults(deferreds)
+
+    def _key_manager(self, user=ADDRESS, url='', token=None,
+                     ca_cert_path=None):
+        return KeyManager(user, url, self._soledad, token=token,
+                          gpgbinary=self.gpg_binary_path,
+                          ca_cert_path=ca_cert_path)
+
+    def _find_gpg(self):
+        gpg_path = distutils.spawn.find_executable('gpg')
+        if gpg_path is not None:
+            return os.path.realpath(gpg_path)
+        else:
+            return "/usr/bin/gpg"
+
+    def get_public_binary_key(self):
+        with open(PATH + '/public_key.bin', 'r') as binary_public_key:
+            return binary_public_key.read()
+
+    def get_private_binary_key(self):
+        with open(
+                PATH + '/private_key.bin', 'r') as binary_private_key:
+            return binary_private_key.read()

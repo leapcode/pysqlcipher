@@ -30,9 +30,9 @@ from leap.bitmask.keymanager.documents import (
     TYPE_ADDRESS_PRIVATE_INDEX,
 )
 from leap.bitmask.keymanager.keys import OpenPGPKey
+from leap.bitmask.keymanager.testing import KeyManagerWithSoledadTestCase
 
 from common import (
-    KeyManagerWithSoledadTestCase,
     ADDRESS,
     ADDRESS_2,
     KEY_FINGERPRINT,

@@ -24,7 +24,7 @@ from twisted.internet.defer import inlineCallbacks
 from leap.bitmask.keymanager.errors import KeyNotValidUpgrade
 from leap.bitmask.keymanager.validation import ValidationLevels
 
-from common import (
+from leap.bitmask.keymanager.testing import (
     KeyManagerWithSoledadTestCase,
     ADDRESS,
     PUBLIC_KEY,

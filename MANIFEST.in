@@ -1,2 +1,3 @@
 include versioneer.py
 include src/leap/bitmask/_version.py
+include *.bin
