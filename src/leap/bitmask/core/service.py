@@ -119,6 +119,7 @@ class BitmaskBackend(configurable.ConfigurableService):
         zs.setServiceParent(self)
 
     def init_web(self):
+        # FIXME try to import leap.bitmask_www and fail otherwise
         http = _web.HTTPDispatcherService(self)
         http.setServiceParent(self)
 

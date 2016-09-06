@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # _web.py
-# Copyright (C) 2016 LEAP
+# Copyright (C) 2016 LEAP Encryption Access Project
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -46,14 +46,16 @@ class HTTPDispatcherService(service.Service):
 
     def startService(self):
         webdir = os.path.abspath(
-            pkg_resources.resource_filename("leap.bitmask_js", "public"))
+            pkg_resources.resource_filename('leap.bitmask_www', 'public'))
         root = File(webdir)
 
         api = Api(CommandDispatcher(self._core))
-        root.putChild(u"API", api)
+        root.putChild(u'API', api)
 
         site = Site(root)
         self.site = site
+
+        # TODO use endpoints instead
         self.listener = reactor.listenTCP(self.port, site,
                                           interface='127.0.0.1')
 
@@ -63,6 +65,7 @@ class HTTPDispatcherService(service.Service):
 
 
 class Api(Resource):
+
     isLeaf = True
 
     def __init__(self, dispatcher):

@@ -2,11 +2,16 @@ build:
 	npm install
 	npm run build:production
 
+build-dev:
+	npm run watch 
+
 clean:
 	rm -rf public
 	rm -rf node_modules
 
-pydist-wheel:
+pydist: pydist-clean build
+	touch leap/bitmask_www/__init__.py
+	cp -r public/ leap/bitmask_www
 	python setup.py bdist_wheel
 
 pydist-dev:
@@ -14,3 +19,8 @@ pydist-dev:
 
 pydist-clean:
 	rm -rf build dist
+	rm -rf leap/bitmask_www/*
+
+all: clean build pydist
+
+.PHONY: clean build install all

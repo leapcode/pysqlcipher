@@ -38,3 +38,7 @@ ENV/
 www/node_modules
 www/public
 www/npm-debug.log
+www/leap/bitmask_www/public/
+
+# vim
+*.swp

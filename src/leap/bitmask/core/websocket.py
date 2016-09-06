@@ -61,11 +61,11 @@ class WebSocketsDispatcherService(service.Service):
 
         # we server static files under "/" ..
         webdir = os.path.abspath(
-            pkg_resources.resource_filename("leap.bitmask.core", "web"))
+            pkg_resources.resource_filename('leap.bitmask.core', 'web'))
         root = File(webdir)
 
         # and our WebSocket server under "/ws"
-        root.putChild(u"bitmask", resource)
+        root.putChild(u'bitmask', resource)
 
         # both under one Twisted Web Site
         site = Site(root)

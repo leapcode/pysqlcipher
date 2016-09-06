@@ -27,9 +27,11 @@ extras = {
     ],
     'gui': [
         'vext.pyqt5',
+        # 'bitmask_www'   # when it's published in pypi
     ],
     'all': [
         'vext.pyqt5',
+        # 'bitmask_www'   # when it's published in pypi
         'leap.soledad.client',
         'gnupg',
     ]

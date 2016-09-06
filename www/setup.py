@@ -15,19 +15,26 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 """
 Setup file for leap.bitmask-www
 """
+
 from setuptools import setup
 
 import datetime
 import time
 
+
+# TODO  add all the node steps in this setup too.
+# Right now it's expected that you run the node commands by hand
+# i.e., 'make build'
+
 now = datetime.datetime.now()
 timestamp = time.strftime('%Y%m%d', now.timetuple())
 
 setup(
-    name='leap.bitmask-www',
+    name='leap.bitmask_www',
     version='0.1.%s' % timestamp,
     description='Bitmask html/js UI',
     long_description=open('notes-python.txt').read(),
@@ -35,8 +42,13 @@ setup(
     author_email='info@leap.se',
     url='http://leap.se',
     namespace_packages=['leap'],
-    packages=['leap.bitmask-www'],
+    packages=['leap.bitmask_www'],
     package_data={
-        '': ['public/*', ]
+        '': ['public/*',
+             'public/css/*',
+             'public/fonts/*',
+             'public/img/*',
+             'publlic/js/*',
+             ]
     }
 )
