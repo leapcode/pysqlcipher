@@ -28,7 +28,11 @@
  * strings.
  */
 
-import "babel-polyfill";
+try {
+    // Use Promises in non-ES6 compliant engines.
+    eval('import "babel-polyfill";')
+}
+catch (err) {}
 
 var bitmask = function(){
     var event_handlers = {};
@@ -297,4 +301,6 @@ var bitmask = function(){
     };
 }();
 
-module.exports = bitmask
+try {
+    module.exports = bitmask
+} catch(err) {}
