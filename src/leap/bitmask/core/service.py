@@ -81,7 +81,7 @@ class BitmaskBackend(configurable.ConfigurableService):
 
     def init_bonafide(self):
         bf = BonafideService(self.basedir)
-        bf.setName("bonafide")
+        bf.setName('bonafide')
         bf.setServiceParent(self)
         # TODO ---- these hooks should be activated only if
         # (1) we have enabled that service
@@ -119,9 +119,9 @@ class BitmaskBackend(configurable.ConfigurableService):
         zs.setServiceParent(self)
 
     def init_web(self):
-        # FIXME try to import leap.bitmask_www and fail otherwise
-        http = _web.HTTPDispatcherService(self)
-        http.setServiceParent(self)
+        service = _web.HTTPDispatcherService
+        web = self._maybe_start_service(
+            'web', service, self)
 
     def init_websockets(self):
         from leap.bitmask.core import websocket
@@ -169,15 +169,13 @@ class BitmaskBackend(configurable.ConfigurableService):
         elif service == 'web':
             self.init_web()
 
-        self.init_http()
-
-        return 'ok'
+        return {'enabled': 'ok'}
 
     def do_disable_service(self, service):
         assert service in self.service_names
         # TODO -- should stop also?
         self.set_config('services', service, 'False')
-        return 'ok'
+        return {'disabled': 'ok'}
 
 
 class BackendCommands(object):
@@ -191,7 +189,7 @@ class BackendCommands(object):
 
     def do_status(self):
         # we may want to make this tuple a class member
-        services = ('soledad', 'keymanager', 'mail', 'eip')
+        services = ('soledad', 'keymanager', 'mail', 'eip', 'web')
 
         status = {}
         for name in services:
@@ -212,7 +210,7 @@ class BackendCommands(object):
     def do_stats(self):
         log.msg('BitmaskCore Service STATS')
         mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-        return {'mem_usage': '%s KB' % (mem / 1024)}
+        return {'mem_usage': '%s MB' % (mem / 1024)}
 
     def do_shutdown(self):
         self.core.stopService()

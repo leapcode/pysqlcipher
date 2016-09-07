@@ -39,9 +39,12 @@ class SubCommand(object):
     __metaclass__ = APICommand
 
     def dispatch(self, service, *parts, **kw):
-        subcmd = parts[1]
+        try:
+            subcmd = parts[1]
+            _method = getattr(self, 'do_' + subcmd.upper(), None)
+        except IndexError:
+            _method = None
 
-        _method = getattr(self, 'do_' + subcmd.upper(), None)
         if not _method:
             raise RuntimeError('No such subcommand')
         return defer.maybeDeferred(_method, service, *parts, **kw)
@@ -152,6 +155,27 @@ class MailCmd(SubCommand):
         bonafide = kw['bonafide']
         d = bonafide.do_get_smtp_cert()
         d.addCallback(save_cert)
+        return d
+
+
+class WebUICmd(SubCommand):
+
+    label = 'web'
+
+    @register_method('dict')
+    def do_ENABLE(self, service, *parts, **kw):
+        d = service.do_enable_service(self.label)
+        return d
+
+    @register_method('dict')
+    def do_DISABLE(self, service, *parts, **kw):
+        d = service.do_disable_service(self.label)
+        return d
+
+    @register_method('dict')
+    def do_STATUS(self, webui, *parts, **kw):
+        print 'webui', webui
+        d = webui.do_status()
         return d
 
 
@@ -267,6 +291,7 @@ class CommandDispatcher(object):
         self.subcommand_mail = MailCmd()
         self.subcommand_keys = KeysCmd()
         self.subcommand_events = EventsCmd()
+        self.subcommand_webui = WebUICmd()
 
     # XXX --------------------------------------------
     # TODO move general services to another subclass
@@ -298,7 +323,7 @@ class CommandDispatcher(object):
     def do_EIP(self, *parts):
         eip = self._get_service(self.subcommand_eip.label)
         if not eip:
-            return _format_result('eip: disabled')
+            return _format_result({'eip': 'disabled'})
         subcmd = parts[1]
 
         dispatch = self._subcommand_eip.dispatch
@@ -322,15 +347,38 @@ class CommandDispatcher(object):
         kw = {'bonafide': bonafide}
 
         if not mail:
-            return _format_result('mail: disabled')
+            return _format_result({'mail': 'disabled'})
 
         if subcmd == 'disable':
             d = dispatch(self.core)
-        else:
+        elif subcmd != 'enable':
             d = dispatch(mail, *parts, **kw)
 
         d.addCallbacks(_format_result, _format_error)
         return d
+
+
+    def do_WEBUI(self, *parts):
+        subcmd = parts[1]
+        dispatch = self.subcommand_webui.dispatch
+
+        if subcmd == 'enable':
+            d = dispatch(self.core, *parts)
+
+        webui_label = 'web'
+        webui = self._get_service(webui_label)
+        kw = {}
+
+        if not webui:
+            return _format_result({'webui': 'disabled'})
+        if subcmd == 'disable':
+            d = dispatch(self.core, *parts)
+        elif subcmd != 'enable':
+            d = dispatch(webui, *parts, **kw)
+
+        d.addCallbacks(_format_result, _format_error)
+        return d
+
 
     def do_KEYS(self, *parts):
         dispatch = self.subcommand_keys.dispatch
@@ -352,6 +400,7 @@ class CommandDispatcher(object):
         d = dispatch(None, *parts)
         d.addCallbacks(_format_result, _format_error)
         return d
+
 
     def dispatch(self, msg):
         cmd = msg[0]

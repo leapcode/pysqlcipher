@@ -27,6 +27,7 @@ from twisted.internet import reactor, defer
 from leap.bitmask.cli.eip import Eip
 from leap.bitmask.cli.keys import Keys
 from leap.bitmask.cli.mail import Mail
+from leap.bitmask.cli.webui import WebUI
 from leap.bitmask.cli import command
 from leap.bitmask.cli.user import User
 
@@ -42,6 +43,7 @@ SERVICE COMMANDS:
   mail       Bitmask Encrypted Mail
   eip        Encrypted Internet Proxy
   keys       Bitmask Keymanager
+  webui      Bitmask Web User Interface
 
 GENERAL COMMANDS:
 
@@ -72,6 +74,10 @@ GENERAL COMMANDS:
     def keys(self, raw_args):
         keys = Keys()
         return keys.execute(raw_args)
+
+    def webui(self, raw_args):
+        webui = WebUI()
+        return webui.execute(raw_args)
 
     # Single commands
 

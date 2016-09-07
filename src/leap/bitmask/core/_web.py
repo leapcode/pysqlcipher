@@ -71,10 +71,17 @@ class HTTPDispatcherService(service.Service):
         # TODO use endpoints instead
         self.listener = reactor.listenTCP(self.port, site,
                                           interface='127.0.0.1')
+        self.running = True
 
     def stopService(self):
         self.site.stopFactory()
         self.listener.stopListening()
+        self.running = False
+
+    def do_status(self):
+        status = 'running' if self.running else 'disabled'
+        return {'web': status}
+
 
 
 class Api(Resource):
