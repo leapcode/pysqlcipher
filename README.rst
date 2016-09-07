@@ -27,10 +27,22 @@ application.
 .. _`PyQt5`: https://pypi.python.org/pypi/PyQt5
 .. _`GPL3`: http://www.gnu.org/licenses/gpl.txt
 
+Package under development!
+--------------------------
+This is a unified repo that has merged the following packages, previously isolated, under the leap namespace:
+
+bonafide, mail, keymanager, bitmask.
+
+The previous Qt client has been deprecated (bitmask version 0.8.2, still
+available at the http://github.com/leapcode/bitmask_client repo). 
+
+Note that this repo still doesn't have support for VPN: its porting will
+follow soon.
+
 Read the Docs!
 ------------------
 
-The latest documentation is available at `LEAP`_.
+The latest documentation about Bitmask is available at `LEAP`_.
 
 .. _`LEAP`: https://leap.se/en/docs/client
 
@@ -56,13 +68,6 @@ And then run all the tests::
 
   tox
 
-If you are developing against a non-published branch of ``leap.common`` or
-``leap.soledad``, run instead::
-
-  tox -e py27-dev
-
-This expects ``leap_common`` and ``soledad`` repos to be checked out in the
-parent folder.
 
 Hacking
 -------
@@ -76,6 +81,30 @@ python2 bindings for Qt5 in your system (in debian: ``apt install python-pyqt5
 python-pyqt5.qtwebkit``). After ensuring this, you can do::
 
   make dev-all
+
+hacking on the webui
+++++++++++++++++++++
+
+The above instructions will install a python package that contains a
+pre-compiled version of all the html+js elements, which is updated
+periodically. If you want to hack on the
+web-ui, you should read the instructions on the ``www/README.rst``. If you want
+to test the integration of the web-ui and the webkit client, you can install a
+development version of the bitmask_www package. Inside your virtualenv::
+
+  cd www
+  make pydist-dev
+
+cross-testing
++++++++++++++
+
+If you are developing against a non-published branch of ``leap.common`` or
+``leap.soledad``, run instead::
+
+  tox -e py27-dev
+
+This expects ``leap_common`` and ``soledad`` repos to be checked out in the
+parent folder.
 
 
 License
