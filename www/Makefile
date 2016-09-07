@@ -19,6 +19,9 @@ pydist: pydist-clean build py-pkg
 pydist-dev: pydist-clean build py-pkg
 	pip install -e .
 
+pydist-install: pydist
+	pip install dist/*.whl
+
 pydist-clean:
 	rm -rf build dist
 	rm -rf leap/bitmask_www/*
