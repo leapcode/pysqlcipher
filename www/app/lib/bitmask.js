@@ -28,7 +28,11 @@
  * strings.
  */
 
-import "babel-polyfill";
+try {
+    // Use Promises in non-ES6 compliant engines.
+    eval('import "babel-polyfill";')
+}
+catch (err) {}
 
 var bitmask = function(){
     var event_handlers = {};
@@ -37,15 +41,15 @@ var bitmask = function(){
     if (window.location.protocol === "file:") {
         api_url = 'http://localhost:7070/API/';
     }
-
+    
     function call(command) {
-        var url = api_url + command.slice(0, 2).join('/');
+        var url = api_url  + command.slice(0, 2).join('/');
         var data = JSON.stringify(command.slice(2));
 
         return new Promise(function(resolve, reject) {
             var req = new XMLHttpRequest();
             req.open('POST', url);
-
+            
             req.onload = function() {
                 if (req.status == 200) {
                     parseResponse(req.response, resolve, reject);
@@ -54,11 +58,11 @@ var bitmask = function(){
                     reject(Error(req.statusText));
                 }
             };
-
+            
             req.onerror = function() {
                 reject(Error("Network Error"));
             };
-
+            
             req.send(data);
         });
     };
@@ -118,59 +122,62 @@ var bitmask = function(){
                 }
             },
 
-        /**
-         * uids are of the form user@provider.net
-         */
-        user: {
             /**
-             * Check which user is active
-             *
-             * @return {Promise<string>} The uid of the active user
+             * uids are of the form user@provider.net
              */
-            active: function() {
-                return call(['bonafide', 'user', 'active']);
-            },
+            user: {
+                /**
+                 * Check wich user is active
+                 *
+                 * @return {Promise<string>} The uid of the active user
+                 */
+                active: function() {
+                    return call(['bonafide', 'user', 'active']);
+                },
 
-            /**
-             * Register a new user
-             *
-             * @param {string} uid The uid to be created
-             * @param {string} password The user password
-             * @param {boolean} autoconf If the provider should be autoconfigured if it's not allready known
-             */
-	    create: function(uid, password, autoconf) {
-	        if (typeof autoconf !== 'boolean') {
-		    autoconf = false;
-	        }
-	        return call(['bonafide', 'user', 'create', uid, password, autoconf]);
-	    },
+                /**
+                 * Register a new user
+                 *
+                 * @param {string} uid The uid to be created
+                 * @param {string} password The user password
+                 * @param {boolean} autoconf If the provider should be autoconfigured if it's not allready known
+                 *                           If it's not provided it will default to false
+                 */
+                create: function(uid, password, autoconf) {
+                    if (typeof autoconf !== 'boolean') {
+                        autoconf = false;
+                    }
+                    return call(['bonafide', 'user', 'create', uid, password, autoconf]);
+                },
 
-            /**
-             * Login
-             *
-             * @param {string} uid The uid to log in
-             * @param {string} password The user password
-             * @param {boolean} autoconf If the provider should be autoconfigured if it's not allready known
-             */
-            auth: function(uid, password, autoconf) {
-                if (typeof autoconf !== 'boolean') {
-                    autoconf = false;
+                /**
+                 * Login
+                 *
+                 * @param {string} uid The uid to log in
+                 * @param {string} password The user password
+                 * @param {boolean} autoconf If the provider should be autoconfigured if it's not allready known
+                 *                           If it's not provided it will default to false
+                 */
+                auth: function(uid, password, autoconf) {
+                    if (typeof autoconf !== 'boolean') {
+                        autoconf = false;
+                    }
+                    return call(['bonafide', 'user', 'authenticate', uid, password, autoconf]);
+                },
+
+                /**
+                 * Logout
+                 *
+                 * @param {string} uid The uid to log out.
+                 *                     If no uid is provided the active user will be used
+                 */
+                logout: function(uid) {
+                    if (typeof uid !== 'string') {
+                        uid = "";
+                    }
+                    return call(['bonafide', 'user', 'logout', uid]);
                 }
-                return call(['bonafide', 'user', 'authenticate', uid, password, autoconf]);
-            },
-
-            /**
-             * Logout
-             *
-             * @param {string} uid The uid to log out.
-             *                     If no uid is provided the active user will be used
-             */
-            logout: function(uid) {
-                 if (typeof uid !== 'string') {
-                     uid = "";
-                 }
-                 return call(['bonafide', 'user', 'logout', uid]);
-             }
+            }
         },
 
         mail: {
@@ -294,4 +301,6 @@ var bitmask = function(){
     };
 }();
 
-module.exports = bitmask
+try {
+    module.exports = bitmask
+} catch(err) {}
