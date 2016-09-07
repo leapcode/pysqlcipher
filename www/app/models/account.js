@@ -54,7 +54,7 @@ export default class Account {
   // returns a promise, fulfill is passed account object
   //
   login(password) {
-    return bitmask.user.auth(this.address, password).then(
+    return bitmask.bonafide.user.auth(this.address, password).then(
       response => {
         if (response.uuid) {
           this._uuid = response.uuid
@@ -69,7 +69,7 @@ export default class Account {
   // returns a promise, fulfill is passed account object
   //
   logout() {
-    return bitmask.user.logout(this.id).then(
+    return bitmask.bonafide.user.logout(this.id).then(
       response => {
         this._authenticated = false
         this._address = '@' + this.domain
@@ -109,7 +109,7 @@ export default class Account {
   // returns a promise, fullfill is passed account object
   //
   static active() {
-    return bitmask.user.active().then(
+    return bitmask.bonafide.user.active().then(
       response => {
         if (response.user == '<none>') {
           return null

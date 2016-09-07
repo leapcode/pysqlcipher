@@ -22,7 +22,7 @@ export default class DummyAccount {
   login(password) {return this.account.login(password)}
 
   logout() {
-    return bitmask.user.logout(this.address).then(
+    return bitmask.bonafide.user.logout(this.address).then(
       response => {
         this._authenticated = false
         this._address = '@' + this.domain
