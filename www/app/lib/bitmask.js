@@ -96,6 +96,28 @@ var bitmask = function(){
     };
 
     return {
+        bonafide: {
+            provider: {
+                create: function(domain) {
+                    return call(['bonafide', 'provider', 'create', domain]);
+                },
+
+                read: function(domain) {
+                    return call(['bonafide', 'provider', 'read', domain]);
+                },
+
+                delete: function(domain) {
+                    return call(['bonafide', 'provider', 'delete', domain]);
+                },
+
+                list: function(seeded) {
+                    if (typeof seeded !== 'boolean') {
+                        seeded = false;
+                    }
+                    return call(['bonafide', 'provider', 'list', seeded]);
+                }
+            },
+
         /**
          * uids are of the form user@provider.net
          */
@@ -106,7 +128,7 @@ var bitmask = function(){
              * @return {Promise<string>} The uid of the active user
              */
             active: function() {
-                return call(['user', 'active']);
+                return call(['bonafide', 'user', 'active']);
             },
 
             /**
@@ -114,19 +136,27 @@ var bitmask = function(){
              *
              * @param {string} uid The uid to be created
              * @param {string} password The user password
+             * @param {boolean} autoconf If the provider should be autoconfigured if it's not allready known
              */
-            create: function(uid, password) {
-                return call(['user', 'create', uid, password]);
-            },
+	    create: function(uid, password, autoconf) {
+	        if (typeof autoconf !== 'boolean') {
+		    autoconf = false;
+	        }
+	        return call(['bonafide', 'user', 'create', uid, password, autoconf]);
+	    },
 
             /**
              * Login
              *
              * @param {string} uid The uid to log in
              * @param {string} password The user password
+             * @param {boolean} autoconf If the provider should be autoconfigured if it's not allready known
              */
-            auth: function(uid, password) {
-                return call(['user', 'authenticate', uid, password]);
+            auth: function(uid, password, autoconf) {
+                if (typeof autoconf !== 'boolean') {
+                    autoconf = false;
+                }
+                return call(['bonafide', 'user', 'authenticate', uid, password, autoconf]);
             },
 
             /**
@@ -136,11 +166,11 @@ var bitmask = function(){
              *                     If no uid is provided the active user will be used
              */
             logout: function(uid) {
-                if (typeof uid !== 'string') {
-                    uid = "";
-                }
-                return call(['user', 'logout', uid]);
-            }
+                 if (typeof uid !== 'string') {
+                     uid = "";
+                 }
+                 return call(['bonafide', 'user', 'logout', uid]);
+             }
         },
 
         mail: {

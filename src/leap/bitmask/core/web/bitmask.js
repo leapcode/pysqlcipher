@@ -27,6 +27,9 @@
  * finished or will fail if there was any error. Errors are always user readable
  * strings.
  */
+
+import "babel-polyfill";
+
 var bitmask = function(){
     var event_handlers = {};
 
@@ -140,7 +143,7 @@ var bitmask = function(){
                     if (typeof autoconf !== 'boolean') {
                         autoconf = false;
                     }
-                    return call(['bonafide', 'user', 'create', uid, password, autocnof]);
+                    return call(['bonafide', 'user', 'create', uid, password, autoconf]);
                 },
 
                 /**
@@ -293,3 +296,5 @@ var bitmask = function(){
         }
     };
 }();
+
+module.exports = bitmask
