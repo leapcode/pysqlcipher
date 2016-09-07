@@ -29,8 +29,16 @@ from twisted.application import service
 from twisted.web.resource import Resource
 from twisted.web.server import Site, NOT_DONE_YET
 from twisted.web.static import File
+from twisted.python import log
 
 from leap.bitmask.core.dispatcher import CommandDispatcher
+
+try:
+    import leap.bitmask_www
+    HAS_WEB_UI = True
+except ImportError:
+    HAS_WEB_UI = False
+
 
 
 class HTTPDispatcherService(service.Service):
@@ -45,8 +53,13 @@ class HTTPDispatcherService(service.Service):
         self.debug = debug
 
     def startService(self):
-        webdir = os.path.abspath(
-            pkg_resources.resource_filename('leap.bitmask_www', 'public'))
+        if HAS_WEB_UI:
+            webdir = os.path.abspath(
+                pkg_resources.resource_filename('leap.bitmask_www', 'public'))
+        else:
+            log.msg('leap.bitmask_www not found, serving bitmask.core web ui')
+            webdir = os.path.abspath(
+                pkg_resources.resource_filename('leap.bitmask.core', 'web')) 
         root = File(webdir)
 
         api = Api(CommandDispatcher(self._core))
