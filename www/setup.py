@@ -31,7 +31,7 @@ import time
 # i.e., 'make build'
 
 now = datetime.datetime.now()
-timestamp = time.strftime('%Y%m%d', now.timetuple())
+timestamp = time.strftime('%Y%m%d%H%M', now.timetuple())
 
 setup(
     name='leap.bitmask_www',

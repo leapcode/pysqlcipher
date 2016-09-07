@@ -1,7 +1,8 @@
-<EDIT-ME: This is the python description for the package>
-
-leap.bitmask-www: this package contains the already compiled static element for
+leap.bitmask_www
+----------------- 
+this package contains the already compiled static element for
 the web-ui of bitmask.
 
-If you want to develop for this UI, please checkout the <bitmask-dev> repo and
-follow the instructions in the www/README.md file.
+If you want to develop for this UI, please checkout the bitmask-dev [0] repo and follow the instructions in the www/README.md file.
+
+[0] https://github.com/leapcode/bitmask-dev
