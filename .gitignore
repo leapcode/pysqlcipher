@@ -42,3 +42,7 @@ www/leap/bitmask_www/public/
 
 # vim
 *.swp
+
+# PyInstaller
+pkg/pyinst/dist/
+pkg/pyinst/build/
