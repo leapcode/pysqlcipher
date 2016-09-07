@@ -48,13 +48,13 @@ SUBCOMMANDS:
     def create(self, raw_args):
         username = self.username(raw_args)
         passwd = getpass.getpass()
-        self.data += ['signup', username, passwd, True]
+        self.data += ['signup', username, passwd, 'true']
         return self._send(printer=command.default_dict_printer)
 
     def auth(self, raw_args):
         username = self.username(raw_args)
         passwd = getpass.getpass()
-        self.data += ['authenticate', username, passwd, True]
+        self.data += ['authenticate', username, passwd, 'true']
         return self._send(printer=command.default_dict_printer)
 
     def logout(self, raw_args):
