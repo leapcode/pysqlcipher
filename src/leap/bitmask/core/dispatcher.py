@@ -101,7 +101,8 @@ class UserCmd(SubCommand):
         user, password = parts[2], parts[3]
         autoconf = False
         if len(parts) > 4:
-            autoconf = parts[4]
+            if parts[4] == 'true':
+                autoconf = True
         return bonafide.do_authenticate(user, password, autoconf)
 
     @register_method("{'signup': 'ok', 'user': str}")
@@ -109,7 +110,8 @@ class UserCmd(SubCommand):
         user, password = parts[2], parts[3]
         autoconf = False
         if len(parts) > 4:
-            autoconf = parts[4]
+            if parts[4] == 'true':
+                autoconf = True
         return bonafide.do_signup(user, password, autoconf)
 
     @register_method("{'logout': 'ok'}")

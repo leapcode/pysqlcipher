@@ -134,7 +134,9 @@ class SoledadContainer(Container):
 
 def _get_provider_from_full_userid(userid):
     _, provider_id = config.get_username_and_provider(userid)
-    return config.Provider(provider_id)
+    # TODO -- this autoconf should be passed from the
+    # command flag. workaround to get cli workinf for now.
+    return config.Provider(provider_id, autoconf=True)
 
 
 def is_service_ready(service, provider):
