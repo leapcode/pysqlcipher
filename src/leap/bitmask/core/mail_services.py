@@ -22,6 +22,8 @@ This should be moved to the different packages when it stabilizes.
 """
 import json
 import os
+import shutil
+import tempfile
 from collections import defaultdict
 from collections import namedtuple
 
@@ -440,9 +442,11 @@ class StandardMailService(service.MultiService, HookableService):
         def registerToken(token):
             self._service_tokens[userid] = token
             self._active_user = userid
+            return token
 
         d = soledad.get_or_create_service_token('mail_auth')
         d.addCallback(registerToken)
+        d.addCallback(self._write_tokens_file, userid)
         return d
 
     def stopInstance(self):
@@ -484,6 +488,22 @@ class StandardMailService(service.MultiService, HookableService):
 
     def get_keymanager_session(self, userid):
         return self._keymanager_sessions.get(userid)
+
+    def _write_tokens_file(self, token, userid):
+        tokens_folder = os.path.join(tempfile.gettempdir(), "bitmask_tokens")
+        if os.path.exists(tokens_folder):
+            try:
+                shutil.rmtree(tokens_folder)
+            except OSError as e:
+                log.msg("Can't remove tokens folder %s: %s"
+                        % (tokens_folder, e))
+                return
+        os.mkdir(tokens_folder, 0700)
+
+        tokens_path = os.path.join(tokens_folder,
+                                   "%s.json" % (userid,))
+        with open(tokens_path, 'w') as ftokens:
+            json.dump(self._service_tokens, ftokens)
 
 
 class IMAPService(service.Service):
