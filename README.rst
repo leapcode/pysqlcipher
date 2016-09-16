@@ -111,11 +111,11 @@ First, install the javascript prerequisites:
 Next, run ``dev-install``:
 
   source venv/bin/activate    # if not already activated
-  cd www
+  cd ui
   make dev-install            # install JS user interface as a python package in "develop" mode.
   node run watch              # continually rebuild javascript bundle when source files change.
 
-For more information, see ``www/README.md``.
+For more information, see ``ui/README.md``.
 
 cross-testing
 +++++++++++++++++++++++++++++++++++++++

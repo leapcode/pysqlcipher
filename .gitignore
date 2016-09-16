@@ -35,9 +35,9 @@ venv/
 ENV/
 
 # Javascript, web-ui
-www/node_modules
-www/npm-debug.log
-www/pydist/bitmask_js
+ui/node_modules
+ui/npm-debug.log
+ui/pydist/bitmask_js
 
 # vim
 *.swp

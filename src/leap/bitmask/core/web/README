@@ -1,9 +1,9 @@
 This is the original implementation of the bitmask.js library, which uses the
 REST api exposed by the HTTPRequestDispatcher.
 
-The development of bitmask_js is in the www/ folder in this bitmask-dev repo.
+The development of bitmask_js is in the ui/ folder in this bitmask-dev repo.
 
-A pre-compiled version of the html+js web-ui can be found in the leap.bitmask_www package.
+A pre-compiled version of the html+js web-ui can be found in the bitmask_js package.
 
 This remains here to be able to develop against the REST api without the need
-of installing the full-fledged bitmask_www package.
+of installing the full-fledged bitmask_js package.
