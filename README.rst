@@ -1,5 +1,5 @@
 Bitmask
-===========
+=======================================
 
 *Your internet encryption toolkit*
 
@@ -28,37 +28,38 @@ application.
 .. _`GPL3`: http://www.gnu.org/licenses/gpl.txt
 
 Package under development!
---------------------------
+---------------------------------------
+
 This is a unified repo that has merged the following packages, previously isolated, under the leap namespace:
 
 bonafide, mail, keymanager, bitmask.
 
 The previous Qt client has been deprecated (bitmask version 0.8.2, still
-available at the http://github.com/leapcode/bitmask_client repo). 
+available at the http://github.com/leapcode/bitmask_client repo).
 
 Note that this repo still doesn't have support for VPN: its porting will
 follow soon.
 
 Read the Docs!
-------------------
+---------------------------------------
 
 The latest documentation about Bitmask is available at `LEAP`_.
 
 .. _`LEAP`: https://leap.se/en/docs/client
 
 Bugs
-====
+=======================================
 
 Please report any bugs `in our bug tracker`_.
 
-.. _`in our bug tracker`: https://leap.se/code/projects/report-issues 
+.. _`in our bug tracker`: https://leap.se/code/projects/report-issues
 
 
 Development
-==============
+=======================================
 
-Tests
------
+Running Tests
+---------------------------------------
 
 You need tox to run the tests. If you don't have it in your system yet::
 
@@ -70,33 +71,54 @@ And then run all the tests::
 
 
 Hacking
--------
+----------------------------------
 
-If you want to develop for the encrypted mail service, execute inside your virtualenv::
+In order to run bitmask in a development environment, you must activate a
+virtualenv and install the various packages using 'pip install -e'. This
+installs python packages as links to the source code, so that your code
+changes are immediately reflected in the packages installed in the virtualenv.
 
+All this is done for you with the Makefile. For example, if you want to
+develop for the encrypted mail service::
+
+  virtualenv venv
+  source venv/bin/activate
   make dev-mail
 
-If you want to develop for the gui client too, you have to have installed the
-python2 bindings for Qt5 in your system (in debian: ``apt install python-pyqt5 
-python-pyqt5.qtwebkit``). After ensuring this, you can do::
+If you want to develop for the gui client too, you have to have
+installed the python2 bindings for Qt5 in your system (in debian: ``apt
+install python-pyqt5  python-pyqt5.qtwebkit``). After ensuring this, you can
+do::
 
   make dev-all
 
-hacking on the webui
-++++++++++++++++++++
+Note: even though the UI is in javascript. Qt is used to create a webview
+window.
 
-The above instructions will install a python package that contains a
-pre-compiled version of all the html+js elements, which is updated
-periodically. If you want to hack on the
-web-ui, you should read the instructions on the ``www/README.rst``. If you want
-to test the integration of the web-ui and the webkit client, you can install a
-development version of the bitmask_www package. Inside your virtualenv::
+hacking on the javascript UI
++++++++++++++++++++++++++++++++++++++++
 
+The above instructions will install a python package that contains a pre-
+bundled version of the javascript UI.
+
+If you want to hack on the javascript UI, then it needs to be able to update the
+javascript bundle whenever a javascript or CSS source file changes.
+
+First, install the javascript prerequisites:
+
+  sudo apt install nodejs npm nodejs-legacy
+
+Next, run ``dev-install``:
+
+  source venv/bin/activate    # if not already activated
   cd www
-  make pydist-dev
+  make dev-install            # install JS user interface as a python package in "develop" mode.
+  node run watch              # continually rebuild javascript bundle when source files change.
+
+For more information, see ``www/README.md``.
 
 cross-testing
-+++++++++++++
++++++++++++++++++++++++++++++++++++++++
 
 If you are developing against a non-published branch of ``leap.common`` or
 ``leap.soledad``, run instead::
@@ -108,7 +130,7 @@ parent folder.
 
 
 License
-=======
+=======================================
 
 .. image:: https://raw.github.com/leapcode/bitmask_client/develop/docs/user/gpl.png
 

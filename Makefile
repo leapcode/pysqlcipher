@@ -4,7 +4,7 @@ clean:
 
 dev-mail:
 	pip install -e '.[mail]'
-	pip install -e www
+	make -C www dev-install-prebuilt
 
 dev-all:
 	pip install -e '.[all]'

@@ -17,32 +17,34 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """
-Setup file for leap.bitmask-www
+Setup file for bitmask_js
 """
 
 from setuptools import setup
-
 import datetime
 import time
 
+long_description = \
+'''bitmask_js
+----------------- 
+This package contains the already compiled javascript resources for the bitmask UI.
 
-# TODO  add all the node steps in this setup too.
-# Right now it's expected that you run the node commands by hand
-# i.e., 'make build'
+If you want to develop for this UI, please checkout the bitmask-dev [0] repo and follow the instructions in the ui/README.md file.
 
-now = datetime.datetime.now()
+[0] https://github.com/leapcode/bitmask-dev'''
+
+now       = datetime.datetime.now()
 timestamp = time.strftime('%Y%m%d%H%M', now.timetuple())
 
 setup(
-    name='leap.bitmask_www',
+    name='bitmask_js',
     version='0.1.%s' % timestamp,
-    description='Bitmask html/js UI',
-    long_description=open('notes-python.txt').read(),
+    description='Bitmask UI',
+    long_description=long_description,
     author='LEAP Encrypted Access Project',
     author_email='info@leap.se',
     url='http://leap.se',
-    namespace_packages=['leap'],
-    packages=['leap.bitmask_www'],
+    packages=['bitmask_js'],
     package_data={
         '': ['public/*',
              'public/css/*',

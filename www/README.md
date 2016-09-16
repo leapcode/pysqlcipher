@@ -5,10 +5,9 @@ Here lies the user interface for Bitmask, written in Javascript.
 
 quick start:
 
+    sudo apt install nodejs npm nodejs-legacy
     npm install       # installs development dependencies in "node_modules"
-    npm run watch     # continually rebuilds source .js into "public"
-    bitmaskd          # launch backend
-    npm run open      # opens http://localhost:7070/ in a browser
+    npm run watch     # continually rebuilds source .js into "pydist"
 
 build for deployment:
 
@@ -16,10 +15,31 @@ build for deployment:
     npm run build:production
 
 After 'build', 'build:production', or 'watch' is run, everything needed for
-Bitmask JS is contained in the 'public' directory. No additional files are
-needed. Open the public/index.html file in a browser or web widget. Because of
-the single origin policy of browsers, you will need to open public/index.html
-through the webserver included with bitmaskd (e.g. http://localhost:7070)
+Bitmask JS is contained in the 'pydist' directory. No additional files are
+needed. Open the pydist/bitmask_js/public/index.html file in a browser or web
+widget.
+
+However! Because of the single origin policy of browsers, you will need to
+open public/index.html through the webserver included with bitmaskd (e.g.
+http://localhost:7070)
+
+In order for this JS app to be loaded by bitmask, it must be packaged as a
+python package and installed in the virtualenv:
+
+    source path-to-virtualenv/bin/activate
+    make dev-install  # builds and installs JS app as python package
+    pkill bitmaskd    # make sure bitmaskd is not already running
+    bitmaskd          # launch backend
+    npm run open      # opens http://localhost:7070/ in a browser
+    npm run watch     # rebuild JS whenever source file is changed.
+
+In order to package for distribution:
+
+    make dist-build
+
+NOTE: If you make changes to the asset files, like add or modify an image, you
+      will need to stop then rerun `npm run watch` for the changes to take
+      effect.
 
 Development Dependencies
 -----------------------------------------------------------------

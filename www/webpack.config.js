@@ -6,7 +6,7 @@ var config = {
   context: path.join(__dirname, 'app'),
   entry: ['babel-polyfill', './main.js'],
   output: {
-    path: path.join(__dirname, 'public'),
+    path: path.join(__dirname, 'pydist', 'bitmask_js', 'public'),
     filename: 'app.bundle.js'
   },
   resolve: {
@@ -41,7 +41,14 @@ var config = {
     // https://webpack.github.io/docs/code-splitting.html
     // new webpack.optimize.CommonChunkPlugin('common.js')
 
-    // https://github.com/kevlened/copy-webpack-plugin
+    //
+    // ASSETS
+    //
+    // If you make changes to the asset files, you will need to stop then rerun
+    // `npm run watch` for the changes to take effect.
+    //
+    // For more information: https://github.com/kevlened/copy-webpack-plugin
+    //
     new CopyWebpackPlugin([
       { from: 'css/*.css' },
       { from: 'img/*'},

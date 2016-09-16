@@ -1,34 +1,47 @@
-build:
+#
+# builds for development mode
+#
+
+dev-build: build-clean
+	npm install
+	npm run build
+	touch pydist/bitmask_js/__init__.py
+
+dev-install: dev-build
+	pip install -e pydist
+
+#
+# installs python package, but does not rebuild the js.
+# for usage when you don't want to install nodejs
+#
+dev-install-prebuilt:
+	pip install -e pydist
+
+
+#
+# distribution builds
+#
+
+dist-build: build-clean
 	npm install
 	npm run build:production
+	touch pydist/bitmask_js/__init__.py
+	cd pydist && python setup.py bdist_wheel
 
-build-dev:
-	npm run watch 
+dist-install: dist-build
+	pip install pydist/dist/*.whl
 
-clean:
-	rm -rf public
+#
+# cleaning up
+#
+
+build-clean:
+	rm -rf pydist/bitmask_js
+	rm -rf pydist/dist
+	rm -rf pydist/build
+
+clean: build-clean
 	rm -rf node_modules
 
-py-pkg:
-	touch leap/bitmask_www/__init__.py
-	cp -r public/ leap/bitmask_www
-
-pydist: pydist-clean build py-pkg
-	python setup.py bdist_wheel
-
-pydist-dev: pydist-clean build py-pkg
-	pip install -e .
-
-pydist-install: pydist
-	pip install dist/*.whl
-
-pydist-clean:
-	rm -rf build dist
-	rm -rf leap/bitmask_www/*
-
 uninstall:
-	pip uninstall leap.bitmask_www
-
-all: clean build pydist
-
-.PHONY: clean build install all
+	pip uninstall bitmask_js

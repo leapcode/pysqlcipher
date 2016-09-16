@@ -36,9 +36,8 @@ ENV/
 
 # Javascript, web-ui
 www/node_modules
-www/public
 www/npm-debug.log
-www/leap/bitmask_www/public/
+www/pydist/bitmask_js
 
 # vim
 *.swp
