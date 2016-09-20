@@ -120,8 +120,7 @@ class BitmaskBackend(configurable.ConfigurableService):
 
     def init_web(self):
         service = _web.HTTPDispatcherService
-        web = self._maybe_start_service(
-            'web', service, self)
+        self._maybe_start_service('web', service, self)
 
     def init_websockets(self):
         from leap.bitmask.core import websocket
