@@ -29,6 +29,8 @@ from collections import namedtuple
 
 from twisted.application import service
 from twisted.internet import defer
+from twisted.internet import reactor
+from twisted.internet import task
 from twisted.python import log
 from twisted.python.procutils import which
 
@@ -249,10 +251,15 @@ class KeymanagerContainer(Container):
             # but this hasn't been successfully uploaded. How do we know that?
             # XXX Should this be a method of bonafide instead?
             # -----------------------------------------------------------------
+            log.msg("Key generated succesfully for %s" % userid)
+            if not self.get_instance(userid).token:
+                log.msg("Token not available yet, "
+                        "wait before attempting to send key...")
+                return task.deferLater(reactor, 5, send_key, None)
+            log.msg("Sending key to server.")
             d = keymanager.send_key()
             d.addCallbacks(
-                lambda _: log.msg(
-                    "Key generated successfully for %s" % userid),
+                lambda _: log.msg("Key sent to server."),
                 log_key_error("sending"))
             return d
 
