@@ -5,4 +5,5 @@ coverage
 pytest
 pytest-pep8
 pytest-cov
+pytest-pdb
 setuptools-trial

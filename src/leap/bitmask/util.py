@@ -22,7 +22,8 @@ import platform
 import sys
 
 from twisted.python import log
-from twisted.python.procutils import which
+
+from leap.common.files import which
 
 
 STANDALONE = getattr(sys, 'frozen', False)
@@ -49,20 +50,6 @@ def get_gpg_bin_path():
     """
     gpgbin = None
 
-    # During the transition towards gpg2, we can look for /usr/bin/gpg1
-    # binary, in case it was renamed using dpkg-divert or manually.
-    # We could just pick gpg2, but we need to solve #7564 first.
-    try:
-        gpgbin_options = which("gpg1")
-        for opt in gpgbin_options:
-            if not os.path.islink(opt):
-                gpgbin = opt
-                break
-    except IndexError as e:
-        log.msg("Couldn't find the gpg1 binary!: %s" % (e,))
-    if gpgbin is not None:
-        return gpgbin
-
     if STANDALONE:
         gpgbin = os.path.join(
             get_path_prefix(), "..", "apps", "mail", "gpg")
@@ -70,7 +57,7 @@ def get_gpg_bin_path():
             gpgbin += ".exe"
     else:
         try:
-            gpgbin_options = which("gpg")
+            gpgbin_options = which("gpg", path_extension='/usr/bin/')
             # gnupg checks that the path to the binary is not a
             # symlink, so we need to filter those and come up with
             # just one option.
@@ -84,6 +71,21 @@ def get_gpg_bin_path():
     if platform.system() == "Darwin":
         gpgbin = os.path.abspath(
             os.path.join(here(), "apps", "mail", "gpg"))
+
+    if gpgbin is not None:
+        return gpgbin
+
+    # During the transition towards gpg2, we can look for /usr/bin/gpg1
+    # binary, in case it was renamed using dpkg-divert or manually.
+    # We could just pick gpg2, but we need to solve #7564 first.
+    try:
+        gpgbin_options = which("gpg1")
+        for opt in gpgbin_options:
+            if not os.path.islink(opt):
+                gpgbin = opt
+                break
+    except IndexError as e:
+        log.msg("Couldn't find the gpg1 binary!: %s" % (e,))
 
     if gpgbin is None:
         log.msg("Could not find gpg1 binary")
