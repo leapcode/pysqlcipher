@@ -40,7 +40,6 @@ except ImportError:
     HAS_WEB_UI = False
 
 
-
 class HTTPDispatcherService(service.Service):
 
     """
@@ -59,7 +58,7 @@ class HTTPDispatcherService(service.Service):
         else:
             log.msg('leap.bitmask_www not found, serving bitmask.core web ui')
             webdir = os.path.abspath(
-                pkg_resources.resource_filename('leap.bitmask.core', 'web')) 
+                pkg_resources.resource_filename('leap.bitmask.core', 'web'))
         root = File(webdir)
 
         api = Api(CommandDispatcher(self._core))
@@ -81,7 +80,6 @@ class HTTPDispatcherService(service.Service):
     def do_status(self):
         status = 'running' if self.running else 'disabled'
         return {'web': status}
-
 
 
 class Api(Resource):

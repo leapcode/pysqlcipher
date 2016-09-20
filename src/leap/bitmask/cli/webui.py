@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# webui.py 
+# webui.py
 # Copyright (C) 2016 LEAP Encryption Access Project
 #
 # This program is free software: you can redistribute it and/or modify

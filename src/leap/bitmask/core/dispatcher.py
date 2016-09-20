@@ -407,7 +407,6 @@ class CommandDispatcher(object):
         d.addCallbacks(_format_result, _format_error)
         return d
 
-
     def do_WEBUI(self, *parts):
         subcmd = parts[1]
         dispatch = self.subcommand_webui.dispatch
@@ -429,7 +428,6 @@ class CommandDispatcher(object):
         d.addCallbacks(_format_result, _format_error)
         return d
 
-
     def do_KEYS(self, *parts):
         dispatch = self.subcommand_keys.dispatch
 
@@ -450,7 +448,6 @@ class CommandDispatcher(object):
         d = dispatch(None, *parts)
         d.addCallbacks(_format_result, _format_error)
         return d
-
 
     def dispatch(self, msg):
         cmd = msg[0]
