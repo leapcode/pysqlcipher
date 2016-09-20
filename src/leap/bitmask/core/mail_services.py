@@ -216,10 +216,10 @@ class KeymanagerContainer(Container):
         super(KeymanagerContainer, self).__init__(service=service)
 
     def add_instance(self, userid, token, uuid, soledad):
-
+        log.msg("Adding Keymanager instance for: %s" % userid)
         keymanager = self._create_keymanager_instance(
             userid, token, uuid, soledad)
-
+        super(KeymanagerContainer, self).add_instance(userid, keymanager)
         d = self._get_or_generate_keys(keymanager, userid)
         d.addCallback(self._on_keymanager_ready_cb, userid, soledad)
         return d
@@ -228,10 +228,6 @@ class KeymanagerContainer(Container):
         self.get_instance(userid)._token = token
 
     def _on_keymanager_ready_cb(self, keymanager, userid, soledad):
-        # TODO use onready-deferreds instead
-        super(KeymanagerContainer, self).add_instance(userid, keymanager)
-
-        log.msg("Adding Keymanager instance for: %s" % userid)
         data = {'userid': userid, 'soledad': soledad, 'keymanager': keymanager}
         self.service.trigger_hook('on_new_keymanager_instance', **data)
 
