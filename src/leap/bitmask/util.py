@@ -22,6 +22,7 @@ import platform
 import sys
 
 from twisted.python import log
+from twisted.python.procutils import which
 
 
 STANDALONE = getattr(sys, 'frozen', False)
