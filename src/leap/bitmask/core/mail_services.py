@@ -235,43 +235,67 @@ class KeymanagerContainer(Container):
 
     def _get_or_generate_keys(self, keymanager, userid):
 
-        def if_not_found_generate(failure):
-            # TODO -------------- should ONLY generate if INITIAL_SYNC_DONE.
-            # ie: put callback on_soledad_first_sync_ready -----------------
-            # --------------------------------------------------------------
+        def _get_key(_):
+            log.msg("looking up private key for %s" % userid)
+            return keymanager.get_key(userid, private=True, fetch_remote=False)
+
+        def _found_key(key):
+            log.msg("found key: %r" % key)
+
+        def _if_not_found_generate(failure):
             failure.trap(KeyNotFound)
-            log.msg("Core: Key not found. Generating key for %s" % (userid,))
+            log.msg("key not found, generating key for %s" % (userid,))
             d = keymanager.gen_key()
-            d.addCallbacks(send_key, log_key_error("generating"))
+            d.addCallbacks(_send_key, _log_key_error("generating"))
             return d
 
-        def send_key(ignored):
+        def _send_key(ignored):
             # ----------------------------------------------------------------
             # It might be the case that we have generated a key-pair
             # but this hasn't been successfully uploaded. How do we know that?
             # XXX Should this be a method of bonafide instead?
             # -----------------------------------------------------------------
-            log.msg("Key generated succesfully for %s" % userid)
-            if not self.get_instance(userid).token:
-                log.msg("Token not available yet, "
-                        "wait before attempting to send key...")
-                return task.deferLater(reactor, 5, send_key, None)
-            log.msg("Sending key to server.")
+            log.msg("key generated for %s" % userid)
+
+            if not keymanager.token:
+                log.msg("token not available, scheduling new send attempt...")
+                return task.deferLater(reactor, 5, _send_key, None)
+
+            log.msg("sending public key to server")
             d = keymanager.send_key()
             d.addCallbacks(
-                lambda _: log.msg("Key sent to server."),
-                log_key_error("sending"))
+                lambda _: log.msg("key sent to server"),
+                _log_key_error("sending"))
             return d
 
-        def log_key_error(step):
+        def _log_key_error(step):
             def log_error(failure):
                 log.err("Error while %s key!" % step)
                 log.err(failure)
                 return failure
             return log_error
 
-        d = keymanager.get_key(userid, private=True, fetch_remote=False)
-        d.addErrback(if_not_found_generate)
+        def _maybe_sync(ever_synced):
+            if ever_synced:
+                log.msg("soledad has synced in the past")
+                return defer.succeed(None)
+
+            log.msg("soledad has never synced")
+
+            if not keymanager.token:
+                log.msg("no token to sync now, scheduling a new check")
+                d = task.deferLater(reactor, 5, keymanager.ever_synced)
+                d.addCallback(_maybe_sync)
+                return d
+
+            log.msg("syncing soledad for the first time...")
+            return keymanager._soledad.sync()
+
+        log.msg("checking if soledad has ever synced...")
+        d = keymanager.ever_synced()
+        d.addCallback(_maybe_sync)
+        d.addCallback(_get_key)
+        d.addCallbacks(_found_key, _if_not_found_generate)
         d.addCallback(lambda _: keymanager)
         return d
 

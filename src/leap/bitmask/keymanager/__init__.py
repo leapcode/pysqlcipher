@@ -783,6 +783,13 @@ class KeyManager(object):
         pubkey.validation = validation
         yield self.put_key(pubkey)
 
+    def ever_synced(self):
+        # TODO: provide this method in soledad api, avoid using a private
+        # attribute here
+        d = self._soledad._dbpool.runQuery('SELECT * FROM sync_log')
+        d.addCallback(lambda result: bool(result))
+        return d
+
 
 def _split_email(address):
     """
