@@ -18,7 +18,6 @@
 Incoming mail fetcher.
 """
 import copy
-import logging
 import shlex
 import time
 import warnings
@@ -30,7 +29,7 @@ from StringIO import StringIO
 from urlparse import urlparse
 
 from twisted.application.service import Service
-from twisted.python import log
+from twisted.logger import Logger
 from twisted.python.failure import Failure
 from twisted.internet import defer, reactor
 from twisted.internet.task import LoopingCall
@@ -48,7 +47,7 @@ from leap.soledad.common.crypto import ENC_SCHEME_KEY, ENC_JSON_KEY
 from leap.soledad.common.errors import InvalidAuthTokenError
 
 
-logger = logging.getLogger(__name__)
+logger = Logger()
 
 MULTIPART_ENCRYPTED = "multipart/encrypted"
 MULTIPART_SIGNED = "multipart/signed"
@@ -161,7 +160,7 @@ class IncomingMail(Service):
         Calls a deferred that will execute the fetch callback.
         """
         def _sync_errback(failure):
-            log.err(failure)
+            logger.error(failure)
 
         def syncSoledadCallback(_):
             # XXX this should be moved to adaptors
@@ -213,7 +212,7 @@ class IncomingMail(Service):
     # synchronize incoming mail
 
     def _errback(self, failure):
-        log.err(failure)
+        logger.error(failure)
 
     def _sync_soledad(self):
         """
@@ -223,16 +222,17 @@ class IncomingMail(Service):
         :rtype: iterable or None
         """
         def _log_synced(result):
-            log.msg('FETCH soledad SYNCED.')
+            logger.info('sync finished')
             return result
 
         def _signal_invalid_auth(failure):
             failure.trap(InvalidAuthTokenError)
+            logger.info('sync failed: %r' % failure)
             # if the token is invalid, send an event so the GUI can
             # disable mail and show an error message.
             emit_async(catalog.SOLEDAD_INVALID_AUTH_TOKEN, self._userid)
 
-        log.msg('FETCH: syncing soledad...')
+        logger.info('starting sync...')
         d = self._soledad.sync()
         d.addCallbacks(_log_synced, _signal_invalid_auth)
         return d
@@ -250,7 +250,7 @@ class IncomingMail(Service):
             fetched_ts = time.mktime(time.gmtime())
             num_mails = len(doclist) if doclist is not None else 0
             if num_mails != 0:
-                log.msg("there are %s mails" % (num_mails,))
+                logger.info("there are %s mails" % (num_mails,))
             emit_async(catalog.MAIL_FETCHED_INCOMING, self._userid,
                        str(num_mails), str(fetched_ts))
             return doclist
@@ -274,7 +274,7 @@ class IncomingMail(Service):
         :type doclist: iterable.
         :returns: a list of deferreds for individual messages.
         """
-        log.msg('processing doclist')
+        logger.info('processing doclist')
         if not doclist:
             logger.debug("no docs found")
             return
@@ -326,7 +326,7 @@ class IncomingMail(Service):
                  decrypted message.
         :rtype: SoledadDocument, str
         """
-        log.msg('decrypting msg')
+        logger.info('decrypting msg')
 
         def process_decrypted(res):
             if isinstance(res, tuple):
@@ -360,7 +360,7 @@ class IncomingMail(Service):
                  data.
         :rtype: Deferred
         """
-        log.msg('processing decrypted doc')
+        logger.info('processing decrypted doc')
 
         # XXX turn this into an errBack for each one of
         # the deferreds that would process an individual document
@@ -405,7 +405,7 @@ class IncomingMail(Service):
         :param doc: the SoledadDocument to update
         :type doc: SoledadDocument
         """
-        log.msg("Updating Incoming MSG: SoledadDoc %s" % (doc.doc_id))
+        logger.info("Updating Incoming MSG: SoledadDoc %s" % (doc.doc_id))
         return self._soledad.put_doc(doc)
 
     def _delete_incoming_message(self, doc):
@@ -415,7 +415,7 @@ class IncomingMail(Service):
         :param doc: the SoledadDocument to delete
         :type doc: SoledadDocument
         """
-        log.msg("Deleting Incoming message: %s" % (doc.doc_id,))
+        logger.info("Deleting Incoming message: %s" % (doc.doc_id,))
         return self._soledad.delete_doc(doc)
 
     def _maybe_decrypt_msg(self, data):
@@ -430,7 +430,7 @@ class IncomingMail(Service):
         :rtype: Deferred
         """
         leap_assert_type(data, str)
-        log.msg('maybe decrypting doc')
+        logger.info('maybe decrypting doc')
 
         # parse the original message
         encoding = get_email_charset(data)
@@ -497,7 +497,7 @@ class IncomingMail(Service):
                  is valid or InvalidSignature or KeyNotFound.
         :rtype: Deferred
         """
-        log.msg('decrypting multipart encrypted msg')
+        logger.info('decrypting multipart encrypted msg')
         msg = copy.deepcopy(msg)
         self._msg_multipart_sanity_check(msg)
 
@@ -556,7 +556,7 @@ class IncomingMail(Service):
                  is valid or InvalidSignature or KeyNotFound.
         :rtype: Deferred
         """
-        log.msg('maybe decrypting inline encrypted msg')
+        logger.info('maybe decrypting inline encrypted msg')
 
         data = self._serialize_msg(origmsg)
 
@@ -779,7 +779,7 @@ class IncomingMail(Service):
         """
         doc, raw_data = msgtuple
         insertion_date = formatdate(time.time())
-        log.msg('adding message %s to local db' % (doc.doc_id,))
+        logger.info('adding message %s to local db' % (doc.doc_id,))
 
         def msgSavedCallback(result):
             if empty(result):
