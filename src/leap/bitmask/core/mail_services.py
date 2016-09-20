@@ -227,7 +227,7 @@ class KeymanagerContainer(Container):
         return d
 
     def set_remote_auth_token(self, userid, token):
-        self.get_instance(userid)._token = token
+        self.get_instance(userid).token = token
 
     def _on_keymanager_ready_cb(self, keymanager, userid, soledad):
         data = {'userid': userid, 'soledad': soledad, 'keymanager': keymanager}
