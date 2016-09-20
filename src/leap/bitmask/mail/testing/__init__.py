@@ -25,6 +25,7 @@ from twisted.trial import unittest
 from twisted.internet import defer
 
 from leap.common.testing.basetest import BaseLeapTest
+from leap.bitmask.util import get_gpg_bin_path
 from leap.bitmask.keymanager import KeyManager
 from leap.soledad.client import Soledad
 
@@ -46,7 +47,7 @@ class defaultMockSharedDB(object):
 class KeyManagerWithSoledadTestCase(unittest.TestCase, BaseLeapTest):
 
     def setUp(self):
-        self.gpg_binary_path = self._find_gpg()
+        self.gpg_binary_path = get_gpg_bin_path()
 
         self._soledad = Soledad(
             u"leap@leap.se",
@@ -109,13 +110,6 @@ class KeyManagerWithSoledadTestCase(unittest.TestCase, BaseLeapTest):
         return KeyManager(user, url, self._soledad, token=token,
                           gpgbinary=self.gpg_binary_path,
                           ca_cert_path=ca_cert_path)
-
-    def _find_gpg(self):
-        gpg_path = distutils.spawn.find_executable('gpg')
-        if gpg_path is not None:
-            return os.path.realpath(gpg_path)
-        else:
-            return "/usr/bin/gpg"
 
     def get_public_binary_key(self):
         with open(PATH + '/fixtures/public_key.bin', 'r') as binary_public_key:

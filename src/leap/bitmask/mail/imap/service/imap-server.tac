@@ -36,6 +36,7 @@ import sys
 
 from twisted.application import service, internet
 
+from leap.bitmask.util import get_gpg_bin_path
 from leap.bitmask.keymanager import KeyManager
 from leap.bitmask.mail.imap.service import imap
 from leap.soledad.client import Soledad
@@ -123,7 +124,7 @@ km_kwargs = {
     "api_uri":  "",
     "api_version": "",
     "uid": uuid,
-    "gpgbinary": "/usr/bin/gpg"
+    "gpgbinary": get_gpg_bin_path()
 }
 keymanager = KeyManager(*km_args, **km_kwargs)
 

@@ -30,6 +30,7 @@ from collections import namedtuple
 from twisted.application import service
 from twisted.internet import defer
 from twisted.python import log
+from twisted.python.procutils import which
 
 # TODO move to bitmask.common
 from leap.common.service_hooks import HookableService
@@ -43,6 +44,7 @@ from leap.bitmask.mail.imap.service import imap
 from leap.bitmask.mail.incoming.service import IncomingMail
 from leap.bitmask.mail.incoming.service import INCOMING_CHECK_PERIOD
 from leap.bitmask.mail import smtp
+from leap.bitmask.util import get_gpg_bin_path
 from leap.soledad.client.api import Soledad
 
 from leap.bitmask.core.uuid_map import UserMap
@@ -282,15 +284,11 @@ class KeymanagerContainer(Container):
 
         km_args = (userid, nickserver_uri, soledad)
 
-        # TODO use the method in
-        # services.soledadbootstrapper._get_gpg_bin_path.
-        # That should probably live in keymanager package.
-
         km_kwargs = {
             "token": token, "uid": uuid,
             "api_uri": api_uri, "api_version": "1",
             "ca_cert_path": cert_path,
-            "gpgbinary": "/usr/bin/gpg"
+            "gpgbinary": get_gpg_bin_path()
         }
         keymanager = KeyManager(*km_args, **km_kwargs)
         return keymanager
