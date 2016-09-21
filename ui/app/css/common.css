@@ -63,12 +63,21 @@ body {
  */
 
 .center-container {
-  position: absolute;
+
   display: -webkit-flex;
+  display: flex;
   -webkit-flex-flow: row nowrap;
+  flex-flow: row nowrap;
   -webkit-justify-content: center;
+  justify-content: center;
   -webkit-align-content: center;
+  align-content: center;
   -webkit-align-items: center;
+  align-items: center;
+}
+
+.center-container.center-both {
+  position: absolute;
   top: 0px;
   left: 0px;
   height: 100%;
@@ -77,4 +86,13 @@ body {
 
 .center-container .center-item {
   -webkit-flex: 0 1 auto;
+  flex: 0 1 auto;
 }
+
+/*
+ * typography
+ */
+
+h1.first { margin-top: 0px }
+
+.vspacer {margin-top: 20px }

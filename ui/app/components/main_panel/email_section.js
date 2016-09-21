@@ -19,8 +19,6 @@ export default class EmailSection extends React.Component {
     this.openKeys  = this.openKeys.bind(this)
     this.openApp   = this.openApp.bind(this)
     this.openPrefs = this.openPrefs.bind(this)
-
-    console.log('email constructor')
   }
 
   openKeys() {}

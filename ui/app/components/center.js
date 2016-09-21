@@ -7,7 +7,8 @@ import React from 'react'
 class Center extends React.Component {
 
   static get defaultProps() {return{
-    width: null
+    width: null,
+    direction: 'both',
   }}
 
   constructor(props) {
@@ -19,8 +20,9 @@ class Center extends React.Component {
     if (this.props.width) {
       style = {width: this.props.width + 'px'}
     }
+    let className = "center-container center-" + this.props.direction
     return (
-      <div className="center-container">
+      <div className={className}>
         <div className="center-item" style={style}>
           {this.props.children}
         </div>

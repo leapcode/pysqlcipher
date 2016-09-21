@@ -16,12 +16,16 @@ export default class GreeterPanel extends React.Component {
     App.show('wizard')
   }
 
+  onLogin(account) {
+    App.show('main', {initialAccount: account})
+  }
+
   render () {
     return <div>
       <Splash speed="slow" mask={false} />
       <Center width="400">
         <Area position="top" type="light" className="greeter">
-          <Login {...this.props} rememberAllowed={false}/>
+          <Login onLogin={this.onLogin.bind(this)} rememberAllowed={false}/>
         </Area>
         <Area position="bottom" type="dark" className="greeter">
           <Glyphicon glyph="user" />

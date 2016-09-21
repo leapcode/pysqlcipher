@@ -3,12 +3,13 @@
 //
 
 import React from 'react'
-import { FormGroup, ControlLabel, FormControl, HelpBlock, Button, Modal } from 'react-bootstrap'
-import Spinner from '../spinner'
-import Validate from '../../lib/validate'
-import App from '../../app'
+import { FormGroup, ControlLabel, FormControl, HelpBlock, Button, ButtonToolbar, Modal } from 'react-bootstrap'
 
-class AddProviderModal extends React.Component {
+import Spinner from 'components/spinner'
+import Validate from 'lib/validate'
+import Provider from 'models/provider'
+
+export default class AddProviderModal extends React.Component {
 
   static get defaultProps() {return{
     title: 'Add a provider',
@@ -18,20 +19,36 @@ class AddProviderModal extends React.Component {
   constructor(props) {
     super(props)
     this.state = {
-      validationState: null,
+      validationState: null,  // one of 'success', 'error', 'warning'
       errorMsg: null,
-      domain: ""
+      domain: "",
+      working: false,         // true if waiting for something
     }
     this.accept   = this.accept.bind(this)
     this.cancel   = this.cancel.bind(this)
     this.changed  = this.changed.bind(this)
   }
 
-  accept() {
-    if (this.state.domain) {
-      App.providers.add(this.state.domain)
+  accept(e=null) {
+    if (e) {
+      e.preventDefault() // don't reload the page please!
     }
-    this.props.onClose()
+    if (this.state.domain) {
+      this.setState({working: true})
+      Provider.setup(this.state.domain).then(
+        provider => {
+          this.props.onClose(provider)
+          // this.setState({working: false})
+        },
+        error => {
+          this.setState({
+            validationState: 'warning',
+            errorMsg: error,
+            working: false
+          })
+        }
+      )
+    }
   }
 
   cancel() {
@@ -44,9 +61,9 @@ class AddProviderModal extends React.Component {
     let newMsg   = null
 
     if (domain.length > 0) {
-      let error = Validate.domain(domain)
-      newState = error ? 'error' : 'success'
-      newMsg   = error
+      let msg = Validate.domain(domain)
+      newState = msg ? 'error' : 'success'
+      newMsg   = msg
     }
     this.setState({
       domain: domain,
@@ -57,10 +74,20 @@ class AddProviderModal extends React.Component {
 
   render() {
     let help = null
+    let addButton = null
     if (this.state.errorMsg) {
       help = <HelpBlock>{this.state.errorMsg}</HelpBlock>
     } else {
       help = <HelpBlock>&nbsp;</HelpBlock>
+    }
+    if (this.state.working) {
+      addButton = <Button><Spinner /></Button>
+    } else if (this.state.validationState == 'warning') {
+      addButton = <Button onClick={this.accept}>Retry</Button>
+    } else if (this.state.validationState == 'error') {
+      addButton = <Button disabled={true}>Add</Button>
+    } else {
+      addButton = <Button onClick={this.accept}>Add</Button>
     }
     let form = <form onSubmit={this.accept} autoComplete="off">
       <FormGroup controlId="addprovider" validationState={this.state.validationState}>
@@ -72,10 +99,12 @@ class AddProviderModal extends React.Component {
           value={this.state.domain}
           onChange={this.changed}
           onBlur={this.changed} />
-        <FormControl.Feedback/>
         {help}
       </FormGroup>
-      <Button onClick={this.accept}>Add</Button>
+      <ButtonToolbar>
+        {addButton}
+        <Button onClick={this.cancel}>Cancel</Button>
+      </ButtonToolbar>
     </form>
 
     return(
@@ -90,5 +119,3 @@ class AddProviderModal extends React.Component {
     )
   }
 }
-
-export default AddProviderModal

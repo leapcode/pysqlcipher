@@ -8,10 +8,18 @@ class Application {
   //
   // main entry point for the application
   //
+  initialize() {
+    if (this.debugging()) {
+      this.show(this.debug_panel)
+    } else {
+      this.start()
+    }
+  }
+
   start() {
     Account.active().then(account => {
       if (account == null) {
-        this.show('greeter', {onLogin: this.onLogin.bind(this)})
+        this.show('greeter')
       } else {
         this.show('main', {initialAccount: account})
       }
@@ -20,12 +28,13 @@ class Application {
     })
   }
 
-  onLogin(account) {
-    this.show('main', {initialAccount: account})
-  }
-
   show(panel, properties) {
     this.switcher.show(panel, properties)
+  }
+
+  debugging() {
+    this.debug_panel = window.location.hash.replace('#', '')
+    return this.debug_panel && this.debug_panel != 'main'
   }
 }
 

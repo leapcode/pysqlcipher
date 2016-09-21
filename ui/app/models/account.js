@@ -57,6 +57,11 @@ export default class Account {
     return bitmask.bonafide.user.auth(this.address, password).then(
       response => {
         if (response.uuid) {
+          // currently, only one account can be authenticated at once
+          Account.list.forEach(account => {
+            account._authenticated = false
+            // if(account.id != this.id) {account.logout()}
+          })
           this._uuid = response.uuid
           this._authenticated = true
         }
@@ -131,13 +136,15 @@ export default class Account {
       return i.id != account.id
     })
   }
-  //   return Account.list
-  //   return new Promise(function(resolve, reject) {
-  //     window.setTimeout(function() {
-  //       resolve(['@blah', '@lala'])
-  //     }, 1000)
-  //   })
-  // }
+
+  static create(address, password) {
+    return bitmask.bonafide.user.create(address, password).then(
+      response => {
+        console.log(response)
+        return new Account(address)
+      }
+    )
+  }
 }
 
 Account.list = []

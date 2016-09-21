@@ -61,9 +61,17 @@ export default class UserSection extends React.Component {
         </SectionLayout>
       )
     } else {
+      let address = null
+      if (this.props.account.userpart) {
+        address = this.props.account.address
+      }
       return (
         <SectionLayout icon="user" className="wide-margin">
-          <Login onLogin={this.props.onLogin} domain={this.props.account.domain} />
+          <Login
+            onLogin={this.props.onLogin}
+            domain={this.props.account.domain}
+            address={address}
+          />
         </SectionLayout>
       )
     }

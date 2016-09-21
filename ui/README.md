@@ -84,7 +84,10 @@ way. We have enabled these plugins:
 * babel-presets-stage-0: Allows the use of some ES7 proposals, even though
   these are not standardized yet. Makes classes nicer.
 
-* babel-polyfill: This is not part of the babel transpiling, but is distributed by babel. This polyfill will give you a full ES2015 environment even if the browser is missing some javascript features. We include this in the 'entry' option of the webpack config. https://babeljs.io/docs/usage/polyfill/
+* babel-polyfill: This is not part of the babel transpiling, but is distributed
+  by babel. This polyfill will give you a full ES2015 environment even if the
+  browser is missing some javascript features. We include this in the 'entry'
+  option of the webpack config. https://babeljs.io/docs/usage/polyfill/
 
 **react**
 
@@ -109,4 +112,28 @@ To integrate Bootstrap with React:
 
 A password strength checker that doesn't suck, but which is big. This JS is
 only loaded when we think we are about to need it.
+
+Known Issues
+-----------------------------------------------------------------
+
+Wizard
+
+* In the wizard, the username field gets deselected.
+* User sign up does not work, getting an error from the backend:
+  No such subcommand: create
+* This wizard is kind of ugly
+  The list of providers should have icons, be sortable, filterable.
+  The list of providers does not show seeded providers (backend is not returning them)
+  The provider details should show human readable output, not codes.
+
+Main window
+
+* UI doesn't subscribe to events yet, won't get updated if
+  user has logged out via the command line interface.
+* The backend doesn't have a concept of multiple accounts that are
+  all authenticated yet.
+* If you cancel the wizard, it does not select the appropriate account
+  in the main window.
+* Removing accounts doesn't do anything
+* Collapsing account list looks weird, and is state is not remembered
 

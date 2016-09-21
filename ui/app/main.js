@@ -16,7 +16,7 @@ class Main extends React.Component {
   }
 
   componentDidMount() {
-    App.start()
+    App.initialize()
   }
 }
 

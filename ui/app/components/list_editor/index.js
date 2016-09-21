@@ -6,22 +6,7 @@
 import React from 'react'
 import {Button, ButtonGroup, ButtonToolbar, Glyphicon, FormControl} from 'react-bootstrap'
 
-const CONTAINER_CSS = {
-  display: "flex",
-  flexDirection: "column"
-}
-const SELECT_CSS = {
-  padding: "0px",
-  flex: "1 1 1000px",
-  overflowY: "scroll"
-}
-const OPTION_CSS = {
-  padding: "10px"
-}
-const TOOLBAR_CSS = {
-  paddingTop: "10px",
-  flex: "0 0 auto"
-}
+import './list_editor.less'
 
 class ListEdit extends React.Component {
 
@@ -32,35 +17,29 @@ class ListEdit extends React.Component {
       'bbbbbbb',
       'ccccccc'
     ],
-    selected: null,
+    selected: null,  // string of the selected item
     onRemove: null,
     onAdd: null,
+    onSelect: null
   }}
 
   constructor(props) {
     super(props)
-    let index = 0
-    if (props.selected) {
-      index = props.items.indexOf(props.selected)
-    }
-    this.state = {
-      selected: index
-    }
     this.click  = this.click.bind(this)
     this.add    = this.add.bind(this)
     this.remove = this.remove.bind(this)
   }
 
-  setSelected(index) {
-    this.setState({
-      selected: index
-    })
+  row(str) {
+    return this.props.items.indexOf(str)
   }
 
   click(e) {
     let row = parseInt(e.target.value)
     if (row >= 0) {
-      this.setState({selected: row})
+      if (this.props.onSelect) {
+        this.props.onSelect(this.props.items[row])
+      }
     }
   }
 
@@ -71,13 +50,17 @@ class ListEdit extends React.Component {
   }
 
   remove() {
-    if (this.state.selected >= 0 && this.props.onRemove) {
-      if (this.props.items.length == this.state.selected + 1) {
-        // if we remove the last item, set the selected item
-        // to the one right before it.
-        this.setState({selected: (this.state.selected - 1)})
+    if (this.props.onRemove) {
+      let currentRow = this.row(this.props.selected)
+      let newSelected = null
+      if (this.props.items.length == currentRow + 1) {
+        // if we remove the last item, set the new selected to be
+        // the new last item.
+        newSelected = this.props.items[currentRow - 1]
+      } else {
+        newSelected = this.props.items[currentRow + 1]
       }
-      this.props.onRemove(this.props.items[this.state.selected])
+      this.props.onRemove(this.props.selected, newSelected)
     }
   }
 
@@ -85,23 +68,23 @@ class ListEdit extends React.Component {
     let options = null
     if (this.props.items) {
       options = this.props.items.map((item, i) => {
-        return <option style={OPTION_CSS} key={i} value={i}>{item}</option>
+        return <option className="list-option" key={i} value={i}>{item}</option>
       }, this)
     }
     return(
-      <div style={CONTAINER_CSS}>
+      <div className="list-editor">
         <FormControl
-          value={this.state.selected}
-          style={SELECT_CSS} className="select-list"
+          value={this.row(this.props.selected)}
+          className="list-select"
           componentClass="select" size="5" onChange={this.click}>
           {options}
         </FormControl>
-        <ButtonToolbar className="pull-right" style={TOOLBAR_CSS}>
+        <ButtonToolbar className="pull-right list-toolbar">
           <ButtonGroup>
             <Button onClick={this.add}>
               <Glyphicon glyph="plus" />
             </Button>
-            <Button disabled={this.state.selected < 0} onClick={this.remove}>
+            <Button disabled={this.props.selected < 0} onClick={this.remove}>
               <Glyphicon glyph="minus" />
             </Button>
           </ButtonGroup>

@@ -17,7 +17,7 @@ export default class PanelSwitcher extends React.Component {
     this.state = {
       panel: null,
       panel_properties: null,
-      debug: false
+      debug: true
     }
     App.switcher = this
   }
@@ -33,10 +33,11 @@ export default class PanelSwitcher extends React.Component {
         this.panelRender(this.state.panel, this.state.panel_properties)
       )
     }
-    if (this.state.debug) {
-      elems.push(
-        elem(DebugPanel, {key: 'debug'})
-      )
+    if (this.state.debug && this.state.panel) {
+      window.location.hash = this.state.panel
+      //elems.push(
+      //  elem(DebugPanel, {key: 'debug'})
+      //)
     }
     return <div id="root">{elems}</div>
   }
