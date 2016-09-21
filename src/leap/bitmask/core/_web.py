@@ -34,7 +34,7 @@ from twisted.python import log
 from leap.bitmask.core.dispatcher import CommandDispatcher
 
 try:
-    import bitmask_js
+    import leap.bitmask_js
     HAS_WEB_UI = True
 except ImportError:
     HAS_WEB_UI = False
@@ -54,7 +54,7 @@ class HTTPDispatcherService(service.Service):
     def startService(self):
         if HAS_WEB_UI:
             webdir = os.path.abspath(
-                pkg_resources.resource_filename('bitmask_js', 'public'))
+                pkg_resources.resource_filename('leap.bitmask_js', 'public'))
         else:
             log.msg('bitmask_js not found, serving bitmask.core ui')
             webdir = os.path.abspath(

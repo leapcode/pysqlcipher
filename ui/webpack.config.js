@@ -6,7 +6,7 @@ var config = {
   context: path.join(__dirname, 'app'),
   entry: ['babel-polyfill', './main.js'],
   output: {
-    path: path.join(__dirname, 'pydist', 'bitmask_js', 'public'),
+    path: path.join(__dirname, 'pydist', 'leap', 'bitmask_js', 'public'),
     filename: 'app.bundle.js'
   },
   resolve: {

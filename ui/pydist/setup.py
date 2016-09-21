@@ -25,26 +25,27 @@ import datetime
 import time
 
 long_description = \
-'''bitmask_js
------------------ 
+'''leap.bitmask_js
+-----------------
 This package contains the already compiled javascript resources for the bitmask UI.
 
 If you want to develop for this UI, please checkout the bitmask-dev [0] repo and follow the instructions in the ui/README.md file.
 
 [0] https://github.com/leapcode/bitmask-dev'''
 
-now       = datetime.datetime.now()
+now = datetime.datetime.now()
 timestamp = time.strftime('%Y%m%d%H%M', now.timetuple())
 
 setup(
-    name='bitmask_js',
+    name='leap.bitmask_js',
     version='0.1.%s' % timestamp,
     description='Bitmask UI',
     long_description=long_description,
     author='LEAP Encrypted Access Project',
     author_email='info@leap.se',
+    namespace_packages=['leap'],
     url='http://leap.se',
-    packages=['bitmask_js'],
+    packages=['leap.bitmask_js'],
     package_data={
         '': ['public/*',
              'public/css/*',

@@ -5,7 +5,7 @@
 dev-build: build-clean
 	npm install
 	npm run build
-	touch pydist/bitmask_js/__init__.py
+	touch pydist/leap/bitmask_js/__init__.py
 
 dev-install: dev-build
 	pip install -e pydist
@@ -25,7 +25,7 @@ dev-install-prebuilt:
 dist-build: build-clean
 	npm install
 	npm run build:production
-	touch pydist/bitmask_js/__init__.py
+	touch pydist/leap/bitmask_js/__init__.py
 	cd pydist && python setup.py bdist_wheel
 
 dist-install: dist-build
@@ -36,7 +36,7 @@ dist-install: dist-build
 #
 
 build-clean:
-	rm -rf pydist/bitmask_js
+	rm -rf pydist/leap/bitmask_js
 	rm -rf pydist/dist
 	rm -rf pydist/build
 
@@ -44,4 +44,4 @@ clean: build-clean
 	rm -rf node_modules
 
 uninstall:
-	pip uninstall bitmask_js
+	pip uninstall leap.bitmask_js
