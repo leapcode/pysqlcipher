@@ -1,2 +1,2 @@
 test:
-    script: pkg/tools/checkout_leap.sh && tox --recreate -e py27-dev
+    script: tox --recreate -e py27-dev
