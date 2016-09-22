@@ -526,8 +526,9 @@ class StandardMailService(service.MultiService, HookableService):
 
         tokens_path = os.path.join(tokens_folder,
                                    "%s.json" % (userid,))
+        token_dict = {'mail_auth': self._service_tokens[userid]}
         with open(tokens_path, 'w') as ftokens:
-            json.dump(self._service_tokens, ftokens)
+            json.dump(token_dict, ftokens)
 
 
 class IMAPService(service.Service):
