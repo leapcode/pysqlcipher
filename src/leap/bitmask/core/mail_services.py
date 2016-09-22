@@ -32,7 +32,6 @@ from twisted.internet import defer
 from twisted.internet import reactor
 from twisted.internet import task
 from twisted.python import log
-from twisted.python.procutils import which
 
 # TODO move to bitmask.common
 from leap.common.service_hooks import HookableService
