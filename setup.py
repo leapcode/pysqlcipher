@@ -20,21 +20,12 @@ required = [
     'leap.common',
 ]
 
+mail_deps = ['leap.soledad.client', 'gnupg']
+gui_deps = ['vext.pyqt5', 'leap.bitmask_js']
 extras = {
-    'mail': [
-        'leap.soledad.client',
-        'gnupg',
-    ],
-    'gui': [
-        'vext.pyqt5',
-        'leap.bitmask_js',
-    ],
-    'all': [
-        'vext.pyqt5',
-        'bitmask_js',
-        'leap.soledad.client',
-        'gnupg',
-    ]
+    'mail': mail_deps,
+    'gui': gui_deps,
+    'all': mail_deps + gui_deps
 }
 
 
