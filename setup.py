@@ -27,7 +27,7 @@ extras = {
     ],
     'gui': [
         'vext.pyqt5',
-        'bitmask_js',
+        'leap.bitmask_js',
     ],
     'all': [
         'vext.pyqt5',
