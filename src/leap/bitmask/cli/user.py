@@ -48,7 +48,7 @@ SUBCOMMANDS:
     def create(self, raw_args):
         username = self.username(raw_args)
         passwd = getpass.getpass()
-        self.data += ['signup', username, passwd, 'true']
+        self.data += ['create', username, passwd, 'true']
         return self._send(printer=command.default_dict_printer)
 
     def auth(self, raw_args):

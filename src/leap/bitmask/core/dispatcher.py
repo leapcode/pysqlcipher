@@ -106,7 +106,7 @@ class UserCmd(SubCommand):
         return bonafide.do_authenticate(user, password, autoconf)
 
     @register_method("{'signup': 'ok', 'user': str}")
-    def do_SIGNUP(self, bonafide, *parts):
+    def do_CREATE(self, bonafide, *parts):
         user, password = parts[2], parts[3]
         autoconf = False
         if len(parts) > 4:
