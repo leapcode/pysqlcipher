@@ -43,7 +43,7 @@ class SubCommand(object):
             subcmd = parts[1]
             _method = getattr(self, 'do_' + subcmd.upper(), None)
         except IndexError:
-            _method = None
+            raise RuntimeError('Can\'t dispatch subcommand: %s' % str(subcmd))
 
         if not _method:
             raise RuntimeError('No such subcommand: ' + subcmd)
