@@ -45,8 +45,8 @@ class BackendCommands(object):
     def do_stats(self):
         return {'mem_usage': '01 KB'}
 
-    def do_shutdown(self):
-        return {'shutdown': 'ok'}
+    def do_stop(self):
+        return {'stop': 'ok'}
 
 
 class mail_services(object):

@@ -145,8 +145,8 @@ class BitmaskBackend(configurable.ConfigurableService):
     def do_version(self):
         return self.core_commands.do_version()
 
-    def do_shutdown(self):
-        return self.core_commands.do_shutdown()
+    def do_stop(self):
+        return self.core_commands.do_stop()
 
     # Service Toggling
 
@@ -211,7 +211,7 @@ class BackendCommands(object):
         mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         return {'mem_usage': '%s MB' % (mem / 1024)}
 
-    def do_shutdown(self):
+    def do_stop(self):
         self.core.stopService()
         reactor.callLater(1, reactor.stop)
-        return {'shutdown': 'ok'}
+        return {'stop': 'ok'}

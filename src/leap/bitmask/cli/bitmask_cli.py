@@ -43,13 +43,13 @@ SERVICE COMMANDS:
   mail       Bitmask Encrypted Mail
   eip        Encrypted Internet Proxy
   keys       Bitmask Keymanager
-  webui      Bitmask Web User Interface
+  ui         Bitmask User Interface
 
 GENERAL COMMANDS:
 
   version    prints version number and exit
-  launch     launch the Bitmask backend daemon
-  shutdown   shutdown Bitmask backend daemon
+  start      starts the Bitmask backend daemon
+  stop       stops the Bitmask backend daemon
   status     displays general status about the running Bitmask services
   stats      show some debug info about bitmask-core
   help       show this help message
@@ -57,7 +57,7 @@ GENERAL COMMANDS:
 '''
     epilog = ("Use 'bitmaskctl <command> help' to learn more "
               "about each command.")
-    commands = ['shutdown', 'stats']
+    commands = ['stop', 'stats']
 
     def user(self, raw_args):
         user = User()
@@ -75,13 +75,13 @@ GENERAL COMMANDS:
         keys = Keys()
         return keys.execute(raw_args)
 
-    def webui(self, raw_args):
+    def ui(self, raw_args):
         webui = WebUI()
         return webui.execute(raw_args)
 
     # Single commands
 
-    def launch(self, raw_args):
+    def start(self, raw_args):
         # XXX careful! Should see if the process in PID is running,
         # avoid launching again.
         import commands

@@ -358,9 +358,9 @@ class CommandDispatcher(object):
     def do_STATUS(self, *parts):
         return _format_result(self.core.do_status())
 
-    @register_method("{'shutdown': 'ok'}")
-    def do_SHUTDOWN(self, *parts):
-        return _format_result(self.core.do_shutdown())
+    @register_method("{'stop': 'ok'}")
+    def do_STOP(self, *parts):
+        return _format_result(self.core.do_stop())
 
     # -----------------------------------------------
 
