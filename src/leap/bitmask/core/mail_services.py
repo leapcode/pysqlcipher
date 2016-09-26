@@ -286,7 +286,7 @@ class KeymanagerContainer(Container):
                 return failure
             return log_error
 
-        def _maybe_sync(ever_synced):
+        def _sync_if_never_synced(ever_synced):
             if ever_synced:
                 log.msg("soledad has synced in the past")
                 return defer.succeed(None)
@@ -296,7 +296,7 @@ class KeymanagerContainer(Container):
             if not keymanager.token:
                 log.msg("no token to sync now, scheduling a new check")
                 d = task.deferLater(reactor, 5, keymanager.ever_synced)
-                d.addCallback(_maybe_sync)
+                d.addCallback(_sync_if_never_synced)
                 return d
 
             log.msg("syncing soledad for the first time...")
@@ -304,7 +304,7 @@ class KeymanagerContainer(Container):
 
         log.msg("checking if soledad has ever synced...")
         d = keymanager.ever_synced()
-        d.addCallback(_maybe_sync)
+        d.addCallback(_sync_if_never_synced)
         d.addCallback(_get_key)
         d.addCallbacks(_found_key, _if_not_found_generate)
         d.addCallback(lambda _: keymanager)
