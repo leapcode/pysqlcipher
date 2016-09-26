@@ -117,7 +117,7 @@ class UserCmd(SubCommand):
     @register_method("{'logout': 'ok'}")
     def do_LOGOUT(self, bonafide, *parts):
         user = parts[2]
-        bonafide.do_logout(user)
+        return bonafide.do_logout(user)
 
     @register_method('str')
     def do_ACTIVE(self, bonafide, *parts):
