@@ -17,7 +17,7 @@
 """
 Run bitmask daemon.
 """
-from os.path import join
+from os.path import join, abspath
 from sys import argv
 
 from twisted.scripts.twistd import run
@@ -25,6 +25,9 @@ from twisted.scripts.twistd import run
 from leap.bitmask.util import here
 from leap.bitmask import core
 from leap.bitmask.core import flags
+from leap.common.config import get_path_prefix
+
+pid = abspath(join(get_path_prefix(), 'leap', 'bitmaskd.pid'))
 
 
 def run_bitmaskd():
@@ -35,8 +38,7 @@ def run_bitmaskd():
             flags.BACKEND = argv[index + 1]
     argv[1:] = [
         '-y', join(here(core), "bitmaskd.tac"),
-        '--pidfile', '/tmp/bitmaskd.pid',
-        '--logfile', '/tmp/bitmaskd.log',
+        '--pidfile', pid,
         '--umask=0022',
     ]
     print '[+] launching bitmaskd...'

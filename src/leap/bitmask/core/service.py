@@ -19,9 +19,10 @@ Bitmask-core Service.
 """
 import json
 import resource
+from os.path import join, abspath
 
 from twisted.internet import reactor
-from twisted.python import log
+from twisted.python import log, logfile
 
 from leap.bitmask import __version__
 from leap.bitmask.core import configurable
