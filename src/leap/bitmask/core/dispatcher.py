@@ -381,7 +381,7 @@ class CommandDispatcher(object):
             return _format_result({'mail': 'disabled'})
 
         if subcmd == 'disable':
-            d = dispatch(self.core)
+            d = dispatch(self.core, *parts)
         elif subcmd != 'enable':
             d = dispatch(mail, *parts, **kw)
 
