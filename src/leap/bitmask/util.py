@@ -25,11 +25,12 @@ from twisted.python import log
 
 from leap.common.files import which
 
-
 STANDALONE = getattr(sys, 'frozen', False)
 
 
 def here(module=None):
+    global STANDALONE
+
     if STANDALONE:
         # we are running in a |PyInstaller| bundle
         return sys._MEIPASS
@@ -48,6 +49,7 @@ def get_gpg_bin_path():
     :returns: the gpg binary path
     :rtype: str
     """
+    global STANDALONE
     gpgbin = None
 
     if STANDALONE:

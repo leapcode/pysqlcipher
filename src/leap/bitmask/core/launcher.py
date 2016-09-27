@@ -17,12 +17,11 @@
 """
 Run bitmask daemon.
 """
-from os.path import join, abspath
-from sys import argv
+from os.path import join, abspath, dirname
+import sys
 
 from twisted.scripts.twistd import run
 
-from leap.bitmask.util import here
 from leap.bitmask import core
 from leap.bitmask.core import flags
 from leap.common.config import get_path_prefix
@@ -30,13 +29,27 @@ from leap.common.config import get_path_prefix
 pid = abspath(join(get_path_prefix(), 'leap', 'bitmaskd.pid'))
 
 
+STANDALONE = getattr(sys, 'frozen', False)
+
+
+def here(module=None):
+    if STANDALONE:
+        # we are running in a |PyInstaller| bundle
+        return sys._MEIPASS
+    else:
+        if module:
+            return dirname(module.__file__)
+        else:
+            return dirname(__file__)
+
+
 def run_bitmaskd():
     # TODO --- configure where to put the logs... (get --logfile, --logdir
     # from the bitmask_cli
-    for (index, arg) in enumerate(argv):
+    for (index, arg) in enumerate(sys.argv):
         if arg == '--backend':
             flags.BACKEND = argv[index + 1]
-    argv[1:] = [
+    sys.argv[1:] = [
         '-y', join(here(core), "bitmaskd.tac"),
         '--pidfile', pid,
         '--umask=0022',

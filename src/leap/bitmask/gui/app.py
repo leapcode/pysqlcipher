@@ -21,16 +21,22 @@ It just launches a wekbit browser that runs the local web-ui served by bitmaskd
 when the web service is running.
 """
 
+import os
+import signal
 import sys
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5 import QtWebKit, QtWebKitWidgets
 
-from bitmask.core.launcher import run_bitmaskd()
+from leap.bitmask.core.launcher import run_bitmaskd, pid
+
+from multiprocessing import Process
+
 
 BITMASK_URI = 'http://localhost:7070'
 
 qApp = None
+bitmaskd = None
 
 
 class BrowserWindow(QtWidgets.QDialog):
@@ -46,7 +52,13 @@ class BrowserWindow(QtWidgets.QDialog):
         self.view.load(QtCore.QUrl(BITMASK_URI))
 
     def shutdown(self):
-        print('[bitmask] shutting down...')
+        global bitmaskd
+        bitmaskd.join()
+        with open(pid) as f:
+            pidno = int(f.read())
+        print('[bitmask] terminating bitmaskd...')
+        os.kill(pidno, signal.SIGTERM)
+        print('[bitmask] shutting down gui...')
         try:
             self.view.stop()
             QtCore.QTimer.singleShot(0, qApp.deleteLater)
@@ -59,9 +71,10 @@ class BrowserWindow(QtWidgets.QDialog):
 def start_app():
 
     global qApp
+    global bitmaskd
 
-    # TODO should do it if no pid
-    run_bitmaskd()
+    bitmaskd = Process(target=run_bitmaskd)
+    bitmaskd.start()
 
     qApp = QtWidgets.QApplication([])
     browser = BrowserWindow(None)
