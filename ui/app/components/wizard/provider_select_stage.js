@@ -3,12 +3,19 @@ import {Button, ButtonGroup, ButtonToolbar, Glyphicon} from 'react-bootstrap'
 
 import App from 'app'
 import Provider from 'models/provider'
+import Language from 'lib/language'
 
 import ListEditor from 'components/list_editor'
 import {HorizontalLayout, Column} from 'components/layout'
 
 import StageLayout from './stage_layout'
 import AddProviderModal from './add_provider_modal'
+
+const SERVICE_MAP = {
+  mx: "Mail",
+  openvpn: "VPN",
+  chat: "Chat"
+}
 
 export default class ProviderSelectStage extends React.Component {
 
@@ -131,14 +138,16 @@ export default class ProviderSelectStage extends React.Component {
     let modal = null
     let info = null
     if (this.state.provider) {
+      let languages = this.state.provider.languages.map(code => Language.find(code).name)
+      let services = this.state.provider.services.map(code => SERVICE_MAP[code] || '????')
       info = (
         <div>
           <h1 className="first">{this.state.provider.name}</h1>
           <h3>{this.state.provider.domain}</h3>
           <p>{this.state.provider.description}</p>
           <p><b>Enrollment Policy:</b> {this.state.provider.enrollment_policy}</p>
-          <p><b>Services</b>: {this.state.provider.services}</p>
-          <p><b>Languages</b>: {this.state.provider.languages.join(', ')}</p>
+          <p><b>Services</b>: {services}</p>
+          <p><b>Languages</b>: {languages.join(', ')}</p>
         </div>
       )
     } else if (this.state.error) {
