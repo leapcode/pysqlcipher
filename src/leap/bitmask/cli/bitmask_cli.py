@@ -30,6 +30,7 @@ from leap.bitmask.cli.mail import Mail
 from leap.bitmask.cli.webui import WebUI
 from leap.bitmask.cli import command
 from leap.bitmask.cli.user import User
+from leap.bitmask.cli.logs import Logs
 
 
 class BitmaskCLI(command.Command):
@@ -44,6 +45,7 @@ SERVICE COMMANDS:
   eip        Encrypted Internet Proxy
   keys       Bitmask Keymanager
   ui         Bitmask User Interface
+  logs       Manages bitmask daemon logs
 
 GENERAL COMMANDS:
 
@@ -78,6 +80,10 @@ GENERAL COMMANDS:
     def ui(self, raw_args):
         webui = WebUI()
         return webui.execute(raw_args)
+
+    def logs(self, raw_args):
+        logs = Logs()
+        return logs.execute(raw_args)
 
     # Single commands
 
