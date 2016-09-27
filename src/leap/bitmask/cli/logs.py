@@ -29,7 +29,6 @@ from twisted.python.procutils import which
 
 from leap.bitmask.cli import command
 from leap.common.config import get_path_prefix
-    
 
 
 class Logs(command.Command):

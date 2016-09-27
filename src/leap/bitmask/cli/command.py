@@ -96,10 +96,10 @@ class Command(object):
         self.parser.print_help()
         return defer.succeed(None)
 
-    def _send(self, printer=_print_result):
-        d = self._conn.sendMsg(*self.data, timeout=60)
+    def _send(self, printer=_print_result, timeout=60, errb=None):
+        d = self._conn.sendMsg(*self.data, timeout=timeout)
         d.addCallback(self._check_err, printer)
-        d.addErrback(self._timeout_handler)
+        d.addErrback(self._timeout_handler, errb)
         return d
 
     def _error(self, msg):
@@ -113,8 +113,10 @@ class Command(object):
         else:
             print Fore.RED + 'ERROR:' + '%s' % obj['error'] + Fore.RESET
 
-    def _timeout_handler(self, failure):
-        # TODO ---- could try to launch the bitmask daemon here and retry
+    def _timeout_handler(self, failure, errb):
         if failure.trap(ZmqRequestTimeoutError) == ZmqRequestTimeoutError:
-            print (Fore.RED + "[ERROR] Timeout contacting the bitmask daemon. "
-                   "Is it running?" + Fore.RESET)
+            if callable(errb):
+                errb()
+            else:
+                print (Fore.RED + "[ERROR] Timeout contacting the bitmask "
+                       "daemon. Is it running?" + Fore.RESET)

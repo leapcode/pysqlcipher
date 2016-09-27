@@ -95,7 +95,6 @@ GENERAL COMMANDS:
         return defer.succeed(None)
 
     def version(self, raw_args):
-        print(Fore.GREEN + 'bitmaskctl:  ' + Fore.RESET + '0.0.1')
         self.data = ['version']
         return self._send(printer=self._print_version)
 
@@ -117,10 +116,20 @@ GENERAL COMMANDS:
                   value + Fore.RESET)
 
 
+@defer.inlineCallbacks
 def execute():
     cli = BitmaskCLI()
-    d = cli.execute(sys.argv[1:])
-    d.addCallback(lambda _: reactor.stop())
+    cli.data = ['version']
+    yield cli._send(
+        timeout=0.1, printer=_null_printer,
+        errb=lambda: cli.start(None))
+    cli.data = []
+    yield cli.execute(sys.argv[1:])
+    yield reactor.stop()
+
+
+def _null_printer(*args):
+    pass
 
 
 def main():
