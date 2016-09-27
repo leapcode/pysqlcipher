@@ -26,6 +26,8 @@ import sys
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5 import QtWebKit, QtWebKitWidgets
 
+from bitmask.core.launcher import run_bitmaskd()
+
 BITMASK_URI = 'http://localhost:7070'
 
 qApp = None
@@ -57,6 +59,9 @@ class BrowserWindow(QtWidgets.QDialog):
 def start_app():
 
     global qApp
+
+    # TODO should do it if no pid
+    run_bitmaskd()
 
     qApp = QtWidgets.QApplication([])
     browser = BrowserWindow(None)
