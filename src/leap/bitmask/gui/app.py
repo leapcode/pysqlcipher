@@ -25,6 +25,8 @@ import os
 import signal
 import sys
 
+from functools import partial
+
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5 import QtWebKit, QtWebKitWidgets
 
@@ -47,11 +49,15 @@ class BrowserWindow(QtWidgets.QDialog):
         self.setWindowTitle('Bitmask')
         self.resize(800, 600)
         self.load_app()
+        self.closing = False
 
     def load_app(self):
         self.view.load(QtCore.QUrl(BITMASK_URI))
 
-    def shutdown(self):
+    def shutdown(self, *args):
+        if self.closing:
+            return
+        self.closing = True
         global bitmaskd
         bitmaskd.join()
         with open(pid) as f:
@@ -68,6 +74,12 @@ class BrowserWindow(QtWidgets.QDialog):
             sys.exit(1)
 
 
+def _handle_kill(*args, **kw):
+    win = kw.get('win')
+    if win:
+        QtCore.QTimer.singleShot(0, win.close)
+
+
 def launch_gui():
     global qApp
     global bitmaskd
@@ -80,6 +92,16 @@ def launch_gui():
 
     qApp.setQuitOnLastWindowClosed(True)
     qApp.lastWindowClosed.connect(browser.shutdown)
+
+    signal.signal(
+        signal.SIGINT,
+        partial(_handle_kill, win=browser))
+
+    # Avoid code to get stuck inside c++ loop, returning control
+    # to python land.
+    timer = QtCore.QTimer()
+    timer.timeout.connect(lambda: None)
+    timer.start(500)
 
     browser.show()
     sys.exit(qApp.exec_())
