@@ -35,6 +35,7 @@ from twisted.python import log
 
 # TODO move to bitmask.common
 from leap.common.service_hooks import HookableService
+from leap.common.files import check_and_fix_urw_only
 from leap.bitmask.bonafide import config
 from leap.bitmask.keymanager import KeyManager
 from leap.bitmask.keymanager.errors import KeyNotFound
@@ -488,6 +489,26 @@ class StandardMailService(service.MultiService, HookableService):
         # TODO --- only start instance if "autostart" is True.
         self.startInstance(userid, soledad, keymanager)
 
+    @defer.inlineCallbacks
+    def hook_on_bonafide_auth(self, **kw):
+        # TODO: if it's expired we should renew it
+        userid = kw['username']
+        username, provider = userid.split('@')
+        cert_path = _get_smtp_client_cert_path(self._basedir, provider,
+                                               username)
+        if os.path.exists(cert_path):
+            return
+
+        bonafide = self.parent.getServiceNamed("bonafide")
+        _, cert_str = yield bonafide.do_get_smtp_cert(userid)
+
+        cert_dir = os.path.dirname(cert_path)
+        if not os.path.exists(cert_dir):
+            os.makedirs(cert_dir, mode=0700)
+        with open(cert_path, 'w') as outf:
+            outf.write(cert_str)
+        check_and_fix_urw_only(cert_path)
+
     # commands
 
     def do_status(self):
@@ -500,10 +521,6 @@ class StandardMailService(service.MultiService, HookableService):
             return defer.succeed({'user': None})
         token = self._service_tokens.get(active_user)
         return defer.succeed({'user': active_user, 'token': token})
-
-    def do_get_smtp_cert_path(self, userid):
-        username, provider = userid.split('@')
-        return _get_smtp_client_cert_path(self._basedir, provider, username)
 
     # access to containers
 

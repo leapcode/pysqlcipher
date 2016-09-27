@@ -182,31 +182,6 @@ class MailCmd(SubCommand):
         d = mail.get_token()
         return d
 
-    @register_method('dict')
-    def do_GET_SMTP_CERTIFICATE(self, mail, *parts, **kw):
-        # TODO move to mail service
-        # TODO should ask for confirmation? like --force or something,
-        # if we already have a valid one. or better just refuse if cert
-        # exists.
-        # TODO how should we pass the userid??
-        # - Keep an 'active' user in bonafide (last authenticated)
-        # (doing it now)
-        # - Get active user from Mail Service (maybe preferred?)
-        # - Have a command/method to set 'active' user.
-
-        @defer.inlineCallbacks
-        def save_cert(cert_data):
-            userid, cert_str = cert_data
-            cert_path = yield mail.do_get_smtp_cert_path(userid)
-            with open(cert_path, 'w') as outf:
-                outf.write(cert_str)
-            defer.returnValue('certificate saved to %s' % cert_path)
-
-        bonafide = kw['bonafide']
-        d = bonafide.do_get_smtp_cert()
-        d.addCallback(save_cert)
-        return d
-
 
 class WebUICmd(SubCommand):
 

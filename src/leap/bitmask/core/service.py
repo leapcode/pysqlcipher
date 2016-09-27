@@ -90,6 +90,7 @@ class BitmaskBackend(configurable.ConfigurableService):
         bf.register_hook('on_passphrase_entry', listener='soledad')
         bf.register_hook('on_bonafide_auth', listener='soledad')
         bf.register_hook('on_bonafide_auth', listener='keymanager')
+        bf.register_hook('on_bonafide_auth', listener='mail')
 
     def init_soledad(self):
         service = mail_services.SoledadService

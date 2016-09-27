@@ -14,6 +14,7 @@ Features
 - `#8265 <https://leap.se/code/issues/8265>`_: Add a REST API and bitmask.js library for it.
 - `#8400 <https://leap.se/code/issues/8400>`_: Add manual provider registration.
 - `#8435 <https://leap.se/code/issues/8435>`_: Write service tokens to a file for email clients to read.
+- `#8486 <https://leap.se/code/issues/8486>`_: Fetch smtp cert automatically if missing.
 - Use mail_auth token in the core instead of imap/smtp tokens.
 
 - `#1234 <https://leap.se/code/issues/1234>`_: Description of the new feature corresponding with issue #1234.
