@@ -1,4 +1,4 @@
-### Python ###
+## Python ###
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -45,3 +45,4 @@ ui/pydist/leap/bitmask_js
 # PyInstaller
 pkg/pyinst/dist/
 pkg/pyinst/build/
+pkg/launcher/bitmask
