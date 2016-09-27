@@ -68,8 +68,7 @@ class BrowserWindow(QtWidgets.QDialog):
             sys.exit(1)
 
 
-def start_app():
-
+def launch_gui():
     global qApp
     global bitmaskd
 
@@ -84,6 +83,19 @@ def start_app():
 
     browser.show()
     sys.exit(qApp.exec_())
+
+
+def start_app():
+    from leap.bitmask.util import STANDALONE
+
+    # Allow the frozen binary in the bundle double as the cli entrypoint
+    # Why have only a user interface when you can have two?
+
+    if STANDALONE and len(sys.argv) > 1:
+        from leap.bitmask.cli import bitmask_cli
+        return bitmask_cli.main()
+
+    launch_gui()
 
 
 if __name__ == "__main__":
