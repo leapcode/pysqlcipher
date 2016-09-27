@@ -29,11 +29,14 @@ from StringIO import StringIO
 from urlparse import urlparse
 
 from twisted.application.service import Service
+from twisted.application.service import IService
 from twisted.logger import Logger
 from twisted.python.failure import Failure
 from twisted.internet import defer, reactor
 from twisted.internet.task import LoopingCall
 from twisted.internet.task import deferLater
+
+from zope.interface import implements
 
 from leap.common.events import emit_async, catalog
 from leap.common.check import leap_assert, leap_assert_type
@@ -47,7 +50,7 @@ from leap.soledad.common.crypto import ENC_SCHEME_KEY, ENC_JSON_KEY
 from leap.soledad.common.errors import InvalidAuthTokenError
 
 
-logger = Logger()
+logger = Logger(__name__)
 
 MULTIPART_ENCRYPTED = "multipart/encrypted"
 MULTIPART_SIGNED = "multipart/signed"
@@ -79,7 +82,8 @@ class IncomingMail(Service):
     This loop will sync the soledad db with the remote server and
     process all the documents found tagged as incoming mail.
     """
-    # TODO implements IService?
+
+    implements(IService)
 
     name = "IncomingMail"
 
@@ -227,7 +231,7 @@ class IncomingMail(Service):
 
         def _signal_invalid_auth(failure):
             failure.trap(InvalidAuthTokenError)
-            logger.info('sync failed: %r' % failure)
+            logger.warn('sync failed because token has expired: %r' % failure)
             # if the token is invalid, send an event so the GUI can
             # disable mail and show an error message.
             emit_async(catalog.SOLEDAD_INVALID_AUTH_TOKEN, self._userid)

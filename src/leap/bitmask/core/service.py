@@ -19,10 +19,9 @@ Bitmask-core Service.
 """
 import json
 import resource
-from os.path import join, abspath
 
 from twisted.internet import reactor
-from twisted.python import log, logfile
+from twisted.python import log
 
 from leap.bitmask import __version__
 from leap.bitmask.core import configurable
@@ -61,21 +60,19 @@ class BitmaskBackend(configurable.ConfigurableService):
         on_start(self.init_bonafide)
 
         if enabled('mail'):
-            on_start(self.init_soledad)
-            on_start(self.init_keymanager)
-            on_start(self.init_mail)
+            on_start(self._init_mail_services)
 
         if enabled('eip'):
-            on_start(self.init_eip)
+            on_start(self._init_eip)
 
         if enabled('zmq'):
-            on_start(self.init_zmq)
+            on_start(self._init_zmq)
 
         if enabled('web'):
-            on_start(self.init_web)
+            on_start(self._init_web)
 
         if enabled('websockets'):
-            on_start(self.init_websockets)
+            on_start(self._init_websockets)
 
     def init_events(self):
         event_server.ensure_server()
@@ -93,47 +90,75 @@ class BitmaskBackend(configurable.ConfigurableService):
         bf.register_hook('on_bonafide_auth', listener='keymanager')
         bf.register_hook('on_bonafide_auth', listener='mail')
 
-    def init_soledad(self):
+    def _start_child_service(self, name):
+        log.msg('starting backend child service: %s' % name)
+        service = self.getServiceNamed(name)
+        if service:
+            service.startService()
+
+    def _stop_child_service(self, name):
+        log.msg('stopping backend child service: %s' % name)
+        service = self.getServiceNamed(name)
+        if service:
+            service.stopService()
+
+    def _init_mail_services(self):
+            self._init_soledad()
+            self._init_keymanager()
+            self._init_mail()
+
+    def _start_mail_services(self):
+        self._start_child_service('soledad')
+        self._start_child_service('keymanager')
+        self._start_child_service('mail')
+
+    def _stop_mail_services(self):
+        self._stop_child_service('mail')
+        self._stop_child_service('keymanager')
+        self._stop_child_service('soledad')
+
+    def _init_soledad(self):
         service = mail_services.SoledadService
-        sol = self._maybe_start_service(
+        sol = self._maybe_init_service(
             'soledad', service, self.basedir)
         if sol:
             sol.register_hook(
                 'on_new_soledad_instance', listener='keymanager')
 
-    def init_keymanager(self):
+    def _init_keymanager(self):
         service = mail_services.KeymanagerService
-        km = self._maybe_start_service(
+        km = self._maybe_init_service(
             'keymanager', service, self.basedir)
         if km:
             km.register_hook('on_new_keymanager_instance', listener='mail')
 
-    def init_mail(self):
+    def _init_mail(self):
         service = mail_services.StandardMailService
-        self._maybe_start_service('mail', service, self.basedir)
+        self._maybe_init_service('mail', service, self.basedir)
 
-    def init_eip(self):
+    def _init_eip(self):
         # FIXME -- land EIP into leap.vpn
         pass
-        # self._maybe_start_service('eip', EIPService)
+        # self._maybe_init_service('eip', EIPService)
 
-    def init_zmq(self):
+    def _init_zmq(self):
         zs = _zmq.ZMQServerService(self)
         zs.setServiceParent(self)
 
-    def init_web(self):
+    def _init_web(self):
         service = _web.HTTPDispatcherService
-        self._maybe_start_service('web', service, self)
+        self._maybe_init_service('web', service, self)
 
-    def init_websockets(self):
+    def _init_websockets(self):
         from leap.bitmask.core import websocket
         ws = websocket.WebSocketsDispatcherService(self)
         ws.setServiceParent(self)
 
-    def _maybe_start_service(self, label, klass, *args, **kw):
+    def _maybe_init_service(self, label, klass, *args, **kw):
         try:
             self.getServiceNamed(label)
         except KeyError:
+            log.msg("initializing service: %s" % label)
             service = klass(*args, **kw)
             service.setName(label)
             service.setServiceParent(self)
@@ -158,24 +183,26 @@ class BitmaskBackend(configurable.ConfigurableService):
         self.set_config('services', service, 'True')
 
         if service == 'mail':
-            self.init_soledad()
-            self.init_keymanager()
-            self.init_mail()
+            self._init_mail_services()
+            self._start_mail_services()
 
         elif service == 'eip':
-            self.init_eip()
+            self._init_eip()
 
         elif service == 'zmq':
-            self.init_zmq()
+            self._init_zmq()
 
         elif service == 'web':
-            self.init_web()
+            self._init_web()
 
         return {'enabled': 'ok'}
 
     def do_disable_service(self, service):
         assert service in self.service_names
-        # TODO -- should stop also?
+
+        if service == 'mail':
+            self._stop_mail_services()
+
         self.set_config('services', service, 'False')
         return {'disabled': 'ok'}
 

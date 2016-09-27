@@ -32,7 +32,7 @@ SMTP_PORT = 2013
 
 
 def run_service(soledad_sessions, keymanager_sessions, sendmail_opts,
-                port=SMTP_PORT):
+                port=SMTP_PORT, factory=None):
     """
     Main entry point to run the service from the client.
 
@@ -46,8 +46,9 @@ def run_service(soledad_sessions, keymanager_sessions, sendmail_opts,
               the factory for the protocol.
     :rtype: tuple
     """
-    factory = SMTPFactory(soledad_sessions, keymanager_sessions,
-                          sendmail_opts)
+    if not factory:
+        factory = SMTPFactory(soledad_sessions, keymanager_sessions,
+                              sendmail_opts)
 
     try:
         interface = "localhost"
@@ -60,7 +61,7 @@ def run_service(soledad_sessions, keymanager_sessions, sendmail_opts,
         tport = reactor.listenTCP(port, factory, interface=interface)
         emit_async(catalog.SMTP_SERVICE_STARTED, str(port))
 
-        return factory, tport
+        return tport, factory
     except CannotListenError:
         logger.error("SMTP Service failed to start: "
                      "cannot listen in port %s" % port)

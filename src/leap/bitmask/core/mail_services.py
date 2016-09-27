@@ -457,10 +457,11 @@ class StandardMailService(service.MultiService, HookableService):
         self.addService(IncomingMailService(self))
 
     def startService(self):
-        log.msg('Starting Mail Service...')
+        log.msg('starting mail service')
         super(StandardMailService, self).startService()
 
     def stopService(self):
+        log.msg('stopping mail service')
         super(StandardMailService, self).stopService()
 
     def startInstance(self, userid, soledad, keymanager):
@@ -484,9 +485,6 @@ class StandardMailService(service.MultiService, HookableService):
         d.addCallback(registerToken)
         d.addCallback(self._write_tokens_file, userid)
         return d
-
-    def stopInstance(self):
-        pass
 
     # hooks
 
@@ -564,20 +562,26 @@ class IMAPService(service.Service):
     name = 'imap'
 
     def __init__(self, soledad_sessions):
-        port, factory = imap.run_service(soledad_sessions)
-
-        self._port = port
-        self._factory = factory
         self._soledad_sessions = soledad_sessions
+        self._port = None
+        self._factory = None
         super(IMAPService, self).__init__()
 
     def startService(self):
-        log.msg('Starting IMAP Service')
+        log.msg('starting imap service')
+        port, factory = imap.run_service(
+            self._soledad_sessions, factory=self._factory)
+        self._port = port
+        self._factory = factory
         super(IMAPService, self).startService()
 
     def stopService(self):
-        self._port.stopListening()
-        self._factory.doStop()
+        log.msg("stopping imap service")
+        if self._port:
+            self._port.stopListening()
+            self._port = None
+        if self._factory:
+            self._factory.doStop()
         super(IMAPService, self).stopService()
 
 
@@ -589,35 +593,47 @@ class SMTPService(service.Service):
                  basedir=DEFAULT_BASEDIR):
 
         self._basedir = os.path.expanduser(basedir)
-        port, factory = smtp.run_service(
-            soledad_sessions, keymanager_sessions, sendmail_opts)
-        self._port = port
-        self._factory = factory
         self._soledad_sessions = soledad_sessions
         self._keymanager_sessions = keymanager_sessions
         self._sendmail_opts = sendmail_opts
+        self._port = None
+        self._factory = None
         super(SMTPService, self).__init__()
 
     def startService(self):
-        log.msg('Starting SMTP Service')
+        log.msg('starting smtp service')
+        port, factory = smtp.run_service(
+            self._soledad_sessions,
+            self._keymanager_sessions,
+            self._sendmail_opts,
+            factory=self._factory)
+        self._port = port
+        self._factory = factory
         super(SMTPService, self).startService()
 
     def stopService(self):
-        # TODO cleanup all instances
+        log.msg('stopping smtp service')
+        if self._port:
+            self._port.stopListening()
+            self._port = None
+        if self._factory:
+            self._factory.doStop()
         super(SMTPService, self).stopService()
 
 
-class IncomingMailService(service.Service):
+class IncomingMailService(service.MultiService):
+    """
+    Manage child services that check for incoming mail for individual users.
+    """
 
     name = 'incoming_mail'
 
     def __init__(self, mail_service):
         super(IncomingMailService, self).__init__()
         self._mail = mail_service
-        self._instances = {}
 
     def startService(self):
-        log.msg('Starting IncomingMail Service')
+        log.msg('starting incoming mail service')
         super(IncomingMailService, self).startService()
 
     def stopService(self):
@@ -625,24 +641,13 @@ class IncomingMailService(service.Service):
 
     # Individual accounts
 
-    # TODO IncomingMail *IS* already a service.
-    # I think we should better model the current Service
-    # as a startInstance inside a container, and get this
-    # multi-tenant service inside the leap.mail.incoming.service.
-    # ... or just simply make it a multiService and set per-user
-    # instances as Child of this parent.
-
     def startInstance(self, userid):
         soledad = self._mail.get_soledad_session(userid)
         keymanager = self._mail.get_keymanager_session(userid)
 
-        log.msg('Starting Incoming Mail instance for %s' % userid)
+        log.msg('setting up incoming mail service for %s' % userid)
         self._start_incoming_mail_instance(
             keymanager, soledad, userid)
-
-    def stopInstance(self, userid):
-        # TODO toggle offline!
-        pass
 
     def _start_incoming_mail_instance(self, keymanager, soledad,
                                       userid, start_sync=True):
@@ -652,18 +657,13 @@ class IncomingMailService(service.Service):
                 keymanager, soledad,
                 inbox, userid,
                 check_period=INCOMING_CHECK_PERIOD)
-            return incoming_mail
-
-        def registerInstance(incoming_instance):
-            self._instances[userid] = incoming_instance
-            if start_sync:
-                incoming_instance.startService()
+            incoming_mail.setName(userid)
+            self.addService(incoming_mail)
 
         acc = Account(soledad, userid)
         d = acc.callWhenReady(
             lambda _: acc.get_collection_by_mailbox(INBOX_NAME))
         d.addCallback(setUpIncomingMail)
-        d.addCallback(registerInstance)
         d.addErrback(log.err)
         return d
 

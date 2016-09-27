@@ -158,7 +158,7 @@ class LeapIMAPFactory(ServerFactory):
         return ServerFactory.doStop(self)
 
 
-def run_service(soledad_sessions, port=IMAP_PORT):
+def run_service(soledad_sessions, port=IMAP_PORT, factory=None):
     """
     Main entry point to run the service from the client.
 
@@ -169,7 +169,8 @@ def run_service(soledad_sessions, port=IMAP_PORT):
               the factory for the protocol.
     :rtype: tuple
     """
-    factory = LeapIMAPFactory(soledad_sessions)
+    if not factory:
+        factory = LeapIMAPFactory(soledad_sessions)
 
     try:
         interface = "localhost"
