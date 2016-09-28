@@ -147,6 +147,18 @@ class BonafideProtocol(object):
         d.addCallback(lambda _: '%s logged out' % full_id)
         return d
 
+    def do_change_password(self, full_id, current_password, new_password):
+        log.msg('Change password for %s' % full_id)
+        if (full_id not in self._sessions or
+                not self._sessions[full_id].is_authenticated):
+            return fail(RuntimeError("There is no session for such user"))
+        session = self._sessions[full_id]
+
+        if current_password != session.password:
+            return fail(RuntimeError("The current password is not valid"))
+
+        return session.change_password(new_password)
+
     def do_get_provider(self, provider_id, autoconf=False):
         provider = config.Provider(provider_id, autoconf=autoconf)
         return provider.callWhenMainConfigReady(provider.config)

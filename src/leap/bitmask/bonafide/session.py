@@ -66,6 +66,7 @@ class Session(object):
         password = self.password or ''
         self._srp_auth = _srp.SRPAuthMechanism(username, password)
         self._srp_signup = _srp.SRPSignupMechanism()
+        self._srp_password = _srp.SRPPasswordChangeMechanism()
         self._token = None
         self._uuid = None
 
@@ -121,6 +122,19 @@ class Session(object):
         self.username = None
         self.password = None
         self._initialize_session()
+        defer.returnValue(OK)
+
+    @_auth_required
+    @defer.inlineCallbacks
+    def change_password(self, password):
+        uri = self._api.get_update_user_uri(uid=self._uuid)
+        met = self._api.get_update_user_method()
+        params = self._srp_password.get_password_params(
+            self.username, password)
+        update = yield self._request(self._agent, uri, values=params,
+                                     method=met)
+        self.password = password
+        self._srp_auth = _srp.SRPAuthMechanism(self.username, password)
         defer.returnValue(OK)
 
     # User certificates

@@ -119,6 +119,12 @@ class UserCmd(SubCommand):
         user = parts[2]
         return bonafide.do_logout(user)
 
+    @register_method("{'update': 'ok'}")
+    def do_UPDATE(self, bonafide, *parts):
+        user, current_password, new_password = parts[2], parts[3], parts[4]
+        return bonafide.do_change_password(
+            user, current_password, new_password)
+
     @register_method('str')
     def do_ACTIVE(self, bonafide, *parts):
         return bonafide.do_get_active_user()

@@ -103,6 +103,17 @@ class BonafideService(HookableService):
         d.addCallback(lambda response: {'logout': 'ok'})
         return d
 
+    def do_change_password(self, username, current_password, new_password):
+        def notify_passphrase_change(_):
+            data = dict(username=username, password=new_password)
+            self.trigger_hook('on_passphrase_change', **data)
+
+        d = self._bonafide.do_change_password(username, current_password,
+                                              new_password)
+        d.addCallback(notify_passphrase_change)
+        d.addCallback(lambda _: {'update': 'ok'})
+        return d
+
     def do_provider_create(self, domain):
         return self._bonafide.do_get_provider(domain, autoconf=True)
 

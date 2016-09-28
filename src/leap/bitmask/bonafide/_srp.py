@@ -101,9 +101,7 @@ class SRPSignupMechanism(object):
     """
 
     def get_signup_params(self, username, password):
-        salt, verifier = srp.create_salted_verification_key(
-            bytes(username), bytes(password),
-            srp.SHA256, srp.NG_1024)
+        salt, verifier = _get_salt_verifier(username, password)
         user_data = {
             'user[login]': username,
             'user[password_salt]': binascii.hexlify(salt),
@@ -119,6 +117,25 @@ class SRPSignupMechanism(object):
         else:
             username = signup.get('login')
             return username
+
+
+class SRPPasswordChangeMechanism(object):
+
+    """
+    Implement a protocol-agnostic SRP passord change mechanism.
+    """
+
+    def get_password_params(self, username, password):
+        salt, verifier = _get_salt_verifier(username, password)
+        user_data = {
+            'user[password_salt]': binascii.hexlify(salt),
+            'user[password_verifier]': binascii.hexlify(verifier)}
+        return user_data
+
+
+def _get_salt_verifier(username, password):
+    return srp.create_salted_verification_key(bytes(username), bytes(password),
+                                              srp.SHA256, srp.NG_1024)
 
 
 def _safe_unhexlify(val):

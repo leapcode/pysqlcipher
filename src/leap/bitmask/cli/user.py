@@ -35,6 +35,7 @@ SUBCOMMANDS:
    create     Registers new user, if possible
    auth       Logs in against the provider
    logout     Ends any active session with the provider
+   update     Update user password
    active     Shows the active user, if any
 
 '''.format(name=command.appname)
@@ -47,7 +48,7 @@ SUBCOMMANDS:
 
     def create(self, raw_args):
         username = self.username(raw_args)
-        passwd = getpass.getpass()
+        passwd = self.getpass_twice()
         self.data += ['create', username, passwd, 'true']
         return self._send(printer=command.default_dict_printer)
 
@@ -60,6 +61,13 @@ SUBCOMMANDS:
     def logout(self, raw_args):
         username = self.username(raw_args)
         self.data += ['logout', username]
+        return self._send(printer=command.default_dict_printer)
+
+    def update(self, raw_args):
+        username = self.username(raw_args)
+        current_passwd = getpass.getpass('Current password: ')
+        new_passwd = self.getpass_twice('New password: ')
+        self.data += ['update', username, current_passwd, new_passwd]
         return self._send(printer=command.default_dict_printer)
 
     def username(self, raw_args):
@@ -78,3 +86,13 @@ SUBCOMMANDS:
             self._error("Username ID must be in the form <user@example.org>")
 
         return username
+
+    def getpass_twice(self, prompt='Password: '):
+        while True:
+            passwd1 = getpass.getpass(prompt)
+            passwd2 = getpass.getpass('Retype the password: ')
+            if passwd1 == passwd2:
+                return passwd1
+            else:
+                print "The passwords do not match, try again."
+                print ""

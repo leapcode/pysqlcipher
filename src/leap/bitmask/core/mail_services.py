@@ -210,6 +210,17 @@ class SoledadService(HookableService):
                 container.add_instance(
                     userid, password, uuid=uuid, token=token)
 
+    def hook_on_passphrase_change(self, **kw):
+        # TODO: if bitmask stops before this hook being executed bonafide and
+        #       soledad will end up with different passwords
+        #       https://leap.se/code/issues/8489
+        userid = kw['username']
+        password = kw['password']
+        soledad = self._container.get_instance(userid)
+        if soledad is not None:
+            log.msg("Change soledad passphrase for %s" % userid)
+            soledad.change_passphrase(unicode(password))
+
 
 class KeymanagerContainer(Container):
 

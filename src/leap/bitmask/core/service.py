@@ -89,6 +89,7 @@ class BitmaskBackend(configurable.ConfigurableService):
         # (2) provider offers this service
         bf.register_hook('on_passphrase_entry', listener='soledad')
         bf.register_hook('on_bonafide_auth', listener='soledad')
+        bf.register_hook('on_passphrase_change', listener='soledad')
         bf.register_hook('on_bonafide_auth', listener='keymanager')
         bf.register_hook('on_bonafide_auth', listener='mail')
 

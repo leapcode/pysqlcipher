@@ -177,6 +177,17 @@ var bitmask = function(){
                     }
                     return call(['bonafide', 'user', 'logout', uid]);
                 }
+
+                /**
+                 * Change password
+                 *
+                 * @param {string} uid The uid to log in
+                 * @param {string} current_password The current user password
+                 * @param {string} new_password The new user password
+                 */
+                update: function(uid, current_password, new_password) {
+                    return call(['bonafide', 'user', 'update', uid, current_password, new_password]);
+                },
             }
         },
 
