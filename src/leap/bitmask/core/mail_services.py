@@ -435,8 +435,6 @@ class StandardMailService(service.MultiService, HookableService):
 
     # TODO factor out Mail Service to inside mail package.
 
-    subscribed_to_hooks = ('on_new_keymanager_instance',)
-
     def __init__(self, basedir):
         self._basedir = basedir
         self._soledad_sessions = {}
@@ -502,12 +500,22 @@ class StandardMailService(service.MultiService, HookableService):
     def hook_on_bonafide_auth(self, **kw):
         # TODO: if it's expired we should renew it
         userid = kw['username']
+
+        # turn on incoming mail service for the user that just logged in
+        multiservice = self.getServiceNamed('incoming_mail')
+        incoming = multiservice.getServiceNamed(userid)
+        log.msg('looking for incoming mail service for auth: %s' % userid)
+        if incoming:
+            incoming.startService()
+
+        # check if smtp cert exists
         username, provider = userid.split('@')
         cert_path = _get_smtp_client_cert_path(self._basedir, provider,
                                                username)
         if os.path.exists(cert_path):
             return
 
+        # fetch smtp cert and store
         bonafide = self.parent.getServiceNamed("bonafide")
         _, cert_str = yield bonafide.do_get_smtp_cert(userid)
 
@@ -517,6 +525,14 @@ class StandardMailService(service.MultiService, HookableService):
         with open(cert_path, 'w') as outf:
             outf.write(cert_str)
         check_and_fix_urw_only(cert_path)
+
+    def hook_on_bonafide_logout(self, **kw):
+        username = kw['username']
+        multiservice = self.getServiceNamed('incoming_mail')
+        incoming = multiservice.getServiceNamed(username)
+        log.msg('looking for incoming mail service for logout: %s' % username)
+        if incoming:
+            incoming.stopService()
 
     # commands
 

@@ -31,7 +31,6 @@ from urlparse import urlparse
 from twisted.application.service import Service
 from twisted.application.service import IService
 from twisted.logger import Logger
-from twisted.python.failure import Failure
 from twisted.internet import defer, reactor
 from twisted.internet.task import LoopingCall
 from twisted.internet.task import deferLater
@@ -183,27 +182,23 @@ class IncomingMail(Service):
 
     def startService(self):
         """
-        Starts a loop to fetch mail.
-
-        :returns: A Deferred whose callback will be invoked with
-                  the LoopingCall instance when loop.stop is called, or
-                  whose errback will be invoked when the function raises an
-                  exception or returned a deferred that has its errback
-                  invoked.
+        Start a loop to fetch mail.
         """
+        if self.running:
+            return
+
         Service.startService(self)
         if self._loop is None:
             self._loop = LoopingCall(self.fetch)
-            stop_deferred = self._loop.start(self._check_period)
-            return stop_deferred
-        else:
-            logger.warning("Tried to start an already running fetching loop.")
-            return defer.fail(Failure('Already running loop.'))
+        self._loop.start(self._check_period)
 
     def stopService(self):
         """
         Stops the loop that fetches mail.
         """
+        if not self.running:
+            return
+
         if self._loop and self._loop.running is True:
             self._loop.stop()
             self._loop = None

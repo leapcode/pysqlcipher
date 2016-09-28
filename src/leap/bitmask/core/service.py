@@ -89,6 +89,7 @@ class BitmaskBackend(configurable.ConfigurableService):
         bf.register_hook('on_passphrase_change', listener='soledad')
         bf.register_hook('on_bonafide_auth', listener='keymanager')
         bf.register_hook('on_bonafide_auth', listener='mail')
+        bf.register_hook('on_bonafide_logout', listener='mail')
 
     def _start_child_service(self, name):
         log.msg('starting backend child service: %s' % name)
@@ -156,13 +157,13 @@ class BitmaskBackend(configurable.ConfigurableService):
 
     def _maybe_init_service(self, label, klass, *args, **kw):
         try:
-            self.getServiceNamed(label)
+            service = self.getServiceNamed(label)
         except KeyError:
             log.msg("initializing service: %s" % label)
             service = klass(*args, **kw)
             service.setName(label)
             service.setServiceParent(self)
-            return service
+        return service
 
     def do_stats(self):
         return self.core_commands.do_stats()

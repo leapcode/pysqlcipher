@@ -98,6 +98,9 @@ class BonafideService(HookableService):
             self._active_user = None
             return passthrough
 
+        data = dict(username=username)
+        self.trigger_hook('on_bonafide_logout', **data)
+
         d = self._bonafide.do_logout(username)
         d.addCallback(reset_active)
         d.addCallback(lambda response: {'logout': 'ok'})
