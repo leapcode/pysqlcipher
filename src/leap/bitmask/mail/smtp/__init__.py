@@ -62,7 +62,7 @@ def run_service(soledad_sessions, keymanager_sessions, sendmail_opts,
 
         return factory, tport
     except CannotListenError:
-        logger.error("STMP Service failed to start: "
+        logger.error("SMTP Service failed to start: "
                      "cannot listen in port %s" % port)
         emit_async(catalog.SMTP_SERVICE_FAILED_TO_START, str(port))
     except Exception as exc:

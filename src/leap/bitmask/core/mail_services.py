@@ -689,7 +689,7 @@ def _get_sendmail_opts(basedir, provider, username):
 
 def _get_smtp_client_cert_path(basedir, provider, username):
     path = os.path.join(
-        basedir, 'providers', provider, 'keys', 'client', 'stmp_%s.pem' %
+        basedir, 'providers', provider, 'keys', 'client', 'smtp_%s.pem' %
         username)
     return path
 
