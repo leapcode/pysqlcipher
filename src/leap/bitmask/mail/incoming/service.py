@@ -629,9 +629,9 @@ class IncomingMail(Service):
         Check for known decryption errors
         """
         if failure.check(keymanager_errors.DecryptError):
-            logger.warning('Failed to decrypt encrypted message (%s). '
-                           'Storing message without modifications.'
-                           % str(failure.value))
+            logger.warn('Failed to decrypt encrypted message (%s). '
+                        'Storing message without modifications.'
+                        % str(failure.value))
             return (msg, None)
         elif failure.check(keymanager_errors.KeyNotFound):
             logger.error('Failed to find private key for decryption (%s). '
@@ -705,12 +705,12 @@ class IncomingMail(Service):
             ):
                 def fetch_error(failure):
                     if failure.check(keymanager_errors.KeyNotFound):
-                        logger.warning("Url from OpenPGP header %s failed"
-                                       % (url,))
+                        logger.warn("Url from OpenPGP header %s failed"
+                                    % (url,))
                     elif failure.check(keymanager_errors.KeyAttributesDiffer):
-                        logger.warning("Key from OpenPGP header url %s didn't "
-                                       "match the from address %s"
-                                       % (url, address))
+                        logger.warn("Key from OpenPGP header url %s didn't "
+                                    "match the from address %s"
+                                    % (url, address))
                     else:
                         return failure
 

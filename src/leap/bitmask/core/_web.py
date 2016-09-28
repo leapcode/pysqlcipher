@@ -59,7 +59,7 @@ class HTTPDispatcherService(service.Service):
                 pkg_resources.resource_filename('leap.bitmask_js', 'public'))
             log.debug('webdir: %s' % webdir)
         else:
-            log.warning('bitmask_js not found, serving bitmask.core ui')
+            log.warn('bitmask_js not found, serving bitmask.core ui')
             webdir = os.path.abspath(
                 pkg_resources.resource_filename('leap.bitmask.core', 'web'))
         root = File(webdir)
