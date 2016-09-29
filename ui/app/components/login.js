@@ -356,7 +356,7 @@ class Login extends React.Component {
   }
 
   doLogin() {
-    let account = Account.find(this.state.username)
+    let account = Account.find_or_add(this.state.username)
     account.login(this.state.password).then(
       account => {
         this.setState({loading: false})

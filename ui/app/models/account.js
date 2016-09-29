@@ -57,11 +57,6 @@ export default class Account {
     return bitmask.bonafide.user.auth(this.address, password).then(
       response => {
         if (response.uuid) {
-          // currently, only one account can be authenticated at once
-          Account.list.forEach(account => {
-            account._authenticated = false
-            // if(account.id != this.id) {account.logout()}
-          })
           this._uuid = response.uuid
           this._authenticated = true
         }
@@ -84,8 +79,7 @@ export default class Account {
   }
 
   //
-  // returns the matching account in the list of accounts, or adds it
-  // if it is not already present.
+  // returns the matching account in the list of accounts
   //
   static find(address) {
     // search by full address
@@ -102,7 +96,11 @@ export default class Account {
         account.address = address
       }
     }
-    // failing that, create new account
+    return account
+  }
+
+  static find_or_add(address) {
+    let account = Account.find(address)
     if (!account) {
       account = new Account(address)
       Account.list.push(account)
@@ -116,6 +114,7 @@ export default class Account {
   static active() {
     return bitmask.bonafide.user.active().then(
       response => {
+        console.log(response)
         if (response.user == '<none>') {
           return null
         } else {
@@ -144,6 +143,26 @@ export default class Account {
         return new Account(address)
       }
     )
+  }
+
+  static initialize_list(domains) {
+    for (let domain of domains) {
+      Account.add(new Account(domain))
+    }
+  }
+
+  //
+  // inserts at the front of the account list
+  // removing any other accounts with the same domain.
+  //
+  // this is a temporary hack to support the old behavior
+  // util the backend has a proper concept of an account list.
+  //
+  static add_primary(account) {
+    Account.list = Account.list.filter(i => {
+      return i.domain != account.domain
+    })
+    Account.list.unshift(account)
   }
 }
 

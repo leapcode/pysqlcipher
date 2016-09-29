@@ -1,5 +1,6 @@
 import bitmask from 'lib/bitmask'
 import Account from 'models/account'
+import Provider from 'models/provider'
 
 class Application {
   constructor() {
@@ -17,12 +18,18 @@ class Application {
   }
 
   start() {
-    Account.active().then(account => {
-      if (account == null) {
-        this.show('greeter')
-      } else {
-        this.show('main', {initialAccount: account})
-      }
+    Provider.list(false).then(domains => {
+      Account.initialize_list(domains)
+      Account.active().then(account => {
+        if (account == null) {
+          this.show('greeter')
+        } else {
+          Account.add_primary(account)
+          this.show('main', {initialAccount: account})
+        }
+      }, error => {
+        this.show('error', {error: error})
+      })
     }, error => {
       this.show('error', {error: error})
     })

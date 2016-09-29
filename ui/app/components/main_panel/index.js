@@ -32,7 +32,6 @@ export default class MainPanel extends React.Component {
 
   componentWillMount() {
     if (this.props.initialAccount) {
-      Account.add(this.props.initialAccount)
       this.setState({
         account: this.props.initialAccount,
         accounts: Account.list
