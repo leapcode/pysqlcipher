@@ -42,10 +42,10 @@ from leap.bitmask.keymanager.errors import KeyNotFound
 from leap.bitmask.keymanager.validation import ValidationLevels
 from leap.bitmask.mail.constants import INBOX_NAME
 from leap.bitmask.mail.mail import Account
-from leap.bitmask.mail.imap.service import imap
+from leap.bitmask.mail.imap import service as imap_service
+from leap.bitmask.mail.smtp import service as smtp_service
 from leap.bitmask.mail.incoming.service import IncomingMail
 from leap.bitmask.mail.incoming.service import INCOMING_CHECK_PERIOD
-from leap.bitmask.mail import smtp
 from leap.bitmask.util import get_gpg_bin_path
 from leap.soledad.client.api import Soledad
 
@@ -585,7 +585,7 @@ class IMAPService(service.Service):
 
     def startService(self):
         log.msg('starting imap service')
-        port, factory = imap.run_service(
+        port, factory = imap_service.run_service(
             self._soledad_sessions, factory=self._factory)
         self._port = port
         self._factory = factory
@@ -618,7 +618,7 @@ class SMTPService(service.Service):
 
     def startService(self):
         log.msg('starting smtp service')
-        port, factory = smtp.run_service(
+        port, factory = smtp_service.run_service(
             self._soledad_sessions,
             self._keymanager_sessions,
             self._sendmail_opts,

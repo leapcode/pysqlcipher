@@ -38,7 +38,7 @@ from twisted.application import service, internet
 
 from leap.bitmask.util import get_gpg_bin_path
 from leap.bitmask.keymanager import KeyManager
-from leap.bitmask.mail.imap.service import imap
+from leap.bitmask.mail.imap.service import LeapIMAPFactory
 from leap.soledad.client import Soledad
 
 
@@ -136,7 +136,7 @@ keymanager = KeyManager(*km_args, **km_kwargs)
 
 def getIMAPService():
     soledad_sessions = {userid: soledad}
-    factory = imap.LeapIMAPFactory(soledad_sessions)
+    factory = LeapIMAPFactory(soledad_sessions)
     return internet.TCPServer(port, factory, interface="localhost")
 
 
