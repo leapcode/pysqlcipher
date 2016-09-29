@@ -179,6 +179,15 @@ var bitmask = function(){
                 },
 
                 /**
+                 * List users
+                 *
+                 * @return {Promise<json>} [{'userid': str, 'authenticated': boolean}]
+                 */
+                list: function() {
+                    return call(['bonafide', 'user', 'list']);
+                },
+
+                /**
                  * Change password
                  *
                  * @param {string} uid The uid to log in

@@ -147,6 +147,13 @@ class BonafideProtocol(object):
         d.addCallback(lambda _: '%s logged out' % full_id)
         return d
 
+    def do_list_users(self):
+        users = []
+        for user, session in self._sessions.items():
+            users.append({'userid': user,
+                          'authenticated': session.is_authenticated})
+        return users
+
     def do_change_password(self, full_id, current_password, new_password):
         log.msg('Change password for %s' % full_id)
         if (full_id not in self._sessions or

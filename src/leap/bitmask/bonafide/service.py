@@ -106,6 +106,9 @@ class BonafideService(HookableService):
         d.addCallback(lambda response: {'logout': 'ok'})
         return d
 
+    def do_list_users(self):
+        return self._bonafide.do_list_users()
+
     def do_change_password(self, username, current_password, new_password):
         def notify_passphrase_change(_):
             data = dict(username=username, password=new_password)

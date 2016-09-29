@@ -16,6 +16,7 @@ Features
 - `#8435 <https://leap.se/code/issues/8435>`_: Write service tokens to a file for email clients to read.
 - `#8486 <https://leap.se/code/issues/8486>`_: Fetch smtp cert automatically if missing.
 - `#8487 <https://leap.se/code/issues/8487>`_: Add change password command.
+- `#8488 <https://leap.se/code/issues/8488>`_: Add list users to bonafide.
 - Use mail_auth token in the core instead of imap/smtp tokens.
 
 - `#1234 <https://leap.se/code/issues/1234>`_: Description of the new feature corresponding with issue #1234.

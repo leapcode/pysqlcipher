@@ -119,6 +119,10 @@ class UserCmd(SubCommand):
         user = parts[2]
         return bonafide.do_logout(user)
 
+    @register_method("[{'userid': str, 'authenticated': bool}]")
+    def do_LIST(self, bonafide, *parts):
+        return bonafide.do_list_users()
+
     @register_method("{'update': 'ok'}")
     def do_UPDATE(self, bonafide, *parts):
         user, current_password, new_password = parts[2], parts[3], parts[4]

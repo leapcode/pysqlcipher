@@ -21,6 +21,8 @@ import argparse
 import getpass
 import sys
 
+from colorama import Fore
+
 from leap.bitmask.cli import command
 
 
@@ -35,6 +37,7 @@ SUBCOMMANDS:
    create     Registers new user, if possible
    auth       Logs in against the provider
    logout     Ends any active session with the provider
+   list       List users
    update     Update user password
    active     Shows the active user, if any
 
@@ -48,7 +51,7 @@ SUBCOMMANDS:
 
     def create(self, raw_args):
         username = self.username(raw_args)
-        passwd = self.getpass_twice()
+        passwd = self._getpass_twice()
         self.data += ['create', username, passwd, 'true']
         return self._send(printer=command.default_dict_printer)
 
@@ -63,10 +66,14 @@ SUBCOMMANDS:
         self.data += ['logout', username]
         return self._send(printer=command.default_dict_printer)
 
+    def list(self, raw_args):
+        self.data += ['list']
+        return self._send(printer=self._print_user_list)
+
     def update(self, raw_args):
         username = self.username(raw_args)
         current_passwd = getpass.getpass('Current password: ')
-        new_passwd = self.getpass_twice('New password: ')
+        new_passwd = self._getpass_twice('New password: ')
         self.data += ['update', username, current_passwd, new_passwd]
         return self._send(printer=command.default_dict_printer)
 
@@ -87,7 +94,7 @@ SUBCOMMANDS:
 
         return username
 
-    def getpass_twice(self, prompt='Password: '):
+    def _getpass_twice(self, prompt='Password: '):
         while True:
             passwd1 = getpass.getpass(prompt)
             passwd2 = getpass.getpass('Retype the password: ')
@@ -96,3 +103,10 @@ SUBCOMMANDS:
             else:
                 print "The passwords do not match, try again."
                 print ""
+
+    def _print_user_list(self, users):
+        for u in users:
+            color = ""
+            if u['authenticated']:
+                color = Fore.GREEN
+            print(color + u['userid'] + Fore.RESET)
