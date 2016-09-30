@@ -4,3 +4,4 @@ dist/
 MANIFEST
 debian/
 *.egg-info
+amalgamation_latest
