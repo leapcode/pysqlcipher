@@ -7,5 +7,8 @@ install_bundle: clean
 get_amalgamation:
 	scripts/get_latest_amalgamation.sh amalgamation_latest
 
+upload:
+	python setup.py sdist upload -r pypi 
+
 clean:
 	rm -rf build dist
