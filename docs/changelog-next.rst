@@ -24,6 +24,8 @@ Features
 
 Bugfixes
 ~~~~~~~~
+- `#8498 <https://leap.se/code/issues/8498>`_: In case of wrong url don't leave files in the config folder.
+
 - `#1235 <https://leap.se/code/issues/1235>`_: Description for the fixed stuff corresponding with issue #1235.
 - Bugfix without related issue number.
 

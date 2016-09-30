@@ -33,7 +33,7 @@ from twisted.web.client import Agent, downloadPage
 
 from leap.bitmask.bonafide._http import httpRequest
 from leap.bitmask.bonafide.provider import Discovery
-from leap.bitmask.bonafide.errors import NotConfiguredError
+from leap.bitmask.bonafide.errors import NotConfiguredError, NetworkError
 
 from leap.common.check import leap_assert
 from leap.common.config import get_path_prefix as common_get_path_prefix
@@ -284,9 +284,13 @@ class Provider(object):
         uri = self._disco.get_provider_info_uri()
         met = self._disco.get_provider_info_method()
 
+        def errback(failure):
+            shutil.rmtree(folders)
+            raise NetworkError(failure.getErrorMessage())
+
         d = downloadPage(uri, provider_json, method=met)
         d.addCallback(lambda _: self._load_provider_json())
-        d.addErrback(log.err)
+        d.addErrback(errback)
         return d
 
     def update_provider_info(self):
@@ -299,6 +303,10 @@ class Provider(object):
         """
         :rtype: deferred
         """
+
+        def errback(self, failure):
+            raise NetworkError(failure.getErrorMessage())
+
         path = self._get_ca_cert_path()
         if is_file(path):
             return defer.succeed('ca_cert_path_already_exists')
@@ -306,7 +314,7 @@ class Provider(object):
         uri = self._get_ca_cert_uri()
         mkdir_p(os.path.split(path)[0])
         d = downloadPage(uri, path)
-        d.addErrback(log.err)
+        d.addErrback(errback)
         return d
 
     def validate_ca_cert(self, ignored):

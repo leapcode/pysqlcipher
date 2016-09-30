@@ -21,3 +21,7 @@ Exceptions for bonafide
 
 class NotConfiguredError(Exception):
     pass
+
+
+class NetworkError(Exception):
+    pass

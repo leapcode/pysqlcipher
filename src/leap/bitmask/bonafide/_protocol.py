@@ -168,7 +168,7 @@ class BonafideProtocol(object):
 
     def do_get_provider(self, provider_id, autoconf=False):
         provider = config.Provider(provider_id, autoconf=autoconf)
-        return provider.callWhenMainConfigReady(provider.config)
+        return provider.callWhenReady(provider.config)
 
     def do_provider_delete(self, provider_id):
         return config.delete_provider(provider_id)
