@@ -83,6 +83,18 @@ if sys.platform != "win32":
 else:
     define_macros.append(('MODULE_NAME', '\\"pysqlcipher.dbapi2\\"'))
 
+BUNDLED = False
+AMALGAMATION_ROOT = "amalgamation"
+
+for idx, arg in enumerate(list(sys.argv)):
+    if arg.startswith('--bundled'):
+        sys.argv.pop(idx)
+        BUNDLED = True
+        break
+    if arg.startswith('--amalgamation='):
+        AMALGAMATION_ROOT = arg.split("=",1)[1]
+        break
+
 
 class DocBuilder(Command):
     description = "Builds the documentation"
@@ -106,45 +118,6 @@ class DocBuilder(Command):
             print ("Is sphinx installed? If not, "
                    "try 'sudo easy_install sphinx'.")
 
-AMALGAMATION_ROOT = "amalgamation"
-
-
-def get_amalgamation():
-    """Download the SQLite amalgamation if it isn't there, already."""
-    if os.path.exists(AMALGAMATION_ROOT):
-        return
-    os.mkdir(AMALGAMATION_ROOT)
-    print "Downloading amalgation."
-
-    amalgamation_url = ("https://downloads.leap.se/libs/pysqlcipher/"
-                        "amalgamation-sqlcipher-2.1.0.zip")
-
-    # and download it
-    print 'amalgamation url: %s' % (amalgamation_url,)
-    urllib.urlretrieve(amalgamation_url, "tmp.zip")
-
-    zf = zipfile.ZipFile("tmp.zip")
-    files = ["sqlite3.c", "sqlite3.h"]
-    directory = zf.namelist()[0]
-
-    for fn in files:
-        print "Extracting", fn
-        outf = open(AMALGAMATION_ROOT + os.sep + fn, "wb")
-        outf.write(zf.read(directory + fn))
-        outf.close()
-    zf.close()
-    os.unlink("tmp.zip")
-
-
-class AmalgamationBuilder(build):
-    description = ("Build a statically built pysqlcipher "
-                   "downloading and using a sqlcipher amalgamation.")
-
-    def __init__(self, *args, **kwargs):
-        MyBuildExt.amalgamation = True
-        MyBuildExt.static = True
-        build.__init__(self, *args, **kwargs)
-
 
 class LibSQLCipherBuilder(build_ext):
 
@@ -156,16 +129,17 @@ class LibSQLCipherBuilder(build_ext):
         build_ext.build_extension(self, ext)
 
 
-class MyBuildExt(build_ext):
+class AmalgamationBuildExt(build_ext):
     amalgamation = True  # We want amalgamation on the default build for now
     static = False
 
     def build_extension(self, ext):
         if self.amalgamation:
-            get_amalgamation()
             # build with fulltext search enabled
             ext.define_macros.append(
                 ("SQLITE_ENABLE_FTS3", "1"))
+            ext.define_macros.append(
+                ("SQLITE_ENABLE_FTS5", "1"))
             ext.define_macros.append(
                 ("SQLITE_ENABLE_RTREE", "1"))
 
@@ -335,7 +309,7 @@ def get_setup_args():
         PYSQLITE_VERSION += "-%s" % PATCH_VERSION
 
     # Need to bump minor version, patch handled badly.
-    PYSQLCIPHER_VERSION = "2.6.5"
+    PYSQLCIPHER_VERSION = "2.6.6"
 
     setup_args = dict(
         name="pysqlcipher",
@@ -380,12 +354,18 @@ def get_setup_args():
         cmdclass={"build_docs": DocBuilder}
     )
 
-    setup_args["cmdclass"].update(
+
+    if BUNDLED:
+       build_ext = AmalgamationBuildExt 
+    else:
+       build_ext = LibSQLCipherBuilder
+
+    setup_args['cmdclass'].update({'build_ext': build_ext})
+
+    setup_args['cmdclass'].update(
         {"build_docs": DocBuilder,
-         "build_ext": MyBuildExt,
-         "build_static": AmalgamationBuilder,
-         "build_sqlcipher": LibSQLCipherBuilder,
          "cross_bdist_wininst": cross_bdist_wininst.bdist_wininst})
+
     return setup_args
 
 

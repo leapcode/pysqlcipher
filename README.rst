@@ -7,7 +7,7 @@ linux environments). It links against against libsqlcipher.
 
 Original code (c) 2004-2007 Gerhard Häring
 
-Packaging for SQLCipher (c) 2013-2014 Kali Kaneko
+Packaging for SQLCipher (c) 2013-2016 Kali Kaneko
 
 
 Usage
@@ -31,17 +31,25 @@ You can quickly verify that your database file in indeed encrypted::
   77 bf e3 1d 65 b5 ea f7  d2 fc 98 31 23 66 a0 1e  |w...e......1#f..|
   a4 4f fa 66 49 36 84 a1  3e 0c 21 98 84 07 eb 07  |.O.fI6..>.!.....|
 
-Build against libsqlcipher
---------------------------
 
-For convenience, this package uses a sqlcipher amalgamation during the regular
+Build against bundled libsqlcipher
+-----------------------------------
+The default behaviour is to link against libsqlcipher in the system.
+
+For convenience, this package includes a sqlcipher amalgamation during the regular
 install. See https://www.sqlite.org/amalgamation.html
 
-For production use, you should build against ``libsqlcipher`` installed in your
-system, you can do it like this::
+If you don't have sqlcipher installed in the system, you can use the bundled
+pysqlcipher::
 
-  python setup.py build_sqlcipher
+  python setup.py install --bundled 
 
-And then::
+You can also pass a different amalgamation path, that you have previously
+downloaded::
 
-  python setup.py install
+  python setup.py install --bundled --amalgamation=/tmp/path/to/amalgamation
+
+If you are installing from pip but for some reason you prefer to use the bundled
+sqlcipher, you should pass the option along::
+
+  pip install pysqlcipher --install-option="--bundled"
