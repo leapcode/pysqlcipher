@@ -69,6 +69,9 @@
   border-top-left-radius: @accounts-corner - 1;
   border-bottom-left-radius: @accounts-corner - 1;
   z-index: 100;
+  &:hover {
+    background-color: #555;
+  }
 }
 
 .main-panel .accounts li span.domain {
@@ -141,31 +144,59 @@
 //
 // SECTIONS
 //
-
+// html structure:
+//
+// .service-section
+//   .expander
+//   .shader
+//     .icon
+//     .inner
+//       .header-row
+//         .header
+//         .buttons
+//       .body-row
+//     .status
+//
 @icon-size: 32px;
 @status-size: 24px;
-@section-padding: 10px;
+@section-padding: 15px;
 
 // service sections layout
 
 .main-panel .service-section {
   display: -webkit-flex;
   -webkit-flex-direction: row;
-  > .icon {
+  .expander {
     -webkit-flex: 0 0 auto;
   }
-  > .body {
+  .shade {
     -webkit-flex: 1 1 auto;
-  }
-  > .buttons {
-    -webkit-flex: 0 0 auto;
-  }
-  > .status {
-    -webkit-flex: 0 0 auto;
     display: -webkit-flex;
-    -webkit-align-items: center;
-  }
+    -webkit-flex-direction: row;
+    .icon {
+      -webkit-flex: 0 0 auto;
+    }
+    .status {
+      -webkit-flex: 0 0 auto;
+    }
+    .inner {
+      -webkit-flex: 1 1 auto;
+      .header-row {
+        display: -webkit-flex;
+        -webkit-flex-direction: row;
+        .header {
+          -webkit-flex: 1 1 auto;
+        }
+        .buttons {
+          -webkit-flex: 0 0 auto;
+        }
+      }
+      .body-row {
 
+      }
+    }
+
+  }
 }
 
 .main-panel .service-section div {
@@ -175,21 +206,35 @@
 // service sections style
 
 .main-panel .service-section {
-  background: #f6f6f6;
-  border-radius: 4px;
-  padding: 10px;
   margin-bottom: 10px;
-  &.wide-margin {
-    padding: 20px 20px 20px 10px; // arbitrary, looks nice
+  .shade {
+    background: #eee;
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+    padding: @section-padding;
   }
-  > .icon {
+  &.wide-margin .shader {
+    padding: 18px 20px 20px 10px; // arbitrary, looks nice
+  }
+  .expander {
+    padding: 22px 6px 0px 6px;
+    width: 12px + 6px + 6px;
+    background: #e3e3e3;
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
+    &:hover.clickable {
+      background: #cfcfcf;
+      cursor: pointer;
+    }
+  }
+  .icon {
     padding-right: @section-padding;
     img {
       width: @icon-size;
       height: @icon-size;
     }
   }
-  > .body {
+  .header {
     h1 {
       margin: 0;
       padding: 0;
@@ -197,16 +242,20 @@
       line-height: @icon-size;
     }
   }
-  > .buttons {
+  .buttons {
     padding-left: 10px;
   }
-  > .status {
+  .status {
+    padding-top: 5px; // maybe there is a better way to do this
     padding-left: @section-padding;
     width: @section-padding + @status-size;
     img {
       width: @status-size;
       height: @status-size;
     }
+  }
+  .body-row {
+    padding-top: @section-padding;
   }
 }
 

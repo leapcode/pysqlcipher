@@ -114,7 +114,6 @@ export default class Account {
   static active() {
     return bitmask.bonafide.user.active().then(
       response => {
-        console.log(response)
         if (response.user == '<none>') {
           return null
         } else {
@@ -139,7 +138,6 @@ export default class Account {
   static create(address, password) {
     return bitmask.bonafide.user.create(address, password).then(
       response => {
-        console.log(response)
         return new Account(address)
       }
     )

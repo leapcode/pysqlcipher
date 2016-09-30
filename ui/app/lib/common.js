@@ -5,3 +5,5 @@
 import React from 'react'
 
 window.elem = React.createElement
+
+window.log = console.log

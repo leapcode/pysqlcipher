@@ -41,7 +41,7 @@ var bitmask = function(){
     if (window.location.protocol === "file:") {
         api_url = 'http://localhost:7070/API/';
     }
-    
+
     function call(command) {
         var url = api_url  + command.slice(0, 2).join('/');
         var data = JSON.stringify(command.slice(2));
@@ -49,7 +49,7 @@ var bitmask = function(){
         return new Promise(function(resolve, reject) {
             var req = new XMLHttpRequest();
             req.open('POST', url);
-            
+
             req.onload = function() {
                 if (req.status == 200) {
                     parseResponse(req.response, resolve, reject);
@@ -58,11 +58,11 @@ var bitmask = function(){
                     reject(Error(req.statusText));
                 }
             };
-            
+
             req.onerror = function() {
                 reject(Error("Network Error"));
             };
-            
+
             req.send(data);
         });
     };
@@ -176,7 +176,7 @@ var bitmask = function(){
                         uid = "";
                     }
                     return call(['bonafide', 'user', 'logout', uid]);
-                }
+                },
 
                 /**
                  * Change password
@@ -187,7 +187,7 @@ var bitmask = function(){
                  */
                 update: function(uid, current_password, new_password) {
                     return call(['bonafide', 'user', 'update', uid, current_password, new_password]);
-                },
+                }
             }
         },
 

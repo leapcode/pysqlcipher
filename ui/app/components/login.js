@@ -33,11 +33,11 @@ class Login extends React.Component {
       usernameState: null,  // username validation state
       usernameError: false, // username help message
 
-      password: null,
+      password: null,       // the main password field
       passwordState: null,  // password validation state
       passwordError: false, // password help message
 
-      password2: null,         // password confirmation
+      password2: null,       // password confirmation
       password2State: null,  // password confirm validation state
       password2Error: false, // password confirm help message
 
@@ -330,7 +330,7 @@ class Login extends React.Component {
 
   maySubmit() {
     let ok = (
-      !this.stateLoading &&
+      !this.state.loading &&
       !this.state.usernameError &&
       this.state.username &&
       this.state.password
