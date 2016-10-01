@@ -9,7 +9,9 @@ clean:
 
 dev-mail:
 	pip install -e '.[mail]'
-	make -C ui dev-install-prebuilt
+
+dev-backend:
+	pip install -e '.[backend]'
 
 dev-all:
 	pip install -e '.[all]'

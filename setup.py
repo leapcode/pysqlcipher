@@ -25,6 +25,7 @@ gui_deps = ['vext.pyqt5', 'leap.bitmask_js']
 extras = {
     'mail': mail_deps,
     'gui': gui_deps,
+    'backend': mail_deps,
     'all': mail_deps + gui_deps
 }
 

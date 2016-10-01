@@ -1,5 +1,5 @@
 Bitmask
-=======================================
+===========================================================
 
 *Your internet encryption toolkit*
 
@@ -28,7 +28,7 @@ application.
 .. _`GPL3`: http://www.gnu.org/licenses/gpl.txt
 
 Package under development!
----------------------------------------
+-----------------------------------------------------------
 
 This is a unified repo that has merged the following packages, previously isolated, under the leap namespace:
 
@@ -41,14 +41,14 @@ Note that this repo still doesn't have support for VPN: its porting will
 follow soon.
 
 Read the Docs!
----------------------------------------
+-----------------------------------------------------------
 
 The latest documentation about Bitmask is available at `LEAP`_.
 
 .. _`LEAP`: https://leap.se/en/docs/client
 
 Bugs
-=======================================
+===========================================================
 
 Please report any bugs `in our bug tracker`_.
 
@@ -56,10 +56,10 @@ Please report any bugs `in our bug tracker`_.
 
 
 Development
-=======================================
+===========================================================
 
 Running Tests
----------------------------------------
+-----------------------------------------------------------
 
 You need tox to run the tests. If you don't have it in your system yet::
 
@@ -71,54 +71,72 @@ And then run all the tests::
 
 
 Hacking
-----------------------------------
+-----------------------------------------------------------
 
 In order to run bitmask in a development environment, you must activate a
 virtualenv and install the various packages using 'pip install -e'. This
 installs python packages as links to the source code, so that your code
-changes are immediately reflected in the packages installed in the virtualenv.
+changes are immediately reflected in the packages installed in the
+virtualenv.
 
-All this is done for you with the Makefile. For example, if you want to
-develop for the encrypted mail service::
+The ``make dev-*`` commands will run the appropriate ``pip install``
+commands for you.
 
+Install headless backend in development mode
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Prerequisites:
+
+  sudo apt install build-essential python-virtualenv libsqlcipher-dev
+  cd bitmask-dev
   virtualenv venv
   source venv/bin/activate
-  make dev-mail
 
-If you want to develop for the gui client too, you have to have
-installed the python2 bindings for Qt5 in your system (in debian: ``apt
-install python-pyqt5  python-pyqt5.qtwebkit``). After ensuring this, you can
-do::
+All the subsequent commands assume that you have activated the virtualenv.
+
+Install python dependencies:
+
+  make dev-backend
+
+Install user interface frontend
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+If you want to run the Bitmask user interface, you additionally need the following:
+
+Prerequisites:
+
+  sudo apt install python-pyqt5  python-pyqt5.qtwebkit
+
+Install python dependencies:
 
   make dev-all
 
-Note: even though the UI is in javascript. Qt is used to create a webview
+Note: even though the UI is in javascript, Qt is used to create a webview
 window.
 
-hacking on the javascript UI
-+++++++++++++++++++++++++++++++++++++++
+Install Bitmask user interface in development mode
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 The above instructions will install a python package that contains a pre-
 bundled version of the javascript UI.
 
-If you want to hack on the javascript UI, then it needs to be able to update the
+If you want to modify the javascript UI, then you need to be able to update the
 javascript bundle whenever a javascript or CSS source file changes.
 
-First, install the javascript prerequisites:
+Prerequisites:
 
   sudo apt install nodejs npm nodejs-legacy
 
 Next, run ``dev-install``:
 
-  source venv/bin/activate    # if not already activated
   cd ui
   make dev-install            # install JS user interface as a python package in "develop" mode.
   node run watch              # continually rebuild javascript bundle when source files change.
 
 For more information, see ``ui/README.md``.
 
-cross-testing
-+++++++++++++++++++++++++++++++++++++++
+Cross-testing
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 If you are developing against a non-published branch of ``leap.common`` or
 ``leap.soledad``, run instead::
@@ -130,7 +148,7 @@ parent folder.
 
 
 License
-=======================================
+===========================================================
 
 .. image:: https://raw.github.com/leapcode/bitmask_client/develop/docs/user/gpl.png
 
