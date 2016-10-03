@@ -19,7 +19,7 @@ docker-compose
 Building the package
 ====================
 
-make pkg
+make bundle
 
 
 Reproducible builds
@@ -104,11 +104,11 @@ pyc and ui elements will mess up the binary in unpredictable ways.
 * copy the /var/src/bitmask sources to a read-write location (/var/build)
 * execute ```make all``` in wine to build the qt ui and other resources
 * execute ```pip install $dependencies``` to have all dependencies available
-* execute ```pyinstaller``` in wine to compile the executable for
-** bitmask (src/leap/bitmask/app.py)
-* cleanup
-** remove the read-write copy
-** remove wine-dlls from the installer
+* execute ```pyinstaller``` in wine to compile the executable for bitmask
+  (src/leap/bitmask/app.py)
+* cleanup:
+  ** remove the read-write copy
+  ** remove wine-dlls from the installer
 
 As the step 'install dependencies' may take long on slow internet connections
 during development it is advised to recycle the container and share the

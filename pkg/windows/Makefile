@@ -1,9 +1,9 @@
 .PHONY: all pkg installer openvpn pyinstaller
 all:
 	docker-compose build
-	$(MAKE) pkg
+	$(MAKE) bundle
 
-pkg:
+bundle:
 	$(MAKE) openvpn
 	$(MAKE) pyinstaller
 	$(MAKE) installer
