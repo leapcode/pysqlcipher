@@ -10,6 +10,7 @@ I've added a new category `Misc` so we can track doc/style/packaging stuff.
 
 Features
 ~~~~~~~~
+- `#7550 <https://leap.se/code/issues/7550>`_: Add ability to use invite codes during signup
 - `#7965 <https://leap.se/code/issues/7965>`_: Add basic keymanagement to the cli.
 - `#8265 <https://leap.se/code/issues/8265>`_: Add a REST API and bitmask.js library for it.
 - `#8400 <https://leap.se/code/issues/8400>`_: Add manual provider registration.

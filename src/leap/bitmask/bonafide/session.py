@@ -162,13 +162,13 @@ class Session(object):
     # User management
 
     @defer.inlineCallbacks
-    def signup(self, username, password):
+    def signup(self, username, password, invite=None):
         # XXX should check that it_IS_NOT_authenticated
         provider.validate_username(username)
         uri = self._api.get_signup_uri()
         met = self._api.get_signup_method()
         params = self._srp_signup.get_signup_params(
-            username, password)
+            username, password, invite)
 
         signup = yield self._request(self._agent, uri, values=params,
                                      method=met)

@@ -20,6 +20,7 @@ Bitmask Command Line interface: user
 import argparse
 import getpass
 import sys
+from copy import copy
 
 from colorama import Fore
 
@@ -50,9 +51,27 @@ SUBCOMMANDS:
         self.data.append('user')
 
     def create(self, raw_args):
-        username = self.username(raw_args)
-        passwd = self._getpass_twice()
-        self.data += ['create', username, passwd, 'true']
+        args = tuple([command.appname] + sys.argv[1:4])
+        parser = argparse.ArgumentParser(
+            description='Bitmask user',
+            prog='%s %s %s  %s' % args)
+        parser.add_argument('--invitecode', **_invitecode_kw)
+        parser.add_argument('username', **_username_kw)
+
+        subargs = parser.parse_args(raw_args)
+
+        # username parsing is factored out, but won't
+        # accept the optional parameters. so strip them.
+        args = copy(raw_args)
+        for (index, item) in enumerate(args):
+            if item.startswith('--'):
+                args.pop(index + 1)
+                args.pop(index)
+
+        username = self.username(args)
+        passwd = self.getpass_twice()
+        self.data += ['create', username, passwd,
+                      subargs.invite, 'true']
         return self._send(printer=command.default_dict_printer)
 
     def auth(self, raw_args):
@@ -82,11 +101,10 @@ SUBCOMMANDS:
         parser = argparse.ArgumentParser(
             description='Bitmask user',
             prog='%s %s %s' % args)
-        parser.add_argument('username', nargs=1,
-                            help='username ID, in the form <user@example.org>')
+        parser.add_argument('username', **_username_kw)
         subargs = parser.parse_args(raw_args)
 
-        username = subargs.username[0]
+        username = subargs.username
         if not username:
             self._error("Missing username ID but needed for this command")
         if '@' not in username:
@@ -110,3 +128,12 @@ SUBCOMMANDS:
             if u['authenticated']:
                 color = Fore.GREEN
             print(color + u['userid'] + Fore.RESET)
+
+_username_kw = {
+    'nargs': '?',
+    'help': 'username ID, in the form <user@example.org>'}
+
+_invitecode_kw = {
+    'dest': 'invite',
+    'default': 'none', 'action': 'store', 'nargs': '?', 'type': str,
+    'help': 'invite code, if needed to register with this provider'}

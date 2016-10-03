@@ -85,8 +85,9 @@ class BonafideService(HookableService):
             'srp_token': response[0], 'uuid': response[1]})
         return d
 
-    def do_signup(self, username, password, autoconf=False):
-        d = self._bonafide.do_signup(username, password, autoconf)
+    def do_signup(self, username, password, invite=None, autoconf=False):
+        d = self._bonafide.do_signup(
+            username, password, invite=invite, autoconf=autoconf)
         d.addCallback(lambda response: {'signup': 'ok', 'user': response})
         return d
 

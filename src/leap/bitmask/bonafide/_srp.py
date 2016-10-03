@@ -19,10 +19,15 @@
 SRP Authentication.
 """
 
+from twisted.logger import Logger
+
 import binascii
 import json
 
 import srp
+
+
+log = Logger()
 
 
 class SRPAuthMechanism(object):
@@ -100,19 +105,34 @@ class SRPSignupMechanism(object):
     Implement a protocol-agnostic SRP Registration mechanism.
     """
 
-    def get_signup_params(self, username, password):
+    def get_signup_params(self, username, password, invite=None):
         salt, verifier = _get_salt_verifier(username, password)
         user_data = {
             'user[login]': username,
             'user[password_salt]': binascii.hexlify(salt),
             'user[password_verifier]': binascii.hexlify(verifier)}
+        if invite is not None:
+            user_data.update({'user[invite_code]': invite})
         return user_data
 
     def process_signup(self, signup_response):
         signup = json.loads(signup_response)
         errors = signup.get('errors')
         if errors:
-            msg = 'username ' + errors.get('login')[0]
+            errmsg = json.dumps(errors)
+            log.error('Oops! Errors during signup: {data!r}', data=errmsg)
+            msg = errors.get('invite_code')
+            if msg:
+                msg = msg[0]
+            else:
+                msg = errors.get('login')
+                if msg:
+                    # there is a bug  https://leap.se/code/issues/8504
+                    # the server tells us 'has already been taken' several
+                    # times
+                    msg = 'username ' + msg[0]
+                else:
+                    msg = 'unknown signup error'
             raise SRPRegistrationError(msg)
         else:
             username = signup.get('login')

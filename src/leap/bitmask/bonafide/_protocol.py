@@ -77,16 +77,16 @@ class BonafideProtocol(object):
 
     # Service public methods
 
-    def do_signup(self, full_id, password, autoconf=False):
+    def do_signup(self, full_id, password, invite=None, autoconf=False):
         log.msg('SIGNUP for %s' % full_id)
         _, provider_id = config.get_username_and_provider(full_id)
 
         provider = config.Provider(provider_id, autoconf=autoconf)
         d = provider.callWhenReady(
-            self._do_signup, provider, full_id, password)
+            self._do_signup, provider, full_id, password, invite)
         return d
 
-    def _do_signup(self, provider, full_id, password):
+    def _do_signup(self, provider, full_id, password, invite):
 
         # XXX check it's unauthenticated
         def return_user(result, _session):
@@ -97,7 +97,7 @@ class BonafideProtocol(object):
         username, _ = config.get_username_and_provider(full_id)
         # XXX get deferred?
         session = self._get_session(provider, full_id, password)
-        d = session.signup(username, password)
+        d = session.signup(username, password, invite)
         d.addCallback(return_user, session)
         d.addErrback(self._del_session_errback, full_id)
         return d

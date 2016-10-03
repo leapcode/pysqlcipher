@@ -107,12 +107,17 @@ class UserCmd(SubCommand):
 
     @register_method("{'signup': 'ok', 'user': str}")
     def do_CREATE(self, bonafide, *parts):
-        user, password = parts[2], parts[3]
+        # params are: [user, create, full_id, password, invite, autoconf]
+        user, password, invite = parts[2], parts[3], parts[4]
+
+        # TODO factor out null/bool conversion to a util function.
+        if invite == 'none':
+            invite = None
         autoconf = False
-        if len(parts) > 4:
-            if parts[4] == 'true':
+        if len(parts) > 5:
+            if parts[5] == 'true':
                 autoconf = True
-        return bonafide.do_signup(user, password, autoconf)
+        return bonafide.do_signup(user, password, invite, autoconf)
 
     @register_method("{'logout': 'ok'}")
     def do_LOGOUT(self, bonafide, *parts):
