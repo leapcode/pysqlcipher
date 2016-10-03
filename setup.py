@@ -309,7 +309,7 @@ def get_setup_args():
         PYSQLITE_VERSION += "-%s" % PATCH_VERSION
 
     # Need to bump minor version, patch handled badly.
-    PYSQLCIPHER_VERSION = "2.6.6"
+    PYSQLCIPHER_VERSION = "2.6.7"
 
     setup_args = dict(
         name="pysqlcipher",
