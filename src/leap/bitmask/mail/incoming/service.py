@@ -224,16 +224,15 @@ class IncomingMail(Service):
             logger.info('sync finished')
             return result
 
-        def _signal_invalid_auth(failure):
+        def _handle_invalid_auth_token_error(failure):
             failure.trap(InvalidAuthTokenError)
-            logger.warn('sync failed because token has expired: %r' % failure)
-            # if the token is invalid, send an event so the GUI can
-            # disable mail and show an error message.
+            logger.warn('sync failed because token is invalid: %r' % failure)
+            self.stopService()
             emit_async(catalog.SOLEDAD_INVALID_AUTH_TOKEN, self._userid)
 
         logger.info('starting sync...')
         d = self._soledad.sync()
-        d.addCallbacks(_log_synced, _signal_invalid_auth)
+        d.addCallbacks(_log_synced, _handle_invalid_auth_token_error)
         return d
 
     def _signal_fetch_to_ui(self, doclist):
