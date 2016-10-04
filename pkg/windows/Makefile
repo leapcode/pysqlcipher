@@ -4,7 +4,8 @@ all:
 	$(MAKE) bundle
 
 bundle:
-	$(MAKE) openvpn
+	# Disabling openvpn for now...
+	# $(MAKE) openvpn
 	$(MAKE) pyinstaller
 	$(MAKE) installer
 
@@ -16,6 +17,19 @@ openvpn:
 
 installer:
 	docker-compose run --rm installer
+
+
+# variant to keep the containers around
+# and save some bandwith
+
+pyinstaller_keep:
+	docker-compose run pyinstaller
+
+openvpn_keep:
+	docker-compose run openvpn
+
+installer_keep:
+	docker-compose run installer
 
 clean:
 	docker rmi windows_pyinstaller

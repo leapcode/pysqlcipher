@@ -1,3 +1,5 @@
+# PYINSTALLER 
+# ============================================================================
 # mingw environment to build dependency binaries in a reproducible environment
 # https://wiki.debian.org/ReproducibleBuilds
 # service to build a windows executable using pyinstaller
@@ -12,11 +14,14 @@ pyinstaller:
     - ../../:/var/src/bitmask:ro
 # produced binaries
     - ../../build:/var/build
+
+# OPENVPN
+# ============================================================================
 # service to build a windows-executable from openvpn sources
 # uses the openvpn-build infrastructure to produce
 # build/executables/openvpn/*
 # produces the openvpn.exe and provides openssl that is to be
-# used by pyinsaller
+# used by pyinstaller
 # usage: docker-compose run --rm openvpn
 # non-zero exit code on failure
 openvpn:
@@ -26,6 +31,9 @@ openvpn:
     - ../../:/var/src/bitmask:ro
 # produced binaries
     - ../../build:/var/build
+
+# INSTALLER 
+# ============================================================================
 # service to compile a installer using nullsoft installer
 # nsis environment to build installer (exe) that contains all required binaries
 # for a clean, just installed windows machine
