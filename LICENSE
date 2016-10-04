@@ -672,39 +672,3 @@ may consider it more useful to permit linking proprietary applications with
 the library.  If this is what you want to do, use the GNU Lesser General
 Public License instead of this License.  But first, please read
 <http://www.gnu.org/philosophy/why-not-lgpl.html>.
-
---------------------------------------------------------------------------------
-We are "embedding" PastebinAPI class since currently the installation through
-pip does not work.
-
-file: src/leap/bitmask/util/pastebin.py
-License: GPL
-Author: Ian Havelock
-website: https://github.com/Morrolan/PastebinAPI
---------------------------------------------------------------------------------
-
-Bitmask also uses third party icons:
-
----
-data/images/Arrow-Up-32.png
-data/images/Arrow-Down-32.png
-
-Author: Liam McKay
-License: GNU General Public License - http://en.wikipedia.org/wiki/GNU_General_Public_License
-WebSite: http://wefunction.com/
-IconPackage: WooFunction icon pack - http://www.iconspedia.com/pack/woofunction-icons-4136/
----
-data/images/oxygen-icons/
-
-The following icons were created based on 'mail-unread.png' from oxygen:
-data/images/mail-locked.png
-data/images/mail-unlocked.png
-
-License: LGPL - http://www.gnu.org/licenses/lgpl.html
-Website: http://www.oxygen-icons.org/
---
-data/images/pastebin.png
-
-author: Marco Martin
-License: LGPL
-website: https://www.iconfinder.com/icons/7897/binary_icon
