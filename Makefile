@@ -16,3 +16,6 @@ dev-all:
 
 uninstall:
 	pip uninstall leap.bitmask
+
+doc:
+	cd docs && make html

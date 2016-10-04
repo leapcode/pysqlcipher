@@ -1,14 +1,14 @@
 .. _hacking:
 
-========
-Hacking 
-========
+Hacking  on Bitmask Mail
+========================
 
 Some hints oriented to `leap.mail` hackers. These notes are mostly related to
 the imap server, although they probably will be useful for other pieces too.
 
 Don't panic! Just manhole into it
-=================================
+---------------------------------
+
 
 If you want to inspect the objects living in your application memory, in
 realtime, you can manhole into it.
@@ -29,7 +29,8 @@ Did I mention how *awesome* twisted is?? ``:)``
 
 
 Profiling
-=========
+----------
+
 If using ``twistd`` to launch the server, you can use twisted profiling
 capabities::
 
@@ -44,16 +45,9 @@ commands::
 
  LEAP_PROFILE_IMAPCMD=1 bitmask --debug
 
-Offline mode
-============
-
-The client has an ``--offline`` flag that will make the Mail services (imap,
-currently) not try to sync with remote replicas. Very useful during development,
-although you need to login with the remote server at least once before being
-able to use it.
 
 Mutt config
-===========
+------------
 
 You cannot live without mutt? You're lucky! Use the following minimal config
 with the imap service::
@@ -65,30 +59,10 @@ with the imap service::
  set imap_pass=MAHSIKRET
 
 
-Running the service with twistd
-===============================
 
-In order to run the mail service (currently, the imap server only), you will
-need a config with this info::
-
-  [leap_mail]
-  userid = "user@provider"
-  uuid = "deadbeefdeadabad"
-  passwd = "foobar" # Optional
-
-In the ``LEAP_MAIL_CONFIG`` enviroment variable. If you do not specify a password
-parameter, you'll be prompted for it.
-
-In order to get the user uid (uuid), look into the
-``~/.config/leap/leap-backend.conf`` file after you have logged in into your
-provider at least once.
-
-Run the twisted service::
-
-  LEAP_MAIL_CONFIG=~/.leapmailrc twistd -n -y imap-server.tac
-
-Now you can telnet into your local IMAP server and read your mail like a real
-programmer™::
+Debugging IMAP
+------------------------------
+After IMAP service is running, you can telnet into your local IMAP server and read your mail like a real programmer™::
 
   % telnet localhost 1984
   Trying 127.0.0.1...
@@ -110,6 +84,20 @@ programmer™::
 Although you probably prefer to use ``offlineimap`` for tests:: 
 
   offlineimap -c LEAPofflineimapRC-tests
+
+
+Use ``ngrep`` to obtain live logs of the commands and responses::
+
+  sudo ngrep -d lo -W byline port 1984
+
+
+Thunderbird
+---------------------------
+
+To get verbose output from thunderbird/icedove, set the following environment
+variable::
+
+  NSPR_LOG_MODULES="imap:5" icedove
 
 
 Minimal offlineimap configuration
@@ -182,14 +170,4 @@ running::
 You can find several message samples in the ``leap/mail/tests`` folder.
  
 
-Debugging IMAP commands
-=======================
 
-Use ``ngrep`` to obtain logs of the commands::
-
-  sudo ngrep -d lo -W byline port 1984
-
-To get verbose output from thunderbird/icedove, set the following environment
-variable::
-
-  NSPR_LOG_MODULES="imap:5" icedove

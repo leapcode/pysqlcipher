@@ -1,6 +1,11 @@
+.. _keymanager:
+
 =================
-Soledad Documents
+Keymanager
 =================
+
+Soledad documents
+-----------------
 
 KeyManager uses two types of documents for the keyring:
 

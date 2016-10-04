@@ -26,8 +26,8 @@ Bugfixes
 - `#1235 <https://leap.se/code/issues/1235>`_: Description for the fixed stuff corresponding with issue #1235.
 - Bugfix without related issue number.
 
-Misc
-~~~~
+Other
+~~~~~
 - `#1236 <https://leap.se/code/issues/1236>`_: Description of the new feature corresponding with issue #1236.
 - Some change without issue number.
 

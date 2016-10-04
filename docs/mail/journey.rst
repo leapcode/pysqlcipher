@@ -1,7 +1,13 @@
-.. _mail_journey:
+:LastChangedDate: $LastChangedDate$
+:LastChangedRevision: $LastChangedRevision$
+:LastChangedBy: $LastChangedBy$
+
+.. _journey:
+
 
 The life cycle of a LEAP Email
 ==============================
+
 The following are just some notes to facilitate the understanding of the
 leap.mail internals to developers and collaborators.
 

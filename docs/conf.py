@@ -51,7 +51,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Bitmask'
-copyright = u'2016, LEAP Encryption Access Project'
+copyright = u'2012-2016, LEAP Encryption Access Project'
 author = u'LEAP Encryption Access Project'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -144,7 +144,7 @@ html_theme = 'alabaster'
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
 #
-# html_logo = None
+html_logo = '../pkg/branding/bitmask-sidebar.png'
 
 # The name of an image file (relative to this directory) to use as a favicon of
 # the docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
