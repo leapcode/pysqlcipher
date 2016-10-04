@@ -87,7 +87,8 @@ Install headless backend in development mode
 
 Prerequisites:
 
-  sudo apt install build-essential python-virtualenv libsqlcipher-dev
+  sudo apt install build-essential python-virtualenv libsqlcipher-dev \
+        libssl-dev libffi-dev
   cd bitmask-dev
   virtualenv venv
   source venv/bin/activate
