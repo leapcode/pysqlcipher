@@ -5,6 +5,9 @@ Bitmask
 
 .. image:: https://badge.fury.io/py/leap.bitmask.svg
     :target: http://badge.fury.io/py/leap.bitmask
+.. image:: https://readthedocs.org/projects/bitmask/badge/?version=latest
+   :target: http://bitmask.readthedocs.io/en/latest/?badge=latest
+   :alt: Documentation Status
 .. image:: https://img.shields.io/badge/IRC-leap-blue.svg
    :target: http://webchat.freenode.net/?channels=%23leap&uio=d4
    :alt: IRC
