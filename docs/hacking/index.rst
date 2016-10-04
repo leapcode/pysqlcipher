@@ -15,16 +15,22 @@ Tox is all you need::
 
 Test when changes are made to common/soledad
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-If you modify soledad or leap.common packages::
+
+If you are developing against a non-published branch of ``leap.common`` or
+``leap.soledad``, run instead::
 
   tox -e py27-dev
+
+This expects ``leap_common`` and ``soledad`` repos to be checked out in the
+parent folder.
 
 Setting up the development environment
 --------------------------------------
 
 Dependencies::
 
-  apt install ...
+  sudo apt install build-essential python-virtualenv libsqlcipher-dev \
+        libssl-dev libffi-dev
 
 There are different requirements files::
 

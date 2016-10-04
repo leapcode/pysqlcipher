@@ -88,17 +88,20 @@ commands for you.
 Install headless backend in development mode
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-Prerequisites:
+Prerequisites::
 
   sudo apt install build-essential python-virtualenv libsqlcipher-dev \
         libssl-dev libffi-dev
+
+Install and activate a virtualenv::
+
   cd bitmask-dev
   virtualenv venv
   source venv/bin/activate
 
 All the subsequent commands assume that you have activated the virtualenv.
 
-Install python dependencies:
+Install all the python dependencies::
 
   make dev-backend
 
@@ -107,16 +110,16 @@ Install user interface frontend
 
 If you want to run the Bitmask user interface, you additionally need the following:
 
-Prerequisites:
+Prerequisites::
 
   sudo apt install python-pyqt5  python-pyqt5.qtwebkit
 
-Install python dependencies:
+Install python dependencies::
 
   make dev-all
 
-Note: even though the UI is in javascript, Qt is used to create a webview
-window.
+Note: even though the UI is in javascript, Qt is used to create a webview window.  
+
 
 Install Bitmask user interface in development mode
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -127,28 +130,18 @@ bundled version of the javascript UI.
 If you want to modify the javascript UI, then you need to be able to update the
 javascript bundle whenever a javascript or CSS source file changes.
 
-Prerequisites:
+Prerequisites::
 
   sudo apt install nodejs npm nodejs-legacy
 
-Next, run ``dev-install``:
+Next, run ``dev-install``::
 
   cd ui
-  make dev-install            # install JS user interface as a python package in "develop" mode.
-  node run watch              # continually rebuild javascript bundle when source files change.
+  make dev-install    # install JS user interface as a python package in "develop" mode.
+  node run watch      # continually rebuild javascript bundle when source files change.
 
 For more information, see ``ui/README.md``.
 
-Cross-testing
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-If you are developing against a non-published branch of ``leap.common`` or
-``leap.soledad``, run instead::
-
-  tox -e py27-dev
-
-This expects ``leap_common`` and ``soledad`` repos to be checked out in the
-parent folder.
 
 
 License
