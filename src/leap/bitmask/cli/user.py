@@ -69,7 +69,7 @@ SUBCOMMANDS:
                 args.pop(index)
 
         username = self.username(args)
-        passwd = self.getpass_twice()
+        passwd = self._getpass_twice()
         self.data += ['create', username, passwd,
                       subargs.invite, 'true']
         return self._send(printer=command.default_dict_printer)
