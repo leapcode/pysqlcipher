@@ -465,6 +465,16 @@ def _format_result(result):
 
 
 def _format_error(failure):
-    # TODO --- should check if the failure has the 'expected' attribute set
-    logger.failure('[DISPATCHER] Uncatched error:')
+    """
+    Logs the failure backtrace, and returns a json containing the error
+    message.
+    """
+
+    # If a exception declares the 'expected' attribute as True,
+    # we will not print a full traceback
+    expected = getattr(failure.value, 'expected', False) 
+    if not expected:
+        logger.failure('[DISPATCHER] Unexpected error:')
+
+    # if needed, we could add here the exception type as an extra field
     return json.dumps({'error': failure.value.message, 'result': None})

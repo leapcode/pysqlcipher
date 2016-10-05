@@ -133,7 +133,9 @@ class SRPSignupMechanism(object):
                     msg = 'username ' + msg[0]
                 else:
                     msg = 'unknown signup error'
-            raise SRPRegistrationError(msg)
+            error = SRPRegistrationError(msg)
+            error.expected = True
+            raise error
         else:
             username = signup.get('login')
             return username
