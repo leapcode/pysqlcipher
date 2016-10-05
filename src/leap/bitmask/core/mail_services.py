@@ -31,7 +31,7 @@ from twisted.application import service
 from twisted.internet import defer
 from twisted.internet import reactor
 from twisted.internet import task
-from twisted.python import log
+from twisted.logger import Logger
 
 # TODO move to bitmask.common
 from leap.common.service_hooks import HookableService
@@ -51,6 +51,9 @@ from leap.soledad.client.api import Soledad
 
 from leap.bitmask.core.uuid_map import UserMap
 from leap.bitmask.core.configurable import DEFAULT_BASEDIR
+
+
+logger = Logger()
 
 
 class Container(object):
@@ -165,7 +168,7 @@ class SoledadService(HookableService):
         self._basedir = basedir
 
     def startService(self):
-        log.msg('Starting Soledad Service')
+        logger.info('starting Soledad Service')
         self._container = SoledadContainer(service=self)
         super(SoledadService, self).startService()
 
@@ -182,11 +185,11 @@ class SoledadService(HookableService):
             password = kw.get('password')
             uuid = kw.get('uuid')
             container = self._container
-            log.msg("on_passphrase_entry: New Soledad Instance: %s" % userid)
+            logger.debug("on_passphrase_entry: New Soledad Instance: %s" % userid)
             if not container.get_instance(userid):
                 container.add_instance(userid, password, uuid=uuid, token=None)
         else:
-            log.msg('Service MX is not ready...')
+            logger.debug('service MX is not ready...')
 
     def hook_on_bonafide_auth(self, **kw):
         userid = kw['username']
@@ -202,11 +205,11 @@ class SoledadService(HookableService):
 
             container = self._container
             if container.get_instance(userid):
-                log.msg("Passing a new SRP Token to Soledad: %s" % userid)
+                logger.debug("passing a new SRP Token to Soledad: %s" % userid)
                 container.set_remote_auth_token(userid, token)
                 container.set_syncable(userid, True)
             else:
-                log.msg("Adding a new Soledad Instance: %s" % userid)
+                logger.debug("adding a new Soledad Instance: %s" % userid)
                 container.add_instance(
                     userid, password, uuid=uuid, token=token)
 
@@ -218,7 +221,7 @@ class SoledadService(HookableService):
         password = kw['password']
         soledad = self._container.get_instance(userid)
         if soledad is not None:
-            log.msg("Change soledad passphrase for %s" % userid)
+            logger.info("Change soledad passphrase for %s" % userid)
             soledad.change_passphrase(unicode(password))
 
 
@@ -229,7 +232,7 @@ class KeymanagerContainer(Container):
         super(KeymanagerContainer, self).__init__(service=service)
 
     def add_instance(self, userid, token, uuid, soledad):
-        log.msg("Adding Keymanager instance for: %s" % userid)
+        logger.debug("adding Keymanager instance for: %s" % userid)
         keymanager = self._create_keymanager_instance(
             userid, token, uuid, soledad)
         super(KeymanagerContainer, self).add_instance(userid, keymanager)
@@ -247,15 +250,15 @@ class KeymanagerContainer(Container):
     def _get_or_generate_keys(self, keymanager, userid):
 
         def _get_key(_):
-            log.msg("looking up private key for %s" % userid)
+            logger.info("looking up private key for %s" % userid)
             return keymanager.get_key(userid, private=True, fetch_remote=False)
 
         def _found_key(key):
-            log.msg("found key: %r" % key)
+            logger.info("found key: %r" % key)
 
         def _if_not_found_generate(failure):
             failure.trap(KeyNotFound)
-            log.msg("key not found, generating key for %s" % (userid,))
+            logger.info("key not found, generating key for %s" % (userid,))
             d = keymanager.gen_key()
             d.addCallbacks(_send_key, _log_key_error("generating"))
             return d
@@ -266,43 +269,43 @@ class KeymanagerContainer(Container):
             # but this hasn't been successfully uploaded. How do we know that?
             # XXX Should this be a method of bonafide instead?
             # -----------------------------------------------------------------
-            log.msg("key generated for %s" % userid)
+            logger.info("key generated for %s" % userid)
 
             if not keymanager.token:
-                log.msg("token not available, scheduling new send attempt...")
+                logger.debug("token not available, scheduling new send attempt...")
                 return task.deferLater(reactor, 5, _send_key, None)
 
-            log.msg("sending public key to server")
+            logger.info("sending public key to server")
             d = keymanager.send_key()
             d.addCallbacks(
-                lambda _: log.msg("key sent to server"),
+                lambda _: logger.info("key sent to server"),
                 _log_key_error("sending"))
             return d
 
         def _log_key_error(step):
             def log_error(failure):
-                log.err("Error while %s key!" % step)
-                log.err(failure)
+                logger.err("Error while %s key!" % step)
+                logger.err(failure)
                 return failure
             return log_error
 
         def _sync_if_never_synced(ever_synced):
             if ever_synced:
-                log.msg("soledad has synced in the past")
+                logger.debug("soledad has synced in the past")
                 return defer.succeed(None)
 
-            log.msg("soledad has never synced")
+            logger.debug("soledad has never synced")
 
             if not keymanager.token:
-                log.msg("no token to sync now, scheduling a new check")
+                logger.debug("no token to sync now, scheduling a new check")
                 d = task.deferLater(reactor, 5, keymanager.ever_synced)
                 d.addCallback(_sync_if_never_synced)
                 return d
 
-            log.msg("syncing soledad for the first time...")
+            logger.debug("syncing soledad for the first time...")
             return keymanager._soledad.sync()
 
-        log.msg("checking if soledad has ever synced...")
+        logger.debug("checking if soledad has ever synced...")
         d = keymanager.ever_synced()
         d.addCallback(_sync_if_never_synced)
         d.addCallback(_get_key)
@@ -347,9 +350,10 @@ class KeymanagerService(HookableService):
     def __init__(self, basedir=DEFAULT_BASEDIR):
         service.Service.__init__(self)
         self._basedir = basedir
+        self._container = None
 
     def startService(self):
-        log.msg('Starting Keymanager Service')
+        logger.debug('starting Keymanager Service')
         self._container = KeymanagerContainer(self._basedir)
         self._container.service = self
         self.tokens = {}
@@ -364,7 +368,7 @@ class KeymanagerService(HookableService):
         uuid = kw['uuid']
         soledad = kw['soledad']
         if not container.get_instance(user):
-            log.msg('Adding a new Keymanager instance for %s' % user)
+            logger.debug('Adding a new Keymanager instance for %s' % user)
             if not token:
                 token = self.tokens.get(user)
             container.add_instance(user, token, uuid, soledad)
@@ -381,10 +385,10 @@ class KeymanagerService(HookableService):
 
             container = self._container
             if container.get_instance(userid):
-                log.msg('Passing a new SRP Token to Keymanager: %s' % userid)
+                logger.debug('Passing a new SRP Token to Keymanager: %s' % userid)
                 container.set_remote_auth_token(userid, token)
             else:
-                log.msg('storing the keymanager token... %s ' % token)
+                logger.debug('storing the keymanager token... %s ' % token)
                 self.tokens[userid] = token
 
     # commands
@@ -455,11 +459,11 @@ class StandardMailService(service.MultiService, HookableService):
         self.addService(IncomingMailService(self))
 
     def startService(self):
-        log.msg('starting mail service')
+        logger.info('starting mail service')
         super(StandardMailService, self).startService()
 
     def stopService(self):
-        log.msg('stopping mail service')
+        logger.info('stopping mail service')
         super(StandardMailService, self).stopService()
 
     def startInstance(self, userid, soledad, keymanager):
@@ -504,7 +508,7 @@ class StandardMailService(service.MultiService, HookableService):
         # turn on incoming mail service for the user that just logged in
         multiservice = self.getServiceNamed('incoming_mail')
         incoming = multiservice.getServiceNamed(userid)
-        log.msg('looking for incoming mail service for auth: %s' % userid)
+        logger.debug('looking for incoming mail service for auth: %s' % userid)
         if incoming:
             incoming.startService()
 
@@ -530,7 +534,7 @@ class StandardMailService(service.MultiService, HookableService):
         username = kw['username']
         multiservice = self.getServiceNamed('incoming_mail')
         incoming = multiservice.getServiceNamed(username)
-        log.msg('looking for incoming mail service for logout: %s' % username)
+        logger.debug('looking for incoming mail service for logout: %s' % username)
         if incoming:
             incoming.stopService()
 
@@ -561,8 +565,8 @@ class StandardMailService(service.MultiService, HookableService):
             try:
                 shutil.rmtree(tokens_folder)
             except OSError as e:
-                log.msg("Can't remove tokens folder %s: %s"
-                        % (tokens_folder, e))
+                logger.warning("Can't remove tokens folder %s: %s"
+                            % (tokens_folder, e))
                 return
         os.mkdir(tokens_folder, 0700)
 
@@ -584,7 +588,7 @@ class IMAPService(service.Service):
         super(IMAPService, self).__init__()
 
     def startService(self):
-        log.msg('starting imap service')
+        logger.info('starting imap service')
         port, factory = imap_service.run_service(
             self._soledad_sessions, factory=self._factory)
         self._port = port
@@ -592,7 +596,7 @@ class IMAPService(service.Service):
         super(IMAPService, self).startService()
 
     def stopService(self):
-        log.msg("stopping imap service")
+        logger.info("stopping imap service")
         if self._port:
             self._port.stopListening()
             self._port = None
@@ -617,7 +621,7 @@ class SMTPService(service.Service):
         super(SMTPService, self).__init__()
 
     def startService(self):
-        log.msg('starting smtp service')
+        logger.info('starting smtp service')
         port, factory = smtp_service.run_service(
             self._soledad_sessions,
             self._keymanager_sessions,
@@ -628,7 +632,7 @@ class SMTPService(service.Service):
         super(SMTPService, self).startService()
 
     def stopService(self):
-        log.msg('stopping smtp service')
+        logger.info('stopping smtp service')
         if self._port:
             self._port.stopListening()
             self._port = None
@@ -649,7 +653,7 @@ class IncomingMailService(service.MultiService):
         self._mail = mail_service
 
     def startService(self):
-        log.msg('starting incoming mail service')
+        logger.info('starting incoming mail service')
         super(IncomingMailService, self).startService()
 
     def stopService(self):
@@ -661,7 +665,7 @@ class IncomingMailService(service.MultiService):
         soledad = self._mail.get_soledad_session(userid)
         keymanager = self._mail.get_keymanager_session(userid)
 
-        log.msg('setting up incoming mail service for %s' % userid)
+        logger.info('setting up incoming mail service for %s' % userid)
         self._start_incoming_mail_instance(
             keymanager, soledad, userid)
 
@@ -680,7 +684,7 @@ class IncomingMailService(service.MultiService):
         d = acc.callWhenReady(
             lambda _: acc.get_collection_by_mailbox(INBOX_NAME))
         d.addCallback(setUpIncomingMail)
-        d.addErrback(log.err)
+        d.addErrback(logger.err)
         return d
 
 # --------------------------------------------------------------------

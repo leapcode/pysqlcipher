@@ -25,15 +25,14 @@ import tempfile
 import json
 import urllib
 
-from leap.common import ca_bundle
+from urlparse import urlparse
+
+from twisted.logger import Logger
+from twisted.internet import defer
 from twisted.web import client
 from twisted.web._responses import NOT_FOUND
 
-import logging
-
-from twisted.internet import defer
-from urlparse import urlparse
-
+from leap.common import ca_bundle
 from leap.common.check import leap_assert
 from leap.common.http import HTTPClient
 from leap.common.events import emit_async, catalog
@@ -47,7 +46,7 @@ from leap.bitmask.keymanager.errors import (
 from leap.bitmask.keymanager.validation import ValidationLevels, can_upgrade
 from leap.bitmask.keymanager.openpgp import OpenPGPScheme
 
-logger = logging.getLogger(__name__)
+logger = Logger()
 
 
 #
@@ -144,15 +143,15 @@ class KeyManager(object):
         except KeyNotFound:
             raise
         except IOError as e:
-            logger.warning("HTTP error retrieving key: %r" % (e,))
-            logger.warning("%s" % (content,))
+            logger.warn("HTTP error retrieving key: %r" % (e,))
+            logger.warn("%s" % (content,))
             raise KeyNotFound(e.message), None, sys.exc_info()[2]
         except ValueError as v:
-            logger.warning("Invalid JSON data from key: %s" % (uri,))
+            logger.warn("invalid JSON data from key: %s" % (uri,))
             raise KeyNotFound(v.message + ' - ' + uri), None, sys.exc_info()[2]
 
         except Exception as e:
-            logger.warning("Error retrieving key: %r" % (e,))
+            logger.warn("error retrieving key: %r" % (e,))
             raise KeyNotFound(e.message), None, sys.exc_info()[2]
         # Responses are now text/plain, although it's json anyway, but
         # this will fail when it shouldn't
@@ -176,7 +175,7 @@ class KeyManager(object):
         def check_404(response):
             if response.code == NOT_FOUND:
                 message = '%s: %s key not found.' % (response.code, address)
-                logger.warning(message)
+                logger.warn(message)
                 raise KeyNotFound(message), None, sys.exc_info()[2]
             return response
 
@@ -204,7 +203,7 @@ class KeyManager(object):
         try:
             content = yield self._async_client.request(str(uri), 'GET')
         except Exception as e:
-            logger.warning("There was a problem fetching key: %s" % (e,))
+            logger.warn("There was a problem fetching key: %s" % (e,))
             raise KeyNotFound(uri)
         if not content:
             raise KeyNotFound(uri)
@@ -239,12 +238,12 @@ class KeyManager(object):
                                                           body=str(data),
                                                           headers=headers)
         except Exception as e:
-            logger.warning("Error uploading key: %r" % (e,))
+            logger.warn("Error uploading key: %r" % (e,))
             raise e
         if 'error' in res:
             # FIXME: That's a workaround for 500,
             # we need to implement a readBody to assert response code
-            logger.warning("Error uploading key: %r" % (res,))
+            logger.warn("Error uploading key: %r" % (res,))
             raise Exception(res)
 
     @memoized_method(invalidation=300)
@@ -759,7 +758,7 @@ class KeyManager(object):
         :raise UnsupportedKeyTypeError: if invalid key type
         """
 
-        logger.info("Fetch key for %s from %s" % (address, uri))
+        logger.info("fetch key for %s from %s" % (address, uri))
         ascii_content = yield self._get_with_combined_ca_bundle(uri)
 
         # XXX parse binary keys

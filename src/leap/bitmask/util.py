@@ -21,11 +21,13 @@ import os
 import platform
 import sys
 
-from twisted.python import log
+from twisted.logger import Logger
 
 from leap.common.files import which
 
 STANDALONE = getattr(sys, 'frozen', False)
+
+logger = Logger()
 
 
 def here(module=None):
@@ -68,8 +70,7 @@ def get_gpg_bin_path():
                     gpgbin = opt
                     break
         except IndexError as e:
-            log.msg("Couldn't find the gpg binary!: %s" % (e,))
-            log.exception(e)
+            logger.debug("couldn't find the gpg binary!: %s" % (e,))
     if platform.system() == "Darwin":
         gpgbin = os.path.abspath(
             os.path.join(here(), "apps", "mail", "gpg"))
@@ -87,7 +88,7 @@ def get_gpg_bin_path():
                 gpgbin = opt
                 break
     except IndexError as e:
-        log.msg("Couldn't find the gpg1 binary!: %s" % (e,))
+        logger.debug("couldn't find the gpg1 binary!: %s" % (e,))
 
     if gpgbin is None:
         log.msg("Could not find gpg1 binary")

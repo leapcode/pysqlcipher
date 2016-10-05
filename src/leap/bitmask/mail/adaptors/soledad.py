@@ -16,16 +16,14 @@
 """
 Soledadad MailAdaptor module.
 """
-import logging
 import re
 
 from collections import defaultdict
 from email import message_from_string
 
 from twisted.internet import defer
-from twisted.python import log
+from twisted.logger import Logger
 from zope.interface import implements
-from leap.soledad.common import l2db
 
 from leap.common.check import leap_assert, leap_assert_type
 
@@ -39,10 +37,11 @@ from leap.bitmask.mail.utils import lowerdict, first
 from leap.bitmask.mail.utils import stringify_parts_map
 from leap.bitmask.mail.interfaces import IMailAdaptor, IMessageWrapper
 
+from leap.soledad.common import l2db
 from leap.soledad.common.document import SoledadDocument
 
 
-logger = logging.getLogger(__name__)
+logger = Logger()
 
 # TODO
 # [ ] Convenience function to create mail specifying subject, date, etc?
@@ -187,7 +186,7 @@ class SoledadDocumentWrapper(models.DocumentWrapper):
         # error, we should mark them in the copy so there is no attempt to
         # create/update them.
         failure.trap(l2db.errors.RevisionConflict)
-        logger.debug("Got conflict while putting %s" % doc_id)
+        logger.debug("got conflict while putting %s" % doc_id)
 
     def delete(self, store):
         """
@@ -505,7 +504,7 @@ class MessageWrapper(object):
             for (key, doc) in cdocs.items()])
         for doc_id, cdoc in zip(self.mdoc.cdocs, self.cdocs.values()):
             if cdoc.raw == "":
-                log.msg("Empty raw field in cdoc %s" % doc_id)
+                logger.warning("Empty raw field in cdoc %s" % doc_id)
             cdoc.set_future_doc_id(doc_id)
 
     def create(self, store, notify_just_mdoc=False, pending_inserts_dict=None):
@@ -567,8 +566,8 @@ class MessageWrapper(object):
         mdoc_created = self.mdoc.create(store, is_copy=self._is_copy)
         fdoc_created = self.fdoc.create(store, is_copy=self._is_copy)
 
-        mdoc_created.addErrback(lambda f: log.err(f))
-        fdoc_created.addErrback(lambda f: log.err(f))
+        mdoc_created.addErrback(logger.error)
+        fdoc_created.addErrback(logger.error)
 
         self.d.append(mdoc_created)
         self.d.append(fdoc_created)
@@ -584,13 +583,13 @@ class MessageWrapper(object):
                 self.d.append(cdoc.create(store))
 
         def log_all_inserted(result):
-            log.msg("All parts inserted for msg!")
+            logger.debug("All parts inserted for msg!")
             return result
 
         self.all_inserted_d = defer.gatherResults(self.d, consumeErrors=True)
         self.all_inserted_d.addCallback(log_all_inserted)
         self.all_inserted_d.addCallback(unblock_pending_insert)
-        self.all_inserted_d.addErrback(lambda failure: log.err(failure))
+        self.all_inserted_d.addErrback(logger.error)
 
         if notify_just_mdoc:
             return mdoc_created
@@ -639,7 +638,7 @@ class MessageWrapper(object):
 
         d = new_wrapper.create(store)
         d.addCallback(lambda result: new_wrapper)
-        d.addErrback(lambda failure: log.err(failure))
+        d.addErrback(logger.error)
         return d
 
     def set_mbox_uuid(self, mbox_uuid):
@@ -946,15 +945,15 @@ class SoledadMailAdaptor(SoledadIndexMixin):
             # See https://leap.se/code/issues/7495.
             # This avoids blocks, but the real cause still needs to be
             # isolated (0.9.0rc3) -- kali
-            log.msg("BUG ---------------------------------------------------")
-            log.msg("BUG: Error while retrieving part docs for mdoc id %s" %
-                    mdoc_id)
-            log.err(failure)
-            log.msg("BUG (please report above info) ------------------------")
+            logger.debug("BUG ---------------------------------------------------")
+            logger.debug("BUG: Error while retrieving part docs for mdoc id %s" %
+                         mdoc_id)
+            logger.error(failure)
+            logger.debug("BUG (please report above info) ------------------------")
             return []
 
         def _err_log_cannot_find_msg(failure):
-            log.msg("BUG: Error while getting msg (uid=%s)" % uid)
+            logger.error("BUG: Error while getting msg (uid=%s)" % uid)
             return None
 
         if get_cdocs:
@@ -1041,7 +1040,7 @@ class SoledadMailAdaptor(SoledadIndexMixin):
         Delete all messages flagged as deleted.
         """
         def err(failure):
-            log.err(failure)
+            logger.errror(failure)
 
         def delete_fdoc_and_mdoc_flagged(fdocs):
             # low level here, not using the wrappers...
@@ -1125,7 +1124,7 @@ class SoledadMailAdaptor(SoledadIndexMixin):
 
         def get_mdoc_id(hdoc):
             if not hdoc:
-                log.msg("Could not find a HDOC with MSGID %s" % msgid)
+                logger.warning("Could not find a HDOC with MSGID %s" % msgid)
                 return None
             hdoc = hdoc[0]
             mdoc_id = hdoc.doc_id.replace("H-", "M-%s-" % uuid)
@@ -1177,7 +1176,7 @@ class SoledadMailAdaptor(SoledadIndexMixin):
         return MailboxWrapper.get_all(store)
 
     def _errback(self, failure):
-        log.err(failure)
+        logger.error(failure)
 
 
 def _split_into_parts(raw):

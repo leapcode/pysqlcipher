@@ -39,7 +39,7 @@ from twisted.cred.portal import Portal, IRealm
 from twisted.mail import smtp
 from twisted.mail.imap4 import LOGINCredentials, PLAINCredentials
 from twisted.internet import defer, protocol
-from twisted.python import log
+from twisted.logger import Logger
 
 from leap.common.check import leap_assert_type
 from leap.common.events import emit_async, catalog
@@ -55,6 +55,8 @@ from leap.bitmask.keymanager.errors import KeyNotFound
 generator.Generator = RFC3156CompliantGenerator
 
 LOCAL_FQDN = "bitmask.local"
+
+logger = Logger()
 
 
 @implementer(IRealm)
@@ -296,7 +298,7 @@ class SMTPDelivery(object):
 
         # verify if recipient key is available in keyring
         def found(_):
-            log.msg("Accepting mail for %s..." % user.dest.addrstr)
+            logger.debug("Accepting mail for %s..." % user.dest.addrstr)
             emit_async(catalog.SMTP_RECIPIENT_ACCEPTED_ENCRYPTED,
                        self._userid, user.dest.addrstr)
 
@@ -308,8 +310,9 @@ class SMTPDelivery(object):
                 emit_async(catalog.SMTP_RECIPIENT_REJECTED, self._userid,
                            user.dest.addrstr)
                 raise smtp.SMTPBadRcpt(user.dest.addrstr)
-            log.msg("Warning: will send an unencrypted message (because "
-                    "encrypted_only' is set to False).")
+            logger.warn(
+                'Warning: will send an unencrypted message (because '
+                '"encrypted_only" is set to False).')
             emit_async(
                 catalog.SMTP_RECIPIENT_ACCEPTED_UNENCRYPTED,
                 self._userid, user.dest.addrstr)
@@ -341,8 +344,9 @@ class SMTPDelivery(object):
         # accept mail from anywhere. To reject an address, raise
         # smtp.SMTPBadSender here.
         if str(origin) != str(self._userid):
-            log.msg("Rejecting sender {0}, expected {1}".format(origin,
-                                                                self._userid))
+            logger.error(
+                "Rejecting sender {0}, expected {1}".format(origin,
+                                                            self._userid))
             raise smtp.SMTPBadSender(origin)
         self._origin = origin
         return origin
@@ -392,7 +396,7 @@ class EncryptedMessage(object):
 
         :returns: a deferred
         """
-        log.msg("Message data complete.")
+        logger.debug("Message data complete.")
         self._lines.append('')  # add a trailing newline
         raw_mail = '\r\n'.join(self._lines)
 
@@ -402,8 +406,8 @@ class EncryptedMessage(object):
         """
         Log an error when the connection is lost.
         """
-        log.msg("Connection lost unexpectedly!")
-        log.err()
+        logger.error("Connection lost unexpectedly!")
+        logger.error()
         emit_async(catalog.SMTP_CONNECTION_LOST, self._userid,
                    self._user.dest.addrstr)
         # unexpected loss of connection; don't save

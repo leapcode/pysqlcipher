@@ -24,7 +24,6 @@ In the future, pluggable transports will expose this generic API.
 """
 import itertools
 import uuid
-import logging
 import StringIO
 import time
 import weakref
@@ -32,11 +31,10 @@ import weakref
 from collections import defaultdict
 
 from twisted.internet import defer
-from twisted.python import log
+from twisted.logger import Logger
 
 from leap.common.check import leap_assert_type
 from leap.common.events import emit_async, catalog
-
 from leap.bitmask.mail.adaptors.soledad import SoledadMailAdaptor
 from leap.bitmask.mail.constants import INBOX_NAME
 from leap.bitmask.mail.constants import MessageFlags
@@ -45,7 +43,7 @@ from leap.bitmask.mail.plugins import soledad_sync_hooks
 from leap.bitmask.mail.utils import find_charset, CaseInsensitiveDict
 from leap.bitmask.mail.utils import lowerdict
 
-logger = logging.getLogger(name=__name__)
+logger = Logger()
 
 
 # TODO LIST
@@ -193,7 +191,7 @@ class MessagePart(object):
         try:
             part_map = sub_pmap[str(part)]
         except KeyError:
-            log.msg("getSubpart for %s: KeyError" % (part,))
+            logger.debug("getSubpart for %s: KeyError" % (part,))
             raise IndexError
         return MessagePart(part_map, cdocs=self._cdocs, nested=True)
 
@@ -441,7 +439,7 @@ class MessageCollection(object):
         d.addCallback(
             lambda uid: self.get_message_by_uid(
                 uid, get_cdocs=get_cdocs))
-        d.addErrback(lambda f: log.err(f))
+        d.addErrback(logger.error)
         return d
 
     def get_message_by_uid(self, uid, absolute=True, get_cdocs=False):
@@ -614,7 +612,7 @@ class MessageCollection(object):
         headers = lowerdict(msg.get_headers())
         moz_draft_hdr = "X-Mozilla-Draft-Info"
         if moz_draft_hdr.lower() in headers:
-            log.msg("Setting fast notify to False, Draft detected")
+            logger.debug("setting fast notify to False, Draft detected")
             notify_just_mdoc = False
 
         if notify_just_mdoc:
@@ -659,7 +657,7 @@ class MessageCollection(object):
         d.addCallback(insert_mdoc_id, wrapper)
         d.addCallback(self.cb_signal_unread_to_ui)
         d.addCallback(self.notify_new_to_listeners)
-        d.addErrback(lambda failure: log.err(failure))
+        d.addErrback(logger.error)
 
         return d
 
@@ -746,7 +744,7 @@ class MessageCollection(object):
             def insert_doc(_, mbox_uuid, doc_id):
                 d = self.mbox_indexer.get_uid_from_doc_id(mbox_uuid, doc_id)
                 d.addCallback(insert_conditionally, mbox_uuid, doc_id)
-                d.addErrback(lambda err: log.failure(err))
+                d.addErrback(logger.error)
                 d.addCallback(log_result)
                 return d
 
@@ -804,7 +802,7 @@ class MessageCollection(object):
             self.store, self.mbox_uuid)
         mdocs_deleted.addCallback(get_uid_list)
         mdocs_deleted.addCallback(delete_uid_entries)
-        mdocs_deleted.addErrback(lambda f: log.err(f))
+        mdocs_deleted.addErrback(logger.error)
         return mdocs_deleted
 
     # TODO should add a delete-by-uid to collection?

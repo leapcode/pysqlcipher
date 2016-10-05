@@ -18,11 +18,13 @@
 LEAP Session management.
 """
 from twisted.internet import defer, reactor
-from twisted.python import log
+from twisted.logger import Logger
 
 from leap.bitmask.bonafide import _srp
 from leap.bitmask.bonafide import provider
 from leap.bitmask.bonafide._http import httpRequest, cookieAgentFactory
+
+logger = Logger()
 
 OK = 'ok'
 
@@ -88,7 +90,7 @@ class Session(object):
     def authenticate(self):
         uri = self._api.get_handshake_uri()
         met = self._api.get_handshake_method()
-        log.msg("%s to %s" % (met, uri))
+        logger.debug("%s to %s" % (met, uri))
         params = self._srp_auth.get_handshake_params()
 
         handshake = yield self._request(self._agent, uri, values=params,
@@ -98,7 +100,7 @@ class Session(object):
         uri = self._api.get_authenticate_uri(login=self.username)
         met = self._api.get_authenticate_method()
 
-        log.msg("%s to %s" % (met, uri))
+        logger.debug("%s to %s" % (met, uri))
         params = self._srp_auth.get_authentication_params()
 
         auth = yield self._request(self._agent, uri, values=params,
@@ -215,8 +217,7 @@ if __name__ == "__main__":
         reactor.stop()
 
     def auth_eb(failure):
-        print "[ERROR!]", failure.getErrorMessage()
-        log.err(failure)
+        logger.error(failure)
 
     d = session.authenticate()
     d.addCallback(print_result)

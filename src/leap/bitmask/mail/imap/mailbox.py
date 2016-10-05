@@ -18,7 +18,6 @@
 IMAP Mailbox.
 """
 import re
-import logging
 import os
 import cStringIO
 import StringIO
@@ -29,7 +28,7 @@ from email.utils import formatdate
 
 from twisted.internet import defer
 from twisted.internet import reactor
-from twisted.python import log
+from twisted.logger import Logger
 
 from twisted.mail import imap4
 from zope.interface import implements
@@ -39,7 +38,7 @@ from leap.common.check import leap_assert_type
 from leap.bitmask.mail.constants import INBOX_NAME, MessageFlags
 from leap.bitmask.mail.imap.messages import IMAPMessage
 
-logger = logging.getLogger(__name__)
+logger = Logger()
 
 # TODO LIST
 # [ ] Restore profile_cmd instrumentation
@@ -894,7 +893,7 @@ class IMAPMailbox(object):
                 return d
 
         # nothing implemented for any other query
-        logger.warning("Cannot process query: %s" % (query,))
+        logger.warn("Cannot process query: %s" % (query,))
         return []
 
     # IMessageCopier

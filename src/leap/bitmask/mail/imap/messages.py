@@ -17,15 +17,15 @@
 """
 IMAPMessage implementation.
 """
-import logging
 from twisted.mail import imap4
 from twisted.internet import defer
+from twisted.logger import Logger
 from zope.interface import implements
 
 from leap.bitmask.mail.utils import find_charset, CaseInsensitiveDict
 
 
-logger = logging.getLogger(__name__)
+logger = Logger()
 
 # TODO
 # [ ] Add ref to incoming message during add_msg.
@@ -213,7 +213,7 @@ def _format_headers(headers, negate, *names):
     # some reason we do not have headers, we have to return at least that
     # one
     if not headers:
-        logger.warning("No headers found")
+        logger.warn("No headers found")
         return {str('content-type'): str('')}
 
     names = map(lambda s: s.upper(), names)

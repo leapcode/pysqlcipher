@@ -17,14 +17,14 @@
 """
 Soledad Backed IMAP Account.
 """
-import logging
 import os
 import time
 from functools import partial
 
 from twisted.internet import defer
+from twisted.logger import Logger
 from twisted.mail import imap4
-from twisted.python import log
+from twisted.logger import Logger
 from zope.interface import implements
 
 from leap.common.check import leap_assert, leap_assert_type
@@ -33,7 +33,7 @@ from leap.bitmask.mail.mail import Account
 from leap.bitmask.mail.imap.mailbox import IMAPMailbox, normalize_mailbox
 from leap.soledad.client import Soledad
 
-logger = logging.getLogger(__name__)
+logger = Logger()
 
 PROFILE_CMD = os.environ.get('LEAP_PROFILE_IMAPCMD', False)
 
@@ -247,7 +247,7 @@ class IMAPAccount(object):
 
         def check_it_exists(mailboxes):
             if name not in mailboxes:
-                logger.warning("SELECT: No such mailbox!")
+                logger.warn('SELECT: No such mailbox!')
                 return None
             return name
 

@@ -35,8 +35,8 @@ from OpenSSL import SSL
 from twisted.mail import smtp
 from twisted.internet import reactor
 from twisted.internet import defer
+from twisted.logger import Logger
 from twisted.protocols.amp import ssl
-from twisted.python import log
 
 from leap.common.check import leap_assert_type, leap_assert
 from leap.common.events import emit_async, catalog
@@ -54,6 +54,11 @@ from leap.bitmask.mail.rfc3156 import PGPEncrypted
 # TODO
 # [ ] rename this module to something else, service should be the implementor
 #     of IService
+
+logger = Logger()
+
+
+logger = Logger()
 
 
 class SSLContextFactory(ssl.ClientContextFactory):
@@ -162,7 +167,7 @@ class OutgoingMail(object):
         """
         dest_addrstr = smtp_sender_result[1][0][0]
         fromaddr = self._from_address
-        log.msg('Message sent from %s to %s' % (fromaddr, dest_addrstr))
+        logger.info('Message sent from %s to %s' % (fromaddr, dest_addrstr))
         emit_async(catalog.SMTP_SEND_MESSAGE_SUCCESS,
                    fromaddr, dest_addrstr)
 
@@ -185,8 +190,7 @@ class OutgoingMail(object):
         # temporal error. We might want to notify the permanent errors
         # differently.
 
-        err = failure.value
-        log.err(err)
+        logger.error(failure)
 
         if self._bouncer:
             self._bouncer.bounce_message(
@@ -204,7 +208,7 @@ class OutgoingMail(object):
         :type encrypt_and_sign_result: tuple
         """
         message, recipient = encrypt_and_sign_result
-        log.msg("Connecting to SMTP server %s:%s" % (self._host, self._port))
+        logger.info("Connecting to SMTP server %s:%s" % (self._host, self._port))
         msg = message.as_string(False)
 
         # we construct a defer to pass to the ESMTPSenderFactory
@@ -297,7 +301,7 @@ class OutgoingMail(object):
         def if_key_not_found_send_unencrypted(failure, message):
             failure.trap(KeyNotFound, KeyAddressMismatch)
 
-            log.msg('Will send unencrypted message to %s.' % to_address)
+            logger.info('Will send unencrypted message to %s.' % to_address)
             emit_async(catalog.SMTP_START_SIGN, self._from_address, to_address)
             d = self._sign(message, from_address)
             d.addCallback(signal_sign)
@@ -307,8 +311,8 @@ class OutgoingMail(object):
             emit_async(catalog.SMTP_END_SIGN, self._from_address)
             return newmsg, recipient
 
-        log.msg("Will encrypt the message with %s and sign with %s."
-                % (to_address, from_address))
+        logger.info("Will encrypt the message with %s and sign with %s."
+                    % (to_address, from_address))
         emit_async(catalog.SMTP_START_ENCRYPT_AND_SIGN,
                    self._from_address,
                    "%s,%s" % (self._from_address, to_address))

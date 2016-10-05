@@ -21,7 +21,7 @@ import json
 import resource
 
 from twisted.internet import reactor
-from twisted.python import log
+from twisted.logger import Logger
 
 from leap.bitmask import __version__
 from leap.bitmask.core import configurable
@@ -30,6 +30,8 @@ from leap.bitmask.core import _web
 from leap.bitmask.core import flags
 from leap.common.events import server as event_server
 # from leap.vpn import EIPService
+
+logger = Logger()
 
 
 backend = flags.BACKEND
@@ -92,13 +94,13 @@ class BitmaskBackend(configurable.ConfigurableService):
         bf.register_hook('on_bonafide_logout', listener='mail')
 
     def _start_child_service(self, name):
-        log.msg('starting backend child service: %s' % name)
+        logger.debug('starting backend child service: %s' % name)
         service = self.getServiceNamed(name)
         if service:
             service.startService()
 
     def _stop_child_service(self, name):
-        log.msg('stopping backend child service: %s' % name)
+        logger.debug('stopping backend child service: %s' % name)
         service = self.getServiceNamed(name)
         if service:
             service.stopService()
@@ -159,7 +161,7 @@ class BitmaskBackend(configurable.ConfigurableService):
         try:
             service = self.getServiceNamed(label)
         except KeyError:
-            log.msg("initializing service: %s" % label)
+            logger.debug("initializing service: %s" % label)
             service = klass(*args, **kw)
             service.setName(label)
             service.setServiceParent(self)
@@ -238,7 +240,7 @@ class BackendCommands(object):
         return {'version_core': __version__}
 
     def do_stats(self):
-        log.msg('BitmaskCore Service STATS')
+        logger.debug('BitmaskCore Service STATS')
         mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         return {'mem_usage': '%s MB' % (mem / 1024)}
 

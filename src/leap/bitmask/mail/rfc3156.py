@@ -22,7 +22,8 @@ Implements RFC 3156: MIME Security with OpenPGP.
 import base64
 from StringIO import StringIO
 
-from twisted.python import log
+from twisted.logger import Logger
+
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email import errors
@@ -33,6 +34,7 @@ from email.generator import (
     _make_boundary,
 )
 
+logger = Logger()
 
 #
 # A generator that solves http://bugs.python.org/issue14983
@@ -163,7 +165,7 @@ def encode_base64(msg):
         except KeyError:
             msg['Content-Transfer-Encoding'] = 'base64'
     elif encoding is not 'base64':
-        log.err('Unknown content-transfer-encoding: %s' % encoding)
+        logger.error('Unknown content-transfer-encoding: %s' % encoding)
 
 
 def encode_base64_rec(msg):

@@ -20,19 +20,17 @@ Soledad PostSync Hooks.
 Process every new document of interest after every soledad synchronization,
 using the hooks that soledad exposes via plugins.
 """
-import logging
-
 from re import compile as regex_compile
 
 from zope.interface import implements
 from twisted.internet import defer
 from twisted.plugin import IPlugin
-from twisted.python import log
+from twisted.logger import Logger
 
 from leap.bitmask.mail import constants
 from leap.soledad.client.interfaces import ISoledadPostSyncPlugin
 
-logger = logging.getLogger(__name__)
+logger = Logger()
 
 
 def _get_doc_type_preffix(s):
@@ -58,7 +56,7 @@ class MailProcessingPostSyncHook(object):
 
         for doc_id in doc_id_list:
             if _get_doc_type_preffix(doc_id) in self.watched_doc_types:
-                log.msg("Mail post-sync hook: processing %s" % doc_id)
+                logger.info("Mail post-sync hook: processing %s" % doc_id)
                 process_fun(doc_id)
 
         return defer.gatherResults(self._processing_deferreds)
@@ -79,7 +77,7 @@ class MailProcessingPostSyncHook(object):
         mbox_uuid = _get_mbox_uuid(mdoc_id)
         if mbox_uuid:
             chash = _get_chash_from_mdoc(mdoc_id)
-            logger.debug("Making index table for %s:%s" % (mbox_uuid, chash))
+            logger.debug('making index table for %s:%s' % (mbox_uuid, chash))
             index_docid = constants.METAMSGID.format(
                 mbox_uuid=mbox_uuid.replace('-', '_'),
                 chash=chash)
@@ -93,7 +91,7 @@ class MailProcessingPostSyncHook(object):
     def _process_queued_docs(self):
         assert(self._has_configured_account())
         pending = self._pending_docs
-        log.msg("Mail post-sync hook: processing queued docs")
+        logger.info("Mail post-sync hook: processing queued docs")
 
         def remove_pending_docs(res):
             self._pending_docs = []

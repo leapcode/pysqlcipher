@@ -26,9 +26,10 @@ from leap.common.service_hooks import HookableService
 from leap.bitmask.bonafide._protocol import BonafideProtocol
 
 from twisted.internet import defer
-from twisted.python import log
+from twisted.logger import Logger
 
 
+logger = Logger()
 _preffix = get_path_prefix()
 
 
@@ -46,7 +47,7 @@ class BonafideService(HookableService):
         self._active_user = None
 
     def startService(self):
-        log.msg('Starting Bonafide Service')
+        logger.debug('starting Bonafide Service')
         super(BonafideService, self).startService()
 
     # Commands
@@ -59,8 +60,8 @@ class BonafideService(HookableService):
 
         def notify_bonafide_auth(result):
             if not result:
-                msg = "Authentication hook did not return anything"
-                log.msg(msg)
+                msg = "authentication hook did not return anything"
+                logger.debug(msg)
                 raise RuntimeError(msg)
 
             token, uuid = result

@@ -17,7 +17,6 @@
 """
 Infrastructure for using OpenPGP keys in Key Manager.
 """
-import logging
 import os
 import re
 import tempfile
@@ -30,6 +29,7 @@ from multiprocessing import cpu_count
 from gnupg.gnupg import GPGUtilities
 from twisted.internet import defer
 from twisted.internet.threads import deferToThread
+from twisted.logger import Logger
 
 from leap.common.check import leap_assert, leap_assert_type, leap_check
 from leap.bitmask.keymanager import errors
@@ -61,7 +61,7 @@ from leap.bitmask.keymanager.documents import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = Logger()
 
 
 #
@@ -497,8 +497,8 @@ class OpenPGPScheme(object):
             if len(docs) == 0:
                 raise errors.KeyNotFound(key)
             elif len(docs) > 1:
-                logger.warning("There is more than one key for fingerprint %s"
-                               % key.fingerprint)
+                logger.warn("There is more than one key for fingerprint %s"
+                            % key.fingerprint)
 
             has_deleted = False
             deferreds = []
@@ -585,7 +585,7 @@ class OpenPGPScheme(object):
                 self._assert_gpg_result_ok(result)
                 defer.returnValue(result.data)
             except errors.GPGError as e:
-                logger.warning('Failed to encrypt: %s.' % str(e))
+                logger.warn('Failed to encrypt: %s.' % str(e))
                 raise errors.EncryptError()
 
     @defer.inlineCallbacks
@@ -631,7 +631,7 @@ class OpenPGPScheme(object):
 
                 defer.returnValue((result.data, sign_valid))
             except errors.GPGError as e:
-                logger.warning('Failed to decrypt: %s.' % str(e))
+                logger.warn('Failed to decrypt: %s.' % str(e))
                 raise errors.DecryptError(str(e))
 
     def is_encrypted(self, data):

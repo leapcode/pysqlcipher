@@ -28,7 +28,7 @@ from urlparse import urlparse
 
 from twisted.internet import defer, reactor
 from twisted.internet.ssl import ClientContextFactory
-from twisted.python import log
+from twisted.logger import Logger
 from twisted.web.client import Agent, downloadPage
 
 from leap.bitmask.bonafide._http import httpRequest
@@ -38,7 +38,8 @@ from leap.bitmask.bonafide.errors import NotConfiguredError, NetworkError
 from leap.common.check import leap_assert
 from leap.common.config import get_path_prefix as common_get_path_prefix
 from leap.common.files import mkdir_p
-# check_and_fix_urw_only, get_mtime
+
+logger = Logger()
 
 
 APPNAME = "bonafide"
@@ -189,14 +190,15 @@ class Provider(object):
 
         if not is_configured:
             if autoconf:
-                log.msg('provider %s not configured: downloading files...' %
-                        domain)
+                logger.debug(
+                    'provider %s not configured: downloading files...' %
+                    domain)
                 self.bootstrap()
             else:
                 raise NotConfiguredError("Provider %s is not configured"
                                          % (domain,))
         else:
-            log.msg('Provider already initialized')
+            logger.debug('provider already initialized')
             self.first_bootstrap[self._domain] = defer.succeed(
                 'already_initialized')
             self.ongoing_bootstrap[self._domain] = defer.succeed(
@@ -233,10 +235,10 @@ class Provider(object):
 
     def bootstrap(self):
         domain = self._domain
-        log.msg("Bootstrapping provider %s" % domain)
+        logger.debug("bootstrapping provider %s" % domain)
         ongoing = self.ongoing_bootstrap.get(domain)
         if ongoing:
-            log.msg('already bootstrapping this provider...')
+            logger.debug('already bootstrapping this provider...')
             return
 
         self.first_bootstrap[self._domain] = defer.Deferred()
@@ -341,7 +343,7 @@ class Provider(object):
         # See: # https://leap.se/code/issues/7906
 
         def further_bootstrap_needs_auth(ignored):
-            log.err('cannot download services config yet, need auth')
+            logger.warning('cannot download services config yet, need auth')
             pending_deferred = defer.Deferred()
             self.stuck_bootstrap[self._domain] = pending_deferred
             return pending_deferred
@@ -364,8 +366,8 @@ class Provider(object):
         def workaround_for_config_fetch(failure):
             # FIXME --- configs.json raises 500, see #7914.
             # This is a workaround until that's fixed.
-            log.err(failure)
-            log.msg(
+            logger.error(failure)
+            logger.debug(
                 "COULD NOT VERIFY CONFIGS.JSON, WORKAROUND: DIRECT DOWNLOAD")
 
             if 'mx' in self._provider_config.services:
@@ -394,7 +396,7 @@ class Provider(object):
             if stuck:
                 d = self._get_config_for_all_services(session)
                 d.addCallback(lambda _: stuck.callback('continue!'))
-                d.addErrback(log.err)
+                d.addErrback(logger.err)
                 return d
 
         if not self.has_fetched_services_config():
@@ -479,7 +481,7 @@ class Provider(object):
     def _load_provider_json(self):
         path = self._get_provider_json_path()
         if not is_file(path):
-            log.msg("Cannot LOAD provider config path %s" % path)
+            logger.debug("cannot LOAD provider config path %s" % path)
             return
 
         with open(path, 'r') as config:
@@ -517,7 +519,7 @@ class Provider(object):
         return services_dict
 
     def _fetch_provider_configs_unauthenticated(self, uri, path):
-        log.msg('Downloading config for %s...' % uri)
+        logger.info('downloading config for %s...' % uri)
         d = downloadPage(uri, path, method='GET')
         return d
 

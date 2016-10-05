@@ -25,13 +25,17 @@ except ImportError:
     from queue import Queue
 
 from twisted.internet import defer
-from twisted.python import failure, log
+from twisted.python import failure
+from twisted.logger import Logger
 
 from leap.common.events import register_async as register
 from leap.common.events import unregister_async as unregister
 from leap.common.events import catalog
 
 from .api import APICommand, register_method
+
+
+logger = Logger()
 
 
 class SubCommand(object):
@@ -461,5 +465,6 @@ def _format_result(result):
 
 
 def _format_error(failure):
-    log.err(failure)
+    # TODO --- should check if the failure has the 'expected' attribute set
+    logger.failure('[DISPATCHER] Uncatched error:')
     return json.dumps({'error': failure.value.message, 'result': None})

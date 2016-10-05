@@ -17,16 +17,16 @@
 """
 SMTP gateway helper function.
 """
-import logging
 import os
 
 from twisted.internet import reactor
 from twisted.internet.error import CannotListenError
+from twisted.logger import Logger
 
 from leap.common.events import emit_async, catalog
 from leap.bitmask.mail.smtp.gateway import SMTPFactory
 
-logger = logging.getLogger(__name__)
+logger = Logger()
 
 SMTP_PORT = 2013
 
@@ -68,4 +68,4 @@ def run_service(soledad_sessions, keymanager_sessions, sendmail_opts,
         emit_async(catalog.SMTP_SERVICE_FAILED_TO_START, str(port))
     except Exception as exc:
         logger.error("Unhandled error while launching smtp gateway service")
-        logger.exception(exc)
+        logger.error('%r' % exc)

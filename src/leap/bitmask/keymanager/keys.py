@@ -18,18 +18,19 @@
 Abstact key type and encryption scheme representations.
 """
 import json
-import logging
 import re
 import time
 
 from datetime import datetime
+
+from twisted.logger import Logger
 
 from leap.bitmask.keymanager import errors
 from leap.bitmask.keymanager.wrapper import TempGPGWrapper
 from leap.bitmask.keymanager.validation import ValidationLevels
 from leap.bitmask.keymanager import documents as doc
 
-logger = logging.getLogger(__name__)
+logger = Logger()
 
 
 #

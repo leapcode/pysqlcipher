@@ -27,7 +27,7 @@ from twisted.cred.portal import Portal, IRealm
 from twisted.mail import imap4
 from twisted.internet import defer
 from twisted.protocols import loopback
-from twisted.python import log
+from twisted.logger import Logger
 from zope.interface import implementer
 
 from leap.bitmask.mail.adaptors import soledad as soledad_adaptor
@@ -37,6 +37,8 @@ from leap.bitmask.mail.testing.common import SoledadTestMixin
 
 TEST_USER = "testuser@leap.se"
 TEST_PASSWD = "1234"
+
+logger = Logger()
 
 
 #
@@ -180,7 +182,7 @@ class IMAP4HelperMixin(SoledadTestMixin):
         self.client.transport.loseConnection()
         self.server.transport.loseConnection()
         if hasattr(self, 'function'):
-            log.err(failure, "Problem with %r" % (self.function,))
+            logger.error(failure, "Problem with %r" % (self.function,))
 
     def loopback(self):
         return loopback.loopbackAsync(self.server, self.client)

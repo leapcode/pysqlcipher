@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+    # -*- coding: utf-8 -*-
 # _protocol.py
 # Copyright (C) 2014-2015 LEAP
 #
@@ -28,11 +28,14 @@ from leap.common.config import get_path_prefix
 
 from twisted.cred.credentials import UsernamePassword
 from twisted.internet.defer import fail
-from twisted.python import log
+from twisted.logger import Logger
 
 
 # TODO [ ] enable-disable services
 # TODO [ ] read provider info
+
+logger = Logger()
+
 
 COMMANDS = 'signup', 'authenticate', 'logout', 'stats'
 _preffix = get_path_prefix()
@@ -78,7 +81,7 @@ class BonafideProtocol(object):
     # Service public methods
 
     def do_signup(self, full_id, password, invite=None, autoconf=False):
-        log.msg('SIGNUP for %s' % full_id)
+        logger.debug('SIGNUP for %s' % full_id)
         _, provider_id = config.get_username_and_provider(full_id)
 
         provider = config.Provider(provider_id, autoconf=autoconf)
@@ -125,7 +128,7 @@ class BonafideProtocol(object):
                 # TODO -- turn this into JSON response
                 return str(_session.token), str(_session.uuid)
 
-        log.msg('AUTH for %s' % full_id)
+        logger.debug('AUTH for %s' % full_id)
 
         # XXX get deferred?
         session = self._get_session(provider, full_id, password)
@@ -136,7 +139,7 @@ class BonafideProtocol(object):
 
     def do_logout(self, full_id):
         # XXX use the AVATAR here
-        log.msg('LOGOUT for %s' % full_id)
+        logger.debug('LOGOUT for %s' % full_id)
         if (full_id not in self._sessions or
                 not self._sessions[full_id].is_authenticated):
             return fail(RuntimeError("There is no session for such user"))
@@ -155,7 +158,7 @@ class BonafideProtocol(object):
         return users
 
     def do_change_password(self, full_id, current_password, new_password):
-        log.msg('Change password for %s' % full_id)
+        logger.debug('change password for %s' % full_id)
         if (full_id not in self._sessions or
                 not self._sessions[full_id].is_authenticated):
             return fail(RuntimeError("There is no session for such user"))
@@ -194,7 +197,7 @@ class BonafideProtocol(object):
         pass
 
     def do_stats(self):
-        log.msg('Calculating Bonafide Service STATS')
+        logger.debug('calculating Bonafide Service STATS')
         mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         return {'sessions': len(self._sessions),
                 'mem': '%s KB' % (mem / 1024)}

@@ -17,18 +17,17 @@
 """
 IMAP Service Initialization.
 """
-import logging
 import os
 
 from collections import defaultdict
 
 from twisted.cred.portal import Portal, IRealm
-from twisted.mail.imap4 import IAccount
 from twisted.internet import defer
 from twisted.internet import reactor
 from twisted.internet.error import CannotListenError
 from twisted.internet.protocol import ServerFactory
-from twisted.python import log
+from twisted.logger import Logger
+from twisted.mail.imap4 import IAccount
 from zope.interface import implementer
 
 from leap.common.events import emit_async, catalog
@@ -38,7 +37,7 @@ from leap.bitmask.mail.imap.server import LEAPIMAPServer
 
 # TODO: leave only an implementor of IService in here
 
-logger = logging.getLogger(__name__)
+logger = Logger()
 
 DO_MANHOLE = os.environ.get("LEAP_MAIL_MANHOLE", None)
 if DO_MANHOLE:

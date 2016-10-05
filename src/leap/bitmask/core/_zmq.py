@@ -20,13 +20,16 @@ ZMQ REQ-REP Dispatcher.
 
 from twisted.application import service
 from twisted.internet import reactor
-from twisted.python import log
+from twisted.logger import Logger
 
 from txzmq import ZmqEndpoint, ZmqEndpointType
 from txzmq import ZmqFactory, ZmqREPConnection
 
 from leap.bitmask.core import ENDPOINT
 from leap.bitmask.core.dispatcher import CommandDispatcher
+
+
+logger = Logger()
 
 
 class ZMQServerService(service.Service):
@@ -61,8 +64,8 @@ class _DispatcherREPConnection(ZmqREPConnection):
         reactor.callLater(0, self.reply, msgId, str(response))
 
     def log_err(self, failure, msgId):
-        log.err(failure)
+        logger.error(failure)
         self.defer_reply("ERROR: %r" % failure, msgId)
 
     def do_greet(self):
-        log.msg('starting ZMQ dispatcher')
+        logger.info('starting ZMQ dispatcher')
