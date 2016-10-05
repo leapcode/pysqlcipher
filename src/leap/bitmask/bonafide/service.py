@@ -22,8 +22,8 @@ import os
 from collections import defaultdict
 
 from leap.common.config import get_path_prefix
-from leap.common.service_hooks import HookableService
 from leap.bitmask.bonafide._protocol import BonafideProtocol
+from leap.bitmask.hooks import HookableService
 
 from twisted.internet import defer
 from twisted.logger import Logger

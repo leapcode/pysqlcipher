@@ -19,7 +19,7 @@ An authoritative dummy backend for tests.
 """
 import json
 
-from leap.common.service_hooks import HookableService
+from leap.bitmask.hooks import HookableService
 
 
 class BackendCommands(object):

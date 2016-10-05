@@ -33,9 +33,8 @@ from twisted.internet import reactor
 from twisted.internet import task
 from twisted.logger import Logger
 
-# TODO move to bitmask.common
-from leap.common.service_hooks import HookableService
 from leap.common.files import check_and_fix_urw_only
+from leap.bitmask.hooks import HookableService
 from leap.bitmask.bonafide import config
 from leap.bitmask.keymanager import KeyManager
 from leap.bitmask.keymanager.errors import KeyNotFound
