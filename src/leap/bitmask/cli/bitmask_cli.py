@@ -20,6 +20,7 @@ Bitmask Command Line interface: zmq client.
 """
 import json
 import sys
+import signal
 
 from colorama import Fore
 from twisted.internet import reactor, defer
@@ -125,15 +126,25 @@ def execute():
         errb=lambda: cli.start(None))
     cli.data = []
     yield cli.execute(sys.argv[1:])
-    yield reactor.stop()
+    try:
+        yield reactor.stop()
+    except:
+        pass
 
 
 def _null_printer(*args):
     pass
 
 
+
 def main():
+    def signal_handler(signal, frame):
+        if reactor.running:
+            reactor.stop()
+        sys.exit(0)
+
     reactor.callWhenRunning(reactor.callLater, 0, execute)
+    signal.signal(signal.SIGINT, signal_handler)
     reactor.run()
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@ import argparse
 import commands
 import os.path
 import sys
+import time
 
 from colorama import Fore
 
@@ -39,6 +40,7 @@ Bitmask Log Handling
 SUBCOMMANDS:
 
    send       Send last bitmaskd log
+   watch      Display logs stream
 '''.format(name=command.appname)
 
     def send(self, raw_args):
@@ -46,13 +48,33 @@ SUBCOMMANDS:
         if not _bin:
             error('pastebinit not found. install it to upload logs.')
             return defer.succeed(None)
-        log_path = os.path.abspath(
-            os.path.join(get_path_prefix(), 'leap', 'bitmaskd.log'))
         output = commands.getoutput('{0} -b {1} {2}'.format(
-            _bin[0], 'paste.debian.net', log_path))
+            _bin[0], 'paste.debian.net', _log_path))
         uri = output.replace('debian.net/', 'debian.net/plain/')
         success(uri)
         return defer.succeed(None)
+
+    def watch(self, raw_args):
+        def tail(_file):
+            _file.seek(0,2)      # Go to the end of the file
+            while True:
+                line = _file.readline()
+                if not line:
+                    time.sleep(0.1)
+                    continue
+                yield line
+
+        _file = open(_log_path, 'r')
+        print (Fore.GREEN + '[bitmask] ' +
+               Fore.RESET + 'Watching log file %s' % _log_path )
+        for line in _file.readlines():
+            print line,
+        for line in tail(_file):
+            print line,
+
+
+_log_path = os.path.abspath(
+    os.path.join(get_path_prefix(), 'leap', 'bitmaskd.log'))
 
 
 def error(msg):
