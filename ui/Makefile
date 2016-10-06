@@ -2,38 +2,37 @@
 # builds for development mode
 #
 
-dev-build: build-clean
+dev-build: build-clean make-init
 	npm install
 	npm run build
-	touch pydist/leap/bitmask_js/__init__.py
 
 dev-install: dev-build
 	pip install -e pydist
 
-#
 # installs python package, but does not rebuild the js.
 # for usage when you don't want to install nodejs
-#
 dev-install-prebuilt:
 	pip install -e pydist
-
 
 #
 # distribution builds
 #
 
-dist-build: build-clean
+dist-build: build-clean make-init
 	npm install
 	npm run build:production
-	touch pydist/leap/bitmask_js/__init__.py
 	cd pydist && python setup.py bdist_wheel
 
 dist-install: dist-build
 	pip install pydist/dist/*.whl
 
 #
-# cleaning up
+# clean up and set up
 #
+
+make-init:
+	test -d pydist/leap/bitmask_js || mkdir -p pydist/leap/bitmask_js
+	touch pydist/leap/bitmask_js/__init__.py
 
 build-clean:
 	rm -rf pydist/leap/bitmask_js
