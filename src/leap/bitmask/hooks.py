@@ -20,9 +20,12 @@ Hooks for service composition.
 from collections import defaultdict
 
 from twisted.application.service import IService, Service
-from twisted.python import log
+from twisted.logger import Logger
 
 from zope.interface import implementer
+
+
+logger = Logger()
 
 
 @implementer(IService)
@@ -44,7 +47,7 @@ class HookableService(Service):
     def register_hook(self, name, listener):
         if not hasattr(self, 'event_listeners'):
             self.event_listeners = defaultdict(list)
-        log.msg("Registering hook %s->%s" % (name, listener))
+        logger.debug('registering hook %s->%s' % (name, listener))
         self.event_listeners[name].append(listener)
 
     def trigger_hook(self, name, **data):
@@ -53,11 +56,12 @@ class HookableService(Service):
             try:
                 getattr(listener, 'hook_' + name)(**kw)
             except AttributeError as exc:
+                logger.failure('Error while triggering hook')
                 raise RuntimeError(
                     "Tried to notify a hook, but the listener "
-                    "service class %s has not defined the "
-                    "proper method %s" %
-                    (listener.__class__, 'hook_' + name))
+                    "service class %s does not seem to have "
+                    "defined the proper method: %s"
+                    % (listener.__class__, 'hook_' + name))
 
         if not hasattr(self, 'event_listeners'):
             self.event_listeners = defaultdict(list)
