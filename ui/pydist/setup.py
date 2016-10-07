@@ -52,7 +52,7 @@ setup(
              'public/css/*',
              'public/fonts/*',
              'public/img/*',
-             'publlic/js/*',
+             'public/js/*',
              ]
     }
 )
