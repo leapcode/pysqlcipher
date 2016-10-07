@@ -22,8 +22,8 @@ also used as a set of libraries to communicate with the different services from
 third party applications.
 
 It is written in python using `Twisted`_  and licensed under the `GPL3`_. The
-Graphical User Interface is written in html+js and uses `PyQt5`_ for serving the
-application.
+Graphical User Interface is written in html+js and uses `PyQt5`_ for serving
+the application.
 
 .. _`the LEAP Platform`: https://github.com/leapcode/leap_platform
 .. _`Twisted`: https://twistedmatrix.com
@@ -33,7 +33,8 @@ application.
 Package under development!
 -----------------------------------------------------------
 
-This is a unified repo that has merged the following packages, previously isolated, under the leap namespace:
+This is a unified repo that has merged the following packages, previously
+isolated, under the leap namespace:
 
 bonafide, mail, keymanager, bitmask.
 
@@ -82,10 +83,10 @@ installs python packages as links to the source code, so that your code
 changes are immediately reflected in the packages installed in the
 virtualenv.
 
-The ``make dev-*`` commands will run the appropriate ``pip install``
+The various ``make dev-*`` commands will run the appropriate ``pip install``
 commands for you.
 
-Install headless backend in development mode
+Run headless backend in development mode
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 Prerequisites::
@@ -105,10 +106,15 @@ Install all the python dependencies::
 
   make dev-backend
 
-Install user interface frontend
+Run application::
+
+  bitmaskd
+
+Run user interface frontend
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-If you want to run the Bitmask user interface, you additionally need the following:
+If you want to run the Bitmask user interface, you additionally need the
+following:
 
 Prerequisites::
 
@@ -118,8 +124,15 @@ Install python dependencies::
 
   make dev-all
 
-Note: even though the UI is in javascript, Qt is used to create a webview window.  
+Note: even though the UI is in javascript, Qt is used to create a webview
+window.
 
+Run user interface::
+
+  bitmask
+
+The command `bitmask` should be in your path if you have activated the virtual
+environment.
 
 Install Bitmask user interface in development mode
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -137,12 +150,23 @@ Prerequisites::
 Next, run ``dev-install``::
 
   cd ui
-  make dev-install    # install JS user interface as a python package in "develop" mode.
-  node run watch      # continually rebuild javascript bundle when source files change.
+  make dev-install    # install JS code as a python package in "develop" mode.
+  node run watch      # continually rebuild JS bundle when source files change.
 
 For more information, see ``ui/README.md``.
 
+Run user interface with debugging tools::
 
+  chromium-browser http://localhost:7070
+
+Firefox does not work as well, because the UI is only tested with webkit-based
+browsers.
+
+Chromium is not the best for this, however, because it uses a newer webkit.
+Instead, try qupzilla:
+
+  sudo apt install qupzilla
+  qupzilla -ow http://localhost:7070
 
 License
 ===========================================================
