@@ -465,9 +465,6 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
                 expected = self._slurp_file(ca_bundle.where()) + ca_content
                 self.assertEqual(expected, self._slurp_file(tmp_output.name))
 
-            del km  # force km out of scope
-            self.assertFalse(path.exists(tmp_output.name))
-
     def _dump_to_file(self, filename, content):
             with open(filename, 'w') as out:
                 out.write(content)
