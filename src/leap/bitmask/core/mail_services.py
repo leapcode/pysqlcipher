@@ -509,19 +509,30 @@ class StandardMailService(service.MultiService, HookableService):
         # TODO: if it's expired we should renew it
         userid = kw['username']
 
-        # turn on incoming mail service for the user that just logged in
-        multiservice = self.getServiceNamed('incoming_mail')
-        incoming = multiservice.getServiceNamed(userid)
-        logger.debug('looking for incoming mail service for auth: %s' % userid)
-        if incoming:
-            incoming.startService()
+        self._maybe_start_incoming_service(userid)
+        yield self._maybe_fetch_smtp_certificate(userid)
 
+    def _maybe_start_incoming_service(self, userid):
+        """
+        try to turn on incoming mail service for the user that just logged in
+        """
+        logger.debug(
+            'looking for incoming mail service for auth: %s' % userid)
+        multiservice = self.getServiceNamed('incoming_mail')
+        try:
+            incoming = multiservice.getServiceNamed(userid)
+            incoming.startService()
+        except KeyError:
+            logger.debug('no incoming service for %s' % userid)
+
+    @defer.inlineCallbacks
+    def _maybe_fetch_smtp_certificate(self, userid):
         # check if smtp cert exists
         username, provider = userid.split('@')
         cert_path = _get_smtp_client_cert_path(self._basedir, provider,
                                                username)
         if os.path.exists(cert_path):
-            return
+            defer.returnValue(None)
 
         # fetch smtp cert and store
         bonafide = self.parent.getServiceNamed("bonafide")
@@ -683,6 +694,7 @@ class IncomingMailService(service.MultiService):
                 keymanager, soledad,
                 inbox, userid,
                 check_period=INCOMING_CHECK_PERIOD)
+            logger.debug('setting incoming mail service for %s' % userid)
             incoming_mail.setName(userid)
             self.addService(incoming_mail)
 
