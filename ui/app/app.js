@@ -1,6 +1,7 @@
 import bitmask from 'lib/bitmask'
 import Account from 'models/account'
 import Provider from 'models/provider'
+import EventLogger from 'lib/event_logger'
 
 class Application {
   constructor() {
@@ -10,6 +11,7 @@ class Application {
   // main entry point for the application
   //
   initialize() {
+    this.ev = new EventLogger()
     if (this.debugging()) {
       this.show(this.debug_panel)
     } else {
