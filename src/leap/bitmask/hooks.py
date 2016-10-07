@@ -54,8 +54,9 @@ class HookableService(Service):
                 getattr(listener, 'hook_' + name)(**kw)
             except AttributeError as exc:
                 raise RuntimeError(
-                    "Tried to notify a hook, but the listener service class %s "
-                    "has not defined the proper method %s" %
+                    "Tried to notify a hook, but the listener "
+                    "service class %s has not defined the "
+                    "proper method %s" %
                     (listener.__class__, 'hook_' + name))
 
         if not hasattr(self, 'event_listeners'):

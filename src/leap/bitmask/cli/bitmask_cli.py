@@ -136,7 +136,6 @@ def _null_printer(*args):
     pass
 
 
-
 def main():
     def signal_handler(signal, frame):
         if reactor.running:

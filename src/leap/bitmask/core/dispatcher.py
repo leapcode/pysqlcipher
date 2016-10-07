@@ -472,7 +472,7 @@ def _format_error(failure):
 
     # If a exception declares the 'expected' attribute as True,
     # we will not print a full traceback
-    expected = getattr(failure.value, 'expected', False) 
+    expected = getattr(failure.value, 'expected', False)
     if not expected:
         logger.failure('[DISPATCHER] Unexpected error:')
 

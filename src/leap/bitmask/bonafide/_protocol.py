@@ -1,4 +1,4 @@
-    # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 # _protocol.py
 # Copyright (C) 2014-2015 LEAP
 #

@@ -97,7 +97,8 @@ class KeyManager(object):
         self.api_version = api_version
         self.uid = uid
         self._openpgp = OpenPGPScheme(soledad, gpgbinary=gpgbinary)
-        self._combined_ca_bundle = combined_ca_bundle or self._create_combined_bundle_file()
+        create = self._create_combined_bundle_file
+        self._combined_ca_bundle = combined_ca_bundle or create()
         self._async_client = HTTPClient(self._combined_ca_bundle)
         self._async_client_pinned = HTTPClient(self._ca_cert_path)
 

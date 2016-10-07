@@ -945,11 +945,12 @@ class SoledadMailAdaptor(SoledadIndexMixin):
             # See https://leap.se/code/issues/7495.
             # This avoids blocks, but the real cause still needs to be
             # isolated (0.9.0rc3) -- kali
-            logger.debug("BUG ---------------------------------------------------")
-            logger.debug("BUG: Error while retrieving part docs for mdoc id %s" %
-                         mdoc_id)
+            logger.debug("BUG ------------------------------------------")
+            logger.debug(
+                "BUG: Error while retrieving part docs for mdoc id %s" %
+                mdoc_id)
             logger.error(failure)
-            logger.debug("BUG (please report above info) ------------------------")
+            logger.debug("BUG (please report above info) ---------------")
             return []
 
         def _err_log_cannot_find_msg(failure):

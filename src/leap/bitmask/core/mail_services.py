@@ -184,7 +184,8 @@ class SoledadService(HookableService):
             password = kw.get('password')
             uuid = kw.get('uuid')
             container = self._container
-            logger.debug("on_passphrase_entry: New Soledad Instance: %s" % userid)
+            logger.debug("on_passphrase_entry: "
+                         "New Soledad Instance: %s" % userid)
             if not container.get_instance(userid):
                 container.add_instance(userid, password, uuid=uuid, token=None)
         else:
@@ -271,7 +272,9 @@ class KeymanagerContainer(Container):
             logger.info("key generated for %s" % userid)
 
             if not keymanager.token:
-                logger.debug("token not available, scheduling new send attempt...")
+                logger.debug(
+                    "token not available, scheduling "
+                    "a new key sending attempt...")
                 return task.deferLater(reactor, 5, _send_key, None)
 
             logger.info("sending public key to server")
@@ -384,7 +387,9 @@ class KeymanagerService(HookableService):
 
             container = self._container
             if container.get_instance(userid):
-                logger.debug('Passing a new SRP Token to Keymanager: %s' % userid)
+                logger.debug(
+                    'passing a new SRP Token '
+                    'to Keymanager: %s' % userid)
                 container.set_remote_auth_token(userid, token)
             else:
                 logger.debug('storing the keymanager token... %s ' % token)
@@ -533,7 +538,9 @@ class StandardMailService(service.MultiService, HookableService):
         username = kw['username']
         multiservice = self.getServiceNamed('incoming_mail')
         incoming = multiservice.getServiceNamed(username)
-        logger.debug('looking for incoming mail service for logout: %s' % username)
+        logger.debug(
+            'looking for incoming mail service '
+            'for logout: %s' % username)
         if incoming:
             incoming.stopService()
 
@@ -565,7 +572,7 @@ class StandardMailService(service.MultiService, HookableService):
                 shutil.rmtree(tokens_folder)
             except OSError as e:
                 logger.warning("Can't remove tokens folder %s: %s"
-                            % (tokens_folder, e))
+                               % (tokens_folder, e))
                 return
         os.mkdir(tokens_folder, 0700)
 

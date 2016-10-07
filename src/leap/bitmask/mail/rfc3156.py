@@ -40,6 +40,7 @@ logger = Logger()
 # A generator that solves http://bugs.python.org/issue14983
 #
 
+
 class RFC3156CompliantGenerator(Generator):
     """
     An email generator that addresses Python's issue #14983 for multipart

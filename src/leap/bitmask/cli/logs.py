@@ -56,7 +56,7 @@ SUBCOMMANDS:
 
     def watch(self, raw_args):
         def tail(_file):
-            _file.seek(0,2)      # Go to the end of the file
+            _file.seek(0, 2)      # Go to the end of the file
             while True:
                 line = _file.readline()
                 if not line:
@@ -66,7 +66,7 @@ SUBCOMMANDS:
 
         _file = open(_log_path, 'r')
         print (Fore.GREEN + '[bitmask] ' +
-               Fore.RESET + 'Watching log file %s' % _log_path )
+               Fore.RESET + 'Watching log file %s' % _log_path)
         for line in _file.readlines():
             print line,
         for line in tail(_file):

@@ -208,7 +208,8 @@ class OutgoingMail(object):
         :type encrypt_and_sign_result: tuple
         """
         message, recipient = encrypt_and_sign_result
-        logger.info("Connecting to SMTP server %s:%s" % (self._host, self._port))
+        logger.info(
+            'Connecting to SMTP server %s:%s' % (self._host, self._port))
         msg = message.as_string(False)
 
         # we construct a defer to pass to the ESMTPSenderFactory
