@@ -168,7 +168,7 @@ Instead, try qupzilla::
   qupzilla -ow http://localhost:7070
 
 If you make a change to any of the CSS or JS source files, you need to rebuild
-the javascript bundle. You can do this continually as files change like so:
+the javascript bundle. You can do this continually as files change like so::
 
   cd ui
   node run watch
