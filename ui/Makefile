@@ -9,10 +9,11 @@ dev-build: build-clean make-init
 dev-install: dev-build
 	pip install -e pydist
 
-# installs python package, but does not rebuild the js.
+# installs a prebuilt python package from
+# the magical pypi place in the sky.
 # for usage when you don't want to install nodejs
 dev-install-prebuilt:
-	pip install -e pydist
+	pip install -U leap.bitmask_js
 
 #
 # distribution builds
