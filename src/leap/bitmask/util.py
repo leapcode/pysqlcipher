@@ -66,8 +66,12 @@ def get_gpg_bin_path():
             # symlink, so we need to filter those and come up with
             # just one option.
             for opt in gpgbin_options:
-                if not os.path.islink(opt):
-                    gpgbin = opt
+                # dereference a symlink, but will fail because
+                # no complete gpg2 support at the moment
+                # path = os.readlink(opt)
+                path = opt
+                if os.path.exists(path) and not os.path.islink(path):
+                    gpgbin = path
                     break
         except IndexError as e:
             logger.debug("couldn't find the gpg binary!: %s" % (e,))
@@ -82,7 +86,7 @@ def get_gpg_bin_path():
     # binary, in case it was renamed using dpkg-divert or manually.
     # We could just pick gpg2, but we need to solve #7564 first.
     try:
-        gpgbin_options = which("gpg1")
+        gpgbin_options = which("gpg1", path_extension='/usr/bin')
         for opt in gpgbin_options:
             if not os.path.islink(opt):
                 gpgbin = opt
@@ -91,5 +95,5 @@ def get_gpg_bin_path():
         logger.debug("couldn't find the gpg1 binary!: %s" % (e,))
 
     if gpgbin is None:
-        log.msg("Could not find gpg1 binary")
+        logger.debug("Could not find gpg1 binary")
     return gpgbin
