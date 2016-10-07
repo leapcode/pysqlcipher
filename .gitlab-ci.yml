@@ -1,3 +1,24 @@
-image: leapcode/soledad:latest
+# Todo: move test stage to the top once it succeeds again
+stages:
+  - build
+  - test
+
 test:
-    script: tox --recreate -e py27-dev
+  image: leapcode/soledad:latest
+  stage: test
+  script:
+    - tox --recreate -e py27-dev
+
+build:
+  image: leapcode/bitmask-dev:latest
+  stage: build
+  script:
+    - virtualenv venv
+    - source venv/bin/activate
+    - make dev-backend
+    - make dev-all
+    - cd ui
+    - make dev-install
+    - mkdir -p /root/.config/leap/
+    - bitmaskd
+    - bitmaskctl status
