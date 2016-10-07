@@ -91,8 +91,8 @@ Run headless backend in development mode
 
 Prerequisites::
 
-  sudo apt install build-essential python-virtualenv libsqlcipher-dev \
-        libssl-dev libffi-dev
+  sudo apt install build-essential python-dev python-virtualenv \
+                   libsqlcipher-dev libssl-dev libffi-dev
 
 Install and activate a virtualenv::
 
@@ -151,12 +151,10 @@ Next, run ``dev-install``::
 
   cd ui
   make dev-install    # install JS code as a python package in "develop" mode.
-  node run watch      # continually rebuild JS bundle when source files change.
 
-For more information, see ``ui/README.md``.
+Now you should be able to run the user interface with debugging tools::
 
-Run user interface with debugging tools::
-
+  bitmaskd
   chromium-browser http://localhost:7070
 
 Firefox does not work as well, because the UI is only tested with webkit-based
@@ -166,7 +164,16 @@ Chromium is not the best for this, however, because it uses a newer webkit.
 Instead, try qupzilla::
 
   sudo apt install qupzilla
+  bitmaskd
   qupzilla -ow http://localhost:7070
+
+If you make a change to any of the CSS or JS source files, you need to rebuild
+the javascript bundle. You can do this continually as files change like so:
+
+  cd ui
+  node run watch
+
+For more information, see ``ui/README.md``.
 
 License
 ===========================================================
