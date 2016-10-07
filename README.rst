@@ -163,7 +163,7 @@ Firefox does not work as well, because the UI is only tested with webkit-based
 browsers.
 
 Chromium is not the best for this, however, because it uses a newer webkit.
-Instead, try qupzilla:
+Instead, try qupzilla::
 
   sudo apt install qupzilla
   qupzilla -ow http://localhost:7070
