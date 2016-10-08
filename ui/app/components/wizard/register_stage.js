@@ -52,19 +52,6 @@ export default class RegisterStage extends React.Component {
   }
 
   render() {
-    let info = null
-    if (this.props.provider) {
-      info = (
-        <div>
-          <h1 className="first">{this.props.provider.name}</h1>
-          <h3>{this.props.provider.domain}</h3>
-          <p>{this.props.provider.description}</p>
-          <p><b>Enrollment Policy:</b> {this.props.provider.enrollment_policy}</p>
-          <p><b>Services</b>: {this.props.provider.services}</p>
-          <p><b>Languages</b>: {this.props.provider.languages.join(', ')}</p>
-        </div>
-      )
-    }
     let buttons = (
       <div>
         <ButtonToolbar className="pull-left">

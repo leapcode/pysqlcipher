@@ -146,7 +146,7 @@ export default class ProviderSelectStage extends React.Component {
           <h3>{this.state.provider.domain}</h3>
           <p>{this.state.provider.description}</p>
           <p><b>Enrollment Policy:</b> {this.state.provider.enrollment_policy}</p>
-          <p><b>Services</b>: {services}</p>
+          <p><b>Services</b>: {services.join(', ')}</p>
           <p><b>Languages</b>: {languages.join(', ')}</p>
         </div>
       )
