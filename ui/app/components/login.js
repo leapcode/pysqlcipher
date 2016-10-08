@@ -8,6 +8,7 @@ import Spinner from './spinner'
 import Validate from 'lib/validate'
 import App from 'app'
 import Account from 'models/account'
+import Provider from 'models/provider'
 
 class Login extends React.Component {
 
@@ -41,8 +42,13 @@ class Login extends React.Component {
       password2State: null,  // password confirm validation state
       password2Error: false, // password confirm help message
 
+      requireInvite: false,
+      invite: null,          // invite code value
+      inviteState: null,     // invite code validation state
+      inviteError: false,    // invite code error
+
       disabled: false,
-      remember: false       // remember is checked?
+      remember: false        // remember is checked?
     }
 
     // prebind:
@@ -50,12 +56,20 @@ class Login extends React.Component {
     this.onUsernameBlur   = this.onUsernameBlur.bind(this)
     this.onPassword  = this.onPassword.bind(this)
     this.onPassword2 = this.onPassword2.bind(this)
+    this.onInvite    = this.onInvite.bind(this)
     this.onSubmit    = this.onSubmit.bind(this)
     this.onRemember  = this.onRemember.bind(this)
   }
 
   componentDidMount() {
     Validate.loadPasswdLib()
+    if (this.props.domain && this.props.mode == 'signup') {
+      Provider.get(this.props.domain).then(provider => {
+        if (provider.enrollment_policy == 'invite') {
+          this.setState({requireInvite: true})
+        }
+      })
+    }
   }
 
   render () {
@@ -65,6 +79,7 @@ class Login extends React.Component {
     let passwordHelp  = null
     let password2Help  = null
     let password2Elem  = null
+    let inviteElem  = null
     let message = null
     let buttonText = "Log In"
 
@@ -125,7 +140,7 @@ class Login extends React.Component {
     if (this.props.mode == 'signup') {
       buttonText = 'Sign Up'
       if (this.state.password2Error) {
-
+        password2Help = <HelpBlock>{this.state.password2Error}</HelpBlock>
       }
       password2Elem = (
         <FormGroup controlId="loginPassword2" validationState={this.state.password2State}>
@@ -139,6 +154,18 @@ class Login extends React.Component {
           {password2Help}
         </FormGroup>
       )
+      if (this.state.requireInvite) {
+        let inviteHelp = null
+        inviteElem = (
+          <FormGroup controlId="invite" validationState={this.state.inviteState}>
+            <ControlLabel>Invite Code</ControlLabel>
+            <FormControl
+              value={this.state.invite || ""}
+              onChange={this.onInvite} />
+            {inviteHelp}
+          </FormGroup>
+        )
+      }
     }
 
     let buttonProps = {
@@ -200,6 +227,7 @@ class Login extends React.Component {
       </FormGroup>
 
       {password2Elem}
+      {inviteElem}
       {submitButton}
       {rememberCheck}
     </form>
@@ -272,6 +300,10 @@ class Login extends React.Component {
     this.validatePassword2(password2, this.state.password)
   }
 
+  onInvite(e) {
+    this.setState({invite: e.target.value})
+  }
+
   onRemember(e) {
     let currentValue = e.target.value == 'on' ? true : false
     let value = !currentValue
@@ -339,7 +371,9 @@ class Login extends React.Component {
     if (this.props.mode == 'login') {
       return ok
     } else if (this.props.mode == 'signup') {
-      return ok && this.state.password2 == this.state.password
+      return ok &&
+             this.state.password2 == this.state.password &&
+             (!this.state.requireInvite || this.state.invite)
     }
   }
 
@@ -379,7 +413,11 @@ class Login extends React.Component {
   }
 
   doSignup() {
-    Account.create(this.state.username, this.state.password).then(
+    Account.create(
+      this.state.username,
+      this.state.password,
+      this.state.invite
+    ).then(
       account => {
         this.doLogin()
       },
@@ -387,12 +425,25 @@ class Login extends React.Component {
         if (error == "") {
           error = "Something failed, but we did not get a message"
         }
-        this.setState({
-          loading: false,
-          usernameState: 'error',
-          passwordState: 'error',
-          authError: error
-        })
+        // error messages for invite codes are in english, and
+        // hardcoded in leap_web in the file invite_code_validator.rb
+        // all the code error messages have the word 'code' in them.
+        // the api backend is returning {user: {code: "error message"}}
+        // but that structure is lost by the time it reaches us.
+        if (/code/.test(error)) {
+          this.setState({
+            loading: false,
+            inviteState: 'error',
+            authError: error
+          })
+        } else {
+          this.setState({
+            loading: false,
+            usernameState: 'error',
+            passwordState: 'error',
+            authError: error
+          })
+        }
       }
     )
   }

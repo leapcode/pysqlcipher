@@ -135,8 +135,8 @@ export default class Account {
     })
   }
 
-  static create(address, password) {
-    return bitmask.bonafide.user.create(address, password).then(
+  static create(address, password, invite=null) {
+    return bitmask.bonafide.user.create(address, password, invite).then(
       response => {
         return new Account(address)
       }

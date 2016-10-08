@@ -143,11 +143,11 @@ var bitmask = function(){
                  * @param {boolean} autoconf If the provider should be autoconfigured if it's not allready known
                  *                           If it's not provided it will default to false
                  */
-                create: function(uid, password, autoconf) {
+                create: function(uid, password, invite, autoconf) {
                     if (typeof autoconf !== 'boolean') {
                         autoconf = false;
                     }
-                    return call(['bonafide', 'user', 'create', uid, password, autoconf]);
+                    return call(['bonafide', 'user', 'create', uid, password, invite, autoconf]);
                 },
 
                 /**
