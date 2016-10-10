@@ -57,7 +57,7 @@ if PROFILE_CMD:
 
     def _debugProfiling(result, cmdname, start):
         took = (time.time() - start) * 1000
-        log.msg("CMD " + cmdname + " TOOK: " + str(took) + " msec")
+        logger.debug("CMD " + cmdname + " TOOK: " + str(took) + " msec")
         return result
 
     def do_profile_cmd(d, name):
@@ -68,7 +68,7 @@ if PROFILE_CMD:
         :type name: str
         """
         d.addCallback(_debugProfiling, name, time.time())
-        d.addErrback(lambda f: log.msg(f.getTraceback()))
+        d.addErrback(lambda f: logger.error(f.getTraceback()))
 
 INIT_FLAGS = (MessageFlags.SEEN_FLAG, MessageFlags.ANSWERED_FLAG,
               MessageFlags.FLAGGED_FLAG, MessageFlags.DELETED_FLAG,
@@ -405,7 +405,7 @@ class IMAPMailbox(object):
 
         d = self.collection.add_msg(message, flags, date=date,
                                     notify_just_mdoc=notify_just_mdoc)
-        d.addErrback(lambda failure: log.err(failure))
+        d.addErrback(lambda failure: logger.error(failure))
         return d
 
     def notify_new(self, *args):
@@ -430,7 +430,7 @@ class IMAPMailbox(object):
         d = self._get_notify_count()
         d.addCallback(cbNotifyNew)
         d.addCallback(self.collection.cb_signal_unread_to_ui)
-        d.addErrback(lambda failure: log.err(failure))
+        d.addErrback(lambda failure: logger.error(failure))
 
     def _get_notify_count(self):
         """
@@ -513,7 +513,7 @@ class IMAPMailbox(object):
         d = self._bound_seq(messages_asked, uid)
         if uid:
             d.addCallback(get_range)
-        d.addErrback(lambda f: log.err(f))
+        d.addErrback(lambda f: logger.error(f))
         return d
 
     def _bound_seq(self, messages_asked, uid):
@@ -617,12 +617,12 @@ class IMAPMailbox(object):
             d = defer.gatherResults(d_msg, consumeErrors=True)
             d.addCallback(_get_imap_msg)
             d.addCallback(_zip_msgid)
-            d.addErrback(lambda failure: log.err(failure))
+            d.addErrback(lambda failure: logger.error(failure))
             return d
 
         d = self._get_messages_range(messages_asked, uid)
         d.addCallback(get_imap_messages_for_range)
-        d.addErrback(lambda failure: log.err(failure))
+        d.addErrback(lambda failure: logger.error(failure))
         return d
 
     def fetch_flags(self, messages_asked, uid):
@@ -800,7 +800,7 @@ class IMAPMailbox(object):
                                 read-write.
         """
         if not self.isWriteable():
-            log.msg('read only mailbox!')
+            logger.info('read only mailbox!')
             raise imap4.ReadOnlyMailbox
 
         d = defer.Deferred()
@@ -810,7 +810,7 @@ class IMAPMailbox(object):
             do_profile_cmd(d, "STORE")
 
         d.addCallback(self.collection.cb_signal_unread_to_ui)
-        d.addErrback(lambda f: log.err(f))
+        d.addErrback(lambda f: logger.error(f))
         return d
 
     def _do_store(self, messages_asked, flags, mode, uid, observer):

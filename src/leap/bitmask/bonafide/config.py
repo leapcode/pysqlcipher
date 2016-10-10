@@ -343,7 +343,7 @@ class Provider(object):
         # See: # https://leap.se/code/issues/7906
 
         def further_bootstrap_needs_auth(ignored):
-            logger.warning('cannot download services config yet, need auth')
+            logger.warn('cannot download services config yet, need auth')
             pending_deferred = defer.Deferred()
             self.stuck_bootstrap[self._domain] = pending_deferred
             return pending_deferred
@@ -396,7 +396,7 @@ class Provider(object):
             if stuck:
                 d = self._get_config_for_all_services(session)
                 d.addCallback(lambda _: stuck.callback('continue!'))
-                d.addErrback(logger.err)
+                d.addErrback(logger.error)
                 return d
 
         if not self.has_fetched_services_config():

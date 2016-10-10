@@ -1041,7 +1041,7 @@ class SoledadMailAdaptor(SoledadIndexMixin):
         Delete all messages flagged as deleted.
         """
         def err(failure):
-            logger.errror(failure)
+            logger.error(failure)
 
         def delete_fdoc_and_mdoc_flagged(fdocs):
             # low level here, not using the wrappers...

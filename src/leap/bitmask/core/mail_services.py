@@ -286,8 +286,8 @@ class KeymanagerContainer(Container):
 
         def _log_key_error(step):
             def log_error(failure):
-                logger.err("Error while %s key!" % step)
-                logger.err(failure)
+                logger.error("Error while %s key!" % step)
+                logger.error(failure)
                 return failure
             return log_error
 
@@ -702,7 +702,7 @@ class IncomingMailService(service.MultiService):
         d = acc.callWhenReady(
             lambda _: acc.get_collection_by_mailbox(INBOX_NAME))
         d.addCallback(setUpIncomingMail)
-        d.addErrback(logger.err)
+        d.addErrback(logger.error)
         return d
 
 # --------------------------------------------------------------------
