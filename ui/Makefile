@@ -24,6 +24,9 @@ dist-build: build-clean make-init
 	npm run build:production
 	cd pydist && python setup.py bdist_wheel
 
+dist-upload:
+	cd pydist && python setup.py sdist upload -r pypi
+
 dist-install: dist-build
 	pip install pydist/dist/*.whl
 
