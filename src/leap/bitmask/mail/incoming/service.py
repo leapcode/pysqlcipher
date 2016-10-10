@@ -169,7 +169,7 @@ class IncomingMail(Service):
             # XXX this should be moved to adaptors
             d = self._soledad.get_from_index(
                 fields.JUST_MAIL_IDX, "1", "0")
-            d.addCallback(self._process_doclist)
+            d.addCallback(self._process_incoming_mail)
             d.addErrback(_sync_errback)
             return d
 
@@ -260,9 +260,7 @@ class IncomingMail(Service):
         emit_async(catalog.MAIL_UNREAD_MESSAGES, self._userid,
                    str(self._inbox_collection.count_unseen()))
 
-    # process incoming mail.
-
-    def _process_doclist(self, doclist):
+    def _process_incoming_mail(self, doclist):
         """
         Iterates through the doclist, checks if each doc
         looks like a message, and yields a deferred that will decrypt and
@@ -272,15 +270,16 @@ class IncomingMail(Service):
         :type doclist: iterable.
         :returns: a list of deferreds for individual messages.
         """
-        logger.info('processing doclist')
+        logger.info('processing incoming mail')
         if not doclist:
-            logger.debug("no docs found")
+            logger.debug("no incoming messages found")
             return
         num_mails = len(doclist)
 
         deferreds = []
         for index, doc in enumerate(doclist):
-            logger.debug("processing doc %d of %d" % (index + 1, num_mails))
+            logger.debug("processing incoming message: %d of %d"
+                         % (index + 1, num_mails))
             emit_async(catalog.MAIL_MSG_PROCESSING, self._userid,
                        str(index), str(num_mails))
 
@@ -297,7 +296,7 @@ class IncomingMail(Service):
                               DeprecationWarning)
 
             if has_errors:
-                logger.debug("skipping msg with decrypting errors...")
+                logger.debug("skipping message with decrypting errors...")
             elif self._is_msg(keys):
                 # TODO this pipeline is a bit obscure!
                 d = self._decrypt_doc(doc)
