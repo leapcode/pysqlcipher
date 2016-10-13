@@ -24,7 +24,6 @@ from functools import partial
 from twisted.internet import defer
 from twisted.logger import Logger
 from twisted.mail import imap4
-from twisted.logger import Logger
 from zope.interface import implements
 
 from leap.common.check import leap_assert, leap_assert_type
@@ -40,7 +39,7 @@ PROFILE_CMD = os.environ.get('LEAP_PROFILE_IMAPCMD', False)
 if PROFILE_CMD:
     def _debugProfiling(result, cmdname, start):
         took = (time.time() - start) * 1000
-        log.msg("CMD " + cmdname + " TOOK: " + str(took) + " msec")
+        logger.debug("CMD " + cmdname + " TOOK: " + str(took) + " msec")
         return result
 
 

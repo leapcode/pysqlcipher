@@ -49,7 +49,7 @@ from leap.soledad.common.crypto import ENC_SCHEME_KEY, ENC_JSON_KEY
 from leap.soledad.common.errors import InvalidAuthTokenError
 
 
-logger = Logger(__name__)
+logger = Logger()
 
 MULTIPART_ENCRYPTED = "multipart/encrypted"
 MULTIPART_SIGNED = "multipart/signed"

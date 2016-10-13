@@ -24,6 +24,7 @@ from twisted.scripts.twistd import run
 
 from leap.bitmask import core
 from leap.bitmask.core import flags
+from leap.bitmask.core.logs import getLogPath
 from leap.common.config import get_path_prefix
 
 pid = abspath(join(get_path_prefix(), 'leap', 'bitmaskd.pid'))
@@ -48,11 +49,12 @@ def run_bitmaskd():
     # from the bitmask_cli
     for (index, arg) in enumerate(sys.argv):
         if arg == '--backend':
-            flags.BACKEND = argv[index + 1]
+            flags.BACKEND = sys.argv[index + 1]
     sys.argv[1:] = [
         '-y', join(here(core), "bitmaskd.tac"),
         '--pidfile', pid,
-        '--umask=0022',
+        '--umask', '0022',
+        '--logfile', getLogPath(),
     ]
     print '[+] launching bitmaskd...'
     run()
