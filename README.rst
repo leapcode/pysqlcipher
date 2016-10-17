@@ -5,6 +5,8 @@ Bitmask
 
 .. image:: https://badge.fury.io/py/leap.bitmask.svg
     :target: http://badge.fury.io/py/leap.bitmask
+.. image:: https://0xacab.org/leap/bitmask-dev/badges/master/build.svg
+    :target: https://0xacab.org/leap/bitmask-dev/pipelines
 .. image:: https://readthedocs.org/projects/bitmask/badge/?version=latest
    :target: http://bitmask.readthedocs.io/en/latest/?badge=latest
    :alt: Documentation Status
