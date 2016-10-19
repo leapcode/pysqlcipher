@@ -346,6 +346,8 @@ class SoledadMailAdaptorTestCase(SoledadTestMixin):
         self.assertEqual(
             'text/plain', msg.wrapper.cdocs[1].content_type)
         self.assertEqual(
+            'utf-8', msg.wrapper.cdocs[1].charset)
+        self.assertEqual(
             'YSB1dGY4IG1lc3NhZ2U=\n', msg.wrapper.cdocs[1].raw)
 
     def test_get_msg_from_docs(self):

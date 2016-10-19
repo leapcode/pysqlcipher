@@ -79,6 +79,7 @@ def get_raw_docs(msg):
          'raw': part.get_payload(),
          'phash': get_hash(part.get_payload()),
          'content-type': part.get_content_type(),
+         'charset': part.get_content_charset(),
          'content-disposition': first(part.get(
              'content-disposition', '').split(';')),
          'content-transfer-encoding': part.get(

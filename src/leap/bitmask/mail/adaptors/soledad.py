@@ -432,6 +432,7 @@ class ContentDocWrapper(SoledadDocumentWrapper):
         content_disposition = ""
         content_transfer_encoding = ""
         content_type = ""
+        charset = ""
 
         class __meta__(object):
             index = "phash"
