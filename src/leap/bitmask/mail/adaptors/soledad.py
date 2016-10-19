@@ -505,7 +505,7 @@ class MessageWrapper(object):
             for (key, doc) in cdocs.items()])
         for doc_id, cdoc in zip(self.mdoc.cdocs, self.cdocs.values()):
             if cdoc.raw == "":
-                logger.warning("Empty raw field in cdoc %s" % doc_id)
+                logger.warn("Empty raw field in cdoc %s" % doc_id)
             cdoc.set_future_doc_id(doc_id)
 
     def create(self, store, notify_just_mdoc=False, pending_inserts_dict=None):
@@ -1126,7 +1126,7 @@ class SoledadMailAdaptor(SoledadIndexMixin):
 
         def get_mdoc_id(hdoc):
             if not hdoc:
-                logger.warning("Could not find a HDOC with MSGID %s" % msgid)
+                logger.warn("Could not find a HDOC with MSGID %s" % msgid)
                 return None
             hdoc = hdoc[0]
             mdoc_id = hdoc.doc_id.replace("H-", "M-%s-" % uuid)
