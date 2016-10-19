@@ -2,10 +2,9 @@
 HOW TO USE THIS TEMPLATE:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Run `git config commit.template docs/leap-commit-template` or
+Run `git config commit.template docs/hooks/leap-commit-template` or
 edit the .git/config for this project and add
-`template = docs/leap-commit-template` 
-under the [commit] block
+`template = docs/hooks/leap-commit-template` under the [commit] block
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 COMMIT TEMPLATE FORMAT EXPLAINED

@@ -44,7 +44,12 @@ Merge requests to https://0xacab/leap/bitmask-dev
 Coding conventions
 ---------------------------------
 * pep8
-* pre-commit hook (more utils in docs/hooks folder)
+* Git messages should be informative.
+* There is a pre-commit hook ready to be used in the ``docs/hooks`` folder,
+  alongside some other hooks to do autopep8 on each commit.
+
+.. include:: ../hooks/leap-commit-template.README
+   :literal:
 
 Pinning
 ----------------------------------
