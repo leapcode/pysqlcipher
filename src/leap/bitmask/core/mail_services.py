@@ -583,7 +583,7 @@ class StandardMailService(service.MultiService, HookableService):
                 shutil.rmtree(tokens_folder)
             except OSError as e:
                 logger.warn("Can't remove tokens folder %s: %s"
-                               % (tokens_folder, e))
+                            % (tokens_folder, e))
                 return
         os.mkdir(tokens_folder, 0700)
 
