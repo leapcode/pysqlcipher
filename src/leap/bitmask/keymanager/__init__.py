@@ -98,7 +98,12 @@ class KeyManager(object):
         self.uid = uid
         self._openpgp = OpenPGPScheme(soledad, gpgbinary=gpgbinary)
         create = self._create_combined_bundle_file
-        self._combined_ca_bundle = combined_ca_bundle or create()
+	try:
+            self._combined_ca_bundle = combined_ca_bundle or create()
+	except Exception:
+	    logger.warn('error while creating combined ca bundle')
+	    self._combined_ca_bundle = ''
+
         self._async_client = HTTPClient(self._combined_ca_bundle)
         self._async_client_pinned = HTTPClient(self._ca_cert_path)
 
