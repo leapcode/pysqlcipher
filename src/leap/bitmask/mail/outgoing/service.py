@@ -194,10 +194,10 @@ class OutgoingMail(object):
 
         if self._bouncer:
             self._bouncer.bounce_message(
-                err.message, to=self._from_address,
+                failure.getErrorMessage(), to=self._from_address,
                 orig=origmsg)
         else:
-            raise err
+            failure.raiseException()
 
     def _route_msg(self, encrypt_and_sign_result, raw):
         """
