@@ -18,7 +18,10 @@
 Bitmask-core Service.
 """
 import json
-import resource
+try:
+    import resource
+except ImportError:
+    pass
 
 from twisted.internet import reactor
 from twisted.logger import Logger

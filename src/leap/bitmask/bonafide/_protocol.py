@@ -18,8 +18,12 @@
 Bonafide protocol.
 """
 import os
-import resource
 from collections import defaultdict
+
+try:
+    import resource
+except ImportError:
+    pass
 
 from leap.bitmask.bonafide import config
 from leap.bitmask.bonafide.provider import Api
