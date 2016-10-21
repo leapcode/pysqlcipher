@@ -22,32 +22,72 @@ when the web service is running.
 """
 
 import os
+import platform
 import signal
 import sys
 
 from functools import partial
 
-from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5 import QtWebKit, QtWebKitWidgets
-
-from leap.bitmask.core.launcher import run_bitmaskd, pid
+if platform.system() == 'Windows':
+    from multiprocessing import freeze_support
+    from PySide import QtCore, QtGui
+    from PySide import QtWebKit
+    from PySide.QtGui import QDialog
+    from PySide.QtGui import QApplication
+    from PySide.QtWebKit import QWebView, QGraphicsWebView
+    from PySide.QtCore import QSize
+else:
+    from PyQt5 import QtCore, QtGui
+    from PyQt5 import QtWebKit
+    from PyQt5.QtWidgets import QDialog
+    from PyQt5.QtWidgets import QApplication
+    from PyQt5.QtWebKitWidgets import QWebView
 
 from multiprocessing import Process
 
+from leap.bitmask.core.launcher import run_bitmaskd, pid
+
+
 
 BITMASK_URI = 'http://localhost:7070'
+
+IS_WIN = platform.system() == "Windows"
+DEBUG = os.environ.get("DEBUG", False)
 
 qApp = None
 bitmaskd = None
 
 
-class BrowserWindow(QtWidgets.QDialog):
+class BrowserWindow(QDialog):
 
     def __init__(self, parent):
         super(BrowserWindow, self).__init__(parent)
-        self.view = QtWebKitWidgets.QWebView(self)
+	if IS_WIN:
+	    self.view = QWebView(self)
+	    win_size = QSize(1024, 600)
+	    self.setMinimumSize(win_size)
+	    self.view.page().setViewportSize(win_size)
+	    self.view.page().setPreferredContentsSize(win_size)
+        else:
+            self.view = QWebView(self)
+	    win_size = QSize(800, 600)
+	self.win_size = win_size
+	self.resize(win_size)
+
+	if DEBUG:
+	    self.view.settings().setAttribute(
+	        QtWebKit.QWebSettings.WebAttribute.DeveloperExtrasEnabled, True)
+            self.inspector = QtWebKit.QWebInspector(self)
+	    self.inspector.setPage(self.view.page())
+	    self.inspector.show()
+	    self.splitter = QtGui.QSplitter()
+	    self.splitter.addWidget(self.view)
+	    self.splitter.addWidget(self.inspector)
+	    #TODO add layout also in non-DEBUG mode
+	    layout = QtGui.QVBoxLayout(self)
+	    layout.addWidget(self.splitter)
+
         self.setWindowTitle('Bitmask')
-        self.resize(800, 600)
         self.load_app()
         self.closing = False
 
@@ -60,10 +100,11 @@ class BrowserWindow(QtWidgets.QDialog):
         self.closing = True
         global bitmaskd
         bitmaskd.join()
-        with open(pid) as f:
-            pidno = int(f.read())
-        print('[bitmask] terminating bitmaskd...')
-        os.kill(pidno, signal.SIGTERM)
+	if os.path.isfile(pid):
+            with open(pid) as f:
+                pidno = int(f.read())
+            print('[bitmask] terminating bitmaskd...')
+            os.kill(pidno, signal.SIGTERM)
         print('[bitmask] shutting down gui...')
         try:
             self.view.stop()
@@ -72,6 +113,7 @@ class BrowserWindow(QtWidgets.QDialog):
         except Exception as ex:
             print('exception catched: %r' % ex)
             sys.exit(1)
+
 
 
 def _handle_kill(*args, **kw):
@@ -84,10 +126,12 @@ def launch_gui():
     global qApp
     global bitmaskd
 
+    if IS_WIN:
+        freeze_support()
     bitmaskd = Process(target=run_bitmaskd)
     bitmaskd.start()
 
-    qApp = QtWidgets.QApplication([])
+    qApp = QApplication([])
     browser = BrowserWindow(None)
 
     qApp.setQuitOnLastWindowClosed(True)
@@ -96,6 +140,7 @@ def launch_gui():
     signal.signal(
         signal.SIGINT,
         partial(_handle_kill, win=browser))
+
 
     # Avoid code to get stuck inside c++ loop, returning control
     # to python land.
@@ -113,10 +158,17 @@ def start_app():
     # Allow the frozen binary in the bundle double as the cli entrypoint
     # Why have only a user interface when you can have two?
 
-    if STANDALONE and len(sys.argv) > 1:
+    if platform.system() == 'Windows':
+        # In windows, there are some args added to the invocation
+	# by PyInstaller, I guess...
+        MIN_ARGS = 3
+    else:
+        MIN_ARGS = 1
+
+    # DEBUG ====================================
+    if STANDALONE and len(sys.argv) > MIN_ARGS:
         from leap.bitmask.cli import bitmask_cli
         return bitmask_cli.main()
-
     launch_gui()
 
 
