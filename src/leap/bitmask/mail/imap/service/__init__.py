@@ -139,7 +139,7 @@ class LeapIMAPFactory(ServerFactory):
         """
         # TODO should reject anything from addr != localhost,
         # just in case.
-        log.msg("Building protocol for connection %s" % addr)
+        logger.debug("Building protocol for connection %s" % addr)
         imapProtocol = self.protocol(self._soledad_sessions)
         self._connections[addr] = imapProtocol
         return imapProtocol
@@ -147,7 +147,7 @@ class LeapIMAPFactory(ServerFactory):
     def stopFactory(self):
         # say bye!
         for conn, proto in self._connections.items():
-            log.msg("Closing connections for %s" % conn)
+            logger.debug("Closing connections for %s" % conn)
             proto.close_server_connection()
 
     def doStop(self):
