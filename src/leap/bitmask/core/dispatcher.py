@@ -474,7 +474,11 @@ def _format_error(failure):
     # we will not print a full traceback
     expected = getattr(failure.value, 'expected', False)
     if not expected:
-        logger.failure('[DISPATCHER] Unexpected error:')
+        try:
+            logger.failure('[DISPATCHER] Unexpected error:')
+        except:
+            logger.debug('[DISPATCHER] Unexpected error: %r' % failure.value)
+            logger.debug('%r' % failure)
 
     # if needed, we could add here the exception type as an extra field
     return json.dumps({'error': failure.value.message, 'result': None})
