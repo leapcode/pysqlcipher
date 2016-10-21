@@ -21,10 +21,20 @@ UUID Map: a persistent mapping between user-ids and uuids.
 import base64
 import os
 import re
+import platform
 
 import scrypt
 
 from leap.common.config import get_path_prefix
+
+IS_WIN = platform.system() == "Windows"
+
+if IS_WIN:
+    import socket
+    from cryptography.fernet import Fernet
+    from cryptography.hazmat.backends.multibackend import MultiBackend
+    from cryptography.hazmat.backends.openssl.backend import Backend as OpenSSLBackend
+    crypto_backend = MultiBackend([OpenSSLBackend()])
 
 
 MAP_PATH = os.path.join(get_path_prefix(), 'leap', 'uuids')
@@ -100,16 +110,33 @@ class UserMap(object):
 
 def _encode_uuid_map(userid, uuid, passwd):
     data = 'userid:%s:uuid:%s' % (userid, uuid)
-    encrypted = scrypt.encrypt(data, passwd, maxtime=0.05)
-    return base64.encodestring(encrypted).replace('\n', '')
+
+    # TODO review usage of the raw passwd here
+    if IS_WIN:
+        key = scrypt.hash(passwd, socket.gethostname())
+	key = base64.urlsafe_b64encode(key[:32])
+	f = Fernet(key, backend=crypto_backend)
+	encrypted = f.encrypt(data)
+    else:
+        encrypted = scrypt.encrypt(data, passwd, maxtime=0.05)
+    return base64.urlsafe_b64encode(encrypted)
 
 
 def _decode_uuid_line(line, passwd):
-    decoded = base64.decodestring(line)
-    try:
-        maybe_decrypted = scrypt.decrypt(decoded, passwd, maxtime=0.1)
-    except scrypt.error:
-        return None
+    decoded = base64.urlsafe_b64decode(line)
+    if IS_WIN:
+        key = scrypt.hash(passwd, socket.gethostname())
+	key = base64.urlsafe_b64encode(key[:32])
+	try:
+	    f = Fernet(key, backend=crypto_backend)
+	    maybe_decrypted = f.decrypt(key)
+	except Exception:
+	    return None
+    else:
+        try:
+            maybe_decrypted = scrypt.decrypt(decoded, passwd, maxtime=0.1)
+        except scrypt.error:
+            return None
     match = re.findall("userid\:(.+)\:uuid\:(.+)", maybe_decrypted)
     if match:
         return match[0]
