@@ -18,11 +18,24 @@
 GPG wrapper for temporary keyrings
 """
 import os
+import platform
 import shutil
 import tempfile
+
 from gnupg import GPG
 
+from twisted.logger import Logger
+
 from leap.common.check import leap_assert
+
+try:
+    from gnupg.gnupg import GPGUtilities
+    GNUPG_NG = True
+except ImportError:
+    GNUPG_NG = False
+
+
+logger = Logger()
 
 
 class TempGPGWrapper(object):
@@ -88,8 +101,16 @@ class TempGPGWrapper(object):
         listkeys = lambda: self._gpg.list_keys()
         listsecretkeys = lambda: self._gpg.list_keys(secret=True)
 
-        self._gpg = GPG(binary=self._gpgbinary,
-                        homedir=tempfile.mkdtemp())
+        try:
+            self._gpg = GPG(binary=self._gpgbinary,
+                            homedir=tempfile.mkdtemp())
+        except TypeError:
+	    # compat-mode with python-gnupg until windows
+	    # support is fixed in gnupg-ng
+            self._gpg = GPG(gpgbinary=self._gpgbinary,
+                            gnupghome=tempfile.mkdtemp(),
+			    options=[])
+
         leap_assert(len(listkeys()) is 0, 'Keyring not empty.')
 
         # import keys into the keyring:
@@ -129,6 +150,16 @@ class TempGPGWrapper(object):
             raise
 
         finally:
-            leap_assert(self._gpg.homedir != os.path.expanduser('~/.gnupg'),
+	    try:
+	        homedir = self._gpg.homedir
+            except AttributeError:
+	        homedir = self._gpg.gnupghome
+            leap_assert(homedir != os.path.expanduser('~/.gnupg'),
                         "watch out! Tried to remove default gnupg home!")
-            shutil.rmtree(self._gpg.homedir)
+            # TODO some windows debug ....
+	    homedir = os.path.normpath(homedir).replace("\\", "/")
+	    homedir = str(homedir.replace("c:/", "c://"))
+            if platform.system() == "Windows":
+                logger.error("BUG! Not erasing folder in Windows") 
+                return
+            shutil.rmtree(homedir)

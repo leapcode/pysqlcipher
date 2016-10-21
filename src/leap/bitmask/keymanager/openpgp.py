@@ -26,7 +26,6 @@ import io
 
 from datetime import datetime
 from multiprocessing import cpu_count
-from gnupg.gnupg import GPGUtilities
 from twisted.internet import defer
 from twisted.internet.threads import deferToThread
 from twisted.logger import Logger
@@ -59,6 +58,17 @@ from leap.bitmask.keymanager.documents import (
     KEYMANAGER_KEY_TAG,
     KEYMANAGER_ACTIVE_TAG,
 )
+try:
+    from gnupg.gnupg import GPGUtilities
+    GNUPG_NG = True
+except ImportError:
+    GNUPG_NG = False
+    class GPGUtilities(object):
+        def __init__(self, gpg):
+	    self.gpg = gpg
+	def is_encrypted_asym(self, raw_data):
+	    result = self._gpg.list_packets(raw_data)
+            return bool(result.key)
 
 
 logger = Logger()
@@ -571,12 +581,18 @@ class OpenPGPScheme(object):
             leap_assert(sign.private is True)
             keys.append(sign)
         with TempGPGWrapper(keys, self._gpgbinary) as gpg:
-            result = yield from_thread(
-                gpg.encrypt,
-                data, pubkey.fingerprint,
+            kw = dict(
                 default_key=sign.fingerprint if sign else None,
                 passphrase=passphrase, symmetric=False,
                 cipher_algo=cipher_algo)
+            if not GNUPG_NG:
+	        kw.pop('cipher_algo')
+		kw.pop('default_key')
+		kw.update(passphrase='')		
+		kw.update(always_trust=True)		
+            result = yield from_thread(
+                gpg.encrypt,
+                data, pubkey.fingerprint, **kw)
             # Here we cannot assert for correctness of sig because the sig is
             # in the ciphertext.
             # result.ok    - (bool) indicates if the operation succeeded
@@ -676,9 +692,13 @@ class OpenPGPScheme(object):
         # result.fingerprint - contains the fingerprint of the key used to
         #                      sign.
         with TempGPGWrapper(privkey, self._gpgbinary) as gpg:
-            result = gpg.sign(data, default_key=privkey.fingerprint,
-                              digest_algo=digest_algo, clearsign=clearsign,
-                              detach=detach, binary=binary)
+	    kw = dict(default_key=privkey.fingerprint,
+	              digest_algo=digest_algo, clearsign=clearsign,
+		      detach=detach, binary=binary)
+            if not GNUPG_NG:
+	        kw.pop('digest_algo')
+		kw.pop('default_key')
+            result = gpg.sign(data, **kw)
             rfprint = privkey.fingerprint
             privkey = gpg.list_keys(secret=True).pop()
             kfprint = privkey['fingerprint']
