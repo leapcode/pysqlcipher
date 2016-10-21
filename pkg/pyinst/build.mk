@@ -10,6 +10,13 @@ bundle: bundle_clean
 	cd pkg/launcher && make
 	cp pkg/launcher/bitmask $(DIST_VERSION)
 
+bundle_win:
+	pyinstaller -y pkg/pyinst/app.spec
+	cp ${VIRTUAL_ENV}/Lib/site-packages/_scrypt.pyd $(DIST)
+	cp ${VIRTUAL_ENV}/Lib/site-packages/zmq/libzmq.pyd $(DIST)
+	cp src/leap/bitmask/core/bitmaskd.tac $(DIST)
+
+
 bundle_tar:
 	cd dist/ && tar cvzf Bitmask.$(NEXT_VERSION).tar.gz bitmask-$(NEXT_VERSION)
 
@@ -20,5 +27,5 @@ bundle_upload:
 	rsync --rsh='ssh' -avztlpog --progress --partial dist/Bitmask.$(NEXT_VERSION).* downloads.leap.se:./
 
 bundle_clean:
-	rm -rf dist build
+	rm -rf "dist" "build"
 

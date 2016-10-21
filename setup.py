@@ -2,6 +2,7 @@
 Setup file for leap.bitmask
 """
 from setuptools import setup, find_packages
+import platform
 
 import versioneer
 
@@ -19,6 +20,11 @@ required = [
     'srp',
     'leap.common',
 ]
+
+if platform.system() == "Windows":
+    required.append(['pypiwin32'])
+    required.append(['appdirs'])
+    required.append(['python-gnupg'])
 
 mail_deps = ['leap.soledad.client', 'gnupg']
 gui_deps = ['vext.pyqt5', 'leap.bitmask_js']
@@ -77,7 +83,7 @@ setup(
     package_data={'': ['*.pem', '*.bin']},
     packages=find_packages('src'),
     include_package_data=True,
-    zip_safe=True,
+    zip_safe=False,
     entry_points={
         'console_scripts': [gui_launcher, bitmask_cli, bitmaskd]
     },

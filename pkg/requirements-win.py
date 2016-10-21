@@ -1,0 +1,4 @@
+pypiwin32
+pyinstaller==3.1
+appdirs
+packaging
