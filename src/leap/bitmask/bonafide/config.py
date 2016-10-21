@@ -20,6 +20,7 @@ Configuration for a LEAP provider.
 import datetime
 import json
 import os
+import platform
 import shutil
 import sys
 
@@ -43,7 +44,10 @@ logger = Logger()
 
 
 APPNAME = "bonafide"
-ENDPOINT = "ipc:///tmp/%s.sock" % APPNAME
+if platform.system() == 'Windows':
+    ENDPOINT = "tcp://127.0.0.1:5001"
+else:
+    ENDPOINT = "ipc:///tmp/%s.sock" % APPNAME
 
 
 def get_path_prefix(standalone=False):
@@ -133,6 +137,8 @@ def get_username_and_provider(full_id):
 def list_providers():
     path = os.path.join(_preffix, "leap", "providers")
     path = os.path.expanduser(path)
+    if not os.path.isdir(path):
+        os.makedirs(path)
     return os.listdir(path)
 
 
