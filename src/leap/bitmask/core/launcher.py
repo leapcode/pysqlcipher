@@ -18,6 +18,7 @@
 Run bitmask daemon.
 """
 from os.path import join, abspath, dirname
+import platform
 import sys
 
 from twisted.scripts.twistd import run
@@ -29,9 +30,7 @@ from leap.common.config import get_path_prefix
 
 pid = abspath(join(get_path_prefix(), 'leap', 'bitmaskd.pid'))
 
-
 STANDALONE = getattr(sys, 'frozen', False)
-
 
 def here(module=None):
     if STANDALONE:
@@ -46,16 +45,19 @@ def here(module=None):
 
 def run_bitmaskd():
     # TODO --- configure where to put the logs... (get --logfile, --logdir
-    # from the bitmask_cli
+    # from bitmaskctl
     for (index, arg) in enumerate(sys.argv):
         if arg == '--backend':
             flags.BACKEND = sys.argv[index + 1]
-    sys.argv[1:] = [
+    args = [
         '-y', join(here(core), "bitmaskd.tac"),
-        '--pidfile', pid,
-        '--umask', '0022',
         '--logfile', getLogPath(),
     ]
+    if platform.system() != 'Windows':
+        args.append([
+            '--pidfile', pid,
+            '--umask', '0022'])
+    sys.argv[1:] = args
     print '[+] launching bitmaskd...'
     run()
 
