@@ -57,10 +57,15 @@ def get_gpg_bin_path():
     gpgbin = None
 
     if STANDALONE:
-        gpgbin = os.path.join(
-            get_path_prefix(), "..", "apps", "mail", "gpg")
         if platform.system() == "Windows":
-            gpgbin += ".exe"
+            gpgbin = os.path.abspath(
+                os.path.join(here(), "apps", "mail", "gpg.exe"))
+        elif platform.system() == "Darwin":
+            gpgbin = os.path.abspath(
+                os.path.join(here(), "apps", "mail", "gpg"))
+	else:
+            gpgbin = os.path.join(
+                get_path_prefix(), "..", "apps", "mail", "gpg")
     else:
         try:
             gpgbin_options = which("gpg", path_extension='/usr/bin/')
@@ -77,9 +82,6 @@ def get_gpg_bin_path():
                     break
         except IndexError as e:
             logger.debug("couldn't find the gpg binary!: %s" % (e,))
-    if platform.system() == "Darwin":
-        gpgbin = os.path.abspath(
-            os.path.join(here(), "apps", "mail", "gpg"))
 
     if gpgbin is not None:
         return gpgbin
