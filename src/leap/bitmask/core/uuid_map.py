@@ -112,7 +112,12 @@ class UserMap(object):
 def _encode_uuid_map(userid, uuid, passwd):
     data = 'userid:%s:uuid:%s' % (userid, uuid)
 
-    # TODO review usage of the raw passwd here
+    # FIXME scrypt.encrypt is broken in windows.
+    # This is a quick hack. The hostname might not be unique enough though.
+    # We could use a long random hash per entry and store it in the file.
+    # Other option is to use a different KDF that is supported by cryptography
+    # (ie, pbkdf)
+
     if IS_WIN:
         key = scrypt.hash(passwd, socket.gethostname())
         key = base64.urlsafe_b64encode(key[:32])
