@@ -63,11 +63,14 @@ try:
     GNUPG_NG = True
 except ImportError:
     GNUPG_NG = False
+
     class GPGUtilities(object):
+
         def __init__(self, gpg):
-	    self.gpg = gpg
-	def is_encrypted_asym(self, raw_data):
-	    result = self._gpg.list_packets(raw_data)
+            self.gpg = gpg
+
+        def is_encrypted_asym(self, raw_data):
+            result = self._gpg.list_packets(raw_data)
             return bool(result.key)
 
 
@@ -586,10 +589,10 @@ class OpenPGPScheme(object):
                 passphrase=passphrase, symmetric=False,
                 cipher_algo=cipher_algo)
             if not GNUPG_NG:
-	        kw.pop('cipher_algo')
-		kw.pop('default_key')
-		kw.update(passphrase='')		
-		kw.update(always_trust=True)		
+                kw.pop('cipher_algo')
+                kw.pop('default_key')
+                kw.update(passphrase='')
+                kw.update(always_trust=True)
             result = yield from_thread(
                 gpg.encrypt,
                 data, pubkey.fingerprint, **kw)
@@ -692,12 +695,12 @@ class OpenPGPScheme(object):
         # result.fingerprint - contains the fingerprint of the key used to
         #                      sign.
         with TempGPGWrapper(privkey, self._gpgbinary) as gpg:
-	    kw = dict(default_key=privkey.fingerprint,
-	              digest_algo=digest_algo, clearsign=clearsign,
-		      detach=detach, binary=binary)
+            kw = dict(default_key=privkey.fingerprint,
+                      digest_algo=digest_algo, clearsign=clearsign,
+                      detach=detach, binary=binary)
             if not GNUPG_NG:
-	        kw.pop('digest_algo')
-		kw.pop('default_key')
+                kw.pop('digest_algo')
+                kw.pop('default_key')
             result = gpg.sign(data, **kw)
             rfprint = privkey.fingerprint
             privkey = gpg.list_keys(secret=True).pop()

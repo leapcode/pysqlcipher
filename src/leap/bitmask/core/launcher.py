@@ -32,6 +32,7 @@ pid = abspath(join(get_path_prefix(), 'leap', 'bitmaskd.pid'))
 
 STANDALONE = getattr(sys, 'frozen', False)
 
+
 def here(module=None):
     if STANDALONE:
         # we are running in a |PyInstaller| bundle

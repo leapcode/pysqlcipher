@@ -27,6 +27,9 @@ import signal
 import sys
 
 from functools import partial
+from multiprocessing import Process
+
+from leap.bitmask.core.launcher import run_bitmaskd, pid
 
 if platform.system() == 'Windows':
     from multiprocessing import freeze_support
@@ -43,11 +46,6 @@ else:
     from PyQt5.QtWidgets import QApplication
     from PyQt5.QtWebKitWidgets import QWebView
 
-from multiprocessing import Process
-
-from leap.bitmask.core.launcher import run_bitmaskd, pid
-
-
 
 BITMASK_URI = 'http://localhost:7070'
 
@@ -62,30 +60,31 @@ class BrowserWindow(QDialog):
 
     def __init__(self, parent):
         super(BrowserWindow, self).__init__(parent)
-	if IS_WIN:
-	    self.view = QWebView(self)
-	    win_size = QSize(1024, 600)
-	    self.setMinimumSize(win_size)
-	    self.view.page().setViewportSize(win_size)
-	    self.view.page().setPreferredContentsSize(win_size)
+        if IS_WIN:
+            self.view = QWebView(self)
+            win_size = QSize(1024, 600)
+            self.setMinimumSize(win_size)
+            self.view.page().setViewportSize(win_size)
+            self.view.page().setPreferredContentsSize(win_size)
         else:
             self.view = QWebView(self)
-	    win_size = QSize(800, 600)
-	self.win_size = win_size
-	self.resize(win_size)
+            win_size = QSize(800, 600)
+        self.win_size = win_size
+        self.resize(win_size)
 
-	if DEBUG:
-	    self.view.settings().setAttribute(
-	        QtWebKit.QWebSettings.WebAttribute.DeveloperExtrasEnabled, True)
+        if DEBUG:
+            self.view.settings().setAttribute(
+                QtWebKit.QWebSettings.WebAttribute.DeveloperExtrasEnabled,
+                True)
             self.inspector = QtWebKit.QWebInspector(self)
-	    self.inspector.setPage(self.view.page())
-	    self.inspector.show()
-	    self.splitter = QtGui.QSplitter()
-	    self.splitter.addWidget(self.view)
-	    self.splitter.addWidget(self.inspector)
-	    #TODO add layout also in non-DEBUG mode
-	    layout = QtGui.QVBoxLayout(self)
-	    layout.addWidget(self.splitter)
+            self.inspector.setPage(self.view.page())
+            self.inspector.show()
+            self.splitter = QtGui.QSplitter()
+            self.splitter.addWidget(self.view)
+            self.splitter.addWidget(self.inspector)
+            # TODO add layout also in non-DEBUG mode
+            layout = QtGui.QVBoxLayout(self)
+            layout.addWidget(self.splitter)
 
         self.setWindowTitle('Bitmask')
         self.load_app()
@@ -100,7 +99,7 @@ class BrowserWindow(QDialog):
         self.closing = True
         global bitmaskd
         bitmaskd.join()
-	if os.path.isfile(pid):
+        if os.path.isfile(pid):
             with open(pid) as f:
                 pidno = int(f.read())
             print('[bitmask] terminating bitmaskd...')
@@ -113,7 +112,6 @@ class BrowserWindow(QDialog):
         except Exception as ex:
             print('exception catched: %r' % ex)
             sys.exit(1)
-
 
 
 def _handle_kill(*args, **kw):
@@ -141,7 +139,6 @@ def launch_gui():
         signal.SIGINT,
         partial(_handle_kill, win=browser))
 
-
     # Avoid code to get stuck inside c++ loop, returning control
     # to python land.
     timer = QtCore.QTimer()
@@ -160,7 +157,7 @@ def start_app():
 
     if platform.system() == 'Windows':
         # In windows, there are some args added to the invocation
-	# by PyInstaller, I guess...
+        # by PyInstaller, I guess...
         MIN_ARGS = 3
     else:
         MIN_ARGS = 1

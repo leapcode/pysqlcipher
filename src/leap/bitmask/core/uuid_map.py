@@ -33,7 +33,8 @@ if IS_WIN:
     import socket
     from cryptography.fernet import Fernet
     from cryptography.hazmat.backends.multibackend import MultiBackend
-    from cryptography.hazmat.backends.openssl.backend import Backend as OpenSSLBackend
+    from cryptography.hazmat.backends.openssl.backend \
+        import Backend as OpenSSLBackend
     crypto_backend = MultiBackend([OpenSSLBackend()])
 
 
@@ -114,9 +115,9 @@ def _encode_uuid_map(userid, uuid, passwd):
     # TODO review usage of the raw passwd here
     if IS_WIN:
         key = scrypt.hash(passwd, socket.gethostname())
-	key = base64.urlsafe_b64encode(key[:32])
-	f = Fernet(key, backend=crypto_backend)
-	encrypted = f.encrypt(data)
+        key = base64.urlsafe_b64encode(key[:32])
+        f = Fernet(key, backend=crypto_backend)
+        encrypted = f.encrypt(data)
     else:
         encrypted = scrypt.encrypt(data, passwd, maxtime=0.05)
     return base64.urlsafe_b64encode(encrypted)
@@ -126,12 +127,12 @@ def _decode_uuid_line(line, passwd):
     decoded = base64.urlsafe_b64decode(line)
     if IS_WIN:
         key = scrypt.hash(passwd, socket.gethostname())
-	key = base64.urlsafe_b64encode(key[:32])
-	try:
-	    f = Fernet(key, backend=crypto_backend)
-	    maybe_decrypted = f.decrypt(key)
-	except Exception:
-	    return None
+        key = base64.urlsafe_b64encode(key[:32])
+        try:
+            f = Fernet(key, backend=crypto_backend)
+            maybe_decrypted = f.decrypt(key)
+        except Exception:
+            return None
     else:
         try:
             maybe_decrypted = scrypt.decrypt(decoded, passwd, maxtime=0.1)

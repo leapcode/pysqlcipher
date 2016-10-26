@@ -105,11 +105,11 @@ class TempGPGWrapper(object):
             self._gpg = GPG(binary=self._gpgbinary,
                             homedir=tempfile.mkdtemp())
         except TypeError:
-	    # compat-mode with python-gnupg until windows
-	    # support is fixed in gnupg-ng
+            # compat-mode with python-gnupg until windows
+            # support is fixed in gnupg-ng
             self._gpg = GPG(gpgbinary=self._gpgbinary,
                             gnupghome=tempfile.mkdtemp(),
-			    options=[])
+                            options=[])
 
         leap_assert(len(listkeys()) is 0, 'Keyring not empty.')
 
@@ -150,16 +150,16 @@ class TempGPGWrapper(object):
             raise
 
         finally:
-	    try:
-	        homedir = self._gpg.homedir
+            try:
+                homedir = self._gpg.homedir
             except AttributeError:
-	        homedir = self._gpg.gnupghome
+                homedir = self._gpg.gnupghome
             leap_assert(homedir != os.path.expanduser('~/.gnupg'),
                         "watch out! Tried to remove default gnupg home!")
             # TODO some windows debug ....
-	    homedir = os.path.normpath(homedir).replace("\\", "/")
-	    homedir = str(homedir.replace("c:/", "c://"))
+            homedir = os.path.normpath(homedir).replace("\\", "/")
+            homedir = str(homedir.replace("c:/", "c://"))
             if platform.system() == "Windows":
-                logger.error("BUG! Not erasing folder in Windows") 
+                logger.error("BUG! Not erasing folder in Windows")
                 return
             shutil.rmtree(homedir)

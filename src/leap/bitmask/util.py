@@ -63,7 +63,7 @@ def get_gpg_bin_path():
         elif platform.system() == "Darwin":
             gpgbin = os.path.abspath(
                 os.path.join(here(), "apps", "mail", "gpg"))
-	else:
+        else:
             gpgbin = os.path.join(
                 get_path_prefix(), "..", "apps", "mail", "gpg")
     else:
