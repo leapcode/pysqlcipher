@@ -26,6 +26,7 @@ import pkg_resources
 from twisted.internet import reactor
 from twisted.application import service
 
+from twisted.internet import endpoints
 from twisted.web.resource import Resource
 from twisted.web.server import Site, NOT_DONE_YET
 from twisted.web.static import File
@@ -39,6 +40,11 @@ try:
 except ImportError:
     HAS_WEB_UI = False
 
+try:
+    import txtorcon
+except Exception:
+    pass
+
 log = Logger()
 
 
@@ -46,12 +52,16 @@ class HTTPDispatcherService(service.Service):
 
     """
     A Dispatcher for BitmaskCore exposing a REST API.
+    If the leap.bitmask_js package is available in the search path, it will
+    serve the UI under this same service too.
     """
 
-    def __init__(self, core, port=7070, debug=False):
+    def __init__(self, core, port=7070, debug=False, onion=False):
         self._core = core
         self.port = port
         self.debug = debug
+        self.onion = onion
+        self.uri = ''
 
     def startService(self):
         if HAS_WEB_UI:
@@ -67,13 +77,48 @@ class HTTPDispatcherService(service.Service):
         api = Api(CommandDispatcher(self._core))
         root.putChild(u'API', api)
 
-        site = Site(root)
-        self.site = site
+        factory = Site(root)
+        self.site = factory
 
-        # TODO use endpoints instead
-        self.listener = reactor.listenTCP(self.port, site,
-                                          interface='127.0.0.1')
+        if self.onion:
+            try:
+                import txtorcon
+            except ImportError:
+                log.error('onion is enabled, but could not find txtorcon')
+                return
+            self._start_onion_service(factory)
+
+        else:
+            interface = '127.0.0.1'
+            endpoint = endpoints.TCP4ServerEndpoint(
+                reactor, self.port, interface=interface)
+            self.uri = 'https://%s:%s' % (interface, self.port)
+            endpoint.listen(factory)
+        # TODO this should be set in a callback to the listen call
         self.running = True
+
+    def _start_onion_service(self, factory):
+
+        def progress(percent, tag, message):
+            bar = int(percent / 10)
+            log.debug('[%s%s] %s' % ('#' * bar, '.' * (10 - bar), message))
+
+        def setup_complete(port):
+            port = txtorcon.IHiddenService(port)
+            self.uri = "http://%s" % (port.getHost().onion_uri)
+            log.info('I have set up a hidden service, advertised at: %s'
+                     % self.uri)
+            log.info('locally listening on %s' % port.local_address.getHost())
+
+        def setup_failed(args):
+            log.error('onion service setup FAILED: %r' % args)
+
+        endpoint = endpoints.serverFromString(reactor, 'onion:80')
+        txtorcon.IProgressProvider(endpoint).add_progress_listener(progress)
+        d = endpoint.listen(factory)
+        d.addCallback(setup_complete)
+        d.addErrback(setup_failed)
+        return d
 
     def stopService(self):
         self.site.stopFactory()
@@ -82,7 +127,7 @@ class HTTPDispatcherService(service.Service):
 
     def do_status(self):
         status = 'running' if self.running else 'disabled'
-        return {'web': status}
+        return {'web': status, 'uri': self.uri}
 
 
 class Api(Resource):

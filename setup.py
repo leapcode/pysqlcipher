@@ -28,11 +28,13 @@ if platform.system() == "Windows":
 
 mail_deps = ['leap.soledad.client', 'gnupg']
 gui_deps = ['vext.pyqt5', 'leap.bitmask_js']
+tor_deps = ['txtorcon']
 extras = {
     'mail': mail_deps,
     'gui': gui_deps,
     'backend': mail_deps,
-    'all': mail_deps + gui_deps
+    'all': mail_deps + gui_deps,
+    'tor': tor_deps
 }
 
 

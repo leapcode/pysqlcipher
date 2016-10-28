@@ -103,5 +103,6 @@ mail = True
 eip = True
 zmq = True
 web = True
+onion = False
 websockets = False
 """

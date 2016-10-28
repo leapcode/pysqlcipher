@@ -74,7 +74,8 @@ class BitmaskBackend(configurable.ConfigurableService):
             on_start(self._init_zmq)
 
         if enabled('web'):
-            on_start(self._init_web)
+            onion = enabled('onion')
+            on_start(self._init_web, onion=onion)
 
         if enabled('websockets'):
             on_start(self._init_websockets)
@@ -151,9 +152,9 @@ class BitmaskBackend(configurable.ConfigurableService):
         zs = _zmq.ZMQServerService(self)
         zs.setServiceParent(self)
 
-    def _init_web(self):
+    def _init_web(self, onion=False):
         service = _web.HTTPDispatcherService
-        self._maybe_init_service('web', service, self)
+        self._maybe_init_service('web', service, self, onion=onion)
 
     def _init_websockets(self):
         from leap.bitmask.core import websocket
