@@ -19,6 +19,7 @@ IMAP Mailbox.
 """
 import re
 import os
+import io
 import cStringIO
 import StringIO
 import time
@@ -390,7 +391,8 @@ class IMAPMailbox(object):
         # A better solution will probably involve implementing MULTIAPPEND
         # extension or patching imap server to support pipelining.
 
-        if isinstance(message, (cStringIO.OutputType, StringIO.StringIO)):
+        if isinstance(message,
+                      (cStringIO.OutputType, StringIO.StringIO, io.BytesIO)):
             message = message.getvalue()
 
         leap_assert_type(message, basestring)
