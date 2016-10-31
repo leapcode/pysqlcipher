@@ -19,7 +19,7 @@ Tests for the OpenPGP support on Key Manager.
 """
 from datetime import datetime
 from mock import Mock
-from twisted.internet.defer import inlineCallbacks, gatherResults, succeed
+from twisted.internet.defer import inlineCallbacks, succeed
 
 from leap.bitmask.keymanager import (
     KeyNotFound,
@@ -27,7 +27,6 @@ from leap.bitmask.keymanager import (
 )
 from leap.bitmask.keymanager.documents import (
     TYPE_FINGERPRINT_PRIVATE_INDEX,
-    TYPE_ADDRESS_PRIVATE_INDEX,
 )
 from leap.bitmask.keymanager.keys import OpenPGPKey
 from leap.bitmask.keymanager.testing import KeyManagerWithSoledadTestCase
@@ -253,9 +252,9 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
     @inlineCallbacks
     def test_self_repair_three_keys(self):
         refreshed_keep = datetime(2007, 1, 1)
-        self._insert_key_docs([datetime(2005, 1, 1),
-                               refreshed_keep,
-                               datetime(2001, 1, 1)])
+        yield self._insert_key_docs([datetime(2005, 1, 1),
+                                     refreshed_keep,
+                                     datetime(2001, 1, 1)])
         delete_doc = self._mock_delete_doc()
 
         pgp = openpgp.OpenPGPScheme(
@@ -294,9 +293,9 @@ class OpenPGPCryptoTestCase(KeyManagerWithSoledadTestCase):
 
     @inlineCallbacks
     def test_self_repair_put_keys(self):
-        self._insert_key_docs([datetime(2005, 1, 1),
-                               datetime(2007, 1, 1),
-                               datetime(2001, 1, 1)])
+        yield self._insert_key_docs([datetime(2005, 1, 1),
+                                     datetime(2007, 1, 1),
+                                     datetime(2001, 1, 1)])
         delete_doc = self._mock_delete_doc()
 
         pgp = openpgp.OpenPGPScheme(
