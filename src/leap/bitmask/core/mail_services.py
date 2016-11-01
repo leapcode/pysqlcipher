@@ -702,7 +702,7 @@ class IncomingMailService(service.MultiService):
         d = acc.callWhenReady(
             lambda _: acc.get_collection_by_mailbox(INBOX_NAME))
         d.addCallback(setUpIncomingMail)
-        d.addErrback(logger.error)
+        d.addErrback(lambda r: logger.error(str(r)))
         return d
 
 # --------------------------------------------------------------------
