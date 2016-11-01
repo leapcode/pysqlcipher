@@ -18,6 +18,7 @@
 Incoming mail fetcher.
 """
 import copy
+import os
 import shlex
 import time
 import warnings
@@ -58,7 +59,7 @@ PGP_END = "-----END PGP MESSAGE-----"
 
 # The period between succesive checks of the incoming mail
 # queue (in seconds)
-INCOMING_CHECK_PERIOD = 60
+INCOMING_CHECK_PERIOD = int(os.environ.get('INCOMING_CHECK_PERIOD', 60))
 
 
 class MalformedMessage(Exception):
