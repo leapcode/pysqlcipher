@@ -173,7 +173,7 @@ class OutgoingMail(object):
 
     def sendError(self, failure, origmsg):
         """
-        Callback for an unsuccessfull send.
+        Callback for an unsuccessful send.
 
         :param failure: The result from the last errback.
         :type failure: anything
