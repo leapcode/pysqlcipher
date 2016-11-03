@@ -17,11 +17,12 @@
 """
 Key Manager is a Nicknym agent for LEAP client.
 """
-# let's do a little sanity check to see if we're using the wrong gnupg
 import fileinput
+import json
 import os
 import sys
 import tempfile
+import urllib
 
 from urlparse import urlparse
 
@@ -35,13 +36,9 @@ from leap.common.check import leap_assert
 from leap.common.decorators import memoized_method
 from leap.common.http import HTTPClient
 from leap.common.events import emit_async, catalog
-from leap.bitmask.keymanager.nicknym import Nicknym
 
-from leap.bitmask.keymanager.errors import (
-    KeyNotFound,
-    KeyNotValidUpgrade,
-    InvalidSignature
-)
+from leap.bitmask.keymanager import errors as keymanager_errors
+from leap.bitmask.keymanager.nicknym import Nicknym
 from leap.bitmask.keymanager.validation import ValidationLevels, can_upgrade
 from leap.bitmask.keymanager.openpgp import OpenPGPScheme
 
@@ -153,19 +150,19 @@ class KeyManager(object):
                 uri, address)
             json_content = json.loads(content)
 
-        except KeyNotFound:
+        except keymanager_errors.KeyNotFound:
             raise
         except IOError as e:
             logger.warn("HTTP error retrieving key: %r" % (e,))
             logger.warn("%s" % (content,))
-            raise KeyNotFound(e.message), None, sys.exc_info()[2]
+            raise keymanager_errors.KeyNotFound(e.message), None, sys.exc_info()[2]
         except ValueError as v:
             logger.warn("invalid JSON data from key: %s" % (uri,))
-            raise KeyNotFound(v.message + ' - ' + uri), None, sys.exc_info()[2]
+            raise keymanager_errors.KeyNotFound(v.message + ' - ' + uri), None, sys.exc_info()[2]
 
         except Exception as e:
             logger.warn("error retrieving key: %r" % (e,))
-            raise KeyNotFound(e.message), None, sys.exc_info()[2]
+            raise keymanager_errors.KeyNotFound(e.message), None, sys.exc_info()[2]
         # Responses are now text/plain, although it's json anyway, but
         # this will fail when it shouldn't
         # leap_assert(
@@ -217,9 +214,9 @@ class KeyManager(object):
             content = yield self._async_client.request(str(uri), 'GET')
         except Exception as e:
             logger.warn("There was a problem fetching key: %s" % (e,))
-            raise KeyNotFound(uri)
+            raise keymanager_errors.KeyNotFound(uri)
         if not content:
-            raise KeyNotFound(uri)
+            raise keymanager_errors.KeyNotFound(uri)
         defer.returnValue(content)
 
     @defer.inlineCallbacks
@@ -383,7 +380,7 @@ class KeyManager(object):
             return key
 
         def key_not_found(failure):
-            if not failure.check(KeyNotFound):
+            if not failure.check(keymanager_errors.KeyNotFound):
                 return failure
 
             emit_async(catalog.KEYMANAGER_KEY_NOT_FOUND, address)
@@ -578,7 +575,7 @@ class KeyManager(object):
             decrypted, signed = yield self._openpgp.decrypt(
                 data, privkey, passphrase=passphrase, verify=pubkey)
             if pubkey is None:
-                signature = KeyNotFound(verify)
+                signature = keymanager_errors.KeyNotFound(verify)
             elif signed:
                 signature = pubkey
                 if not pubkey.sign_used:
@@ -586,7 +583,7 @@ class KeyManager(object):
                     yield self._openpgp.put_key(pubkey)
                     defer.returnValue((decrypted, signature))
             else:
-                signature = InvalidSignature(
+                signature = keymanager_errors.InvalidSignature(
                     'Failed to verify signature with key %s' %
                     (pubkey.fingerprint,))
             defer.returnValue((decrypted, signature))
@@ -596,7 +593,8 @@ class KeyManager(object):
         if verify is not None:
             dpub = self.get_key(verify, private=False,
                                 fetch_remote=fetch_remote)
-            dpub.addErrback(lambda f: None if f.check(KeyNotFound) else f)
+            dpub.addErrback(lambda f: None if f.check(
+                keymanager_errors.KeyNotFound) else f)
         d = defer.gatherResults([dpub, dpriv], consumeErrors=True)
         d.addCallbacks(decrypt, self._extract_first_error)
         return d
@@ -676,7 +674,7 @@ class KeyManager(object):
                     return d
                 return pubkey
             else:
-                raise InvalidSignature(
+                raise keymanager_errors.InvalidSignature(
                     'Failed to verify signature with key %s' %
                     (pubkey.fingerprint,))
 
@@ -715,7 +713,7 @@ class KeyManager(object):
         :raise UnsupportedKeyTypeError: if invalid key type
         """
         def old_key_not_found(failure):
-            if failure.check(KeyNotFound):
+            if failure.check(keymanager_errors.KeyNotFound):
                 return None
             else:
                 return failure
@@ -724,7 +722,7 @@ class KeyManager(object):
             if key.private or can_upgrade(key, old_key):
                 return self._openpgp.put_key(key)
             else:
-                raise KeyNotValidUpgrade(
+                raise keymanager_errors.KeyNotValidUpgrade(
                     "Key %s can not be upgraded by new key %s"
                     % (old_key.fingerprint, key.fingerprint))
 
@@ -759,7 +757,7 @@ class KeyManager(object):
         pubkey, privkey = self._openpgp.parse_key(key, address)
 
         if pubkey is None:
-            return defer.fail(KeyNotFound(key))
+            return defer.fail(keymanager_errors.KeyNotFound(key))
 
         pubkey.validation = validation
         d = self.put_key(pubkey)
@@ -797,7 +795,7 @@ class KeyManager(object):
         # XXX parse binary keys
         pubkey, _ = self._openpgp.parse_key(ascii_content, address)
         if pubkey is None:
-            raise KeyNotFound(uri)
+            raise keymanager_errors.KeyNotFound(uri)
 
         pubkey.validation = validation
         yield self.put_key(pubkey)
