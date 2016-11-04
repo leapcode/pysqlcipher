@@ -16,9 +16,6 @@ build:
     - virtualenv venv
     - source venv/bin/activate
     - make dev-backend
-    - make dev-all
-    - cd ui
-    - make dev-install
     - mkdir -p /root/.config/leap/
     - bitmaskd
     - bitmaskctl status
