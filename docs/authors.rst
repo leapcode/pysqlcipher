@@ -25,6 +25,7 @@ All the Code is Copyright 2012-2016 LEAP Encryption Access Project
 * NavaL ayoyo at thoughtworks dot com
 * Denis Costa deniscostadsc at gmail dot com
 * Zara Gebru zgebru at thoughtworks dot com
+* Tulio Casagrande tcasagra at thoughtworks dot com
 * irregulator irregulator at riseup dot net
 * Paixu Aabuizia PaixuAabuizia at users dot noreply at github dot com
 * Christoph Kluenter ckluente at thoughtworks dot com
