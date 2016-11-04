@@ -21,10 +21,8 @@ from datetime import datetime
 from mock import Mock
 from twisted.internet.defer import inlineCallbacks, succeed
 
-from leap.bitmask.keymanager import (
-    KeyNotFound,
-    openpgp,
-)
+from leap.bitmask.keymanager import openpgp
+from leap.bitmask.keymanager.errors import KeyNotFound
 from leap.bitmask.keymanager.documents import (
     TYPE_FINGERPRINT_PRIVATE_INDEX,
 )

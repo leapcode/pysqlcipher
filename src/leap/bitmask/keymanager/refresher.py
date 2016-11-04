@@ -48,7 +48,7 @@ class RandomRefreshPublicKey(object):
         self._openpgp = openpgp
         self._keymanger = keymanager
         self._loop = LoopingCall(self._refresh_continuous)
-        self._loop.interval = self._random_interval_to_refersh()
+        self._loop.interval = self._get_random_interval_to_refresh()
 
     def start(self):
         """
@@ -57,7 +57,7 @@ class RandomRefreshPublicKey(object):
         :return: LoopingCall to start the service.
         :rtype: A deferred.
         """
-        self._loop.start(self._random_interval_to_refersh(), False)
+        self._loop.start(self._get_random_interval_to_refresh(), False)
         logger.debug(DEBUG_START_REFRESH)
 
     def stop(self):
@@ -83,7 +83,7 @@ class RandomRefreshPublicKey(object):
         """
         The LoopingCall to refresh the key doc continuously.
         """
-        self._loop.interval = self._random_interval_to_refersh()
+        self._loop.interval = self._get_random_interval_to_refresh()
         yield self.maybe_refresh_key()
 
     @defer.inlineCallbacks
@@ -120,13 +120,12 @@ class RandomRefreshPublicKey(object):
         # No new fetch by address needed, bc that will happen before sending an email
         # could be discussed since fetching before sending an email leaks information.
 
-    def _random_interval_to_refersh(self):
+    def _get_random_interval_to_refresh(self):
         """
-        Random interval.
-        :return: A number in this interval.
+        Return a random quantity, in minutes, to be used as the refresh
+        interval.
+
+        :return: A random integer, in the interval defined by the constants
+        (MIN_RANDOM_INTERVAL_RANGE, MAX_RANDOM_INTERVAL_RANGE).
         """
         return randrange(MIN_RANDOM_INTERVAL_RANGE, MAX_RANDOM_INTERVAL_RANGE)
-
-
-
-
