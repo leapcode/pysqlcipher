@@ -16,7 +16,10 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import unittest
+
 from mock import MagicMock
+from twisted.python.failure import Failure
+
 from leap.bitmask.mail.outgoing.service import OutgoingMail
 
 
@@ -36,7 +39,7 @@ class TestService(unittest.TestCase):
                                      self.cert, self.key, self.host, self.port,
                                      bouncer)
 
-        failure = MagicMock()
+        failure = Failure(exc_value=Exception())
         origmsg = 'message'
         outgoing_mail.sendError(failure, origmsg)
 
@@ -48,7 +51,7 @@ class TestService(unittest.TestCase):
                                      self.cert, self.key, self.host, self.port,
                                      bouncer)
 
-        failure = MagicMock(value=Exception('smtp error'))
+        failure = Failure(exc_value=Exception('smtp error'))
         origmsg = 'message'
         with self.assertRaises(Exception):
             outgoing_mail.sendError(failure, origmsg)
