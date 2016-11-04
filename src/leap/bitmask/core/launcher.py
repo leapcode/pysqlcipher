@@ -55,7 +55,7 @@ def run_bitmaskd():
         '--logfile', getLogPath(),
     ]
     if platform.system() != 'Windows':
-        args.append([
+        args.extend([
             '--pidfile', pid,
             '--umask', '0022'])
     sys.argv[1:] = args
