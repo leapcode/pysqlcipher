@@ -50,7 +50,7 @@ def run_bitmaskd():
     for (index, arg) in enumerate(sys.argv):
         if arg == '--backend':
             flags.BACKEND = sys.argv[index + 1]
-        elif arg == '--verbose':
+        elif arg == '--verbose' or arg == '-v':
             flags.VERBOSE = True
     args = [
         '-y', join(here(core), "bitmaskd.tac"),

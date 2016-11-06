@@ -93,7 +93,7 @@ GENERAL COMMANDS:
         # avoid launching again.
         import commands
         cmd = 'bitmaskd'
-        if raw_args and '--verbose' in raw_args:
+        if raw_args and ('--verbose' in raw_args or '-v' in raw_args):
             cmd += ' --verbose'
         commands.getoutput(cmd)
         command.default_dict_printer({'start': 'ok'})
