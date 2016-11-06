@@ -1,1 +1,2 @@
 BACKEND = 'default'
+VERBOSE = False

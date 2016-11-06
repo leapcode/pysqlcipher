@@ -92,7 +92,11 @@ GENERAL COMMANDS:
         # XXX careful! Should see if the process in PID is running,
         # avoid launching again.
         import commands
-        commands.getoutput('bitmaskd')
+        cmd = 'bitmaskd'
+        if raw_args and '--verbose' in raw_args:
+            cmd += ' --verbose'
+        commands.getoutput(cmd)
+        command.default_dict_printer({'start': 'ok'})
         return defer.succeed(None)
 
     def version(self, raw_args):
