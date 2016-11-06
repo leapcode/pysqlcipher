@@ -121,14 +121,19 @@ GENERAL COMMANDS:
                   value + Fore.RESET)
 
 
+def _check_started(cli):
+    cli.data = ['version']
+    args = ['--verbose'] if '--verbose' in sys.argv else None
+    yield cli._send(
+        timeout=0.1, printer=_null_printer,
+        errb=lambda: cli.start(args))
+    cli.data = []
+
+
 @defer.inlineCallbacks
 def execute():
     cli = BitmaskCLI()
-    cli.data = ['version']
-    yield cli._send(
-        timeout=0.1, printer=_null_printer,
-        errb=lambda: cli.start(None))
-    cli.data = []
+    _check_started(cli)
     yield cli.execute(sys.argv[1:])
     try:
         yield reactor.stop()
