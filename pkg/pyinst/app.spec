@@ -9,7 +9,9 @@ hiddenimports = [
      'leap.common', 'leap.bitmask', 
      'leap.bitmask.core.logs',
      'leap.soledad.common.document', 
-     'leap.bitmask_js']
+     'leap.bitmask_js',
+     'packaging', 'packaging.version', 'packaging.specifiers',
+     'packaging.requirements']
 
 if platform.system() == 'Windows':
     print "Platform=Windows, using pyside..."

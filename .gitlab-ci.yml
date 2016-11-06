@@ -1,7 +1,7 @@
-# Todo: move test stage to the top once it succeeds again
 stages:
-  - build
   - test
+  - build
+  - bundle
 
 test:
   image: leapcode/soledad:latest
@@ -19,3 +19,11 @@ build:
     - mkdir -p /root/.config/leap/
     - bitmaskd
     - bitmaskctl status
+
+bundle:
+  image: leapcode/bitmask-dev:latest
+  stage: bundle 
+  script: pkg/build_bundle_with_venv.sh
+  artifacts:
+    paths:
+      - dist/*.tar.gz

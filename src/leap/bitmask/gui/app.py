@@ -45,6 +45,7 @@ else:
     from PyQt5.QtWidgets import QDialog
     from PyQt5.QtWidgets import QApplication
     from PyQt5.QtWebKitWidgets import QWebView
+    from PyQt5.QtCore import QSize
 
 
 BITMASK_URI = 'http://localhost:7070'
