@@ -1,5 +1,5 @@
 import React from 'react'
-import { Button, Glyphicon, Alert } from 'react-bootstrap'
+import { Button, Glyphicon, Alert, ButtonToolbar } from 'react-bootstrap'
 
 import SectionLayout from './section_layout'
 import IMAPButton from './imap_button'
@@ -7,6 +7,7 @@ import IMAPButton from './imap_button'
 import Account from 'models/account'
 import Spinner from 'components/spinner'
 import bitmask from 'lib/bitmask'
+import App from 'app'
 
 const GENERAL_NOTICES = [
   "KEYMANAGER_KEY_FOUND",  // (address)
@@ -66,17 +67,17 @@ export default class EmailSection extends React.Component {
       expanded: true
     }
     this.expand    = this.expand.bind(this)
-    this.openKeys  = this.openKeys.bind(this)
+    this.openKeys = this.openKeys.bind(this)
     this.openApp   = this.openApp.bind(this)
     this.openPrefs = this.openPrefs.bind(this)
     this.logEvent  = this.logEvent.bind(this)
   }
 
   componentWillMount() {
-    let events = [].concat(GENERAL_NOTICES, ACCOUNT_NOTICES, STATUSES, STATUS_ERRORS)
-    for (let event of events) {
-      bitmask.events.register(event, this.logEvent)
-    }
+    //let events = [].concat(GENERAL_NOTICES, ACCOUNT_NOTICES, STATUSES, STATUS_ERRORS)
+    //for (let event of events) {
+    //  bitmask.events.register(event, this.logEvent)
+    //}
     bitmask.mail.status().then(status => {
       // either 'running' or 'disabled'
       let newstatus = 'error'
@@ -93,8 +94,12 @@ export default class EmailSection extends React.Component {
     console.log("EVENT: " + event, msg)
   }
 
-  openKeys() {}
+  openKeys() {
+    App.show('addressbook', {account: this.props.account})
+  }
+
   openApp() {}
+
   openPrefs() {}
 
   expand() {
@@ -113,14 +118,17 @@ export default class EmailSection extends React.Component {
     let body = null
     let header = <h1>Mail</h1>
     if (this.state.status == 'on') {
-      button = <Button onClick={this.openApp}>Open Email</Button>
+      // button = <Button onClick={this.openKeys}>Addressbook</Button>
     }
     if (this.state.status == 'disabled') {
       header = <h1>Mail Disabled</h1>
     }
     if (this.state.expanded) {
       body = (
-        <IMAPButton account={this.props.account} />
+        <ButtonToolbar>
+          <IMAPButton account={this.props.account} />
+          <Button onClick={this.openKeys}>Addressbook</Button>
+        </ButtonToolbar>
       )
     }
     return (

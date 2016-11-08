@@ -23,3 +23,33 @@
 .horizontal-layout.equal2 > .layout-column {width: 50%;}
 .horizontal-layout.equal3 > .layout-column {width: 33.33%;}
 .horizontal-layout.equal4 > .layout-column {width: 25%;}
+
+.vertical-layout {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  -webkit-flex: 1 1 auto;
+  flex: 1 1 auto;
+  > .layout-row {
+    //display: -webkit-flex;
+    //display: flex;
+    margin-bottom: @gutter;
+    &.expand {
+      -webkit-flex: 1 1 auto;
+      flex: 1 1 auto;
+    }
+    &.shrink {
+      -webkit-flex: 0 1 auto;
+      flex: 0 1 auto;
+    }
+  }
+  > .layout-row:last-child {
+    margin-bottom: 0px;
+  }
+}
+
+.vertical-layout.equal1 > .layout-row {width: 100%;}
+.vertical-layout.equal2 > .layout-row {width: 50%;}
+.vertical-layout.equal3 > .layout-row {width: 33.33%;}
+.vertical-layout.equal4 > .layout-row {width: 25%;}
