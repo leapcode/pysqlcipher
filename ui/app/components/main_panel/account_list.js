@@ -80,12 +80,13 @@ export default class AccountList extends React.Component {
           <Glyphicon glyph="triangle-left" />
         </Button>
       )
+      let removeDisabled = !this.props.account || this.props.account.authenticated
       plusminusButtons = (
         <ButtonGroup style={style}>
           <Button onClick={this.add} className="btn-inverse">
             <Glyphicon glyph="plus" />
           </Button>
-          <Button disabled={this.props.account == null} onClick={this.askRemove} className="btn-inverse">
+          <Button disabled={removeDisabled} onClick={this.askRemove} className="btn-inverse">
             <Glyphicon glyph="minus" />
           </Button>
         </ButtonGroup>

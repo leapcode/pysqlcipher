@@ -50,11 +50,14 @@ export default class MainPanel extends React.Component {
   removeAccount(account) {
     Account.remove(account).then(
       newActiveAccount => {
-        console.log(newActiveAccount)
-        this.setState({
-          account: newActiveAccount,
-          accounts: Account.list
-        })
+        if (newActiveAccount == null) {
+          App.start()
+        } else {
+          this.setState({
+            account: newActiveAccount,
+            accounts: Account.list
+          })
+        }
       },
       error => {
         console.log(error)
