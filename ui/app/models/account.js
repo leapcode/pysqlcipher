@@ -53,8 +53,8 @@ export default class Account {
   //
   // returns a promise, fulfill is passed account object
   //
-  login(password) {
-    return bitmask.bonafide.user.auth(this.address, password).then(
+  login(password, autoSetupProvider=false) {
+    return bitmask.bonafide.user.auth(this.address, password, autoSetupProvider).then(
       response => {
         if (response.uuid) {
           this._uuid = response.uuid
@@ -145,7 +145,9 @@ export default class Account {
         Account.list = Account.list.filter(i => {
           return i.id != account.id
         })
-        if (index >= Account.list.length) {
+        if (Account.list.length == 0) {
+          return null
+        } else if (index >= Account.list.length) {
           index = index - 1
         } else if (index == -1) {
           index = 0

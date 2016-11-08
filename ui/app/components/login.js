@@ -14,6 +14,7 @@ class Login extends React.Component {
 
   static get defaultProps() {return{
     rememberAllowed: false,   // if set, show remember password checkbox
+    autoAllowed: false,       // if set, allow auto setup of provider
     domain: null,             // if set, only allow this domain
     address: null,            // if set, only allow this username@domain
     onLogin: null,            // callback
@@ -391,7 +392,7 @@ class Login extends React.Component {
 
   doLogin() {
     let account = Account.findOrAdd(this.state.username)
-    account.login(this.state.password).then(
+    account.login(this.state.password, this.props.autoAllowed).then(
       account => {
         this.setState({loading: false})
         if (this.props.onLogin) {
