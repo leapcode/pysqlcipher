@@ -21,12 +21,12 @@ class Application {
 
   start() {
     Provider.list(false).then(domains => {
-      Account.initialize_list(domains)
+      Account.initializeList(domains)
       Account.active().then(account => {
         if (account == null) {
           this.show('greeter')
         } else {
-          Account.add_primary(account)
+          Account.addPrimary(account)
           this.show('main', {initialAccount: account})
         }
       }, error => {

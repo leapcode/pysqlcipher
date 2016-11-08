@@ -28,6 +28,7 @@ export default class MainPanel extends React.Component {
       accounts: []
     }
     this.activateAccount = this.activateAccount.bind(this)
+    this.removeAccount = this.removeAccount.bind(this)
   }
 
   componentWillMount() {
@@ -46,11 +47,20 @@ export default class MainPanel extends React.Component {
     })
   }
 
-  //setAccounts(accounts) {
-  //  this.setState({
-  //    accounts: accounts
-  //  })
-  //}
+  removeAccount(account) {
+    Account.remove(account).then(
+      newActiveAccount => {
+        console.log(newActiveAccount)
+        this.setState({
+          account: newActiveAccount,
+          accounts: Account.list
+        })
+      },
+      error => {
+        console.log(error)
+      }
+    )
+  }
 
   render() {
     let emailSection = null
@@ -64,7 +74,10 @@ export default class MainPanel extends React.Component {
 
     return (
       <div className="main-panel">
-        <AccountList account={this.state.account} accounts={this.state.accounts} onSelect={this.activateAccount} />
+        <AccountList account={this.state.account}
+          accounts={this.state.accounts}
+          onSelect={this.activateAccount}
+          onRemove={this.removeAccount}/>
         <div className="body">
           <UserSection account={this.state.account} onLogin={this.activateAccount} onLogout={this.activateAccount}/>
           {vpnSection}

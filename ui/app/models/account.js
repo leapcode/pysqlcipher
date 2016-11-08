@@ -99,7 +99,7 @@ export default class Account {
     return account
   }
 
-  static find_or_add(address) {
+  static findOrAdd(address) {
     let account = Account.find(address)
     if (!account) {
       account = new Account(address)
@@ -129,10 +129,30 @@ export default class Account {
     }
   }
 
+  //
+  // For now, accounts are really just providers. Eventually,
+  // there will be a separate account and provider list.
+  //
+  // Returns the account in the list that is closest to the one
+  // We removed.
+  //
   static remove(account) {
-    Account.list = Account.list.filter(i => {
-      return i.id != account.id
-    })
+    return bitmask.bonafide.provider.delete(account.domain).then(
+      response => {
+        let index = Account.list.findIndex(i => {
+          return i.id == account.id
+        })
+        Account.list = Account.list.filter(i => {
+          return i.id != account.id
+        })
+        if (index >= Account.list.length) {
+          index = index - 1
+        } else if (index == -1) {
+          index = 0
+        }
+        return Account.list[index]
+      }
+    )
   }
 
   static create(address, password, invite=null) {
@@ -143,7 +163,7 @@ export default class Account {
     )
   }
 
-  static initialize_list(domains) {
+  static initializeList(domains) {
     for (let domain of domains) {
       Account.add(new Account(domain))
     }
@@ -156,7 +176,7 @@ export default class Account {
   // this is a temporary hack to support the old behavior
   // util the backend has a proper concept of an account list.
   //
-  static add_primary(account) {
+  static addPrimary(account) {
     Account.list = Account.list.filter(i => {
       return i.domain != account.domain
     })

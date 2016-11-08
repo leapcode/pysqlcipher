@@ -3,6 +3,7 @@ import {Button, ButtonGroup, ButtonToolbar, Glyphicon} from 'react-bootstrap'
 
 import App from 'app'
 import Account from 'models/account'
+import Confirmation from 'components/confirmation'
 
 export default class AccountList extends React.Component {
 
@@ -18,13 +19,16 @@ export default class AccountList extends React.Component {
     super(props)
 
     this.state = {
-      mode: 'expanded'
+      mode: 'expanded',
+      showRemoveConfirmation: false
     }
 
     // prebind:
     this.select = this.select.bind(this)
     this.add    = this.add.bind(this)
     this.remove = this.remove.bind(this)
+    this.askRemove = this.askRemove.bind(this)
+    this.cancelRemove = this.cancelRemove.bind(this)
     this.expand = this.expand.bind(this)
     this.collapse = this.collapse.bind(this)
   }
@@ -43,6 +47,17 @@ export default class AccountList extends React.Component {
   }
 
   remove() {
+    this.setState({showRemoveConfirmation: false})
+    if (this.props.onRemove) {
+      this.props.onRemove(this.props.account)
+    }
+  }
+
+  askRemove() {
+    this.setState({showRemoveConfirmation: true})
+  }
+  cancelRemove() {
+    this.setState({showRemoveConfirmation: false})
   }
 
   expand() {
@@ -57,6 +72,7 @@ export default class AccountList extends React.Component {
     let style = {}
     let expandButton = null
     let plusminusButtons = null
+    let removeModal = null
 
     if (this.state.mode == 'expanded') {
       expandButton = (
@@ -69,7 +85,7 @@ export default class AccountList extends React.Component {
           <Button onClick={this.add} className="btn-inverse">
             <Glyphicon glyph="plus" />
           </Button>
-          <Button disabled={this.props.account == null} onClick={this.remove} className="btn-inverse">
+          <Button disabled={this.props.account == null} onClick={this.askRemove} className="btn-inverse">
             <Glyphicon glyph="minus" />
           </Button>
         </ButtonGroup>
@@ -80,6 +96,14 @@ export default class AccountList extends React.Component {
         <Button onClick={this.expand} className="expander btn-inverse btn-flat pull-right">
           <Glyphicon glyph="triangle-right" />
         </Button>
+      )
+    }
+
+    if (this.state.showRemoveConfirmation) {
+      let domain = this.props.account.domain
+      let title = `Are you sure you wish to remove ${domain}?`
+      removeModal = (
+        <Confirmation title={title} onAccept={this.remove} onCancel={this.cancelRemove} />
       )
     }
 
@@ -95,6 +119,7 @@ export default class AccountList extends React.Component {
       )
     })
 
+    expandButton = null // for now, disable expand  button
 
     return (
       <div className="accounts" style={style}>
@@ -105,6 +130,7 @@ export default class AccountList extends React.Component {
           {plusminusButtons}
           {expandButton}
         </ButtonToolbar>
+        {removeModal}
       </div>
     )
   }
