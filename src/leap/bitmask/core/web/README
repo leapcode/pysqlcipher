@@ -1,9 +1,14 @@
-This is the original implementation of the bitmask.js library, which uses the
-REST api exposed by the HTTPRequestDispatcher.
+This is a simple html based console that uses the bitmask.js library, which
+uses the REST api exposed by the HTTPRequestDispatcher. This html should be
+served when leap.bitmask_js package is not found on the import path from where
+bitmask.core is executed. 
 
 The development of bitmask_js is in the ui/ folder in this bitmask-dev repo.
 
-A pre-compiled version of the html+js web-ui can be found in the bitmask_js package.
+A pre-compiled version of the whole html+js ui can be found in the
+leap.bitmask_js package. To have it served from the same endpoint than the REST
+api, just install leap.bitmask_js in your environment.
 
-This remains here to be able to develop against the REST api without the need
-of installing the full-fledged bitmask_js package.
+This 'web console' remains here to be able to develop against the REST api
+without the need of installing the full-fledged bitmask_js package. However,
+it's only going to work when running from the git repository.

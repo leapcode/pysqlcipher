@@ -32,6 +32,7 @@ from twisted.web.server import Site, NOT_DONE_YET
 from twisted.web.static import File
 from twisted.logger import Logger
 
+from leap.bitmask.util import here
 from leap.bitmask.core.dispatcher import CommandDispatcher
 
 try:
@@ -52,8 +53,14 @@ class HTTPDispatcherService(service.Service):
 
     """
     A Dispatcher for BitmaskCore exposing a REST API.
-    If the leap.bitmask_js package is available in the search path, it will
-    serve the UI under this same service too.
+
+    The API itself is served under the API/ route.
+
+    If the package ``leap.bitmask_js`` is found in the import path, we'll serve
+    the whole JS UI in the root resource too (under the ``public`` path).
+    
+    If that package cannot be found, we'll serve just the javascript wrapper
+    around the REST API.
     """
 
     def __init__(self, core, port=7070, debug=False, onion=False):
@@ -72,13 +79,21 @@ class HTTPDispatcherService(service.Service):
             log.warn('bitmask_js not found, serving bitmask.core ui')
             webdir = os.path.abspath(
                 pkg_resources.resource_filename('leap.bitmask.core', 'web'))
+            jspath = os.path.join(
+                here(), '..', '..', '..',
+                'ui', 'app', 'lib', 'bitmask.js')
+            jsapi = File(os.path.abspath(jspath))
         root = File(webdir)
 
         api = Api(CommandDispatcher(self._core))
         root.putChild(u'API', api)
 
+        # TODO --- pass requestFactory for header authentication
         factory = Site(root)
         self.site = factory
+
+        if not HAS_WEB_UI:
+            root.putChild('bitmask.js', jsapi)
 
         if self.onion:
             try:
