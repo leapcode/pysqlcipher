@@ -43,6 +43,7 @@ class SubCommand(object):
     __metaclass__ = APICommand
 
     def dispatch(self, service, *parts, **kw):
+        subcmd = ''
         try:
             subcmd = parts[1]
             _method = getattr(self, 'do_' + subcmd.upper(), None)
@@ -402,7 +403,7 @@ class CommandDispatcher(object):
         return d
 
     def do_WEBUI(self, *parts):
-        subcmd = parts[1]
+        subcmd = parts[1] if parts and len(parts) > 1 else None
         dispatch = self.subcommand_webui.dispatch
 
         if subcmd == 'enable':

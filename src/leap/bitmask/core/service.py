@@ -51,6 +51,12 @@ else:
 
 class BitmaskBackend(configurable.ConfigurableService):
 
+    """
+    The Bitmask Core Backend Service.
+    Here is where the multiple service tree gets composed.
+    This is passed to the command dispatcher.
+    """
+
     def __init__(self, basedir=configurable.DEFAULT_BASEDIR):
 
         configurable.ConfigurableService.__init__(self, basedir)
@@ -217,7 +223,7 @@ class BitmaskBackend(configurable.ConfigurableService):
 class BackendCommands(object):
 
     """
-    General commands for the BitmaskBackend Core Service.
+    General Commands for the BitmaskBackend Core Service.
     """
 
     def __init__(self, core):
