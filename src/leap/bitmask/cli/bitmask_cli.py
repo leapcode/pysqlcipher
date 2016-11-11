@@ -96,7 +96,6 @@ GENERAL COMMANDS:
         if raw_args and ('--verbose' in raw_args or '-v' in raw_args):
             cmd += ' --verbose'
         commands.getoutput(cmd)
-        command.default_dict_printer({'start': 'ok'})
         return defer.succeed(None)
 
     def version(self, raw_args):
@@ -129,6 +128,8 @@ def execute():
     yield cli._send(
         timeout=0.1, printer=_null_printer,
         errb=lambda: cli.start(args))
+    if 'start' in sys.argv or 'restart' in sys.argv:
+        command.default_dict_printer({'start': 'ok'})
     cli.data = []
     yield cli.execute(sys.argv[1:])
     try:
