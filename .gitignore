@@ -25,6 +25,7 @@ docs/cov_html/
 .cache
 coverage.xml
 *,cover
+_trial_temp
 
 # Sphinx documentation
 docs/_build/

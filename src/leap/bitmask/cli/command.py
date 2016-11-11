@@ -39,6 +39,8 @@ def _print_result(result):
 
 
 def default_dict_printer(result):
+    if not result:
+        return
     for key, value in result.items():
         if value is None:
             value = str(value)
