@@ -1,10 +1,19 @@
 #!/bin/bash
+###########################################################
+# Build a Bitmask bundle inside a fresh virtualenv.
+# To be run by Gitlab Runner,
+# will produce an artifact for each build.
+###########################################################
 virtualenv venv
 source venv/bin/activate
 $VIRTUAL_ENV/bin/pip install -U pyinstaller==3.1 packaging
 $VIRTUAL_ENV/bin/pip install zope.interface zope.proxy
-$VIRTUAL_ENV/bin/pip install leap.soledad.common
-$VIRTUAL_ENV/bin/pip install leap.soledad.client
+
+# CHANGE THIS IF YOU WANT A DIFFERENT BRANCH CHECKED OUT FOR COMMON/SOLEDAD --------------------
+# (this is tracking shyba/feature/streaming_encrypter for the moment)
+$VIRTUAL_ENV/bin/pip install -U leap.soledad.common --find-links https://devpi.net/kali/dev 
+$VIRTUAL_ENV/bin/pip install -U leap.soledad.client --find-links https://devpi.net/kali/dev 
+# ----------------------------------------------------------------------------------------------
 
 # XXX hack for the namespace package not being properly handled by pyinstaller
 touch $VIRTUAL_ENV/lib/python2.7/site-packages/zope/__init__.py
