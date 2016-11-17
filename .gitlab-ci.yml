@@ -27,4 +27,5 @@ bundle:
   artifacts:
     paths:
       - dist/bitmask-*
-    name: "bitmask_linux64_latest_${CI_BUILD_REF}"
+    name: "Bitmask_linux64_latest_${CI_BUILD_REF}"
+    expire_in: 1 week
