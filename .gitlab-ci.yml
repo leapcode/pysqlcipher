@@ -26,4 +26,5 @@ bundle:
   script: pkg/build_bundle_with_venv.sh
   artifacts:
     paths:
-      - dist/*.tar.gz
+      - dist/bitmask-*
+    name: "bitmask_linux64_latest_${CI_BUILD_REF}"
