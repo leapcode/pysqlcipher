@@ -18,6 +18,10 @@ bundle_win:
 	cp ${VIRTUAL_ENV}/Lib/site-packages/zmq/libzmq.pyd $(DIST)
 	cp src/leap/bitmask/core/bitmaskd.tac $(DIST)
 
+bundle_gpg:
+	# TODO build it in a docker container!
+	mkdir -p $(DIST_VERSION)/apps/mail
+	cp /usr/bin/gpg $(DIST_VERSION)/apps/mail/
 
 bundle_tar:
 	cd dist/ && tar cvzf Bitmask.$(NEXT_VERSION).tar.gz bitmask-$(NEXT_VERSION)
