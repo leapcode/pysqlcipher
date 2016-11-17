@@ -16,4 +16,3 @@ $VIRTUAL_ENV/bin/pip uninstall leap.bitmask
 $VIRTUAL_ENV/bin/pip install .
 
 make bundle
-make bundle_tar
