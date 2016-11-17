@@ -20,7 +20,7 @@ build:
     - bitmaskd
     - bitmaskctl status
 
-bundle:
+bitmask_latest_bundle:
   image: leapcode/bitmask-dev:latest
   stage: bundle 
   script: pkg/build_bundle_with_venv.sh
