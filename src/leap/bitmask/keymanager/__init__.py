@@ -19,10 +19,8 @@ Key Manager is a Nicknym agent for LEAP client.
 """
 import fileinput
 import json
-import os
 import sys
 import tempfile
-import urllib
 
 from urlparse import urlparse
 
@@ -32,13 +30,13 @@ from twisted.web import client
 from twisted.web._responses import NOT_FOUND
 
 from leap.common import ca_bundle
-from leap.common.check import leap_assert
-from leap.common.decorators import memoized_method
 from leap.common.http import HTTPClient
 from leap.common.events import emit_async, catalog
 
 from leap.bitmask.keymanager import errors as keymanager_errors
+from leap.bitmask.keymanager.errors import KeyNotFound
 from leap.bitmask.keymanager.nicknym import Nicknym
+from leap.bitmask.keymanager.refresher import RandomRefreshPublicKey
 from leap.bitmask.keymanager.validation import ValidationLevels, can_upgrade
 from leap.bitmask.keymanager.openpgp import OpenPGPScheme
 
@@ -101,7 +99,8 @@ class KeyManager(object):
             self._combined_ca_bundle = ''
 
         self._async_client = HTTPClient(self._combined_ca_bundle)
-        self._nicknym = Nicknym(self._nickserver_uri, self._ca_cert_path, self._token)
+        self._nicknym = Nicknym(self._nickserver_uri,
+                                self._ca_cert_path, self._token)
         self.refresher = None
 
     #
@@ -155,14 +154,17 @@ class KeyManager(object):
         except IOError as e:
             logger.warn("HTTP error retrieving key: %r" % (e,))
             logger.warn("%s" % (content,))
-            raise keymanager_errors.KeyNotFound(e.message), None, sys.exc_info()[2]
+            raise keymanager_errors.KeyNotFound(e.message), \
+                None, sys.exc_info()[2]
         except ValueError as v:
             logger.warn("invalid JSON data from key: %s" % (uri,))
-            raise keymanager_errors.KeyNotFound(v.message + ' - ' + uri), None, sys.exc_info()[2]
+            raise keymanager_errors.KeyNotFound(v.message + ' - ' + uri), \
+                None, sys.exc_info()[2]
 
         except Exception as e:
             logger.warn("error retrieving key: %r" % (e,))
-            raise keymanager_errors.KeyNotFound(e.message), None, sys.exc_info()[2]
+            raise keymanager_errors.KeyNotFound(e.message), \
+                None, sys.exc_info()[2]
         # Responses are now text/plain, although it's json anyway, but
         # this will fail when it shouldn't
         # leap_assert(
@@ -189,7 +191,7 @@ class KeyManager(object):
                 raise KeyNotFound(message), None, sys.exc_info()[2]
             return response
 
-        d = self._async_client_pinned.request(
+        d = self._nicknym._async_client_pinned.request(
             str(uri), 'GET', callback=check_404)
         d.addCallback(client.readBody)
         return d
@@ -219,76 +221,6 @@ class KeyManager(object):
             raise keymanager_errors.KeyNotFound(uri)
         defer.returnValue(content)
 
-    @defer.inlineCallbacks
-    def _put(self, uri, data=None):
-        """
-        Send a PUT request to C{uri} containing C{data}.
-
-        The request will be sent using the configured CA certificate path to
-        verify the server certificate and the configured session id for
-        authentication.
-
-        :param uri: The URI of the request.
-        :type uri: str
-        :param data: The body of the request.
-        :type data: dict, str or file
-
-        :return: A deferred that will be fired when PUT request finishes
-        :rtype: Deferred
-        """
-        leap_assert(
-            self._token is not None,
-            'We need a token to interact with webapp!')
-        if type(data) == dict:
-            data = urllib.urlencode(data)
-        headers = {'Authorization': [str('Token token=%s' % self._token)]}
-        headers['Content-Type'] = ['application/x-www-form-urlencoded']
-        try:
-            res = yield self._async_client_pinned.request(str(uri), 'PUT',
-                                                          body=str(data),
-                                                          headers=headers)
-        except Exception as e:
-            logger.warn("Error uploading key: %r" % (e,))
-            raise e
-        if 'error' in res:
-            # FIXME: That's a workaround for 500,
-            # we need to implement a readBody to assert response code
-            logger.warn("Error uploading key: %r" % (res,))
-            raise Exception(res)
-
-    @memoized_method(invalidation=300)
-    @defer.inlineCallbacks
-    def _fetch_keys_from_server(self, address):
-        """
-        Fetch keys bound to address from nickserver and insert them in
-        local database.
-
-        :param address: The address bound to the keys.
-        :type address: str
-
-        :return: A Deferred which fires when the key is in the storage,
-                 or which fails with KeyNotFound if the key was not found on
-                 nickserver.
-        :rtype: Deferred
-
-        """
-        # request keys from the nickserver
-        server_keys = yield self._get_key_from_nicknym(address)
-
-        # insert keys in local database
-        if self.OPENPGP_KEY in server_keys:
-            # nicknym server is authoritative for its own domain,
-            # for other domains the key might come from key servers.
-            validation_level = ValidationLevels.Weak_Chain
-            _, domain = _split_email(address)
-            if (domain == _get_domain(self._nickserver_uri)):
-                validation_level = ValidationLevels.Provider_Trust
-
-            yield self.put_raw_key(
-                server_keys['openpgp'],
-                address=address,
-                validation=validation_level)
-
     #
     # key management
     #
@@ -307,7 +239,8 @@ class KeyManager(object):
         :raise UnsupportedKeyTypeError: if invalid key type
         """
         def send(pubkey):
-            d = self._nicknym.put_key(self.uid, pubkey.key_data, self._api_uri, self._api_version)
+            d = self._nicknym.put_key(self.uid, pubkey.key_data,
+                                      self._api_uri, self._api_version)
             d.addCallback(lambda _:
                           emit_async(catalog.KEYMANAGER_DONE_UPLOADING_KEYS,
                                      self._address))
@@ -327,9 +260,9 @@ class KeyManager(object):
         :type address: str
 
         :return: A Deferred which fires when the key is in the storage,
-                     or which fails with KeyNotFound if the key was not found on
-                     nickserver.
-            :rtype: Deferred
+                     or which fails with KeyNotFound if the key was not
+                     found on nickserver.
+        :rtype: Deferred
 
         """
         server_keys = yield self._nicknym.fetch_key_with_address(address)

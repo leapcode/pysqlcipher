@@ -206,8 +206,8 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         token = "mytoken"
         km = self._key_manager(token=token)
         yield km._openpgp.put_raw_key(PUBLIC_KEY, ADDRESS)
-        km._async_client.request = mock.Mock(
-            return_value=defer.succeed(''))
+        km._nicknym._async_client_pinned.request = \
+            mock.Mock(return_value=defer.succeed(''))
         # the following data will be used on the send
         km.ca_cert_path = 'capath'
         km.session_id = 'sessionid'
@@ -280,9 +280,9 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
             check_404_callback = used_kwargs['callback']
             fake_response = mock.Mock()
             fake_response.code = NOT_FOUND
-            with self.assertRaisesRegexp(
-                    errors.KeyNotFound,
-                    '404: Key not found. Request: %s' % url.replace('?', '\?')):
+            with self.assertRaisesRegexp(errors.KeyNotFound,
+                                         '404: Key not found. Request: '
+                                         '%s' % url.replace('?', '\?')):
                 check_404_callback(fake_response)
 
         d.addCallback(check_key_not_found_is_raised_if_404)
@@ -323,7 +323,8 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         """
         km = self._key_manager(url=NICKSERVER_URI)
 
-        key = yield self._fetch_key_with_address(km, ADDRESS_OTHER, PUBLIC_KEY_OTHER)
+        key = yield self._fetch_key_with_address(km, ADDRESS_OTHER,
+                                                 PUBLIC_KEY_OTHER)
         self.assertIsInstance(key, OpenPGPKey)
         self.assertTrue(ADDRESS_OTHER in key.uids)
         self.assertEqual(key.validation, ValidationLevels.Weak_Chain)
@@ -395,8 +396,8 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         """
         km = self._key_manager()
 
-        km._nicknym._async_client_pinned.request = mock.Mock(
-            return_value=defer.succeed(PUBLIC_KEY))
+        km._async_client.request = \
+            mock.Mock(return_value=defer.succeed(PUBLIC_KEY))
 
         yield km.fetch_key(ADDRESS, "http://site.domain/key")
         key = yield km.get_key(ADDRESS)
@@ -410,7 +411,7 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         """
         km = self._key_manager()
 
-        km._nicknym._async_client_pinned.request = mock.Mock(
+        km._async_client.request = mock.Mock(
             return_value=defer.succeed(self.get_public_binary_key()))
 
         yield km.fetch_key(ADDRESS, "http://site.domain/key")
@@ -423,7 +424,8 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         """
         km = self._key_manager()
 
-        km._nicknym._async_client_pinned.request = mock.Mock(return_value=defer.succeed(""))
+        km._nicknym._async_client_pinned.request = \
+            mock.Mock(return_value=defer.succeed(""))
         d = km.fetch_key(ADDRESS, "http://site.domain/key")
         return self.assertFailure(d, errors.KeyNotFound)
 
@@ -434,8 +436,8 @@ class KeyManagerKeyManagementTestCase(KeyManagerWithSoledadTestCase):
         """
         km = self._key_manager()
 
-        km._nicknym._async_client_pinned.request = mock.Mock(
-            return_value=defer.succeed(PUBLIC_KEY))
+        km._async_client.request = \
+            mock.Mock(return_value=defer.succeed(PUBLIC_KEY))
         d = km.fetch_key(ADDRESS_2, "http://site.domain/key")
         return self.assertFailure(d, errors.KeyAddressMismatch)
 

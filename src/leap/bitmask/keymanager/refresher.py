@@ -17,24 +17,25 @@
 
 
 """
-A service which continuous refreshes the (public) key directories randomly in a random time interval.
+A service which continuous refreshes the (public) key directories randomly in a
+random time interval.
 """
 
-import logging
-
 from twisted.internet.task import LoopingCall
+from twisted.logger import Logger
 from twisted.internet import defer
 from random import choice, randrange
 
 DEBUG_STOP_REFRESH = "Stop to refresh the key directory ..."
 DEBUG_START_REFRESH = "Start to refresh the key directory ..."
-ERROR_UNEQUAL_FINGERPRINTS = "[WARNING] Your provider might be cheat on you, " \
-                             "and gave a wrong key back. Fingerprints are unequal, old %s new %s "
+ERROR_UNEQUAL_FINGERPRINTS = "[WARNING] Your provider might be cheat " \
+                             "on you, and gave a wrong key back. " \
+                             "Fingerprints are unequal, old %s new %s "
 
 MIN_RANDOM_INTERVAL_RANGE = 4 * 60  # four minutes
 MAX_RANDOM_INTERVAL_RANGE = 6 * 60  # six minutes
 
-logger = logging.getLogger(__name__)
+logger = Logger()
 
 
 class RandomRefreshPublicKey(object):
@@ -74,7 +75,6 @@ class RandomRefreshPublicKey(object):
         :return: A random key.
         :rtype: A deferred.
         """
-        # TODO maybe make a check first if key is active and get another one then.
         keys = yield self._openpgp.get_all_keys()
         defer.returnValue(None if keys is None or keys == [] else choice(keys))
 
@@ -117,8 +117,9 @@ class RandomRefreshPublicKey(object):
         yield self._maybe_unactivate_key(old_updated_key)
         yield self._openpgp.put_key(old_updated_key)
 
-        # No new fetch by address needed, bc that will happen before sending an email
-        # could be discussed since fetching before sending an email leaks information.
+        # No new fetch by address needed, bc that will happen before sending an
+        # email could be discussed since fetching before sending an email
+        # leaks information.
 
     def _get_random_interval_to_refresh(self):
         """

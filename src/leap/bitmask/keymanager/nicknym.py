@@ -139,12 +139,14 @@ class Nicknym(object):
 
         def check_404(response):
             if response.code == NOT_FOUND:
-                message = ' %s: Key not found. Request: %s' % (response.code, uri)
+                message = ' %s: Key not found. Request: %s' \
+                          % (response.code, uri)
                 logger.warning(message)
                 raise KeyNotFound(message), None, sys.exc_info()[2]
             return response
 
-        d = self._async_client_pinned.request(str(uri), 'GET', callback=check_404)
+        d = self._async_client_pinned.request(str(uri), 'GET',
+                                              callback=check_404)
         d.addCallback(client.readBody)
         return d
 
@@ -162,7 +164,8 @@ class Nicknym(object):
         :rtype: Deferred
 
         """
-        return self._get_key_from_nicknym(self._nickserver_uri + '?address=' + address)
+        return self._get_key_from_nicknym(self._nickserver_uri +
+                                          '?address=' + address)
 
     @memoized_method(invalidation=300)
     def fetch_key_with_fingerprint(self, fingerprint):
@@ -178,4 +181,5 @@ class Nicknym(object):
         :rtype: Deferred
 
         """
-        return self._get_key_from_nicknym(self._nickserver_uri + '?fingerprint=' + fingerprint)
+        return self._get_key_from_nicknym(self._nickserver_uri +
+                                          '?fingerprint=' + fingerprint)

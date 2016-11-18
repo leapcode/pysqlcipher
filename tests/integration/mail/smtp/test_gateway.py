@@ -113,7 +113,7 @@ class TestSmtpGateway(KeyManagerWithSoledadTestCase):
             self._soledad, gpgbinary=self.gpg_binary_path)
         yield pgp.delete_key(pubkey)
         # mock the key fetching
-        self.km._fetch_keys_from_server = Mock(
+        self.km._nicknym.fetch_key_with_address = Mock(
             return_value=fail(errors.KeyNotFound()))
         user = TEST_USER
         proto = getSMTPFactory(

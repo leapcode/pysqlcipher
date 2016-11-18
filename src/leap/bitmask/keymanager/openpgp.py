@@ -533,12 +533,13 @@ class OpenPGPScheme(object):
         d.addCallback(delete_key)
         return d
 
+    @defer.inlineCallbacks
     def unactivate_key(self, address):
         """
         Mark a active doc as deleted.
         :param address: The unique address for the active content.
         """
-        active_doc = self._get_active_doc_from_address(address, False)
+        active_doc = yield self._get_active_doc_from_address(address, False)
         yield self._soledad.delete_doc(active_doc)
 
     #

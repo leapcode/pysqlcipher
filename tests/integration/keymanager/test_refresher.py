@@ -18,7 +18,6 @@
 """
 Tests for refreshing the key directory.
 """
-
 from datetime import datetime
 
 from mock import Mock, patch
@@ -28,16 +27,14 @@ from twisted.logger import Logger
 
 from leap.bitmask.keymanager import openpgp
 from leap.bitmask.keymanager.keys import OpenPGPKey
-from leap.bitmask.keymanager.refresher import RandomRefreshPublicKey, MIN_RANDOM_INTERVAL_RANGE, DEBUG_START_REFRESH, \
-    DEBUG_STOP_REFRESH, ERROR_UNEQUAL_FINGERPRINTS
+from leap.bitmask.keymanager.refresher import RandomRefreshPublicKey, \
+    MIN_RANDOM_INTERVAL_RANGE, DEBUG_START_REFRESH, DEBUG_STOP_REFRESH,\
+    ERROR_UNEQUAL_FINGERPRINTS
 from leap.bitmask.keymanager.testing import KeyManagerWithSoledadTestCase
 
 from common import KEY_FINGERPRINT
 
 ANOTHER_FP = 'ANOTHERFINGERPRINT'
-
-
-logger = Logger()
 
 
 class RandomRefreshPublicKeyTestCase(KeyManagerWithSoledadTestCase):
@@ -53,7 +50,8 @@ class RandomRefreshPublicKeyTestCase(KeyManagerWithSoledadTestCase):
         pgp.get_all_keys = Mock(return_value=defer.succeed([key, key_another]))
 
         random_key = yield rf._get_random_key()
-        self.assertTrue(random_key.address == key.address or random_key.address == key_another.address)
+        self.assertTrue(random_key.address == key.address or
+                        random_key.address == key_another.address)
 
     @defer.inlineCallbacks
     def test_do_not_throw_error_for_empty_key_dict(self):
@@ -66,8 +64,7 @@ class RandomRefreshPublicKeyTestCase(KeyManagerWithSoledadTestCase):
         self.assertTrue(random_address is None)
 
     @defer.inlineCallbacks
-    def _test_log_error_if_fetch_by_fingerprint_returns_wrong_key(self):
-        # FIXME !!! ---------------------------------------------------
+    def test_log_error_if_fetch_by_fingerprint_returns_wrong_key(self):
         pgp = openpgp.OpenPGPScheme(
             self._soledad, gpgbinary=self.gpg_binary_path)
         km = self._key_manager()
@@ -75,10 +72,12 @@ class RandomRefreshPublicKeyTestCase(KeyManagerWithSoledadTestCase):
         with patch.object(Logger, 'error') as mock_logger_error:
             rf = RandomRefreshPublicKey(pgp, km)
             rf._get_random_key = \
-                Mock(return_value=defer.succeed(OpenPGPKey(fingerprint=KEY_FINGERPRINT)))
+                Mock(return_value=defer.succeed(OpenPGPKey(
+                    fingerprint=KEY_FINGERPRINT)))
 
             km._nicknym.fetch_key_with_fingerprint = \
-                Mock(return_value=defer.succeed(OpenPGPKey(fingerprint=ANOTHER_FP)))
+                Mock(return_value=defer.succeed(OpenPGPKey(
+                    fingerprint=ANOTHER_FP)))
 
             yield rf.maybe_refresh_key()
 
@@ -92,10 +91,11 @@ class RandomRefreshPublicKeyTestCase(KeyManagerWithSoledadTestCase):
         km = self._key_manager()
 
         rf = RandomRefreshPublicKey(pgp, km)
-        rf._get_random_key = Mock(return_value=defer.succeed(OpenPGPKey(fingerprint=KEY_FINGERPRINT)))
+        rf._get_random_key = Mock(return_value=defer.succeed(
+            OpenPGPKey(fingerprint=KEY_FINGERPRINT)))
 
-        km._nicknym.fetch_key_with_fingerprint = \
-            Mock(return_value=defer.succeed(OpenPGPKey(fingerprint=ANOTHER_FP)))
+        km._nicknym.fetch_key_with_fingerprint = Mock(
+            return_value=defer.succeed(OpenPGPKey(fingerprint=ANOTHER_FP)))
 
         yield rf.maybe_refresh_key()
 
@@ -107,13 +107,14 @@ class RandomRefreshPublicKeyTestCase(KeyManagerWithSoledadTestCase):
         rf = RandomRefreshPublicKey(pgp, km)
         key = OpenPGPKey(address='zara@leap.se', expiry_date=datetime.now())
         self.assertTrue(key.address is 'zara@leap.se')
-        km._openpgp.unactivate_key = Mock(return_value=defer.succeed(None))
+        pgp.unactivate_key = Mock(return_value=defer.succeed(None))
+
         yield rf._maybe_unactivate_key(key)
+
         self.assertTrue(key.address is None)
         self.assertFalse(key.is_active())
 
-    def _test_start_refreshing(self):
-        # FIXME !!! ---------------------------------------------------
+    def test_start_refreshing(self):
         pgp = openpgp.OpenPGPScheme(
             self._soledad, gpgbinary=self.gpg_binary_path)
 
