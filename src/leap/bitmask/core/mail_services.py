@@ -126,7 +126,6 @@ class SoledadContainer(Container):
             server_url=server_url,
             cert_file=cert_file,
             auth_token=token,
-            defer_encryption=True,
             syncable=syncable)
 
     def set_remote_auth_token(self, userid, token):
