@@ -64,8 +64,8 @@ def get_gpg_bin_path():
             gpgbin = os.path.abspath(
                 os.path.join(here(), "apps", "mail", "gpg"))
         else:
-            gpgbin = os.path.join(
-                get_path_prefix(), "..", "apps", "mail", "gpg")
+            gpgbin = os.path.abspath(
+                os.path.join(here(), "..", "apps", "mail", "gpg"))
     else:
         try:
             gpgbin_options = which("gpg", path_extension='/usr/bin/')
