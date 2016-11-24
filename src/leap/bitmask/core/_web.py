@@ -64,8 +64,7 @@ class TokenDictChecker:
                             credentials.IUsernameHashedPassword)
 
     def __init__(self, tokens):
-        "tokens: a dict-like object mapping usernames to session-tokens"
-        self.tokens = tokens 
+        self.tokens = tokens
 
     def requestAvatarId(self, credentials):
         username = credentials.username
@@ -87,8 +86,8 @@ class HttpPasswordRealm(object):
         self.resource = resource
 
     def requestAvatar(self, user, mind, *interfaces):
+        # the resource is passed on regardless of user
         if IResource in interfaces:
-            # the resource is passed on regardless of user
             return (IResource, self.resource, lambda: None)
         raise NotImplementedError()
 
@@ -123,12 +122,9 @@ class WhitelistHTTPAuthSessionWrapper(HTTPAuthSessionWrapper):
         return HTTPAuthSessionWrapper.render(self, request)
 
 
-
-def protectedResourceFactory(resource, passwords, whitelist):
+def protectedResourceFactory(resource, session_tokens, whitelist):
     realm = HttpPasswordRealm(resource)
-    # TODO this should have the per-site tokens.
-    # can put it inside the API Resource object.
-    checker = PasswordDictChecker(passwords)
+    checker = TokenDictChecker(session_tokens)
     resource_portal = portal.Portal(realm, [checker])
     credentialFactory = TokenCredentialFactory('localhost')
     protected_resource = WhitelistHTTPAuthSessionWrapper(
@@ -155,7 +151,6 @@ class HTTPDispatcherService(service.Service):
         '/API/bonafide/user',
     )
 
-
     def __init__(self, core, port=7070, debug=False, onion=False):
         self._core = core
         self.port = port
@@ -178,33 +173,20 @@ class HTTPDispatcherService(service.Service):
                 'ui', 'app', 'lib', 'bitmask.js')
             jsapi = File(os.path.abspath(jspath))
 
-        root = File(webdir)
-
-        # TODO move this to the tests...
-        DUMMY_PASS = {'user1': 'pass'}
-
         api = Api(CommandDispatcher(self._core))
         protected_api = protectedResourceFactory(
-            api, DUMMY_PASS, self.API_WHITELIST)
-        root.putChild(u'API', protected_api)
+            api, self._core.tokens, self.API_WHITELIST)
 
+        root = File(webdir)
+        root.putChild(u'API', protected_api)
         if not HAS_WEB_UI:
             root.putChild('bitmask.js', jsapi)
 
-        # TODO --- pass requestFactory for header authentication
-        # so that we remove the setting of the cookie.
-
-        # http://www.tsheffler.com/blog/2011/09/22/twisted-learning-about-cred-and-basicdigest-authentication/#Digest_Authentication
         factory = Site(root)
         self.site = factory
 
-        if self.onion:
-            try:
-                import txtorcon
-            except ImportError:
-                log.error('onion is enabled, but could not find txtorcon')
-                return
-            self._start_onion_service(factory)
+        if self.onion and _has_txtorcon():
+                self._start_onion_service(factory)
         else:
             interface = '127.0.0.1'
             endpoint = endpoints.TCP4ServerEndpoint(
@@ -274,3 +256,13 @@ class Api(Resource):
         request.setHeader('Content-Type', 'application/json')
         request.write(response)
         request.finish()
+
+
+def _has_txtorcon():
+    try:
+        import txtorcon
+        txtorcon
+    except ImportError:
+        log.error('onion is enabled, but could not find txtorcon')
+        return False
+    return True

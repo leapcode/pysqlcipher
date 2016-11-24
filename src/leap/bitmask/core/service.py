@@ -31,6 +31,7 @@ from leap.bitmask.core import configurable
 from leap.bitmask.core import _zmq
 from leap.bitmask.core import _web
 from leap.bitmask.core import flags
+from leap.bitmask.core import _session
 from leap.common.events import server as event_server
 # from leap.vpn import EIPService
 
@@ -61,6 +62,7 @@ class BitmaskBackend(configurable.ConfigurableService):
 
         configurable.ConfigurableService.__init__(self, basedir)
         self.core_commands = BackendCommands(self)
+        self.tokens = {}
 
         def enabled(service):
             return self.get_config('services', service, False, boolean=True)
@@ -69,6 +71,7 @@ class BitmaskBackend(configurable.ConfigurableService):
 
         on_start(self.init_events)
         on_start(self.init_bonafide)
+        on_start(self.init_sessions)
 
         if enabled('mail'):
             on_start(self._init_mail_services)
@@ -102,6 +105,10 @@ class BitmaskBackend(configurable.ConfigurableService):
         bf.register_hook('on_bonafide_auth', listener='keymanager')
         bf.register_hook('on_bonafide_auth', listener='mail')
         bf.register_hook('on_bonafide_logout', listener='mail')
+
+    def init_sessions(self):
+        sessions = _session.SessionService(self.basedir, self.tokens)
+        sessions.setServiceParent(self)
 
     def _start_child_service(self, name):
         logger.debug('starting backend child service: %s' % name)
@@ -137,6 +144,15 @@ class BitmaskBackend(configurable.ConfigurableService):
         if sol:
             sol.register_hook(
                 'on_new_soledad_instance', listener='keymanager')
+
+            # XXX this might not be the right place for hooking the sessions.
+            # If we want to be offline, we need to authenticate them after
+            # soledad. But this is not valid for the VPN case,
+            # because we have not decided if soledad is required in that case
+            # (seemingly not). If only VPN, then we have to return the token
+            # from the SRP authentication.
+            sol.register_hook(
+                'on_new_soledad_instance', listener='sessions')
 
     def _init_keymanager(self):
         service = mail_services.KeymanagerService
