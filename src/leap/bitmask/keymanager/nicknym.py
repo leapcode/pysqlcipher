@@ -43,7 +43,7 @@ class Nicknym(object):
     def __init__(self, nickserver_uri, ca_cert_path, token):
         self._nickserver_uri = nickserver_uri
         self._async_client_pinned = HTTPClient(ca_cert_path)
-        self._token = token
+        self.token = token
 
     @defer.inlineCallbacks
     def put_key(self, uid, key_data, api_uri, api_version):
@@ -72,11 +72,11 @@ class Nicknym(object):
             uid)
 
         leap_assert(
-            self._token is not None,
+            self.token is not None,
             'We need a token to interact with webapp!')
         if type(data) == dict:
             data = urllib.urlencode(data)
-        headers = {'Authorization': [str('Token token=%s' % self._token)]}
+        headers = {'Authorization': [str('Token token=%s' % self.token)]}
         headers['Content-Type'] = ['application/x-www-form-urlencoded']
         try:
             res = yield self._async_client_pinned.request(str(uri), 'PUT',

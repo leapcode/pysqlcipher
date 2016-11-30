@@ -90,7 +90,6 @@ class KeyManager(object):
         self.api_uri = api_uri
         self.api_version = api_version
         self.uid = uid
-        self._openpgp = OpenPGPScheme(soledad, gpgbinary=gpgbinary)
         create = self._create_combined_bundle_file
         try:
             self._combined_ca_bundle = combined_ca_bundle or create()
@@ -102,10 +101,14 @@ class KeyManager(object):
         self._nicknym = Nicknym(self._nickserver_uri,
                                 self._ca_cert_path, self._token)
         self.refresher = None
+        self._init_gpg(soledad, gpgbinary)
 
     #
     # utilities
     #
+
+    def _init_gpg(self, soledad, gpgbinary):
+        self._openpgp = OpenPGPScheme(soledad, gpgbinary=gpgbinary)
 
     def start_refresher(self):
         self.refresher = RandomRefreshPublicKey(self._openpgp, self)
@@ -376,6 +379,7 @@ class KeyManager(object):
 
     def _set_token(self, token):
         self._token = token
+        self._nicknym.token = token
 
     token = property(
         _get_token, _set_token, doc='The session token.')
