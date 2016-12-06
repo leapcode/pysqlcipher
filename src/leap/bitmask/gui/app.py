@@ -31,6 +31,9 @@ from multiprocessing import Process
 
 from leap.bitmask.core.launcher import run_bitmaskd, pid
 
+from leap.bitmask.gui import app_rc
+
+
 if platform.system() == 'Windows':
     from multiprocessing import freeze_support
     from PySide import QtCore, QtGui
@@ -86,6 +89,11 @@ class BrowserWindow(QDialog):
             # TODO add layout also in non-DEBUG mode
             layout = QtGui.QVBoxLayout(self)
             layout.addWidget(self.splitter)
+
+        icon = QtGui.QIcon()
+        icon.addPixmap(QtGui.QPixmap(":/mask-icon.png"),
+            QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        self.setWindowIcon(icon)  
 
         self.setWindowTitle('Bitmask')
         self.load_app()

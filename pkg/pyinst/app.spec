@@ -8,6 +8,7 @@ hiddenimports = [
      'pysqlcipher', 'service_identity',
      'leap.common', 'leap.bitmask', 
      'leap.bitmask.core.logs',
+     'leap.bitmask.gui.icons_rc',
      'leap.soledad.common.document', 
      'leap.bitmask_js',
      'packaging', 'packaging.version', 'packaging.specifiers',

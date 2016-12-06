@@ -19,5 +19,8 @@ dev-all:
 uninstall:
 	pip uninstall leap.bitmask
 
+qt-resources:
+	pyrcc5 pkg/branding/icons.qrc -o src/leap/bitmask/gui/app_rc.py
+
 doc:
 	cd docs && make html
