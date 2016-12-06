@@ -57,7 +57,8 @@ exe = EXE(pyz,
           strip=False,
           upx=True,
 	  # TODO remove console for win
-          console=True )
+          console=True,
+          icon='../branding/mask-icon.ico')
 coll = COLLECT(exe,
                a.binaries,
                a.zipfiles,
