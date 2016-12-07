@@ -7,6 +7,15 @@
 Testing and Reporting
 ================================
 
+`Latest bundles` for the next release cycle are automatically built by our
+Gitlab CI for every commit in master.
+
+NOTE that, for compatibility reasons, these bundles only support email for the
+time being (no VPN support yet in this latest branch), and have to be tested
+against the latest, unreleased provider at https://cdev.bitmask.net
+
+.. _`Latest bundles`: https://0xacab.org/leap/bitmask-dev/builds/artifacts/master/download?job=bitmask_latest_bundle
+
 Reporting bugs
 --------------------------------
 
@@ -21,13 +30,8 @@ Reporting bugs
 Tips for QA
 --------------------------------
 
-From time to time, we'll ask the community for help testing a new alpha release
-or a release candidate. Normally, we'll offer a link for the download of a
-self-contained bundle just for internal testing purposes. These will be updated
-quite often, as soon as there are fixes available to fix the release-critical
-bugs.
-
-If you want to give a hand in this process, please follow the following tips:
+If you want to give a hand testing the unreleased bundles, please follow the
+following tips:
 
 * Focus all your efforts, if possible, on whatever is *the* golden distro at
   the time of the release.  This currently is: Ubuntu 16.04.x LTS, 64bits, with
@@ -52,3 +56,11 @@ If you want to give a hand in this process, please follow the following tips:
   in the issue tracker. If you are absolutely certain that you have found a new
   bug, please attach a log of a new bitmask session, which should contain
   *only* the behaviour needed to reproduce the bug you are reporting.
+
+Xenial live image testing
+-------------------------
+
+Pasting the following lines in a terminal will help you testing the latest
+bundle from inside a live image in xenial::
+
+  curl https://gist.githubusercontent.com/kalikaneko/46bc2452f4ffc0c27d028d02625252aa/raw/41019f8c695086965465c559bd1751778275b78c/bitmask-in-ubuntu-live.sh | bash
