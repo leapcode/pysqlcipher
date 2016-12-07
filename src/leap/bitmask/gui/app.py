@@ -92,8 +92,8 @@ class BrowserWindow(QDialog):
 
         icon = QtGui.QIcon()
         icon.addPixmap(QtGui.QPixmap(":/mask-icon.png"),
-            QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.setWindowIcon(icon)  
+                       QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        self.setWindowIcon(icon)
 
         self.setWindowTitle('Bitmask')
         self.load_app()

@@ -52,6 +52,8 @@ def run_bitmaskd():
             flags.BACKEND = sys.argv[index + 1]
         elif arg == '--verbose' or arg == '-v':
             flags.VERBOSE = True
+        if STANDALONE:
+            flags.VERBOSE = True
     args = [
         '-y', join(here(core), "bitmaskd.tac"),
         '--logfile', getLogPath(),
