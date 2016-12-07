@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# _web.py
-# Copyright (C) 2016 LEAP Encryption Access Project
+# service.py
+# Copyright (C) 2016 LEAP Encryption Acess Project
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -19,118 +19,29 @@
 HTTP REST Dispatcher Service.
 """
 
-import json
 import os
 import pkg_resources
 
 from twisted.application import service
-
-from twisted.internet import endpoints
-from twisted.cred import portal, checkers, credentials, error as credError
-from twisted.internet import reactor, defer
 from twisted.logger import Logger
-from twisted.web.guard import HTTPAuthSessionWrapper, BasicCredentialFactory
-from twisted.web.resource import IResource, Resource
-from twisted.web.server import Site, NOT_DONE_YET
+from twisted.internet import endpoints
+from twisted.internet import reactor
+from twisted.web.server import Site
 from twisted.web.static import File
 
-from zope.interface import implementer
-
-from leap.bitmask.util import here
 from leap.bitmask.core.dispatcher import CommandDispatcher
-
-try:
-    import leap.bitmask_js
-    HAS_WEB_UI = True
-except ImportError:
-    HAS_WEB_UI = False
+from leap.bitmask.core.web import HAS_WEB_UI
+from leap.bitmask.core.web.api import Api
+from leap.bitmask.core.web._auth import protectedResourceFactory
+from leap.bitmask.util import here
 
 try:
     import txtorcon
-except Exception:
+except ImportError:
     pass
 
+
 log = Logger()
-
-
-class TokenCredentialFactory(BasicCredentialFactory):
-    scheme = 'token'
-
-
-@implementer(checkers.ICredentialsChecker)
-class TokenDictChecker:
-
-    credentialInterfaces = (credentials.IUsernamePassword,
-                            credentials.IUsernameHashedPassword)
-
-    def __init__(self, tokens):
-        self.tokens = tokens
-
-    def requestAvatarId(self, credentials):
-        username = credentials.username
-        if username in self.tokens:
-            if credentials.checkPassword(self.tokens[username]):
-                return defer.succeed(username)
-            else:
-                return defer.fail(
-                    credError.UnauthorizedLogin("Bad session token"))
-        else:
-            return defer.fail(
-                credError.UnauthorizedLogin("No such user"))
-
-
-@implementer(portal.IRealm)
-class HttpPasswordRealm(object):
-
-    def __init__(self, resource):
-        self.resource = resource
-
-    def requestAvatar(self, user, mind, *interfaces):
-        # the resource is passed on regardless of user
-        if IResource in interfaces:
-            return (IResource, self.resource, lambda: None)
-        raise NotImplementedError()
-
-
-@implementer(IResource)
-class WhitelistHTTPAuthSessionWrapper(HTTPAuthSessionWrapper):
-
-    """
-    Wrap a portal, enforcing supported header-based authentication schemes.
-    It doesn't apply the enforcement to routes included in a whitelist.
-    """
-
-    # TODO extend this to inspect the data -- so that we pass a tuple
-    # with the action
-
-    whitelist = (None,)
-
-    def __init__(self, *args, **kw):
-        self.whitelist = kw.pop('whitelist', tuple())
-        super(WhitelistHTTPAuthSessionWrapper, self).__init__(
-            *args, **kw)
-
-    def getChildWithDefault(self, path, request):
-        if request.path in self.whitelist:
-            return self
-        return HTTPAuthSessionWrapper.getChildWithDefault(self, path, request)
-
-    def render(self, request):
-        if request.path in self.whitelist:
-            _res = self._portal.realm.resource
-            return _res.render(request)
-        return HTTPAuthSessionWrapper.render(self, request)
-
-
-def protectedResourceFactory(resource, session_tokens, whitelist):
-    realm = HttpPasswordRealm(resource)
-    checker = TokenDictChecker(session_tokens)
-    resource_portal = portal.Portal(realm, [checker])
-    credentialFactory = TokenCredentialFactory('localhost')
-    protected_resource = WhitelistHTTPAuthSessionWrapper(
-        resource_portal, [credentialFactory],
-        whitelist=whitelist)
-    return protected_resource
 
 
 class HTTPDispatcherService(service.Service):
@@ -167,7 +78,8 @@ class HTTPDispatcherService(service.Service):
         else:
             log.warn('bitmask_js not found, serving bitmask.core ui')
             webdir = os.path.abspath(
-                pkg_resources.resource_filename('leap.bitmask.core', 'web'))
+                pkg_resources.resource_filename(
+                    'leap.bitmask.core.web', 'static'))
             jspath = os.path.join(
                 here(), '..', '..', '..',
                 'ui', 'app', 'lib', 'bitmask.js')
@@ -228,34 +140,6 @@ class HTTPDispatcherService(service.Service):
     def do_status(self):
         status = 'running' if self.running else 'disabled'
         return {'web': status, 'uri': self.uri}
-
-
-class Api(Resource):
-
-    isLeaf = True
-
-    def __init__(self, dispatcher):
-        Resource.__init__(self)
-        self.dispatcher = dispatcher
-
-    def render_POST(self, request):
-        command = request.uri.split('/')[2:]
-        params = request.content.getvalue()
-        if params:
-            # json.loads returns unicode strings and the rest of the code
-            # expects strings. This 'str(param)' conversion can be removed
-            # if we move to python3
-            for param in json.loads(params):
-                command.append(str(param))
-
-        d = self.dispatcher.dispatch(command)
-        d.addCallback(self._write_response, request)
-        return NOT_DONE_YET
-
-    def _write_response(self, response, request):
-        request.setHeader('Content-Type', 'application/json')
-        request.write(response)
-        request.finish()
 
 
 def _has_txtorcon():
