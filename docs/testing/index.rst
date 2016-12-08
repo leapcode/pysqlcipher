@@ -7,7 +7,7 @@
 Testing and Reporting
 ================================
 
-`Latest bundles` for the next release cycle are automatically built by our
+`Latest bundles`_ for the next release cycle are automatically built by our
 Gitlab CI for every commit in master.
 
 NOTE that, for compatibility reasons, these bundles only support email for the
@@ -63,4 +63,4 @@ Xenial live image testing
 Pasting the following lines in a terminal will help you testing the latest
 bundle from inside a live image in xenial::
 
-  curl https://gist.githubusercontent.com/kalikaneko/46bc2452f4ffc0c27d028d02625252aa/raw/41019f8c695086965465c559bd1751778275b78c/bitmask-in-ubuntu-live.sh | bash
+  curl https://0xacab.org/leap/bitmask-dev/raw/master/docs/testing/latest-bundle-xenial | bash

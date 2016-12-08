@@ -1,0 +1,12 @@
+# Test latest Bitmask bundle in Ubuntu Live (xenial)
+sudo add-apt-repository universe
+sudo add-apt-repository multiverse
+sudo apt update
+sudo apt install haveged
+
+rm -rf bitmask-latest.zip dist/
+wget https://0xacab.org/leap/bitmask-dev/builds/artifacts/master/download?job=bitmask_latest_bundle -O bitmask-latest.zip
+unzip bitmask-latest.zip
+cd dist
+cd `ls`
+./bitmask
