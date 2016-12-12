@@ -71,6 +71,14 @@ each one. For details click on the resource name.
 | ``POST`` :ref:`cmd_keys_export`   | Export keys                     |
 +-----------------------------------+---------------------------------+
 
+.. _cmd_parameters:
+
+Passing parameters
+------------------
+
+In all the cases that need data passed as parameter, those will be passed as
+JSON-encoded data to the POST.
+
 .. _cmd_core_version:
 
 /core/version
@@ -78,6 +86,21 @@ each one. For details click on the resource name.
 **POST /core/version**
 
   Get Bitmask Core Version Info
+
+  **Example request**::
+
+        curl -X POST localhost:7070/API/core/version 
+ 
+  **Example response**::
+
+   {
+      "error": null,
+      "result":
+          {
+             "version_core": "0.9.3+185.g59ee6c29.dirty"
+          }
+   }
+
 
 .. _cmd_core_stats:
 
@@ -125,7 +148,60 @@ each one. For details click on the resource name.
 -----------------------
 **POST /bonafide/provider/read**
 
-  Get info bout a given provider.
+  Get info about a given provider.
+
+  **Example request**::
+
+  curl -X POST localhost:7070/API/bonafide/provider/read -d '["dev.bitmask.net"]' 
+
+ 
+  **Example response**::
+
+   {
+   "error": null,         
+        "result": {
+        "api_uri": "https://api.dev.bitmask.net:4430",
+        "api_version": "1",          
+        "ca_cert_fingerprint": "SHA256: 0f17c033115f6b76ff67871872303ff65034efe7dd1b910062ca323eb4da5c7e",
+        "ca_cert_uri": "https://dev.bitmask.net/ca.crt",
+        "default_language": "es",
+        "description": {               
+            "en": "Bitmask is a project of LEAP",
+        }, 
+        "domain": "dev.bitmask.net",
+        "enrollment_policy": "open",
+        "languages": [
+            "es"
+        ],
+        "name": {
+            "en": "Bitmask"
+        },
+        "service": {
+            "allow_anonymous": false,
+            "allow_free": true,
+            "allow_limited_bandwidth": false,
+            "allow_paid": false,
+            "allow_registration": true,
+            "allow_unlimited_bandwidth": true,
+            "bandwidth_limit": 102400,
+            "default_service_level": 1,
+            "levels": {
+                "1": {
+                    "description": "Please donate.",
+                    "name": "free"
+                }
+            }
+        },
+        "services": [
+            "mx",
+            "openvpn"
+        ]
+    }
+   }
+
+ 
+  **Form parameters**:
+        * ``domain`` *(required)* - domain to obtain the info for.
 
 .. _cmd_prov_del:
 
