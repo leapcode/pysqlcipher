@@ -31,45 +31,48 @@ Resources
 Following is a list of currently available resources and a brief description of
 each one. For details click on the resource name.
 
-+-----------------------------------+---------------------------------+
-| Resource                          | Description                     |
-+===================================+=================================+
-| ``POST`` :ref:`cmd_core_version`  | Get Bitmask Core Version Info   |
-+-----------------------------------+---------------------------------+
-| ``POST`` :ref:`cmd_core_stats`    | Get Stats about Bitmask Usage   |
-+-----------------------------------+---------------------------------+
-| ``POST`` :ref:`cmd_core_status`   | Get Bitmask Status              |
-+-----------------------------------+---------------------------------+
-| ``POST`` :ref:`cmd_core_stop`     | Stop Bitmask Core               |
-+-----------------------------------+---------------------------------+
-| ``POST`` :ref:`cmd_prov_list`     | List all providers              |
-+-----------------------------------+---------------------------------+
-| ``POST`` :ref:`cmd_prov_create`   | Create a new provider           |
-+-----------------------------------+---------------------------------+
-| ``POST`` :ref:`cmd_prov_read`     | Get info about a provider       |
-+-----------------------------------+---------------------------------+
-| ``POST`` :ref:`cmd_prov_del`      | Delete a given provider         |
-+-----------------------------------+---------------------------------+
-| ``POST`` :ref:`cmd_user_list`     | List all users                  |
-+-----------------------------------+---------------------------------+
-| ``POST`` :ref:`cmd_user_active`   | Get active user                 |
-+-----------------------------------+---------------------------------+
-| ``POST`` :ref:`cmd_user_create`   | Create a new user               |
-+-----------------------------------+---------------------------------+
-| ``POST`` :ref:`cmd_user_update`   | Update an user                  |
-+-----------------------------------+---------------------------------+
-| ``POST`` :ref:`cmd_user_auth`     | Authenticate an user            |
-+-----------------------------------+---------------------------------+
-| ``POST`` :ref:`cmd_user_logout`   | End session for an user         |
-+-----------------------------------+---------------------------------+
-| ``POST`` :ref:`cmd_keys_list`     | Get all known keys for an user  |
-+-----------------------------------+---------------------------------+
-| ``POST`` :ref:`cmd_keys_insert`   | Insert a new key                |
-+-----------------------------------+---------------------------------+
-| ``POST`` :ref:`cmd_keys_del`      | Delete a given key              |
-+-----------------------------------+---------------------------------+
-| ``POST`` :ref:`cmd_keys_export`   | Export keys                     |
-+-----------------------------------+---------------------------------+
+**By default, all the resources need authentication**. An asterisk next to it
+means that it does not need an authentication header.
+
++------------------------------------+---------------------------------+
+| Resource                           | Description                     |
++====================================+=================================+
+| ``POST`` :ref:`cmd_core_version` * | Get Bitmask Core Version Info   |
++------------------------------------+---------------------------------+
+| ``POST`` :ref:`cmd_core_stats` *   | Get Stats about Bitmask Usage   |
++------------------------------------+---------------------------------+
+| ``POST`` :ref:`cmd_core_status`    | Get Bitmask Status              |
++------------------------------------+---------------------------------+
+| ``POST`` :ref:`cmd_core_stop`      | Stop Bitmask Core               |
++------------------------------------+---------------------------------+
+| ``POST`` :ref:`cmd_prov_list` *    | List all providers              |
++------------------------------------+---------------------------------+
+| ``POST`` :ref:`cmd_prov_create` *  | Create a new provider           |
++------------------------------------+---------------------------------+
+| ``POST`` :ref:`cmd_prov_read` *    | Get info about a provider       |
++------------------------------------+---------------------------------+
+| ``POST`` :ref:`cmd_prov_del`       | Delete a given provider         |
++------------------------------------+---------------------------------+
+| ``POST`` :ref:`cmd_user_list`      | List all users                  |
++------------------------------------+---------------------------------+
+| ``POST`` :ref:`cmd_user_active`    | Get active user                 |
++------------------------------------+---------------------------------+
+| ``POST`` :ref:`cmd_user_create` *  | Create a new user               |
++------------------------------------+---------------------------------+
+| ``POST`` :ref:`cmd_user_update`    | Update an user                  |
++------------------------------------+---------------------------------+
+| ``POST`` :ref:`cmd_user_auth` *    | Authenticate an user            |
++------------------------------------+---------------------------------+
+| ``POST`` :ref:`cmd_user_logout`    | End session for an user         |
++------------------------------------+---------------------------------+
+| ``POST`` :ref:`cmd_keys_list`      | Get all known keys for an user  |
++------------------------------------+---------------------------------+
+| ``POST`` :ref:`cmd_keys_insert`    | Insert a new key                |
++------------------------------------+---------------------------------+
+| ``POST`` :ref:`cmd_keys_del`       | Delete a given key              |
++------------------------------------+---------------------------------+
+| ``POST`` :ref:`cmd_keys_export`    | Export keys                     |
++------------------------------------+---------------------------------+
 
 .. _cmd_parameters:
 
@@ -306,4 +309,20 @@ JSON-encoded data to the POST.
 API Authentication
 ==================
 
-(TBD) Most of the resources in the API are protected by an authentication token.
+Most of the resources in the API are protected by an authentication token.
+To authenticate the request, the ``Authentication`` header has to be added to
+it. You need to pass a ``Token`` field, with a value equal to the concatenation of
+the username and the local session token that you have received after the
+authentication call, base64-encoded::
+
+
+   $ curl -X POST localhost:7070/API/core/stop
+   $ Unauthorized
+
+   >>> import base64                                                                                           
+   >>> base64.b64encode('user@provider.org:52dac27fcf633b1dba58')
+   'dXNlckBwcm92aWRlci5vcmc6NTJkYWMyN2ZjZjYzM2IxZGJhNTg='
+
+   $ curl -X POST localhost:7070/API/core/stop -H 'Authentication: Token dXNlckBwcm92aWRlci5vcmc6NTJkYWMyN2ZjZjYzM2IxZGJhNTg='
+   $ {'shutdown': 'ok'}
+
