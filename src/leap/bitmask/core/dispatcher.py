@@ -105,14 +105,24 @@ class UserCmd(SubCommand):
 
     label = 'bonafide.user'
 
-    @register_method("{'srp_token': unicode, 'uuid': unicode}")
+    @register_method("{'srp_token': unicode, 'uuid': unicode "
+                     "'lcl_token': unicode}")
     def do_AUTHENTICATE(self, bonafide, *parts):
         user, password = parts[2], parts[3]
         autoconf = False
         if len(parts) > 4:
             if parts[4] == 'true':
                 autoconf = True
-        return bonafide.do_authenticate(user, password, autoconf)
+
+        # FIXME We still SHOULD pass a local token
+        # even if the SRP authentication times out!!!
+        def add_local_token(result):
+            result['lcl_token'] = bonafide.local_tokens[user]
+            return result
+
+        d = bonafide.do_authenticate(user, password, autoconf)
+        d.addCallback(add_local_token)
+        return d
 
     @register_method("{'signup': 'ok', 'user': str}")
     def do_CREATE(self, bonafide, *parts):
@@ -369,6 +379,8 @@ class CommandDispatcher(object):
 
     def do_BONAFIDE(self, *parts):
         bonafide = self._get_service('bonafide')
+        bonafide.local_tokens = self.core.tokens
+
         d = self.subcommand_bonafide.dispatch(bonafide, *parts)
         d.addCallbacks(_format_result, _format_error)
         return d
