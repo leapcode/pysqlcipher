@@ -12,7 +12,7 @@ The bitmask core daemon can be launched like this::
 
   bitmaskd
 
-The command-line program, ``bitmaskctl``, and the GUI, will launch the
+The command-line program ``bitmaskctl`` and the GUI, will launch the
 daemon when needed.
 
 Starting the API server
@@ -59,7 +59,7 @@ means that it does not need an authentication header.
 +------------------------------------+---------------------------------+
 | ``POST`` :ref:`cmd_user_create` *  | Create a new user               |
 +------------------------------------+---------------------------------+
-| ``POST`` :ref:`cmd_user_update`    | Update an user                  |
+| ``POST`` :ref:`cmd_user_update`    | Change the user password        |
 +------------------------------------+---------------------------------+
 | ``POST`` :ref:`cmd_user_auth` *    | Authenticate an user            |
 +------------------------------------+---------------------------------+
@@ -93,6 +93,7 @@ JSON-encoded data to the POST.
   **Example request**::
 
         curl -X POST localhost:7070/API/core/version 
+
  
   **Example response**::
 
@@ -155,7 +156,8 @@ JSON-encoded data to the POST.
 
   **Example request**::
 
-  curl -X POST localhost:7070/API/bonafide/provider/read -d '["dev.bitmask.net"]' 
+  
+        curl -X POST localhost:7070/API/bonafide/provider/read -d '["dev.bitmask.net"]'
 
  
   **Example response**::
@@ -224,8 +226,6 @@ JSON-encoded data to the POST.
   List all the users known to the local backend. 
 
   **Form parameters**:
-        * ``foo`` *(required)* - foo bar.
-        * ``bar`` *(optional)* - foo bar.
 
   **Status codes**:
         * ``200`` - no error
@@ -247,7 +247,15 @@ JSON-encoded data to the POST.
   Create a new user.
 
   **Form parameters**:
-        * ``foo`` *(required)* - foo bar.
+        * ``username`` *(required)* - in the form user@provider.
+        * ``pass`` *(required)* - the username passphrase
+        * ``invitecode`` *(optional)* - an optional invitecode, to be used if
+          the provider requires it for creating a new account.
+        * ``autoconf`` *(optional)* - whether to autoconfigure the provider, if
+          we don't have seen it before.
+
+  **Status codes**:
+        * ``200`` - no error
 
 .. _cmd_user_update:
 
@@ -255,7 +263,15 @@ JSON-encoded data to the POST.
 ---------------------
 **POST /bonafide/user/update**
 
-  Update a given user.
+  Change the user password.
+
+  **Form parameters**:
+        * ``username`` *(required)* - in the form user@provider
+        * ``oldpass`` *(required)* - current password
+        * ``newpass`` *(required)* - new password
+
+  **Status codes**:
+        * ``200`` - no error
 
 .. _cmd_user_auth:
 
@@ -264,6 +280,16 @@ JSON-encoded data to the POST.
 **POST /bonafide/user/authenticate**
 
   Authenticate an user.
+
+  **Form parameters**:
+
+        * ``username`` *(required)* - in the form user@provider
+        * ``pass`` *(required)* - passphrase
+        * ``autoconf`` *(optional)* - whether to autoconfigure the provider, if
+          we don't have seen it before.
+
+  **Status codes**:
+        * ``200`` - no error
 
 .. _cmd_user_logout:
 

@@ -2,6 +2,9 @@ import json
 from twisted.web.server import NOT_DONE_YET
 
 from twisted.web.resource import Resource
+from twisted.logger import Logger
+
+log = Logger()
 
 
 class Api(Resource):
@@ -16,6 +19,8 @@ class Api(Resource):
         command = request.uri.split('/')[2:]
         params = request.content.getvalue()
         if params:
+            # TODO sanitize this
+
             # json.loads returns unicode strings and the rest of the code
             # expects strings. This 'str(param)' conversion can be removed
             # if we move to python3
@@ -24,6 +29,7 @@ class Api(Resource):
 
         d = self.dispatcher.dispatch(command)
         d.addCallback(self._write_response, request)
+        d.addErrback(log.error)
         return NOT_DONE_YET
 
     def _write_response(self, response, request):

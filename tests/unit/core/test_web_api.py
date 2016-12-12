@@ -132,7 +132,9 @@ class RESTApiTests(unittest.TestCase):
     def setUp(self):
         dispatcher = dummyDispatcherFactory()
         api = web.api.Api(dispatcher)
-        plainSite = Site(api)
+        root = resource.Resource()
+        root.putChild(b"API", api)
+        plainSite = Site(root)
         self.plainPort = reactor.listenTCP(0, plainSite, interface="127.0.0.1")
         self.plainPortno = self.plainPort.getHost().port
         self.canned = CannedData
@@ -161,17 +163,23 @@ class RESTApiTests(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_bonafide_user_create(self):
-        call = yield self.makeAPICall('bonafide/user/create')
-        self.assertCall(call, self.canned.bonafide.auth)
+        params = ['user@provider', 'pass', 'invitecode']
+        call = yield self.makeAPICall('bonafide/user/create',
+                                      params=params)
+        self.assertCall(call, self.canned.bonafide.signup)
 
     @defer.inlineCallbacks
     def test_bonafide_user_update(self):
-        call = yield self.makeAPICall('bonafide/user/update')
-        self.assertCall(call, self.canned.bonafide.update)
+        params = ['user@provider', 'oldpass', 'newpass']
+        call = yield self.makeAPICall('bonafide/user/update',
+                                      params=params)
+        self.assertCall(call, self.canned.bonafide.change_password)
 
     @defer.inlineCallbacks
     def test_bonafide_user_authenticate(self):
-        call = yield self.makeAPICall('bonafide/user/authenticate')
+        params = ['user@provider', 'pass', 'false']
+        call = yield self.makeAPICall('bonafide/user/authenticate',
+                                      params=params)
         self.assertCall(call, self.canned.bonafide.auth)
 
     @defer.inlineCallbacks
@@ -181,13 +189,20 @@ class RESTApiTests(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_bonafide_user_logout(self):
-        call = yield self.makeAPICall('bonafide/user/logout')
+        params = ['user@provider']
+        call = yield self.makeAPICall('bonafide/user/logout',
+                                      params=params)
         self.assertCall(call, self.canned.bonafide.logout)
 
-    def makeAPICall(self, path, method="POST"):
-        uri = networkString("http://127.0.0.1:%d/%s" % (
+    def makeAPICall(self, path, method="POST", params=None):
+        if params:
+            postdata = json.dumps(params)
+        else:
+            postdata = None
+        uri = networkString("http://127.0.0.1:%d/API/%s" % (
             self.plainPortno, path))
-        return client.getPage(uri, method=method, timeout=1)
+        return client.getPage(
+            uri, method=method, timeout=1, postdata=postdata)
 
     def assertCall(self, returned, expected):
         data = json.loads(returned)
@@ -219,6 +234,7 @@ class DummyCore(service.MultiService):
         self.init('mail', mail)
 
         self.core_cmds = BackendCommands(self)
+        self.tokens = {}
 
     def init(self, label, service, *args, **kw):
         s = service(*args, **kw)

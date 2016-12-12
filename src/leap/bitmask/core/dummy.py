@@ -37,6 +37,7 @@ class CannedData:
 
     class bonafide:
         auth = {
+            u'lcl_token': u'deadbeef',
             u'srp_token': u'deadbeef123456789012345678901234567890123',
             u'uuid': u'01234567890abcde01234567890abcde'}
         signup = {
@@ -48,6 +49,8 @@ class CannedData:
         logout = {
             'logout': 'ok'}
         get_active_user = 'dummyuser@provider.example.org'
+        change_password = {
+            'update': 'ok'}
 
 
 class BackendCommands(object):
@@ -90,10 +93,10 @@ class BonafideService(HookableService):
     def __init__(self, basedir):
         self.canned = CannedData
 
-    def do_authenticate(self, user, password):
+    def do_authenticate(self, user, password, autoconf):
         return self.canned.bonafide.auth
 
-    def do_signup(self, user, password):
+    def do_signup(self, user, password, invite, autoconf):
         return self.canned.bonafide.signup
 
     def do_list_users(self):
@@ -104,3 +107,6 @@ class BonafideService(HookableService):
 
     def do_get_active_user(self):
         return self.canned.bonafide.get_active_user
+
+    def do_change_password(self, username, old, new):
+        return self.canned.bonafide.change_password

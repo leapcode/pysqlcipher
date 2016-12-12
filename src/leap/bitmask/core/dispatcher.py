@@ -108,7 +108,12 @@ class UserCmd(SubCommand):
     @register_method("{'srp_token': unicode, 'uuid': unicode "
                      "'lcl_token': unicode}")
     def do_AUTHENTICATE(self, bonafide, *parts):
-        user, password = parts[2], parts[3]
+        try:
+            user, password = parts[2], parts[3]
+        except IndexError:
+            raise DispatchError(
+                'wrong number of arguments: expected 2 or 3, got %s' % (
+                    len(parts[2:])))
         autoconf = False
         if len(parts) > 4:
             if parts[4] == 'true':
@@ -117,17 +122,21 @@ class UserCmd(SubCommand):
         # FIXME We still SHOULD pass a local token
         # even if the SRP authentication times out!!!
         def add_local_token(result):
-            result['lcl_token'] = bonafide.local_tokens[user]
+            result['lcl_token'] = bonafide.local_tokens.get(user)
             return result
 
-        d = bonafide.do_authenticate(user, password, autoconf)
+        d = defer.maybeDeferred(
+            bonafide.do_authenticate, user, password, autoconf)
         d.addCallback(add_local_token)
         return d
 
     @register_method("{'signup': 'ok', 'user': str}")
     def do_CREATE(self, bonafide, *parts):
         if len(parts) < 5:
-            raise DispatchError('Not enough parameters passed')
+            raise DispatchError(
+                'wrong number of arguments: expected min 3, got %s' % (
+                    len(parts[2:])))
+
         # params are: [user, create, full_id, password, invite, autoconf]
         user, password, invite = parts[2], parts[3], parts[4]
 
@@ -142,7 +151,12 @@ class UserCmd(SubCommand):
 
     @register_method("{'logout': 'ok'}")
     def do_LOGOUT(self, bonafide, *parts):
-        user = parts[2]
+        try:
+            user = parts[2]
+        except IndexError:
+            raise DispatchError(
+                'wrong number of arguments: expected 1, got %s' % (
+                    len(parts[2:])))
         return bonafide.do_logout(user)
 
     @register_method("[{'userid': str, 'authenticated': bool}]")
@@ -151,7 +165,12 @@ class UserCmd(SubCommand):
 
     @register_method("{'update': 'ok'}")
     def do_UPDATE(self, bonafide, *parts):
-        user, current_password, new_password = parts[2], parts[3], parts[4]
+        try:
+            user, current_password, new_password = parts[2], parts[3], parts[4]
+        except IndexError:
+            raise DispatchError(
+                'wrong number of arguments: expected 3, got %s' % (
+                    len(parts[2:])))
         return bonafide.do_change_password(
             user, current_password, new_password)
 
