@@ -266,6 +266,7 @@ class BackendCommands(object):
         return {'version_core': __version__}
 
     def do_stats(self):
+        print "DO STATS"
         logger.debug('BitmaskCore Service STATS')
         mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         return {'mem_usage': '%s MB' % (mem / 1024)}

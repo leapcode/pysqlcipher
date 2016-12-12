@@ -18,9 +18,6 @@ class WhitelistHTTPAuthSessionWrapper(HTTPAuthSessionWrapper):
     It doesn't apply the enforcement to routes included in a whitelist.
     """
 
-    # TODO extend this to inspect the data -- so that we pass a tuple
-    # with the action
-
     whitelist = (None,)
 
     def __init__(self, *args, **kw):

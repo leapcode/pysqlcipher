@@ -22,6 +22,34 @@ import json
 from leap.bitmask.hooks import HookableService
 
 
+class CannedData:
+
+    class backend:
+        status = {
+            'soledad': 'running',
+            'keymanager': 'running',
+            'mail': 'running',
+            'eip': 'stopped',
+            'backend': 'dummy'}
+        version = {'version_core': '0.0.1'}
+        stop = {'stop': 'ok'}
+        stats = {'mem_usage': '01 KB'}
+
+    class bonafide:
+        auth = {
+            u'srp_token': u'deadbeef123456789012345678901234567890123',
+            u'uuid': u'01234567890abcde01234567890abcde'}
+        signup = {
+            'signup': 'ok',
+            'user': 'dummyuser@provider.example.org'}
+        list_users = {
+            'userid': 'testuser',
+            'authenticated': False}
+        logout = {
+            'logout': 'ok'}
+        get_active_user = 'dummyuser@provider.example.org'
+
+
 class BackendCommands(object):
 
     """
@@ -30,23 +58,19 @@ class BackendCommands(object):
 
     def __init__(self, core):
         self.core = core
+        self.canned = CannedData
 
     def do_status(self):
-        return json.dumps(
-            {'soledad': 'running',
-             'keymanager': 'running',
-             'mail': 'running',
-             'eip': 'stopped',
-             'backend': 'dummy'})
+        return json.dumps(self.canned.backend.stats)
 
     def do_version(self):
-        return {'version_core': '0.0.1'}
+        return self.canned.backend.version
 
     def do_stats(self):
-        return {'mem_usage': '01 KB'}
+        return self.canned.backend.stats
 
     def do_stop(self):
-        return {'stop': 'ok'}
+        return self.canned.backend.stop
 
 
 class mail_services(object):
@@ -64,17 +88,19 @@ class mail_services(object):
 class BonafideService(HookableService):
 
     def __init__(self, basedir):
-        pass
+        self.canned = CannedData
 
     def do_authenticate(self, user, password):
-        return {u'srp_token': u'deadbeef123456789012345678901234567890123',
-                u'uuid': u'01234567890abcde01234567890abcde'}
+        return self.canned.bonafide.auth
 
     def do_signup(self, user, password):
-        return {'signup': 'ok', 'user': 'dummyuser@provider.example.org'}
+        return self.canned.bonafide.signup
+
+    def do_list_users(self):
+        return self.canned.bonafide.list_users
 
     def do_logout(self, user):
-        return {'logout': 'ok'}
+        return self.canned.bonafide.logout
 
     def do_get_active_user(self):
-        return 'dummyuser@provider.example.org'
+        return self.canned.bonafide.get_active_user

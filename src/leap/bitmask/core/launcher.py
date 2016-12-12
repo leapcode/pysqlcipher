@@ -45,6 +45,7 @@ def here(module=None):
 
 
 def run_bitmaskd():
+
     # TODO --- configure where to put the logs... (get --logfile, --logdir
     # from bitmaskctl
     for (index, arg) in enumerate(sys.argv):

@@ -60,7 +60,6 @@ GENERAL COMMANDS:
 '''
     epilog = ("Use 'bitmaskctl <command> help' to learn more "
               "about each command.")
-    commands = ['stop', 'stats']
 
     def user(self, raw_args):
         user = User()
@@ -99,7 +98,7 @@ GENERAL COMMANDS:
         return defer.succeed(None)
 
     def version(self, raw_args):
-        self.data = ['version']
+        self.data = ['core', 'version']
         return self._send(printer=self._print_version)
 
     def _print_version(self, version):
@@ -107,7 +106,7 @@ GENERAL COMMANDS:
         print(Fore.GREEN + 'bitmask_core: ' + Fore.RESET + corever)
 
     def status(self, raw_args):
-        self.data = ['status']
+        self.data = ['core', 'status']
         return self._send(printer=self._print_status)
 
     def _print_status(self, status):
@@ -119,11 +118,19 @@ GENERAL COMMANDS:
             print(key.ljust(10) + ': ' + color +
                   value + Fore.RESET)
 
+    def stop(self, raw_args):
+        self.data = ['core', 'stop']
+        return self._send(printer=command.default_dict_printer)
+
+    def stats(self, raw_args):
+        self.data = ['core', 'stats']
+        return self._send(printer=command.default_dict_printer)
+
 
 @defer.inlineCallbacks
 def execute():
     cli = BitmaskCLI()
-    cli.data = ['version']
+    cli.data = ['core', 'version']
     args = ['--verbose'] if '--verbose' in sys.argv else None
     yield cli._send(
         timeout=0.1, printer=_null_printer,
@@ -151,6 +158,7 @@ def main():
     reactor.callWhenRunning(reactor.callLater, 0, execute)
     signal.signal(signal.SIGINT, signal_handler)
     reactor.run()
+
 
 if __name__ == "__main__":
     main()

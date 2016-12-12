@@ -1,16 +1,22 @@
+import json
 import base64
 
 from twisted.application import service
 from twisted.cred import portal
+from twisted.internet import defer, reactor
+from twisted.python.compat import networkString
 from twisted.trial import unittest
-from twisted.web.test.test_web import DummyRequest
+from twisted.web import client
 from twisted.web import resource
 from twisted.web.server import Site
+from twisted.web.test.test_web import DummyRequest
 
 from leap.bitmask.core import dispatcher
 from leap.bitmask.core import web
 from leap.bitmask.core.dummy import mail_services
 from leap.bitmask.core.dummy import BonafideService
+from leap.bitmask.core.dummy import BackendCommands
+from leap.bitmask.core.dummy import CannedData
 
 
 def b64encode(s):
@@ -102,71 +108,6 @@ class WhitelistedResourceTests(SimpleAPIMixin, unittest.TestCase):
         pass
 
 
-class RESTApiMixin:
-    def setUp(self):
-        self.request = self.makeRequest()
-
-        dispatcher = dummyDispatcherFactory()
-        api = web.api.Api(dispatcher)
-        self.site = Site(api)
-
-    def makeRequest(self, method=b'GET', clientAddress=None):
-        """
-        Create a request object to be passed to
-        TokenCredentialFactory.decode along with a response value.
-        Override this in a subclass.
-        """
-        raise NotImplementedError("%r did not implement makeRequest" % (
-                                  self.__class__,))
-
-
-class RESTApiTests(RESTApiMixin, unittest.TestCase):
-    """
-    Tests that involve checking the routing between the REST api and the
-    command dispatcher.
-    """
-
-    def test_simple_api_request(self):
-        # FIXME -- check the requests to the API
-        assert 1 == 1
-
-    def makeRequest(self, method='GET', clientAddress=None):
-        pass
-
-
-class DummyCore(service.MultiService):
-    """
-    A minimal core that uses the dummy backend modules.
-    """
-
-    def __init__(self):
-        service.MultiService.__init__(self)
-        mail = mail_services.StandardMailService
-        self.init('mail', mail)
-
-        km = mail_services.KeymanagerService
-        self.init('keymanager', km)
-
-        sol = mail_services.SoledadService
-        self.init('soledad', sol)
-
-        bf = BonafideService
-        self.init('bonafide', bf, '/tmp/')
-
-    def init(self, label, service, *args, **kw):
-        s = service(*args, **kw)
-        s.setName(label)
-        s.setServiceParent(self)
-
-
-def dummyDispatcherFactory():
-    """
-    Returns a CommandDispatcher that uses the dummy backend
-    """
-    dummy_core = DummyCore()
-    return dispatcher.CommandDispatcher(dummy_core)
-
-
 class AuthTestResource(resource.Resource):
 
     isLeaf = True
@@ -176,3 +117,130 @@ class AuthTestResource(resource.Resource):
 
     def render_POST(self, request):
         return "dummyPOST"
+
+
+class RESTApiTests(unittest.TestCase):
+    """
+    Tests that involve checking the routing between the REST api and the
+    command dispatcher.
+
+    This is just really testing the canned responses in the Dummy backend.
+    To make sure that those responses match the live data, e2e tests should be
+    run.
+    """
+
+    def setUp(self):
+        dispatcher = dummyDispatcherFactory()
+        api = web.api.Api(dispatcher)
+        plainSite = Site(api)
+        self.plainPort = reactor.listenTCP(0, plainSite, interface="127.0.0.1")
+        self.plainPortno = self.plainPort.getHost().port
+        self.canned = CannedData
+
+    def tearDown(self):
+        return self.plainPort.stopListening()
+
+    # core commands
+
+    @defer.inlineCallbacks
+    def test_core_version(self):
+        call = yield self.makeAPICall('core/version')
+        self.assertCall(call, self.canned.backend.version)
+
+    @defer.inlineCallbacks
+    def test_core_stop(self):
+        call = yield self.makeAPICall('core/stop')
+        self.assertCall(call, self.canned.backend.stop)
+
+    # bonafide commands
+
+    @defer.inlineCallbacks
+    def test_bonafide_user_list(self):
+        call = yield self.makeAPICall('bonafide/user/list')
+        self.assertCall(call, self.canned.bonafide.list_users)
+
+    @defer.inlineCallbacks
+    def test_bonafide_user_create(self):
+        call = yield self.makeAPICall('bonafide/user/create')
+        self.assertCall(call, self.canned.bonafide.auth)
+
+    @defer.inlineCallbacks
+    def test_bonafide_user_update(self):
+        call = yield self.makeAPICall('bonafide/user/update')
+        self.assertCall(call, self.canned.bonafide.update)
+
+    @defer.inlineCallbacks
+    def test_bonafide_user_authenticate(self):
+        call = yield self.makeAPICall('bonafide/user/authenticate')
+        self.assertCall(call, self.canned.bonafide.auth)
+
+    @defer.inlineCallbacks
+    def test_bonafide_user_active(self):
+        call = yield self.makeAPICall('bonafide/user/active')
+        self.assertCall(call, self.canned.bonafide.get_active_user)
+
+    @defer.inlineCallbacks
+    def test_bonafide_user_logout(self):
+        call = yield self.makeAPICall('bonafide/user/logout')
+        self.assertCall(call, self.canned.bonafide.logout)
+
+    def makeAPICall(self, path, method="POST"):
+        uri = networkString("http://127.0.0.1:%d/%s" % (
+            self.plainPortno, path))
+        return client.getPage(uri, method=method, timeout=1)
+
+    def assertCall(self, returned, expected):
+        data = json.loads(returned)
+        error = data['error']
+        assert error is None
+        result = data['result']
+        assert result == expected
+
+
+class DummyCore(service.MultiService):
+
+    """
+    A minimal core that uses the dummy backend modules.
+    """
+
+    def __init__(self):
+        service.MultiService.__init__(self)
+
+        bf = BonafideService
+        self.init('bonafide', bf, '/tmp/')
+
+        km = mail_services.KeymanagerService
+        self.init('keymanager', km)
+
+        sol = mail_services.SoledadService
+        self.init('soledad', sol)
+
+        mail = mail_services.StandardMailService
+        self.init('mail', mail)
+
+        self.core_cmds = BackendCommands(self)
+
+    def init(self, label, service, *args, **kw):
+        s = service(*args, **kw)
+        s.setName(label)
+        s.setServiceParent(self)
+
+    def do_stats(self):
+        return self.core_cmds.do_stats()
+
+    def do_version(self):
+        return self.core_cmds.do_version()
+
+    def do_status(self):
+        return self.core_cmds.do_status()
+
+    def do_stop(self):
+        return self.core_cmds.do_stop()
+
+
+def dummyDispatcherFactory():
+    """
+    Returns a CommandDispatcher that uses the dummy backend
+    """
+    dummy_core = DummyCore()
+    return dispatcher.CommandDispatcher(dummy_core)

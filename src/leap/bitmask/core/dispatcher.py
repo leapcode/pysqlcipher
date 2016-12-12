@@ -38,6 +38,10 @@ from .api import APICommand, register_method
 logger = Logger()
 
 
+class DispatchError(Exception):
+    pass
+
+
 class SubCommand(object):
 
     __metaclass__ = APICommand
@@ -112,6 +116,8 @@ class UserCmd(SubCommand):
 
     @register_method("{'signup': 'ok', 'user': str}")
     def do_CREATE(self, bonafide, *parts):
+        if len(parts) < 5:
+            raise DispatchError('Not enough parameters passed')
         # params are: [user, create, full_id, password, invite, autoconf]
         user, password, invite = parts[2], parts[3], parts[4]
 
@@ -219,7 +225,6 @@ class WebUICmd(SubCommand):
 
     @register_method('dict')
     def do_STATUS(self, webui, *parts, **kw):
-        print 'webui', webui
         d = webui.do_status()
         return d
 
@@ -310,7 +315,6 @@ class EventsCmd(SubCommand):
         self.waiting.append(d)
         return d
 
-    @register_method("")
     def _callback(self, event, *content):
         payload = (str(event), content)
         if not self.waiting:
@@ -322,15 +326,35 @@ class EventsCmd(SubCommand):
             d.callback(payload)
 
 
+class CoreCmd(SubCommand):
+
+    label = 'core'
+
+    @register_method("{'mem_usage': str}")
+    def do_STATS(self, core, *parts):
+        return core.do_stats()
+
+    @register_method("{version_core': '0.0.0'}")
+    def do_VERSION(self, core, *parts):
+        return core.do_version()
+
+    @register_method("{'mail': 'running'}")
+    def do_STATUS(self, core, *parts):
+        return core.do_status()
+
+    @register_method("{'stop': 'ok'}")
+    def do_STOP(self, core, *parts):
+        return core.do_stop()
+
+
 class CommandDispatcher(object):
 
     __metaclass__ = APICommand
 
-    label = 'core'
-
     def __init__(self, core):
 
         self.core = core
+        self.subcommand_core = CoreCmd()
         self.subcommand_bonafide = BonafideCmd()
         self.subcommand_eip = EIPCmd()
         self.subcommand_mail = MailCmd()
@@ -338,26 +362,10 @@ class CommandDispatcher(object):
         self.subcommand_events = EventsCmd()
         self.subcommand_webui = WebUICmd()
 
-    # XXX --------------------------------------------
-    # TODO move general services to another subclass
-
-    @register_method("{'mem_usage': str}")
-    def do_STATS(self, *parts):
-        return _format_result(self.core.do_stats())
-
-    @register_method("{version_core': '0.0.0'}")
-    def do_VERSION(self, *parts):
-        return _format_result(self.core.do_version())
-
-    @register_method("{'mail': 'running'}")
-    def do_STATUS(self, *parts):
-        return _format_result(self.core.do_status())
-
-    @register_method("{'stop': 'ok'}")
-    def do_STOP(self, *parts):
-        return _format_result(self.core.do_stop())
-
-    # -----------------------------------------------
+    def do_CORE(self, *parts):
+        d = self.subcommand_core.dispatch(self.core, *parts)
+        d.addCallbacks(_format_result, _format_error)
+        return d
 
     def do_BONAFIDE(self, *parts):
         bonafide = self._get_service('bonafide')
@@ -446,7 +454,6 @@ class CommandDispatcher(object):
 
     def dispatch(self, msg):
         cmd = msg[0]
-
         _method = getattr(self, 'do_' + cmd.upper(), None)
 
         if not _method:

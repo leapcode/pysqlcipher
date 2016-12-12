@@ -21,6 +21,8 @@ api for Bitmask Core.
 
 The values are meant to be type annotations.
 """
+import pkg_resources
+pkg_resources.get_distribution('leap.bitmask')
 
 if __name__ == "__main__":
     from leap.bitmask.core.service import BitmaskBackend

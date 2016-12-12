@@ -59,7 +59,13 @@ class HTTPDispatcherService(service.Service):
     """
 
     API_WHITELIST = (
-        '/API/bonafide/user',
+        '/API/core/version',
+        '/API/core/stats',
+        '/API/bonafide/user/create',
+        '/API/bonafide/user/authenticate',
+        '/API/bonafide/provider/list',
+        '/API/bonafide/provider/create',
+        '/API/bonafide/provider/read',
     )
 
     def __init__(self, core, port=7070, debug=False, onion=False):
