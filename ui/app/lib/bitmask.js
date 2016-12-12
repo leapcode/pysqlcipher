@@ -43,8 +43,8 @@ var bitmask = function(){
     }
 
     function call(command) {
-        var url = api_url  + command.slice(0, 2).join('/');
-        var data = JSON.stringify(command.slice(2));
+        var url = api_url  + command.slice(0, 3).join('/');
+        var data = JSON.stringify(command.slice(3));
 
         return new Promise(function(resolve, reject) {
             var req = new XMLHttpRequest();
