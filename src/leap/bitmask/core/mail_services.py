@@ -545,14 +545,18 @@ class StandardMailService(service.MultiService, HookableService):
         check_and_fix_urw_only(cert_path)
 
     def hook_on_bonafide_logout(self, **kw):
-        username = kw['username']
-        multiservice = self.getServiceNamed('incoming_mail')
-        incoming = multiservice.getServiceNamed(username)
-        logger.debug(
-            'looking for incoming mail service '
-            'for logout: %s' % username)
-        if incoming:
-            incoming.stopService()
+        username = kw.get('username', None)
+        if username:
+            multiservice = self.getServiceNamed('incoming_mail')
+            try:
+                incoming = multiservice.getServiceNamed(username)
+            except KeyError:
+                incoming = None
+            if incoming:
+                logger.debug(
+                    'looking for incoming mail service '
+                    'for logout: %s' % username)
+                incoming.stopService()
 
     # commands
 
@@ -708,6 +712,7 @@ class IncomingMailService(service.MultiService):
 #
 # config utilities. should be moved to bonafide
 #
+
 
 SERVICES = ('soledad', 'smtp', 'eip')
 
