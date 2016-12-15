@@ -25,6 +25,8 @@ class Api(Resource):
             # expects strings. This 'str(param)' conversion can be removed
             # if we move to python3
             for param in json.loads(params):
+                if isinstance(param, basestring):
+                    param = param.encode('ascii', 'replace')
                 command.append(str(param))
 
         d = self.dispatcher.dispatch(command)

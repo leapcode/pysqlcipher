@@ -142,7 +142,15 @@ class RESTApiTests(unittest.TestCase):
     def tearDown(self):
         return self.plainPort.stopListening()
 
+    @defer.inlineCallbacks
+    def test_param_encoding(self):
+        params = ['test_types', 1, True]
+        call = yield self.makeAPICall('core/version',
+                                      params=params)
+        self.assertCall(call, self.canned.backend.version)
+
     # core commands
+    # TODO these tests can be generated dinamically
 
     @defer.inlineCallbacks
     def test_core_version(self):
