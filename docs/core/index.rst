@@ -12,17 +12,56 @@ The bitmask core daemon can be launched like this::
 
   bitmaskd
 
-The command-line program ``bitmaskctl`` and the GUI, will launch the
+The command-line program ``bitmaskctl`` and the GUI will launch the
 daemon when needed.
 
-Starting the API server
-=======================
+Starting the REST service
+=========================
 
 If configured to do so, the bitmask core will expose all of the commands
 throught a REST API. In bitmaskd.cfg::
 
   [services]
   web = True
+
+API Authentication
+==================
+
+By default, the resources in the API are protected by an authentication token.
+
+The rationale is that, since the Bitmask core can be used simultaneously by
+several users, no single user should be able to interfere with others by
+querying for sensible information or disrupting other users' interaction with
+running services.
+
+Therefore, there's a small white list of resources that do not
+need authentication, based on which is the subset of the API that needs to
+provide functionality for the creation of new accounts (the first-run wizard
+from the UI perspective).
+
+The local authentication token is sent back in the response for an
+authentication call.
+
+This local session token is different from the remote SRP token, although both
+are returned together. In the case that the remote SRP authentication with the
+provider fails (or with no network connectivity), the backend **should** signal
+the error but equally return a local authentication token (this is not
+implemented yet, but needs to be done to support an offline mode of operation).
+
+To authenticate any request to the API, the ``Authentication`` header has to be
+added to it. You need to pass a ``Token`` field, with a value equal to the
+concatenation of the username and the local session token , base64-encoded::
+
+
+   $ curl -X POST localhost:7070/API/core/stop
+   $ Unauthorized
+
+   >>> import base64                                                                                           
+   >>> base64.b64encode('user@provider.org:52dac27fcf633b1dba58')
+   'dXNlckBwcm92aWRlci5vcmc6NTJkYWMyN2ZjZjYzM2IxZGJhNTg='
+
+   $ curl -X POST localhost:7070/API/core/stop -H 'Authentication: Token dXNlckBwcm92aWRlci5vcmc6NTJkYWMyN2ZjZjYzM2IxZGJhNTg='
+   $ {'shutdown': 'ok'}
 
 
 Resources
@@ -252,7 +291,7 @@ JSON-encoded data to the POST.
         * ``invitecode`` *(optional)* - an optional invitecode, to be used if
           the provider requires it for creating a new account.
         * ``autoconf`` *(optional)* - whether to autoconfigure the provider, if
-          we don't have seen it before.
+          we have not seen it before.
 
   **Status codes**:
         * ``200`` - no error
@@ -331,24 +370,4 @@ JSON-encoded data to the POST.
 
   Export keys for an user.
 
-
-API Authentication
-==================
-
-Most of the resources in the API are protected by an authentication token.
-To authenticate the request, the ``Authentication`` header has to be added to
-it. You need to pass a ``Token`` field, with a value equal to the concatenation of
-the username and the local session token that you have received after the
-authentication call, base64-encoded::
-
-
-   $ curl -X POST localhost:7070/API/core/stop
-   $ Unauthorized
-
-   >>> import base64                                                                                           
-   >>> base64.b64encode('user@provider.org:52dac27fcf633b1dba58')
-   'dXNlckBwcm92aWRlci5vcmc6NTJkYWMyN2ZjZjYzM2IxZGJhNTg='
-
-   $ curl -X POST localhost:7070/API/core/stop -H 'Authentication: Token dXNlckBwcm92aWRlci5vcmc6NTJkYWMyN2ZjZjYzM2IxZGJhNTg='
-   $ {'shutdown': 'ok'}
 
