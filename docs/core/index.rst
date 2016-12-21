@@ -48,7 +48,7 @@ provider fails (or with no network connectivity), the backend **should** signal
 the error but equally return a local authentication token (this is not
 implemented yet, but needs to be done to support an offline mode of operation).
 
-To authenticate any request to the API, the ``Authentication`` header has to be
+To authenticate any request to the API, the ``Authorization`` header has to be
 added to it. You need to pass a ``Token`` field, with a value equal to the
 concatenation of the username and the local session token , base64-encoded::
 
@@ -60,7 +60,7 @@ concatenation of the username and the local session token , base64-encoded::
    >>> base64.b64encode('user@provider.org:52dac27fcf633b1dba58')
    'dXNlckBwcm92aWRlci5vcmc6NTJkYWMyN2ZjZjYzM2IxZGJhNTg='
 
-   $ curl -X POST localhost:7070/API/core/stop -H 'Authentication: Token dXNlckBwcm92aWRlci5vcmc6NTJkYWMyN2ZjZjYzM2IxZGJhNTg='
+   $ curl -X POST localhost:7070/API/core/stop -H 'Authorization: Token dXNlckBwcm92aWRlci5vcmc6NTJkYWMyN2ZjZjYzM2IxZGJhNTg='
    $ {'shutdown': 'ok'}
 
 

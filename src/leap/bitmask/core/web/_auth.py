@@ -51,8 +51,7 @@ def protectedResourceFactory(resource, session_tokens, whitelist):
 @implementer(checkers.ICredentialsChecker)
 class TokenDictChecker:
 
-    credentialInterfaces = (credentials.IUsernamePassword,
-                            credentials.IUsernameHashedPassword)
+    credentialInterfaces = (credentials.IUsernamePassword,)
 
     def __init__(self, tokens):
         self.tokens = tokens
