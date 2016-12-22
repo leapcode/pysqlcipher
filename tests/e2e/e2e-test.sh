@@ -52,9 +52,12 @@ while [[ $imap_pw == *"None"* ]]; do
   imap_pw=$(echo "$response" | head -n 1 | sed 's/  */ /g' | cut -d' ' -f 2)
 done
 
-#echo "IMAP/SMTP PASSWD: $imap_pw"
-
 
 $SWAKS $FROM_EXTERNAL_OPTS
 
 
+echo "IMAP/SMTP PASSWD: $imap_pw"
+
+
+# XXX get mail we just sent.
+./getmail --mailbox INBOX --subject "my_unique_subject" $user $imap_pw

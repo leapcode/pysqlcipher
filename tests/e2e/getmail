@@ -13,9 +13,10 @@ particular mailbox.
 import os
 import sys
 
-from twisted.internet import protocol
-from twisted.internet import ssl
 from twisted.internet import defer
+from twisted.internet import protocol
+from twisted.internet import reactor
+from twisted.internet import ssl
 from twisted.internet import stdio
 from twisted.mail import imap4
 from twisted.protocols import basic
@@ -23,6 +24,8 @@ from twisted.python import log
 
 # Global options stored here from main
 _opts = {}
+
+EXITCODE = 0
 
 
 class TrivialPrompter(basic.LineReceiver):
@@ -230,6 +233,12 @@ def cbFetch(result, proto):
         print "Hey, an empty mailbox!"
 
     if not index:
+        if selected_subject:
+            global EXITCODE
+            EXITCODE=42
+            print "NO SUCH MAIL"
+            return reactor.stop()
+
         return proto.prompt("\nWhich message? [1] (Q quits) "
                             ).addCallback(cbPickMessage, proto)
     else:
@@ -280,6 +289,8 @@ def main():
     import sys
     from twisted.internet import reactor
 
+    global EXITCODE
+
     description = (
         'Get messages from a LEAP IMAP Proxy.\nThis is a '
         'debugging tool, do not use this to retrieve any sensitive '
@@ -306,9 +317,11 @@ def main():
         parser.add_argument('username', type=str)
         parser.add_argument('password', type=str)
 
-    parser.add_argument('--mailbox', dest='mailbox', default=None,
+    parser.add_argument(
+        '--mailbox', dest='mailbox', default=None,
         help='Which mailbox to retrieve. Empty for interactive prompt.')
-    parser.add_argument('--subject', dest='subject', default=None,
+    parser.add_argument(
+        '--subject', dest='subject', default=None,
         help='A subject for retrieve a mail that matches. Empty for interactive prompt.')
 
     ns = parser.parse_args()
@@ -338,6 +351,7 @@ def main():
             port = 143
         reactor.connectTCP(hostname, int(port), factory)
     reactor.run()
+    sys.exit(EXITCODE)
 
 
 if __name__ == '__main__':
