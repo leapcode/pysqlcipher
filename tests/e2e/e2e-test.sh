@@ -62,7 +62,7 @@ $SWAKS $FROM_EXTERNAL_OPTS
 
 # XXX wait until we the get mail we just sent.
 
-while [[ ! $(./getmail --mailbox INBOX --subject "$MAIL_UUID" $user $imap_pw) ]]
+while [[ ! $(./tests/e2e/getmail --mailbox INBOX --subject "$MAIL_UUID" $user $imap_pw) ]]
 do
   sleep 10
 done
