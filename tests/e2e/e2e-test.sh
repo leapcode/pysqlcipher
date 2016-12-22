@@ -15,19 +15,19 @@ set -e
 
 PROVIDER='cdev.bitmask.net'
 BCTL='bitmaskctl'
-LEAP_HOME='~/.config/leap'
+LEAP_HOME="$HOME/.config/leap"
 MAIL_UUID=$(uuidgen)
 
 username="tmp_user_$(date +%Y%m%d%H%M%S)"
 user="${username}@${PROVIDER}"
 pw="$(head -c 10 < /dev/urandom | base64)"
-SWAKS="swaks -t $user --header-X-MAIL-UUID \"$MAIL_UUID\""
+SWAKS="swaks -t $user --h-Subject $MAIL_UUID"
 
 # Stop any previously started bitmaskd
 # and start a new instance
 "$BCTL" stop
 
-rm -rf $LEAP_HOME
+rm -rf "$LEAP_HOME"
 
 "$BCTL" start
 
@@ -52,12 +52,17 @@ while [[ $imap_pw == *"None"* ]]; do
   imap_pw=$(echo "$response" | head -n 1 | sed 's/  */ /g' | cut -d' ' -f 2)
 done
 
-
 $SWAKS $FROM_EXTERNAL_OPTS
 
 
 echo "IMAP/SMTP PASSWD: $imap_pw"
 
+# Send testmail
+$SWAKS $FROM_EXTERNAL_OPTS
 
-# XXX get mail we just sent.
-./getmail --mailbox INBOX --subject "my_unique_subject" $user $imap_pw
+# XXX wait until we the get mail we just sent.
+
+while [[ ! $(./getmail --mailbox INBOX --subject "$MAIL_UUID" $user $imap_pw) ]]
+do
+  sleep 10
+done
