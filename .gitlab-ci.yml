@@ -15,14 +15,16 @@ build:
   script:
     - virtualenv venv
     - source venv/bin/activate
-    - make dev-backend
+    - make dev-latest-backend
     - mkdir -p /root/.config/leap/
     - bitmaskd
     - bitmaskctl status
+    - apt install swaks
+    - make test_e2e
 
 bitmask_latest_bundle:
   image: leapcode/bitmask-dev:latest
-  stage: bundle 
+  stage: bundle
   script: pkg/build_bundle_with_venv.sh
   artifacts:
     paths:
