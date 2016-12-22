@@ -352,7 +352,7 @@ class Provider(object):
             logger.warn('cannot download services config yet, need auth')
             pending_deferred = defer.Deferred()
             self.stuck_bootstrap[self._domain] = pending_deferred
-            return pending_deferred
+            return defer.succeed('ok for now')
 
         uri, met, path = self._get_configs_download_params()
 
