@@ -24,7 +24,6 @@ import sys
 from twisted.logger import Logger
 
 from leap.common.files import which
-from leap.common.config import get_path_prefix
 
 
 STANDALONE = getattr(sys, 'frozen', False)
