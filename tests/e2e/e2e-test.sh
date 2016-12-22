@@ -9,9 +9,19 @@
 # as an example:
 #   export FROM_EXTERNAL_OPTS='-f user@example.org --tlsc --au user@example.or -ap MYPASSWORD -s smtp.example.org'
 #
+# then:
+#
+#   source venv/bin/activate
+#   make dev-latest-backend
+#   make test_e2e
+#
+#
 # TODO:
 #   - Timeout waiting for mail
-
+#   - Decrease poll interval
+#   - Make it less noisy (fix the vext warnings)
+#   - move away from cdev.bm
+#   - remove test user on success
 
 set -e
 
@@ -23,7 +33,7 @@ MAIL_UUID=$(uuidgen)
 username="tmp_user_$(date +%Y%m%d%H%M%S)"
 user="${username}@${PROVIDER}"
 pw="$(head -c 10 < /dev/urandom | base64)"
-SWAKS="swaks -t $user --h-Subject $MAIL_UUID"
+SWAKS="swaks -t $user --h-Subject $MAIL_UUID --silent 2"
 
 # Stop any previously started bitmaskd
 # and start a new instance
@@ -38,7 +48,7 @@ rm -rf "$LEAP_HOME"
 "$BCTL" user create "$user" --pass "$pw"
 
 # Authenticate
-"$BCTL" user auth "$user" --pass "$pw"
+"$BCTL" user auth "$user" --pass "$pw" > /dev/null
 
 # Note that imap_pw is the same for smtp
 
@@ -65,6 +75,7 @@ $SWAKS $FROM_EXTERNAL_OPTS
 # wait until we the get mail we just sent.
 while ! ./tests/e2e/getmail --mailbox INBOX --subject "$MAIL_UUID" "$user" "$imap_pw" > /dev/null
 do
+  echo "Waiting for incoming test mail..."
   sleep 10
 done
 
