@@ -52,6 +52,13 @@ SUBCOMMANDS:
 
     def create(self, raw_args):
         args = tuple([command.appname] + sys.argv[1:4])
+        passwd = None
+
+        for (index, item) in enumerate(raw_args):
+            if item.startswith('--pass'):
+                passwd = raw_args.pop(index + 1)
+                raw_args.pop(index)
+
         parser = argparse.ArgumentParser(
             description='Bitmask user',
             prog='%s %s %s  %s' % args)
@@ -69,7 +76,8 @@ SUBCOMMANDS:
                 args.pop(index)
 
         username = self.username(args)
-        passwd = self._getpass_twice()
+        if not passwd:
+            passwd = self._getpass_twice()
         self.data += ['create', username, passwd,
                       subargs.invite, 'true']
         return self._send(printer=command.default_dict_printer)
@@ -128,6 +136,7 @@ SUBCOMMANDS:
             if u['authenticated']:
                 color = Fore.GREEN
             print(color + u['userid'] + Fore.RESET)
+
 
 _username_kw = {
     'nargs': '?',
