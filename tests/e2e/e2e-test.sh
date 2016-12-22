@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Dependencies
-# - swaks
+# - swaks and uuid-runtime debian packages
 #
 # Usage
 #
@@ -10,7 +10,7 @@
 #   - FROM_EXTERNAL_OPTS for sending mails from external mailservers to the tmp_user account
 #
 # as an example:
-#   export FROM_EXTERNAL_OPTS='-f user@example.org --tlsc --au user@example.or -ap MYPASSWORD -s smtp.example.org'
+#   export FROM_EXTERNAL_OPTS='--tlsc --au user@example.or -ap MYPASSWORD -s smtp.example.org'
 #
 # then:
 #
@@ -36,7 +36,7 @@ MAIL_UUID=$(uuidgen)
 username="tmp_user_$(date +%Y%m%d%H%M%S)"
 user="${username}@${PROVIDER}"
 pw="$(head -c 10 < /dev/urandom | base64)"
-SWAKS="swaks -t $user --h-Subject $MAIL_UUID --silent 2"
+SWAKS="swaks --h-Subject $MAIL_UUID --silent 2 --helo ci.leap.se -f ci@leap.se -t $user"
 
 # Stop any previously started bitmaskd
 # and start a new instance
