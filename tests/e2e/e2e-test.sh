@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Dependencies
+# - swaks
+#
 # Usage
 #
 # In order to send authenticated mail to the tmp_user you need to
@@ -39,10 +42,9 @@ SWAKS="swaks -t $user --h-Subject $MAIL_UUID --silent 2"
 # and start a new instance
 "$BCTL" stop
 
-rm -rf "$LEAP_HOME"
+[ -d "$LEAP_HOME" ] && rm -rf "$LEAP_HOME"
 
 "$BCTL" start
-
 
 # Register a new user
 "$BCTL" user create "$user" --pass "$pw"
