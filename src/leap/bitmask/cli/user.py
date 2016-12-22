@@ -83,8 +83,15 @@ SUBCOMMANDS:
         return self._send(printer=command.default_dict_printer)
 
     def auth(self, raw_args):
+        passwd = None
+        for (index, item) in enumerate(raw_args):
+            if item.startswith('--pass'):
+                passwd = raw_args.pop(index + 1)
+                raw_args.pop(index)
+
         username = self.username(raw_args)
-        passwd = getpass.getpass()
+        if not passwd:
+            passwd = getpass.getpass()
         self.data += ['authenticate', username, passwd, 'true']
         return self._send(printer=command.default_dict_printer)
 
