@@ -9,11 +9,21 @@ export default class ErrorPanel extends React.Component {
   }
 
   render () {
+    var error_msg = null
+    var error = this.props.error
+    console.log(error)
+    if (error instanceof Error && error.stack) {
+      error_msg = error.stack
+    } else if (error instanceof PromiseRejectionEvent) {
+      error_msg = "Error connecting to bitmaskd"
+    } else {
+      error_msg = error.toString()
+    }
     return (
-      <Center width="400">
+      <Center width="600">
         <Area>
           <h1>Error</h1>
-          {this.props.error}
+          {error_msg}
         </Area>
       </Center>
     )

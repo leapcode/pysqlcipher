@@ -36,8 +36,11 @@ catch (err) {}
 
 var bitmask = function(){
     var event_handlers = {};
-
     var api_url = '/API/';
+    var api_token = null;
+    var last_uid = null;
+    var last_uuid = null;
+
     if (window.location.protocol === "file:") {
         api_url = 'http://localhost:7070/API/';
     }
@@ -45,10 +48,18 @@ var bitmask = function(){
     function call(command) {
         var url = api_url  + command.slice(0, 3).join('/');
         var data = JSON.stringify(command.slice(3));
+        var auth_header = null
+        if (api_token) {
+           auth_header = "Token " + btoa(last_uid + ":" + api_token)
+        }
 
         return new Promise(function(resolve, reject) {
             var req = new XMLHttpRequest();
+
             req.open('POST', url);
+            if (auth_header) {
+                req.setRequestHeader("Authorization", auth_header)
+            }
 
             req.onload = function() {
                 if (req.status == 200) {
@@ -77,18 +88,20 @@ var bitmask = function(){
     };
 
     function event_polling() {
-        call(['events', 'poll']).then(function(response) {
-            if (response !== null) {
-                var evnt = response[0];
-                var content = response[1];
-                if (evnt in event_handlers) {
-                    event_handlers[evnt](evnt, content);
+        if (api_token) {
+            call(['events', 'poll']).then(function(response) {
+                if (response !== null) {
+                    var evnt = response[0];
+                    var content = response[1];
+                    if (evnt in event_handlers) {
+                        event_handlers[evnt](evnt, content);
+                    }
                 }
-            }
-            event_polling();
-        }, function(error) {
-            setTimeout(event_polling, 5000);
-        });
+                event_polling();
+            }, function(error) {
+                setTimeout(event_polling, 5000);
+            });
+        }
     };
     event_polling();
 
@@ -100,6 +113,7 @@ var bitmask = function(){
     };
 
     return {
+        api_token: function() {return api_token},
         bonafide: {
             provider: {
                 create: function(domain) {
@@ -162,7 +176,12 @@ var bitmask = function(){
                     if (typeof autoconf !== 'boolean') {
                         autoconf = false;
                     }
-                    return call(['bonafide', 'user', 'authenticate', uid, password, autoconf]);
+                    return call(['bonafide', 'user', 'authenticate', uid, password, autoconf]).then(function(response) {
+                        api_token = response.lcl_token
+                        last_uuid = response.uuid
+                        last_uid = uid
+                        return response;
+                    });
                 },
 
                 /**

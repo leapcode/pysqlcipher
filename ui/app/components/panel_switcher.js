@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom'
 
 import DebugPanel from './debug_panel'
+import ErrorPanel from './error_panel'
 import Splash from './splash'
 import GreeterPanel from './greeter_panel'
 import MainPanel from './main_panel'
@@ -35,7 +36,7 @@ export default class PanelSwitcher extends React.Component {
       )
     }
     if (this.state.debug && this.state.panel) {
-      window.location.hash = this.state.panel
+      //window.location.hash = this.state.panel
       //elems.push(
       //  elem(DebugPanel, {key: 'debug'})
       //)
@@ -57,5 +58,6 @@ export default class PanelSwitcher extends React.Component {
   render_greeter(props) {return elem(GreeterPanel, props)}
   render_main(props)    {return elem(MainPanel, props)}
   render_addressbook(props) {return elem(Addressbook, props)}
+  render_error(props)   {return elem(ErrorPanel, props)}
 
 }

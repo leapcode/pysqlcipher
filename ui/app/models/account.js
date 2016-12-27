@@ -112,6 +112,9 @@ export default class Account {
   // returns a promise, fullfill is passed account object
   //
   static active() {
+    if (!bitmask.api_token()) {
+      return new Promise((resolve, reject) => {resolve(null)})
+    }
     return bitmask.bonafide.user.active().then(
       response => {
         if (response.user == '<none>') {

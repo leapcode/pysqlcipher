@@ -1,7 +1,6 @@
 import bitmask from 'lib/bitmask'
 import Account from 'models/account'
 import Provider from 'models/provider'
-import EventLogger from 'lib/event_logger'
 
 class Application {
   constructor() {
@@ -11,7 +10,8 @@ class Application {
   // main entry point for the application
   //
   initialize() {
-    this.ev = new EventLogger()
+    window.addEventListener("error", this.handleError.bind(this))
+    window.addEventListener("unhandledrejection", this.handleError.bind(this))
     if (this.debugging()) {
       this.show(this.debug_panel)
     } else {
@@ -44,6 +44,10 @@ class Application {
   debugging() {
     this.debug_panel = window.location.hash.replace('#', '')
     return this.debug_panel && this.debug_panel != 'main'
+  }
+
+  handleError(e) {
+    this.show('error', {error: e})
   }
 }
 
