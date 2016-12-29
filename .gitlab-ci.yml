@@ -28,4 +28,4 @@ bitmask_latest_bundle:
     paths:
       - dist/bitmask-*
     name: "Bitmask_linux64_latest_${CI_BUILD_REF}"
-    expire_in: 1 week
+    expire_in: 1 month
