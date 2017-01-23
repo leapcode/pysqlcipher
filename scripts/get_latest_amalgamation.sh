@@ -34,7 +34,8 @@ else
 fi
 
 # copy amalgamation files
-cp ${REPO_DIR}/sqlite3.{c,h} ${AMALGAMATION_DIR}/
+cp ${REPO_DIR}/sqlite3.c ${AMALGAMATION_DIR}/
+cp ${REPO_DIR}/sqlite3.h ${AMALGAMATION_DIR}/
 
 # remove leftovers
 rm -rf ${TEMP_DIR}
