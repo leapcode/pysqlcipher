@@ -28,6 +28,7 @@
 #include "prepare_protocol.h"
 #include "microprotocols.h"
 #include "row.h"
+#include "blob.h"
 
 #ifdef PYSQLITE_EXPERIMENTAL
 #include "backup.h"
@@ -321,6 +322,7 @@ PyMODINIT_FUNC init_sqlite(void)
         #ifdef PYSQLITE_EXPERIMENTAL
         (pysqlite_backup_setup_types() < 0) ||
         #endif
+        (pysqlite_blob_setup_types() < 0) ||
         (pysqlite_prepare_protocol_setup_types() < 0)
        ) {
         return;
