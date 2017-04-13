@@ -10,5 +10,10 @@ get_amalgamation:
 upload:
 	python setup.py sdist upload -r pypi 
 
+test:
+	rm -f tests/*.db
+	cd tests && ./run.sh
+	rm -f tests/*.db
+
 clean:
 	rm -rf build dist
