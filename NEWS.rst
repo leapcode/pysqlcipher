@@ -2,6 +2,19 @@
 Changes in pysqlcipher
 ======================
 
+Release 2.6.10
+--------------
+
+- Update amalgamation to 3.15
+- Patch amalgamation to show HAVE_USLEEP compile time option
+- Cleanup setup.py
+
+Release 2.6.9
+-------------
+
+- Add support for the blobs interface
+
+
 Release 2.6.4
 -------------
 
