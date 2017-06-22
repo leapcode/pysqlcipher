@@ -3,7 +3,9 @@ build
 dist/
 MANIFEST
 debian/python-sqlcipher
+debian/debhelper-build-stamp
 debian/*.log
 debian/files
 debian/*.substvars
 debian/*.debhelper
+pysqlcipher.egg-info/
