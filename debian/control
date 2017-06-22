@@ -3,7 +3,7 @@ Maintainer: Ben Carrillo <ben@futeisha.org>
 Section: python
 Priority: optional
 Build-Depends: python-all-dev (>= 2.6.6-3), libsqlcipher-dev (>3.2.0-1), debhelper (>= 9)
-Standards-Version: 3.9.6
+Standards-Version: 3.9.8
 Uploaders: Micah Anderson <micah@debian.org>
 X-Python-Version: >= 2.5
 
