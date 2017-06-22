@@ -1,3 +1,6 @@
+default:
+.PHONY :  install install_bundle get_amalgamation upload test clean
+
 install: clean
 	python setup.py install
 
