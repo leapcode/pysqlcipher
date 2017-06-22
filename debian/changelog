@@ -1,0 +1,46 @@
+pysqlcipher (2.6.3.6) unstable; urgency=medium
+
+  * set dependency on sqlcipher to "> 3.2.0-1" so it matches
+    the jessie-backports version (3.2.0-1.1~bpo80+1)
+    see https://leap.se/code/issues/7576#note-10 and following
+
+ -- Varac Anero <varacanero@zeromail.org>  Wed, 18 Nov 2015 22:34:18 +0100
+
+pysqlcipher (2.6.3.5) unstable; urgency=medium
+
+  * Remove dependency on dh-python, its not available in wheezy
+
+ -- Micah Anderson <micah@debian.org>  Thu, 29 Oct 2015 16:54:36 -0400
+
+pysqlcipher (2.6.3.4) unstable; urgency=medium
+
+  * remove unneeded debian watch file
+  * bump dependency on sqlcipher >= 3.2.0-1.1
+  * fix debian/copyright file to have proper dep-5 format
+
+ -- Micah Anderson <micah@debian.org>  Tue, 01 Sep 2015 15:38:41 -0400
+
+pysqlcipher (2.6.3.3) unstable; urgency=medium
+
+  * Need to also change the Depends for libsqlcipher0
+
+ -- Micah Anderson <micah@debian.org>  Fri, 04 Jul 2014 15:14:46 -0400
+
+pysqlcipher (2.6.3.2) unstable; urgency=medium
+
+  * Change build-dependency version for libsqlcipher-dev to pick up
+    backported versions more easily
+
+ -- Micah Anderson <micah@debian.org>  Tue, 01 Jul 2014 12:25:04 -0400
+
+pysqlcipher (2.6.3.1) unstable; urgency=low
+
+  * Use libsqlcipher0 2.2.1-2, that uses SQLITE_TEMP_STORE=2. See #726464
+
+ -- Ben Carrillo <ben@futeisha.org>  Tue, 29 Oct 2013 13:21:37 -0200
+
+pysqlcipher (2.6.3~dev02) unstable; urgency=low
+
+  * Initial debian package
+
+ -- Ben Carrillo <ben@futeisha.org>  Thu, 30 May 2013 03:33:25 +0900
