@@ -5,3 +5,10 @@ MANIFEST
 debian/
 *.egg-info
 amalgamation_latest
+debian/python-sqlcipher
+debian/debhelper-build-stamp
+debian/*.log
+debian/files
+debian/*.substvars
+debian/*.debhelper
+pysqlcipher.egg-info/
