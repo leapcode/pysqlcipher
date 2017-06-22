@@ -9,7 +9,7 @@ X-Python-Version: >= 2.5
 
 Package: python-sqlcipher
 Architecture: any
-Depends: libsqlcipher0 (>3.2.0-1), ${misc:Depends}, ${python:Depends}, ${shlibs:Depends}
+Depends: libsqlcipher0 (>=3.2.0-1), ${misc:Depends}, ${python:Depends}, ${shlibs:Depends}
 Description: DB-API 2.0 interface for SQLCIPHER 3.x
  Python interface to SQLCipher
  .
