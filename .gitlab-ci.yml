@@ -34,10 +34,10 @@ package:amd64_jessie:
     LINTIAN_OPTS: "-X filename-length"
   <<: *job_definition
 
-package:amd64_stretch:
-  variables:
-    ARCH: "amd64"
-    DIST: "stretch"
-    REPONAMES: "platform"
-    LINTIAN_OPTS: "-X filename-length"
-  <<: *job_definition
+#package:amd64_stretch:
+#  variables:
+#    ARCH: "amd64"
+#    DIST: "stretch"
+#    REPONAMES: "platform"
+#    LINTIAN_OPTS: "-X filename-length"
+#  <<: *job_definition
