@@ -2,7 +2,6 @@ build
 *.pyc
 dist/
 MANIFEST
-debian/
 *.egg-info
 amalgamation_latest
 debian/python-sqlcipher
