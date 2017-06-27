@@ -31,13 +31,17 @@ package:amd64_jessie:
     ARCH: "amd64"
     DIST: "jessie"
     REPONAMES: "platform"
+    # Default is to fail on warnings, we disable it here
+    # unless the lintian warnings are fixed (see #2)
     LINTIAN_OPTS: "-X filename-length"
   <<: *job_definition
 
-#package:amd64_stretch:
+# package:amd64_stretch:
 #  variables:
 #    ARCH: "amd64"
 #    DIST: "stretch"
 #    REPONAMES: "platform"
+#    # Default is to fail on warnings, we disable it here
+#    # unless the lintian warnings are fixed (see #2)
 #    LINTIAN_OPTS: "-X filename-length"
 #  <<: *job_definition
