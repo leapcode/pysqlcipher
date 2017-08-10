@@ -8,5 +8,5 @@ flags = [l[0] for l in lines]
 for flag in flags:
     print flag
 assert "HAVE_USLEEP" in flags
-assert "ENABLE_LOAD_EXTENSION" in flags
+#assert "ENABLE_LOAD_EXTENSION" in flags
 
