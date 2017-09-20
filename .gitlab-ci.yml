@@ -46,6 +46,17 @@ package:amd64_stretch:
     LINTIAN_OPTS: "-X filename-length"
   <<: *job_definition
 
+package:amd64_buster:
+  variables:
+    ARCH: "amd64"
+    DIST: "buster"
+    REPONAMES: "platform,client"
+    # Default is to fail on warnings, we disable it here
+    # unless the lintian warnings are fixed (see #2)
+    LINTIAN_OPTS: "-X filename-length"
+  <<: *job_definition
+
+
 package:amd64_zesty:
   variables:
     ARCH: "amd64"
