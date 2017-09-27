@@ -1,5 +1,5 @@
 Source: pysqlcipher
-Maintainer: Ben Carrillo <ben@futeisha.org>
+Maintainer: Kali Kaneko <kali@leap.se>
 Section: python
 Priority: optional
 Build-Depends: python-all-dev (>= 2.6.6-3), libsqlcipher-dev (>=3.2.0-1), debhelper (>= 9), dh-python
