@@ -3,7 +3,7 @@ Maintainer: Kali Kaneko <kali@leap.se>
 Section: python
 Priority: optional
 Build-Depends: python-all-dev (>= 2.6.6), libsqlcipher-dev (>=3.2.0), debhelper (>= 9), dh-python
-Standards-Version: 3.9.8
+Standards-Version: 4.1.1
 Uploaders: LEAP automated build <sysdev@leap.se>
 X-Python-Version: >= 2.5
 

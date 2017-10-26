@@ -32,8 +32,8 @@ package:amd64_jessie:
     DIST: "jessie"
     REPONAMES: "platform,client"
     # Default is to fail on warnings, we disable it here
-    # unless the lintian warnings are fixed (see #2)
-    LINTIAN_OPTS: "-X filename-length"
+    # Standard-Version is higher than available for this release
+    LINTIAN_OPTS: "--fail-on-warnings -X filename-length,standards-version"
   <<: *job_definition
 
 package:amd64_stretch:
@@ -42,8 +42,8 @@ package:amd64_stretch:
     DIST: "stretch"
     REPONAMES: "platform,client"
     # Default is to fail on warnings, we disable it here
-    # unless the lintian warnings are fixed (see #2)
-    LINTIAN_OPTS: "-X filename-length"
+    # Standard-Version is higher than available for this release
+    LINTIAN_OPTS: "--fail-on-warnings -X filename-length,standards-version"
   <<: *job_definition
 
 package:amd64_buster:
@@ -51,9 +51,6 @@ package:amd64_buster:
     ARCH: "amd64"
     DIST: "buster"
     REPONAMES: "platform,client"
-    # Default is to fail on warnings, we disable it here
-    # unless the lintian warnings are fixed (see #2)
-    LINTIAN_OPTS: "-X filename-length"
   <<: *job_definition
 
 
@@ -63,8 +60,8 @@ package:amd64_zesty:
     DIST: "zesty"
     REPONAMES: "platform,client"
     # Default is to fail on warnings, we disable it here
-    # unless the lintian warnings are fixed (see #2)
-    LINTIAN_OPTS: "-X filename-length"
+    # Standard-Version is higher than available for this release
+    LINTIAN_OPTS: "--fail-on-warnings -X filename-length,standards-version"
   <<: *job_definition
 
 package:amd64_artful:
