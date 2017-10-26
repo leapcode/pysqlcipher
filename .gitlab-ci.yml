@@ -50,7 +50,7 @@ package:amd64_buster:
   variables:
     ARCH: "amd64"
     DIST: "buster"
-    REPONAMES: "platform,client"
+    REPONAMES: "client"
   <<: *job_definition
 
 
@@ -58,7 +58,7 @@ package:amd64_zesty:
   variables:
     ARCH: "amd64"
     DIST: "zesty"
-    REPONAMES: "platform,client"
+    REPONAMES: "client"
     # Default is to fail on warnings, we disable it here
     # Standard-Version is higher than available for this release
     LINTIAN_OPTS: "--fail-on-warnings -X filename-length,standards-version"
@@ -68,5 +68,5 @@ package:amd64_artful:
   variables:
     ARCH: "amd64"
     DIST: "artful"
-    REPONAMES: "platform,client"
+    REPONAMES: "client"
   <<: *job_definition
