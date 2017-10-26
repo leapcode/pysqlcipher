@@ -66,3 +66,10 @@ package:amd64_zesty:
     # unless the lintian warnings are fixed (see #2)
     LINTIAN_OPTS: "-X filename-length"
   <<: *job_definition
+
+package:amd64_artful:
+  variables:
+    ARCH: "amd64"
+    DIST: "artful"
+    REPONAMES: "platform,client"
+  <<: *job_definition
