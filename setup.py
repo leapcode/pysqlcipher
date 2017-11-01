@@ -182,8 +182,12 @@ class AmalgamationBuildExt(build_ext):
     def __setattr__(self, k, v):
         # Make sure we don't link against the SQLite
         # library, no matter what setup.cfg says
-        if self.amalgamation and k == "libraries":
-            v = None
+        if self.amalgamation and k == "libraries" and isinstance(v, list):
+            for i in ["sqlcipher", "sqlite3"]:
+                try:
+                    v.remove(i)
+                except ValueError:
+                    pass
         self.__dict__[k] = v
 
 
