@@ -61,7 +61,7 @@ if PYSQLITE_EXPERIMENTAL:
 if sys.platform == "darwin":
     # Work around clang raising hard error for unused arguments
     os.environ['CFLAGS'] = "-Qunused-arguments"
-    print "CFLAGS", os.environ['CFLAGS']
+    print( "CFLAGS", os.environ['CFLAGS'])
 
 include_dirs = []
 library_dirs = []
@@ -202,7 +202,7 @@ def get_setup_args():
     f.close()
 
     if not PYSQLITE_VERSION:
-        print "Fatal error: PYSQLITE_VERSION could not be detected!"
+        print ("Fatal error: PYSQLITE_VERSION could not be detected!")
         sys.exit(1)
 
     if DEV_VERSION:
