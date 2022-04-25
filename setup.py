@@ -61,7 +61,7 @@ if PYSQLITE_EXPERIMENTAL:
 if sys.platform == "darwin":
     # Work around clang raising hard error for unused arguments
     os.environ['CFLAGS'] = "-Qunused-arguments"
-    print "CFLAGS", os.environ['CFLAGS']
+    print("CFLAGS", os.environ['CFLAGS'])
 
 include_dirs = []
 library_dirs = []
