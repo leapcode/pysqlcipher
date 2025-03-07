@@ -23,7 +23,7 @@ You have to pass the ``PRAGMA key`` before doing any operations::
   conn.commit()
   c.close()
 
-You can quickly verify that your database file in indeed encrypted::
+You can quickly verify that your database file is encrypted::
 
   hexdump -C test.db                                                                                                        
   ab 7f 61 7a 33 9d 07 f4  08 68 c9 b0 4f e3 34 60  |..az3....h..O.4`|
